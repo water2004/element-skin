@@ -58,5 +58,15 @@ class Database:
             await db.executescript(INIT_SQL)
             await db.commit()
 
+            # 迁移：如果旧数据库的 users 表缺少 is_admin 列，添加该列
+            cur = await db.execute("PRAGMA table_info(users)")
+            cols = await cur.fetchall()
+            col_names = [c[1] for c in cols]
+            if "is_admin" not in col_names:
+                await db.execute(
+                    "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0"
+                )
+                await db.commit()
+
     def get_conn(self):
         return aiosqlite.connect(self.db_path)

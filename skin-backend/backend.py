@@ -45,7 +45,9 @@ class YggdrasilBackend:
         # 生产环境应实现"吊销最旧令牌"
         pass
 
-    async def _get_profile_json(self, profile_row, sign: bool = False) -> Dict:
+    async def _get_profile_json(
+        self, profile_row, sign: bool = False, base_url: str = None
+    ) -> Dict:
         """构建角色 JSON，包含 textures 和签名"""
         pid, uid, name, model, skin_hash, cape_hash = profile_row
 
@@ -59,16 +61,24 @@ class YggdrasilBackend:
             "textures": {},
         }
 
-        # 假设材质存储在一个基础 URL 下
-        base_texture_url = "https://skin.example.com/textures/"
+        # 材质基础 URL：默认使用相对路径 `/static/textures/`。
+        # 若提供了 base_url（例如 Request.base_url），则生成绝对 URL：{base_url.rstrip('/')}/static/textures/{hash}.png
+        base_texture_url = "/static/textures/"
+        if base_url:
+            # ensure no trailing slash on base_url
+            base_texture_url = base_url.rstrip("/") + "/static/textures/"
 
         if skin_hash:
-            textures_payload["textures"]["SKIN"] = {"url": base_texture_url + skin_hash}
+            textures_payload["textures"]["SKIN"] = {
+                "url": base_texture_url + skin_hash + ".png"
+            }
             if model == "slim":
                 textures_payload["textures"]["SKIN"]["metadata"] = {"model": "slim"}
 
         if cape_hash:
-            textures_payload["textures"]["CAPE"] = {"url": base_texture_url + cape_hash}
+            textures_payload["textures"]["CAPE"] = {
+                "url": base_texture_url + cape_hash + ".png"
+            }
 
         # 序列化 Textures
         textures_json = json.dumps(textures_payload)
@@ -310,7 +320,11 @@ class YggdrasilBackend:
             await conn.commit()
 
     async def has_joined(
-        self, username: str, server_id: str, ip: Optional[str] = None
+        self,
+        username: str,
+        server_id: str,
+        ip: Optional[str] = None,
+        base_url: str = None,
     ) -> Optional[Dict]:
         async with self.db.get_conn() as conn:
             # 1. 查找 Session
@@ -350,19 +364,23 @@ class YggdrasilBackend:
                 return None
 
             # 返回带签名的完整信息
-            return await self._get_profile_json(p_row, sign=True)
+            return await self._get_profile_json(p_row, sign=True, base_url=base_url)
 
     # =========================
     # 角色/材质部分 API 实现
     # =========================
 
-    async def get_profile(self, uuid: str, unsigned: bool = True) -> Optional[Dict]:
+    async def get_profile(
+        self, uuid: str, unsigned: bool = True, base_url: str = None
+    ) -> Optional[Dict]:
         async with self.db.get_conn() as conn:
             cursor = await conn.execute("SELECT * FROM profiles WHERE id = ?", (uuid,))
             row = await cursor.fetchone()
             if not row:
                 return None
-            return await self._get_profile_json(row, sign=not unsigned)
+            return await self._get_profile_json(
+                row, sign=not unsigned, base_url=base_url
+            )
 
     async def upload_texture(
         self,
@@ -374,16 +392,28 @@ class YggdrasilBackend:
     ):
         # 1. 鉴权
         async with self.db.get_conn() as conn:
+            # SELECT token's user and bound profile
             cursor = await conn.execute(
-                "SELECT profile_id FROM tokens WHERE access_token = ?", (access_token,)
+                "SELECT user_id, profile_id FROM tokens WHERE access_token = ?",
+                (access_token,),
             )
             row = await cursor.fetchone()
-            if not row or row[0] != uuid:
+            if not row:
+                raise ForbiddenOperationException("Unauthorized")
+
+            token_user_id, token_profile_id = row
+
+            # 验证目标 profile 属于该 token 所在的 user
+            p_cursor = await conn.execute(
+                "SELECT user_id FROM profiles WHERE id = ?", (uuid,)
+            )
+            p_row = await p_cursor.fetchone()
+            if not p_row or p_row[0] != token_user_id:
                 raise ForbiddenOperationException("Unauthorized")
 
             # 2. 检查图片安全性与规范
             try:
-                # 检查是否为 PNG, 检查尺寸
+                # 打开并验证为 PNG
                 img = Image.open(BytesIO(file_bytes))
                 if img.format != "PNG":
                     raise IllegalArgumentException("Texture must be PNG")
@@ -393,47 +423,66 @@ class YggdrasilBackend:
                 if not self.crypto.validate_texture_dimensions(img, is_cape):
                     raise IllegalArgumentException("Invalid image dimensions")
 
-                # 3. 计算 Hash
-                texture_hash = self.crypto.compute_texture_hash(file_bytes)
+                # 规范化图片：转换为 RGBA 并重新保存为干净的 PNG（去除不必要 chunk）
+                img = img.convert("RGBA")
+                normalized_io = BytesIO()
+                img.save(normalized_io, format="PNG")
+                normalized_bytes = normalized_io.getvalue()
 
-                # 4. 保存文件 (保存到本地 textures/ 目录)
+                # 3. 计算 Hash（基于规范化后的数据）
+                texture_hash = self.crypto.compute_texture_hash(normalized_bytes)
+
+                # 4. 保存文件 (保存到本地 textures/ 目录)，文件名使用 {hash}.png
                 textures_dir = os.path.join(os.path.dirname(__file__), "textures")
                 os.makedirs(textures_dir, exist_ok=True)
                 file_name = f"{texture_hash}.png"
                 file_path = os.path.join(textures_dir, file_name)
                 with open(file_path, "wb") as wf:
-                    wf.write(file_bytes)
+                    wf.write(normalized_bytes)
 
                 print(
-                    f"DEBUG: Saved texture {texture_hash} -> {file_path} (size: {len(file_bytes)} bytes)"
+                    f"DEBUG: Saved texture {texture_hash} -> {file_path} (size: {len(normalized_bytes)} bytes)"
                 )
 
                 # 5. 更新数据库
                 field = "skin_hash" if texture_type.lower() == "skin" else "cape_hash"
-                sql = f"UPDATE profiles SET {field} = ? WHERE id = ?"
-                params = [texture_hash, uuid]
-
                 if texture_type.lower() == "skin":
                     # 更新 model
                     m_val = "slim" if model == "slim" else "default"
                     sql = f"UPDATE profiles SET skin_hash = ?, texture_model = ? WHERE id = ?"
                     params = [texture_hash, m_val, uuid]
+                else:
+                    sql = f"UPDATE profiles SET {field} = ? WHERE id = ?"
+                    params = [texture_hash, uuid]
 
                 await conn.execute(sql, tuple(params))
                 await conn.commit()
 
+            except YggdrasilError:
+                # 已知的业务异常直接抛出
+                raise
             except Exception as e:
-                print(e)
+                print("Texture processing error:", e)
                 raise IllegalArgumentException("Failed to process texture")
 
     async def delete_texture(self, access_token: str, uuid: str, texture_type: str):
         async with self.db.get_conn() as conn:
             # 鉴权
             cursor = await conn.execute(
-                "SELECT profile_id FROM tokens WHERE access_token = ?", (access_token,)
+                "SELECT user_id, profile_id FROM tokens WHERE access_token = ?",
+                (access_token,),
             )
             row = await cursor.fetchone()
-            if not row or row[0] != uuid:
+            if not row:
+                raise ForbiddenOperationException("Unauthorized")
+
+            token_user_id, token_profile_id = row
+
+            p_cursor = await conn.execute(
+                "SELECT user_id FROM profiles WHERE id = ?", (uuid,)
+            )
+            p_row = await p_cursor.fetchone()
+            if not p_row or p_row[0] != token_user_id:
                 raise ForbiddenOperationException("Unauthorized")
 
             field = "skin_hash" if texture_type.lower() == "skin" else "cape_hash"

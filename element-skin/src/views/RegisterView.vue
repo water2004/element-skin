@@ -1,21 +1,23 @@
 <template>
-  <el-card>
-    <h2>注册</h2>
-    <el-form :model="form">
-      <el-form-item label="Email">
-        <el-input v-model="form.email" />
-      </el-form-item>
-      <el-form-item label="密码">
-        <el-input v-model="form.password" type="password" />
-      </el-form-item>
-      <el-form-item label="邀请码 (若需要)">
-        <el-input v-model="form.invite" />
-      </el-form-item>
-      <el-form-item>
-        <el-button type="primary" @click="register">注册</el-button>
-      </el-form-item>
-    </el-form>
-  </el-card>
+  <div class="app-container">
+    <el-card>
+      <h2>注册</h2>
+      <el-form :model="form">
+        <el-form-item label="Email">
+          <el-input v-model="form.email" />
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input v-model="form.password" type="password" />
+        </el-form-item>
+        <el-form-item label="邀请码 (若需要)">
+          <el-input v-model="form.invite" />
+        </el-form-item>
+        <el-form-item>
+          <el-button type="primary" @click="register">注册</el-button>
+        </el-form-item>
+      </el-form>
+    </el-card>
+  </div>
 </template>
 
 <script setup>

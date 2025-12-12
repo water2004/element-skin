@@ -5,8 +5,9 @@ import jwt
 from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse, Response
-from fastapi import UploadFile, File, Form
+from fastapi import UploadFile, File, Form, Header
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import time
 import uuid
@@ -39,10 +40,56 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+
+# 全局请求/响应日志中间件：打印每个收到的请求摘要与响应状态，便于诊断为什么游戏没有请求到 PNG
+@app.middleware("http")
+async def log_all_requests(request: Request, call_next):
+    try:
+        body = await request.body()
+    except Exception:
+        body = b""
+
+    # 打印基础请求信息（限制 body 输出长度）
+    print("--- HTTP REQUEST ---")
+    print(f"{request.method} {request.url}")
+    # 打印部分头部信息（避免泄露大块敏感数据）
+    hdrs = {k: v for k, v in request.headers.items()}
+    print("Headers:", {k: hdrs[k] for k in list(hdrs)[:20]})
+    if body:
+        try:
+            preview = body.decode("utf-8", errors="replace")
+        except Exception:
+            preview = str(body[:200])
+        print("Body preview:", preview[:1000])
+    else:
+        print("Body preview: <empty>")
+
+    # Recreate request stream for downstream
+    async def receive():
+        return {"type": "http.request", "body": body}
+
+    response = await call_next(Request(request.scope, receive))
+
+    print(
+        f"--- HTTP RESPONSE --- {response.status_code} for {request.method} {request.url}\n"
+    )
+    return response
+
+
+# 允许跨域开发请求（开发环境使用），生产请按需限制
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # 挂载静态材质目录
 textures_path = os.path.join(os.path.dirname(__file__), "textures")
 os.makedirs(textures_path, exist_ok=True)
-app.mount("/textures", StaticFiles(directory=textures_path), name="textures")
+# 挂载为 /static/textures，避免与 /textures/upload 路由冲突（StaticFiles 会拦截相同前缀的请求）
+app.mount("/static/textures", StaticFiles(directory=textures_path), name="textures")
 
 
 # 异常处理器
@@ -111,8 +158,10 @@ async def join_server(req: JoinRequest, request: Request):
 
 
 @app.get("/sessionserver/session/minecraft/hasJoined")
-async def has_joined(username: str, serverId: str, ip: str = None):
-    profile = await backend.has_joined(username, serverId, ip)
+async def has_joined(request: Request, username: str, serverId: str, ip: str = None):
+    profile = await backend.has_joined(
+        username, serverId, ip, base_url=str(request.base_url)
+    )
     if profile:
         return profile
     else:
@@ -120,11 +169,65 @@ async def has_joined(username: str, serverId: str, ip: str = None):
 
 
 @app.get("/sessionserver/session/minecraft/profile/{uuid}")
-async def get_profile(uuid: str, unsigned: bool = True):
-    profile = await backend.get_profile(uuid, unsigned)
+async def get_profile(request: Request, uuid: str, unsigned: bool = True):
+    profile = await backend.get_profile(uuid, unsigned, base_url=str(request.base_url))
     if profile:
         return profile
     return Response(status_code=204)
+
+
+async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(security)):
+    token = creds.credentials
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
+        return payload
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="token expired")
+    except Exception:
+        raise HTTPException(status_code=401, detail="invalid token")
+
+
+def admin_required(payload: dict = Depends(get_current_user)):
+    if not payload.get("is_admin"):
+        raise HTTPException(status_code=403, detail="admin required")
+    return payload
+
+
+@app.get("/me")
+async def me(payload: dict = Depends(get_current_user)):
+    user_id = payload.get("sub")
+    async with db.get_conn() as conn:
+        cur = await conn.execute(
+            "SELECT id, email, preferred_language, is_admin FROM users WHERE id=?",
+            (user_id,),
+        )
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="user not found")
+
+        cur2 = await conn.execute(
+            "SELECT id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE user_id=?",
+            (user_id,),
+        )
+        profiles = await cur2.fetchall()
+        profiles_list = [
+            {
+                "id": p[0],
+                "name": p[1],
+                "model": p[2],
+                "skin_hash": p[3],
+                "cape_hash": p[4],
+            }
+            for p in profiles
+        ]
+
+        return {
+            "id": row[0],
+            "email": row[1],
+            "lang": row[2],
+            "is_admin": bool(row[3]),
+            "profiles": profiles_list,
+        }
 
 
 # 注册接口（支持邀请码，若 settings 中设置 invite_required=1 则必须提供有效邀请码）
@@ -213,23 +316,6 @@ async def admin_list_invites():
         ]
 
 
-async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(security)):
-    token = creds.credentials
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGO])
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="token expired")
-    except Exception:
-        raise HTTPException(status_code=401, detail="invalid token")
-
-
-def admin_required(payload: dict = Depends(get_current_user)):
-    if not payload.get("is_admin"):
-        raise HTTPException(status_code=403, detail="admin required")
-    return payload
-
-
 @app.get("/admin/users/list")
 async def admin_users_list(
     page: int = 1, per_page: int = 20, _=Depends(admin_required)
@@ -282,21 +368,70 @@ async def admin_delete_user(payload: dict, _=Depends(admin_required)):
 @app.post("/textures/upload")
 async def textures_upload(
     file: UploadFile = File(...),
-    accessToken: str = Form(...),
+    accessToken: str = Form(None),
     uuid: str = Form(...),
     texture_type: str = Form(...),
     model: str = Form(""),
+    authorization: str = Header(None),
 ):
+    # 兼容两种传递 access token 的方式：1) Authorization: Bearer <token> 2) form field accessToken
     content = await file.read()
-    await backend.upload_texture(accessToken, uuid, texture_type, content, model)
+    token = accessToken
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    if not token:
+        raise HTTPException(status_code=401, detail="access token required")
+
+    await backend.upload_texture(token, uuid, texture_type, content, model)
     return {"ok": True}
+
+
+@app.put("/api/user/profile/{uuid}/{textureType}")
+async def api_put_profile(
+    uuid: str,
+    textureType: str,
+    file: UploadFile = File(...),
+    model: str = Form(""),
+    authorization: str = Header(None),
+):
+    # 接受 Authorization: Bearer <accessToken>
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    if not token:
+        raise HTTPException(status_code=401, detail="access token required")
+    content = await file.read()
+    await backend.upload_texture(token, uuid, textureType, content, model)
+    return Response(status_code=204)
+
+
+@app.delete("/api/user/profile/{uuid}/{textureType}")
+async def api_delete_profile(
+    uuid: str, textureType: str, authorization: str = Header(None)
+):
+    token = None
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split(" ", 1)[1]
+    if not token:
+        raise HTTPException(status_code=401, detail="access token required")
+    await backend.delete_texture(token, uuid, textureType)
+    return Response(status_code=204)
 
 
 # 扩展 API: 元数据
 @app.get("/")
-async def get_meta():
+async def get_meta(request: Request):
     with open("public.pem", "r") as f:
         pub_key = f.read()
+
+    # 动态返回 skinDomains，以包含当前请求的主机，避免客户端因域名白名单不匹配而拒绝材质
+    host = request.url.hostname or ""
+    skin_domains = [host] if host else ["example.com"]
+    # 若为多级域名，则同时添加根域名的通配符（例如 sub.example.com -> .example.com）
+    if host and "." in host:
+        parts = host.split(".", 1)
+        if len(parts) == 2:
+            skin_domains.append("." + parts[1])
 
     return {
         "meta": {
@@ -304,7 +439,7 @@ async def get_meta():
             "implementationName": "Python-UV-Yggdrasil",
             "implementationVersion": "1.0.0",
         },
-        "skinDomains": ["example.com"],
+        "skinDomains": skin_domains,
         "signaturePublickey": pub_key,
     }
 

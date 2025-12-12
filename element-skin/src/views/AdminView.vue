@@ -1,12 +1,10 @@
 <template>
-  <el-container>
-    <el-header>
+  <div class="app-container">
+    <el-card>
       <h2>管理员面板</h2>
-    </el-header>
-    <el-main>
       <admin-users />
-    </el-main>
-  </el-container>
+    </el-card>
+  </div>
 </template>
 
 <script setup>

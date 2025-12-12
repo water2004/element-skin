@@ -7,6 +7,13 @@
   font-weight: normal;
 }
 
+/* 统一应用容器，配合 AppLayout.app-container 使用 */
+.app-container{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
 a,
 .green {
   text-decoration: none;
@@ -22,14 +29,12 @@ a,
 }
 
 @media (min-width: 1024px) {
+  /* 大屏仍然使用居中容器，而不是两列布局，避免内容被强制分栏导致空白 */
   body {
-    display: flex;
-    place-items: center;
+    display: block;
   }
 
   #app {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    padding: 0 2rem;
+    padding: 0 4rem;
   }
 }
