@@ -1,0 +1,62 @@
+### Node
+node_modules/
+dist/
+build/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+### Vite / frontend
+.env
+.env.*
+.local
+
+### Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+dist/
+*.egg-info/
+pip-log.txt
+pip-delete-this-directory.txt
+yggdrasil.db
+*.db
+
+### Logs
+*.log
+.pytest_cache/
+coverage/
+
+### IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+### macOS
+.DS_Store
+
+### Certificates / keys / secrets
+*.pem
+*.key
+.env.local
+
+### Backend textures / uploaded assets (can be large)
+/skin-backend/textures/
+
+### Misc
+.cache/
+node_modules/
+.history/
