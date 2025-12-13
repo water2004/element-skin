@@ -1,166 +1,40 @@
 version: '3.8'
 
-# 自定义网络
 networks:
-  element-skin-network:
+  element-skin:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.28.0.0/16
+        - subnet: 172.18.0.0/16
+          gateway: 172.18.0.1
 
 services:
   # 后端服务
   backend:
     build:
       context: ./skin-backend
-      dockerfile: Dockerfile
+      network: host
     container_name: element-skin-backend
     restart: unless-stopped
-    
-    # 端口映射
     ports:
       - "8000:8000"
-    
-    # 环境变量
-    environment:
-      # JWT 配置（⚠️ 生产环境务必修改！）
-      - JWT__SECRET=${JWT_SECRET:-your-production-secret-key-change-me}
-      
-      # 数据库配置
-      - DATABASE__PATH=/data/yggdrasil.db
-      
-      # 材质存储配置
-      - TEXTURES__DIRECTORY=/data/textures
-      
-      # 服务器配置
-      - SERVER__HOST=0.0.0.0
-      - SERVER__PORT=8000
-    
-    # 卷挂载（使用绝对路径，不使用数据卷）
     volumes:
-      # 配置文件（只读）
-      - ./config/config.yaml:/app/config.yaml:ro
-      
-      # RSA 密钥对（如需持久化）
-      - ./config/keys:/app/keys:ro
-      
-      # 数据存储（读写）
+      - ./config.yaml:/app/config.yaml:ro
       - ./data:/data
-      
-      # 如需自定义日志目录
-      # - ./logs:/app/logs
-    
-    # 健康检查
-    healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/', timeout=3)"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
-    
-    # 网络配置
     networks:
-      element-skin-network:
-        ipv4_address: 172.28.0.2
-    
-    # 资源限制（可选）
-    deploy:
-      resources:
-        limits:
-          cpus: '1.0'
-          memory: 512M
-        reservations:
-          cpus: '0.5'
-          memory: 256M
-  
+      - element-skin
+
   # 前端服务
   frontend:
     build:
       context: ./element-skin
-      dockerfile: Dockerfile
+      network: host
       args:
-        # 构建参数 - 部署到子目录示例：
-        # 如需部署到子目录（如 /skin/），请修改以下参数：
-        # - VITE_BASE_PATH=/skin/  （必须以 / 开头和结尾）
-        # - VITE_API_BASE=         （通常留空）
-        # 然后执行：docker compose build --no-cache frontend
-        - VITE_BASE_PATH=/
-        - VITE_API_BASE=
+        - VITE_BASE_PATH=${VITE_BASE_PATH:-/}
+        - VITE_API_BASE=${VITE_API_BASE:-}
     container_name: element-skin-frontend
     restart: unless-stopped
-    
-    # 端口映射
     ports:
-      - "80:80"
-    
-    # 依赖后端服务
-    depends_on:
-      backend:
-        condition: service_healthy
-    
-    # 健康检查
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    
-    # 网络配置
+      - "3000:80"
     networks:
-      element-skin-network:
-        ipv4_address: 172.28.0.3
-    
-    # 资源限制（可选）
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M
-        reservations:
-          cpus: '0.25'
-          memory: 128M
-
-  # 可选：Nginx 反向代理（统一入口）
-  nginx:
-    image: nginx:1.25-alpine
-    container_name: element-skin-nginx
-    restart: unless-stopped
-    
-    # 端口映射
-    ports:
-      - "80:80"
-      - "443:443"
-    
-    # 配置文件挂载
-    volumes:
-      - ./config/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./config/ssl:/etc/nginx/ssl:ro  # SSL 证书目录
-    
-    # 依赖其他服务
-    depends_on:
-      - frontend
-      - backend
-    
-    # 网络配置
-    networks:
-      element-skin-network:
-        ipv4_address: 172.28.0.10
-    
-    # 健康检查
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-
-# 注意：
-# 1. 首次启动前需创建以下目录结构：
-#    - ./config/config.yaml
-#    - ./config/keys/ (存放 private.pem 和 public.pem)
-#    - ./data/ (数据库和材质存储)
-#
-# 2. 修改 JWT_SECRET 环境变量或在 .env 文件中设置
-#
-# 3. 如需使用 Nginx 统一入口，取消注释 nginx 服务，
-#    并将 frontend 的端口改为非 80（如 3000）
+      - element-skin

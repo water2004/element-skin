@@ -1,0 +1,14 @@
+# Element-Skin 配置文件
+
+jwt:
+  secret: "CHANGE-ME-TO-RANDOM-SECRET"  # ⚠️ 生产环境必须修改
+
+database:
+  path: "/data/yggdrasil.db"
+
+textures:
+  directory: "/data/textures"
+
+server:
+  host: "0.0.0.0"
+  port: 8000

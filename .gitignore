@@ -12,8 +12,6 @@ pnpm-lock.yaml
 yarn.lock
 
 ### Vite / frontend
-.env
-.env.*
 .local
 
 ### Python
