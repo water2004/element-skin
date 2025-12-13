@@ -2,6 +2,8 @@
 
 基于 Vue 3 + FastAPI 的 Minecraft 外置登录系统。
 
+![](./img/root.png)
+
 ## 功能特性
 
 - ✅ 完整的 Yggdrasil API 支持
