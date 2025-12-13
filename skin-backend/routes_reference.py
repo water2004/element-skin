@@ -2,7 +2,7 @@
 from fastapi import FastAPI, Request, HTTPException, Depends, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse, Response
 from fastapi import UploadFile, File, Form, Header, Body
@@ -14,16 +14,29 @@ import uuid
 from backend import YggdrasilBackend, YggdrasilError
 from database import Database
 from models import AuthRequest, RefreshRequest, JoinRequest, CryptoUtils
+from config_loader import config
+from rate_limiter import rate_limiter, check_rate_limit
 
 # 初始化
 db = Database()
 crypto = CryptoUtils("private.pem")
 backend = YggdrasilBackend(db, crypto)
 
-# JWT 配置
-JWT_SECRET = os.environ.get("JWT_SECRET", "dev-secret")
+# JWT 配置（secret 从配置文件，expire_days 从数据库）
+JWT_SECRET = config.get("jwt.secret", "dev-secret")
 JWT_ALGO = "HS256"
-JWT_EXPIRE_DAYS = int(os.environ.get("JWT_EXPIRE_DAYS", "7"))
+
+
+async def get_jwt_expire_days() -> int:
+    """从数据库获取 JWT 过期天数"""
+    async with db.get_conn() as conn:
+        cur = await conn.execute(
+            "SELECT value FROM settings WHERE key='jwt_expire_days'"
+        )
+        row = await cur.fetchone()
+        return int(row[0]) if row else 7
+
+
 security = HTTPBearer()
 
 
@@ -105,8 +118,18 @@ async def ygg_exception_handler(request: Request, exc: YggdrasilError):
 
 
 @app.post("/authserver/authenticate")
-async def authenticate(req: AuthRequest):
-    resp = await backend.authenticate(req)
+async def authenticate(req: AuthRequest, request: Request):
+    # 速率限制检查
+    await check_rate_limit(request, is_auth_endpoint=True)
+
+    try:
+        resp = await backend.authenticate(req)
+        # 登录成功，重置速率限制
+        rate_limiter.reset(request.client.host, request.url.path)
+    except Exception as e:
+        # 登录失败，不重置
+        raise e
+
     # 如果请求了用户信息，则签发 JWT（包含 is_admin）
     if resp.get("user"):
         user_id = resp["user"]["id"]
@@ -118,10 +141,11 @@ async def authenticate(req: AuthRequest):
             row = await cur.fetchone()
             is_admin = bool(row[0]) if row else False
 
+        jwt_expire_days = await get_jwt_expire_days()
         payload = {
             "sub": user_id,
             "is_admin": is_admin,
-            "exp": datetime.utcnow() + timedelta(days=JWT_EXPIRE_DAYS),
+            "exp": datetime.now(timezone.utc) + timedelta(days=jwt_expire_days),
         }
         token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGO)
         resp["token"] = token
@@ -146,6 +170,23 @@ async def invalidate(req: dict):
     token = req.get("accessToken")
     if token:
         await backend.invalidate(token)
+    return Response(status_code=204)
+
+
+@app.post("/authserver/signout")
+async def signout(req: dict, request: Request):
+    """
+    登出：吊销用户的所有令牌
+    需要验证用户密码，应受速率限制
+    """
+    await check_rate_limit(request, is_auth_endpoint=True)
+    username = req.get("username")
+    password = req.get("password")
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Missing username or password")
+    await backend.signout(username, password)
+    # 成功则重置速率限制
+    rate_limiter.reset(request.client.host, request.url.path)
     return Response(status_code=204)
 
 
@@ -184,6 +225,75 @@ async def get_profile(request: Request, uuid: str, unsigned: bool = True):
     if profile:
         return profile
     return Response(status_code=204)
+
+
+@app.post("/api/profiles/minecraft")
+async def get_profiles_by_names(req: list[str], request: Request):
+    """
+    按名称批量查询角色
+    请求体为角色名称数组，最多100个
+    """
+    if not isinstance(req, list):
+        raise HTTPException(status_code=400, detail="Request body must be an array")
+
+    async with db.get_conn() as conn:
+        cur = await conn.execute("SELECT value FROM settings WHERE key='site_url'")
+        row = await cur.fetchone()
+        site_url = row[0] if row else str(request.base_url)
+
+    profiles = await backend.get_profiles_by_names(req, base_url=site_url)
+    return profiles
+
+
+# API元数据端点 (Yggdrasil服务发现)
+@app.get("/")
+async def get_api_metadata(request: Request):
+    """
+    返回API元数据，用于Yggdrasil客户端发现服务端配置
+    包括服务端信息、材质域名白名单、签名公钥等
+    """
+    async with db.get_conn() as conn:
+        # 获取站点名称和URL
+        site_name_cur = await conn.execute(
+            "SELECT value FROM settings WHERE key='site_name'"
+        )
+        site_name_row = await site_name_cur.fetchone()
+        site_name = site_name_row[0] if site_name_row else "Yggdrasil 皮肤站"
+
+        site_url_cur = await conn.execute(
+            "SELECT value FROM settings WHERE key='site_url'"
+        )
+        site_url_row = await site_url_cur.fetchone()
+        site_url = (
+            site_url_row[0] if site_url_row else str(request.base_url).rstrip("/")
+        )
+
+    # 读取公钥
+    public_key_pem = crypto.get_public_key_pem()
+
+    # 构建元数据响应
+    metadata = {
+        "meta": {
+            "serverName": site_name,
+            "implementationName": "element-skin",
+            "implementationVersion": "1.0.0",
+            "links": {
+                "homepage": site_url,
+                "register": f"{site_url}/register" if site_url else None,
+            },
+            "feature.non_email_login": True,  # 支持角色名登录
+        },
+        "skinDomains": [
+            (
+                site_url.replace("https://", "").replace("http://", "").split("/")[0]
+                if site_url
+                else "localhost"
+            )
+        ],
+        "signaturePublickey": public_key_pem,
+    }
+
+    return metadata
 
 
 async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(security)):
@@ -252,10 +362,11 @@ async def refresh_jwt(payload: dict = Depends(get_current_user)):
             raise HTTPException(status_code=404, detail="user not found")
 
         is_admin = bool(row[0])
+        jwt_expire_days = await get_jwt_expire_days()
         new_payload = {
             "sub": user_id,
             "is_admin": is_admin,
-            "exp": datetime.utcnow() + timedelta(days=JWT_EXPIRE_DAYS),
+            "exp": datetime.now(timezone.utc) + timedelta(days=jwt_expire_days),
         }
         token = jwt.encode(new_payload, JWT_SECRET, algorithm=JWT_ALGO)
 
@@ -377,7 +488,7 @@ async def upload_texture_to_library(
         img.save(normalized_io, format="PNG")
         normalized_bytes = normalized_io.getvalue()
 
-        texture_hash = crypto.compute_texture_hash(normalized_bytes)
+        texture_hash = crypto.compute_texture_hash_from_image(img)
 
         textures_dir = os.path.join(os.path.dirname(__file__), "textures")
         os.makedirs(textures_dir, exist_ok=True)
@@ -482,45 +593,69 @@ async def apply_texture_to_profile(
 
 # 注册接口（支持邀请码，若 settings 中设置 invite_required=1 则必须提供有效邀请码）
 @app.post("/register")
-async def register(req: dict):
+async def register(req: dict, request: Request):
+    # 速率限制检查
+    await check_rate_limit(request, is_auth_endpoint=True)
+
     email = req.get("email")
     password = req.get("password")
     invite = req.get("invite")
     if not email or not password:
         raise HTTPException(status_code=400, detail="email and password required")
 
+    # 密码强度检查
+    if len(password) < 6:
+        raise HTTPException(
+            status_code=400, detail="password must be at least 6 characters"
+        )
+
     async with db.get_conn() as conn:
-        # 检查是否需要邀请码
+        # 检查是否允许注册
         cur = await conn.execute(
-            "SELECT value FROM settings WHERE key=?", ("invite_required",)
+            "SELECT value FROM settings WHERE key=?", ("allow_register",)
         )
         row = await cur.fetchone()
-        invite_required = row and row[0] == "1"
+        allow_register = not row or row[0] == "true"
+        if not allow_register:
+            raise HTTPException(status_code=403, detail="registration is disabled")
 
-        if invite_required:
+        # 检查是否需要邀请码
+        cur = await conn.execute(
+            "SELECT value FROM settings WHERE key=?", ("require_invite",)
+        )
+        row = await cur.fetchone()
+        require_invite = row and row[0] == "true"
+
+        if require_invite:
             if not invite:
-                raise HTTPException(status_code=400, detail="invite required")
+                raise HTTPException(status_code=400, detail="invite code required")
             c = await conn.execute(
                 "SELECT code, used_by FROM invites WHERE code=?", (invite,)
             )
             crow = await c.fetchone()
             if not crow:
-                raise HTTPException(status_code=400, detail="invalid invite")
+                raise HTTPException(status_code=400, detail="invalid invite code")
             if crow[1]:
-                raise HTTPException(status_code=400, detail="invite already used")
+                raise HTTPException(status_code=400, detail="invite code already used")
+
+        # 检查是否是第一个用户
+        cur = await conn.execute("SELECT COUNT(*) FROM users")
+        count = await cur.fetchone()
+        is_first_user = count and count[0] == 0
+
+        # 使用 bcrypt 哈希密码
+        import bcrypt
+
+        password_hash = bcrypt.hashpw(
+            password.encode("utf-8"), bcrypt.gensalt()
+        ).decode("utf-8")
 
         # 创建用户
         uid = uuid.uuid4().hex
         await conn.execute(
-            "INSERT INTO users (id, email, password) VALUES (?, ?, ?)",
-            (uid, email, password),
+            "INSERT INTO users (id, email, password, is_admin) VALUES (?, ?, ?, ?)",
+            (uid, email, password_hash, 1 if is_first_user else 0),
         )
-
-        # 检查是否是第一个用户，如果是则设为管理员
-        cur = await conn.execute("SELECT COUNT(*) FROM users")
-        count = await cur.fetchone()
-        if count and count[0] == 1:
-            await conn.execute("UPDATE users SET is_admin=1 WHERE id=?", (uid,))
 
         # 创建默认 profile
         pid = uuid.uuid4().hex
@@ -529,9 +664,10 @@ async def register(req: dict):
             (pid, uid, email.split("@")[0]),
         )
 
-        if invite_required and invite:
+        # 如果使用了邀请码，标记为已使用
+        if require_invite and invite:
             await conn.execute(
-                "UPDATE invites SET used_by=? WHERE code=?", (uid, invite)
+                "UPDATE invites SET used_by=? WHERE code=?", (email, invite)
             )
 
         await conn.commit()
@@ -539,12 +675,7 @@ async def register(req: dict):
     return {"id": uid}
 
 
-# 管理接口：简单的 invite 与 用户列表示例
-@app.get("/admin/users")
-async def admin_list_users():
-    raise HTTPException(
-        status_code=401, detail="use paginated endpoint /admin/users/list"
-    )
+# 管理接口：invite 与 用户相关操作
 
 
 @app.post("/admin/invite/generate")
@@ -745,6 +876,10 @@ async def get_admin_settings(payload: dict = Depends(admin_required)):
         "require_invite": settings.get("require_invite", "false") == "true",
         "allow_register": settings.get("allow_register", "true") == "true",
         "max_texture_size": int(settings.get("max_texture_size", "1024")),
+        "rate_limit_enabled": settings.get("rate_limit_enabled", "true") == "true",
+        "rate_limit_auth_attempts": int(settings.get("rate_limit_auth_attempts", "5")),
+        "rate_limit_auth_window": int(settings.get("rate_limit_auth_window", "15")),
+        "jwt_expire_days": int(settings.get("jwt_expire_days", "7")),
     }
 
 
@@ -752,7 +887,7 @@ async def get_admin_settings(payload: dict = Depends(admin_required)):
 async def save_admin_settings(
     payload: dict = Depends(admin_required), body: dict = Body(...)
 ):
-    """保存站点设置"""
+    """保存站点设置（规范化布尔值为小写 'true'/'false'，数字保存为字符串）"""
     async with db.get_conn() as conn:
         for key in [
             "site_name",
@@ -760,9 +895,18 @@ async def save_admin_settings(
             "require_invite",
             "allow_register",
             "max_texture_size",
+            "rate_limit_enabled",
+            "rate_limit_auth_attempts",
+            "rate_limit_auth_window",
+            "jwt_expire_days",
         ]:
             if key in body:
-                value = str(body[key])
+                val = body[key]
+                # 规范化布尔值为小写 "true"/"false"
+                if isinstance(val, bool):
+                    value = "true" if val else "false"
+                else:
+                    value = str(val)
                 await conn.execute(
                     "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
                     (key, value),
@@ -801,6 +945,12 @@ async def get_admin_users(payload: dict = Depends(admin_required)):
 async def toggle_user_admin(user_id: str, payload: dict = Depends(admin_required)):
     """切换用户管理员权限"""
     async with db.get_conn() as conn:
+        # 禁止管理员对自己取消管理员
+        actor_id = payload.get("sub")
+        if actor_id == user_id:
+            raise HTTPException(
+                status_code=403, detail="cannot change own admin status"
+            )
         cur = await conn.execute("SELECT is_admin FROM users WHERE id=?", (user_id,))
         row = await cur.fetchone()
         if not row:
@@ -849,13 +999,40 @@ async def get_admin_invites(payload: dict = Depends(admin_required)):
 
 
 @app.post("/admin/invites")
-async def create_admin_invite(payload: dict = Depends(admin_required)):
-    """生成新邀请码"""
+async def create_admin_invite(
+    payload: dict = Depends(admin_required), body: dict = Body(None)
+):
+    """生成新邀请码（支持自定义或自动生成）"""
     import secrets
+    import re
 
-    code = secrets.token_urlsafe(16)
+    # 如果提供了自定义邀请码，使用它；否则自动生成
+    if body and body.get("code"):
+        code = body["code"].strip()
+        # 验证自定义邀请码格式
+        if len(code) < 6:
+            raise HTTPException(
+                status_code=400, detail="invite code must be at least 6 characters"
+            )
+        if len(code) > 32:
+            raise HTTPException(
+                status_code=400, detail="invite code must be at most 32 characters"
+            )
+        if not re.match(r"^[a-zA-Z0-9_-]+$", code):
+            raise HTTPException(
+                status_code=400,
+                detail="invite code can only contain letters, numbers, underscore and hyphen",
+            )
+    else:
+        code = secrets.token_urlsafe(16)
+
     created_at = int(time.time() * 1000)
     async with db.get_conn() as conn:
+        # 检查邀请码是否已存在
+        cur = await conn.execute("SELECT code FROM invites WHERE code=?", (code,))
+        if await cur.fetchone():
+            raise HTTPException(status_code=400, detail="invite code already exists")
+
         await conn.execute(
             "INSERT INTO invites (code, created_at) VALUES (?, ?)", (code, created_at)
         )

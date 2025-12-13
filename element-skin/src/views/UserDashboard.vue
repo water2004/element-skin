@@ -72,21 +72,11 @@
         <div v-if="active === 'roles' && user" class="roles-section">
           <div class="section-header">
             <h2>角色管理</h2>
+            <el-button type="primary" size="large" @click="showCreateRoleDialog = true">
+              <el-icon><Plus /></el-icon>
+              <span style="margin-left:8px">新建角色</span>
+            </el-button>
           </div>
-
-          <el-card class="create-role-card">
-            <el-form :inline="true" @submit.prevent="createRole">
-              <el-form-item label="角色名称">
-                <el-input v-model="newRoleName" placeholder="输入新角色名" style="width:200px" />
-              </el-form-item>
-              <el-form-item>
-                <el-button type="primary" @click="createRole" native-type="submit">
-                  <el-icon><Plus /></el-icon>
-                  新增角色
-                </el-button>
-              </el-form-item>
-            </el-form>
-          </el-card>
 
           <div class="roles-grid">
             <el-card v-for="profile in user.profiles || []" :key="profile.id" class="role-card">
@@ -120,7 +110,17 @@
           </div>
 
           <el-card class="profile-form-card">
-            <el-form label-width="120px" :model="form">
+            <div class="profile-header">
+              <el-avatar :size="72" class="profile-avatar">{{ emailInitial }}</el-avatar>
+              <div class="profile-meta">
+                <h3>{{ user.display_name || '未设置显示名' }}</h3>
+                <p>{{ user.email }}</p>
+              </div>
+            </div>
+
+            <el-divider />
+
+            <el-form label-width="120px" :model="form" label-position="left">
               <el-form-item label="邮箱">
                 <el-input v-model="form.email" placeholder="请输入邮箱" />
               </el-form-item>
@@ -130,16 +130,16 @@
               <el-form-item label="新密码">
                 <el-input type="password" v-model="form.password" placeholder="留空则不修改密码" show-password />
               </el-form-item>
-              <el-form-item>
+              <div class="profile-actions">
                 <el-button type="primary" @click="updateProfile" size="large">
                   <el-icon><Check /></el-icon>
                   保存修改
                 </el-button>
-                <el-button type="danger" @click="deleteAccount" size="large" v-if="!user.is_admin" style="margin-left:20px">
+                <el-button type="danger" @click="deleteAccount" size="large" v-if="!user.is_admin">
                   <el-icon><Delete /></el-icon>
                   注销账号
                 </el-button>
-              </el-form-item>
+              </div>
             </el-form>
           </el-card>
         </div>
@@ -213,6 +213,22 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 新建角色对话框 -->
+    <el-dialog v-model="showCreateRoleDialog" title="新建角色" width="420px">
+      <el-form label-width="100px">
+        <el-form-item label="角色名称">
+          <el-input v-model="newRoleName" placeholder="请输入角色名称" maxlength="32" show-word-limit />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCreateRoleDialog = false">取消</el-button>
+        <el-button type="primary" @click="createRole">
+          <el-icon><Check /></el-icon>
+          创建
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -229,6 +245,7 @@ import SkinViewer from '@/components/SkinViewer.vue'
 const route = useRoute()
 const user = ref(null)
 const newRoleName = ref('')
+const showCreateRoleDialog = ref(false)
 const form = ref({ email: '', password: '', display_name: '' })
 const textures = ref([])
 const showUploadDialog = ref(false)
@@ -378,10 +395,12 @@ async function doApply() {
 }
 
 async function createRole() {
-  if (!newRoleName.value) return ElMessage.error('请输入角色名')
+  const name = (newRoleName.value || '').trim()
+  if (!name) return ElMessage.error('请输入角色名称')
   try {
-    await axios.post('/me/profiles', { name: newRoleName.value }, { headers: authHeaders() })
+    await axios.post('/me/profiles', { name }, { headers: authHeaders() })
     newRoleName.value = ''
+    showCreateRoleDialog.value = false
     ElMessage.success('创建成功')
     fetchMe()
   } catch (e) {
@@ -435,14 +454,19 @@ async function deleteAccount() {
 
 <style scoped>
 .dashboard-container {
-  height: 100%;
+  min-height: 100vh;
   background: #f5f7fa;
+}
+
+.dashboard-container :deep(.el-container) {
+  min-height: 100vh;
 }
 
 .dashboard-sidebar {
   background: #fff;
   border-right: 1px solid #e4e7ed;
   padding: 20px 0;
+  min-height: 100vh;
 }
 
 .user-info {
@@ -475,11 +499,18 @@ async function deleteAccount() {
   line-height: 50px;
   margin: 4px 12px;
   border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.sidebar-menu .el-menu-item:hover {
+  background-color: #ecf5ff;
+  transform: translateX(4px);
 }
 
 .sidebar-menu .el-menu-item.is-active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
+  transform: translateX(0);
 }
 
 .sidebar-menu .admin-menu-item {
@@ -496,6 +527,7 @@ async function deleteAccount() {
 .dashboard-main {
   padding: 30px;
   background: #f5f7fa;
+  min-height: 100vh;
 }
 
 .section-header {
@@ -503,6 +535,18 @@ async function deleteAccount() {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .section-header h2 {
@@ -592,6 +636,8 @@ async function deleteAccount() {
   margin-bottom: 24px;
 }
 
+/* 移除单独的工具栏，按钮与区块标题右侧对齐 */
+
 .roles-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -646,6 +692,31 @@ async function deleteAccount() {
   max-width: 600px;
   margin: 0 auto;
   padding: 30px;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.profile-meta h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.profile-meta p {
+  margin: 6px 0 0;
+  color: #909399;
+  font-size: 13px;
+}
+
+.profile-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
 }
 
 /* 上传对话框样式 */

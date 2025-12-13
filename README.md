@@ -28,6 +28,32 @@ uvicorn routes_reference:app --reload --host 0.0.0.0 --port 8000
 说明：
 - 静态材质目录 `skin-backend/textures/` 会在运行时自动创建。
 - 若需要签名 (Yggdrasil)，请使用 `gen_key.py` 生成 `private.pem`/`public.pem`。
+- **配置文件**：`skin-backend/config.yaml` 包含所有服务器配置（JWT、速率限制、数据库等）。环境变量可覆盖配置（格式：`JWT__SECRET`）。
+
+**安全特性**
+- ✅ **密码加密**：使用 bcrypt 哈希存储，自动升级旧明文密码
+- ✅ **速率限制**：防止暴力破解，**可在管理面板实时配置**
+- ✅ **文件大小检查**：上传材质自动验证大小限制
+- ✅ **配置分离**：基础配置用文件，运营配置在数据库（无需重启）
+
+**配置系统说明**
+
+配置分为两类：
+
+1. **基础配置（config.yaml）** - 需要重启生效
+   - `jwt.secret` — JWT 签名密钥（生产必改！）
+   - `database.path` — 数据库文件路径
+   - `textures.directory` — 材质存储目录
+   - `server.host` / `server.port` — 服务器监听地址
+
+2. **运营配置（管理面板 → 设置）** - 实时生效
+   - 站点名称、URL
+   - JWT 过期时间
+   - 速率限制开关、尝试次数、时间窗口
+   - 材质大小限制
+   - 注册开关、邀请码要求
+
+环境变量可覆盖配置文件（格式：`JWT__SECRET`），但运营配置建议在管理面板修改。
 
 **一键安装（前端）**
 ```bash

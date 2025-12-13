@@ -31,6 +31,10 @@
         <div v-if="active === 'settings'" class="settings-section">
           <div class="section-header">
             <h2>站点设置</h2>
+            <el-button type="primary" @click="loadSettings">
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
           </div>
 
           <el-card class="settings-card">
@@ -51,6 +55,29 @@
                 <el-input v-model="siteSettings.max_texture_size" type="number">
                   <template #suffix>KB</template>
                 </el-input>
+              </el-form-item>
+              <el-divider content-position="left">安全设置</el-divider>
+              <el-form-item label="启用速率限制">
+                <el-switch v-model="siteSettings.rate_limit_enabled" />
+              </el-form-item>
+              <el-form-item label="登录失败限制" v-if="siteSettings.rate_limit_enabled">
+                <el-input v-model="siteSettings.rate_limit_auth_attempts" type="number">
+                  <template #suffix>次</template>
+                </el-input>
+                <el-text size="small" type="info" style="margin-top:4px">每个时间窗口内允许的最大尝试次数</el-text>
+              </el-form-item>
+              <el-form-item label="时间窗口" v-if="siteSettings.rate_limit_enabled">
+                <el-input v-model="siteSettings.rate_limit_auth_window" type="number">
+                  <template #suffix>分钟</template>
+                </el-input>
+                <el-text size="small" type="info" style="margin-top:4px">超限后需等待的时间</el-text>
+              </el-form-item>
+              <el-divider content-position="left">JWT 认证设置</el-divider>
+              <el-form-item label="JWT 过期时间">
+                <el-input v-model="siteSettings.jwt_expire_days" type="number">
+                  <template #suffix>天</template>
+                </el-input>
+                <el-text size="small" type="info" style="margin-top:4px">用户登录后 Token 的有效期</el-text>
               </el-form-item>
               <el-form-item>
                 <el-button type="primary" @click="saveSettings" size="large">
@@ -114,10 +141,16 @@
         <div v-if="active === 'invites'" class="invites-section">
           <div class="section-header">
             <h2>邀请码管理</h2>
-            <el-button type="primary" @click="generateInvite">
-              <el-icon><Plus /></el-icon>
-              生成邀请码
-            </el-button>
+            <div style="display: flex; gap: 12px;">
+              <el-button type="primary" @click="loadInvites">
+                <el-icon><Refresh /></el-icon>
+                刷新
+              </el-button>
+              <el-button type="success" @click="showInviteDialog">
+                <el-icon><Plus /></el-icon>
+                创建邀请码
+              </el-button>
+            </div>
           </div>
 
           <el-card>
@@ -145,7 +178,6 @@
                     size="small"
                     type="danger"
                     @click="deleteInvite(row)"
-                    :disabled="!!row.used_by"
                   >
                     删除
                   </el-button>
@@ -156,11 +188,63 @@
         </div>
       </el-main>
     </el-container>
+
+    <!-- 邀请码创建弹窗 -->
+    <el-dialog
+      v-model="inviteDialogVisible"
+      title="创建邀请码"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="100px">
+        <el-form-item label="生成方式">
+          <el-radio-group v-model="inviteMode">
+            <el-radio value="auto">自动生成</el-radio>
+            <el-radio value="manual">手动输入</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item v-if="inviteMode === 'manual'" label="邀请码">
+          <el-input
+            v-model="customInviteCode"
+            placeholder="请输入自定义邀请码（6-32个字符）"
+            maxlength="32"
+            show-word-limit
+          />
+          <el-text size="small" type="info" style="margin-top: 8px;">
+            支持字母、数字和常见符号，建议使用易记的格式
+          </el-text>
+        </el-form-item>
+
+        <el-form-item v-if="inviteMode === 'auto'" label="预览">
+          <el-text type="success" size="large" style="font-family: monospace;">
+            {{ previewInviteCode }}
+          </el-text>
+          <el-button
+            link
+            type="primary"
+            @click="refreshPreview"
+            style="margin-left: 12px;"
+          >
+            <el-icon><Refresh /></el-icon>
+            换一个
+          </el-button>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="inviteDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmCreateInvite" :loading="creating">
+          <el-icon><Check /></el-icon>
+          创建
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -171,12 +255,22 @@ import {
 const route = useRoute()
 const users = ref([])
 const invites = ref([])
+const inviteDialogVisible = ref(false)
+const inviteMode = ref('auto')
+const customInviteCode = ref('')
+const previewInviteCode = ref('')
+const creating = ref(false)
+
 const siteSettings = ref({
   site_name: '皮肤站',
   site_url: '',
   require_invite: false,
   allow_register: true,
-  max_texture_size: 1024
+  max_texture_size: 1024,
+  rate_limit_enabled: true,
+  rate_limit_auth_attempts: 5,
+  rate_limit_auth_window: 15,
+  jwt_expire_days: 7
 })
 
 const activeRoute = computed(() => route.path)
@@ -233,6 +327,15 @@ async function toggleAdmin(user) {
       '确认操作',
       { type: 'warning' }
     )
+    // 阻止管理员取消自己的管理员权限
+    const token = localStorage.getItem('jwt')
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      if (payload.sub === user.id && user.is_admin) {
+        ElMessage.warning('不能取消自身的管理员权限')
+        return
+      }
+    }
     await axios.post(`/admin/users/${user.id}/toggle-admin`, {}, { headers: authHeaders() })
     ElMessage.success('操作成功')
     refreshUsers()
@@ -269,13 +372,56 @@ async function loadInvites() {
   }
 }
 
-async function generateInvite() {
+function generateRandomCode() {
+  // 生成一个随机的邀请码（16个字符，URL安全）
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  let code = ''
+  for (let i = 0; i < 16; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return code
+}
+
+function showInviteDialog() {
+  inviteMode.value = 'auto'
+  customInviteCode.value = ''
+  previewInviteCode.value = generateRandomCode()
+  inviteDialogVisible.value = true
+}
+
+function refreshPreview() {
+  previewInviteCode.value = generateRandomCode()
+}
+
+async function confirmCreateInvite() {
+  const code = inviteMode.value === 'auto' ? previewInviteCode.value : customInviteCode.value.trim()
+
+  // 验证邀请码
+  if (!code) {
+    ElMessage.warning('请输入邀请码')
+    return
+  }
+
+  if (code.length < 6) {
+    ElMessage.warning('邀请码至少需要6个字符')
+    return
+  }
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(code)) {
+    ElMessage.warning('邀请码只能包含字母、数字、下划线和横线')
+    return
+  }
+
+  creating.value = true
   try {
-    const res = await axios.post('/admin/invites', {}, { headers: authHeaders() })
-    ElMessage.success('生成成功: ' + res.data.code)
+    const res = await axios.post('/admin/invites', { code }, { headers: authHeaders() })
+    ElMessage.success('创建成功！邀请码：' + res.data.code)
+    inviteDialogVisible.value = false
     loadInvites()
   } catch (e) {
-    ElMessage.error('生成失败: ' + (e.response?.data?.detail || e.message))
+    ElMessage.error('创建失败: ' + (e.response?.data?.detail || e.message))
+  } finally {
+    creating.value = false
   }
 }
 
@@ -300,18 +446,34 @@ onMounted(() => {
     loadInvites()
   }
 })
+
+// 监听路由变化，自动刷新对应页面数据
+watch(() => route.path, (newPath) => {
+  if (newPath.includes('/admin/settings')) {
+    loadSettings()
+  } else if (newPath.includes('/admin/users')) {
+    refreshUsers()
+  } else if (newPath.includes('/admin/invites')) {
+    loadInvites()
+  }
+})
 </script>
 
 <style scoped>
 .admin-container {
-  height: 100%;
+  min-height: 100vh;
   background: #f5f7fa;
+}
+
+.admin-container :deep(.el-container) {
+  min-height: 100vh;
 }
 
 .admin-sidebar {
   background: #fff;
   border-right: 1px solid #e4e7ed;
   padding: 20px 0;
+  min-height: 100vh;
 }
 
 .admin-title {
@@ -336,16 +498,24 @@ onMounted(() => {
   line-height: 50px;
   margin: 4px 12px;
   border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.sidebar-menu .el-menu-item:hover {
+  background-color: #ecf5ff;
+  transform: translateX(4px);
 }
 
 .sidebar-menu .el-menu-item.is-active {
   background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
   color: #fff;
+  transform: translateX(0);
 }
 
 .admin-main {
   padding: 30px;
   background: #f5f7fa;
+  min-height: 100vh;
 }
 
 .section-header {
@@ -353,6 +523,18 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+  animation: fadeIn 0.4s ease-out;
+}
+
+@@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .section-header h2 {

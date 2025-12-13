@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { User, Picture, Files, Connection } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const router = useRouter()
@@ -116,11 +117,35 @@ function goRegister() {
   border-radius: 16px;
   margin: 16px auto 0;
   max-width: 1280px;
+  animation: fadeInScale 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .hero-content {
   text-align: center;
   max-width: 800px;
+  animation: slideUpFade 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
+}
+
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .hero-title {
@@ -174,13 +199,13 @@ function goRegister() {
   border-radius: 12px;
   padding: 24px 20px;
   text-align: center;
-  transition: all 0.25s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
 }
 
 .feature-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  transform: translateY(-6px) scale(1.02);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
 }
 
 .feature-icon {
@@ -192,6 +217,11 @@ function goRegister() {
   justify-content: center;
   margin: 0 auto 16px;
   color: #fff;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.feature-card:hover .feature-icon {
+  transform: scale(1.1) rotate(5deg);
 }
 
 .feature-card h3 {

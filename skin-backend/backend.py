@@ -126,26 +126,77 @@ class YggdrasilBackend:
     # =========================
 
     async def authenticate(self, req: AuthRequest) -> Dict:
+        import bcrypt
+
         async with self.db.get_conn() as conn:
-            # 1. 验证用户 (此处简化，明文密码对比，生产环境请用 bcrypt)
+            # 1. 查找用户
             cursor = await conn.execute(
-                "SELECT id, email, preferred_language FROM users WHERE email = ? AND password = ?",
-                (req.username, req.password),
+                "SELECT id, email, preferred_language, password FROM users WHERE email = ?",
+                (req.username,),
             )
             user = await cursor.fetchone()
+
+            # 验证密码
+            if user and len(user) >= 4:
+                user_id, email, lang, password_hash = user
+                # 检查是否是旧的明文密码（向后兼容）
+                if password_hash.startswith("$2"):
+                    # bcrypt 哈希
+                    if not bcrypt.checkpw(
+                        req.password.encode("utf-8"), password_hash.encode("utf-8")
+                    ):
+                        user = None
+                else:
+                    # 旧的明文密码，验证后升级为哈希
+                    if password_hash == req.password:
+                        # 升级为 bcrypt
+                        new_hash = bcrypt.hashpw(
+                            req.password.encode("utf-8"), bcrypt.gensalt()
+                        ).decode("utf-8")
+                        await conn.execute(
+                            "UPDATE users SET password=? WHERE id=?",
+                            (new_hash, user_id),
+                        )
+                        await conn.commit()
+                    else:
+                        user = None
+
             if not user:
-                # 尝试角色名登录（API 元数据需开启）
+                # 尝试角色名登录
                 cursor = await conn.execute(
-                    "SELECT u.id, u.email, u.preferred_language, p.id FROM users u "
-                    "JOIN profiles p ON p.user_id = u.id WHERE p.name = ? AND u.password = ?",
-                    (req.username, req.password),
+                    "SELECT u.id, u.email, u.preferred_language, u.password, p.id FROM users u "
+                    "JOIN profiles p ON p.user_id = u.id WHERE p.name = ?",
+                    (req.username,),
                 )
                 user_via_profile = await cursor.fetchone()
+                if user_via_profile and len(user_via_profile) >= 4:
+                    user_id, email, lang, password_hash, _ = user_via_profile
+                    if password_hash.startswith("$2"):
+                        if not bcrypt.checkpw(
+                            req.password.encode("utf-8"), password_hash.encode("utf-8")
+                        ):
+                            user_via_profile = None
+                    else:
+                        if password_hash != req.password:
+                            user_via_profile = None
+                        else:
+                            # 升级密码
+                            new_hash = bcrypt.hashpw(
+                                req.password.encode("utf-8"), bcrypt.gensalt()
+                            ).decode("utf-8")
+                            await conn.execute(
+                                "UPDATE users SET password=? WHERE id=?",
+                                (new_hash, user_id),
+                            )
+                            await conn.commit()
+
                 if not user_via_profile:
                     raise ForbiddenOperationException(
                         "Invalid credentials. Invalid username or password."
                     )
                 user = user_via_profile[:3]
+            else:
+                user = user[:3]
 
             user_id, email, lang = user
 
@@ -410,6 +461,28 @@ class YggdrasilBackend:
                 row, sign=not unsigned, base_url=base_url
             )
 
+    async def get_profiles_by_names(
+        self, names: list, base_url: str = None
+    ) -> list[Dict]:
+        """
+        按名称批量查询角色（用于 POST /api/profiles/minecraft）
+        """
+        if not names or len(names) == 0:
+            return []
+        # 最多查询100个
+        names = names[:100]
+        async with self.db.get_conn() as conn:
+            placeholders = ",".join("?" * len(names))
+            query = f"SELECT * FROM profiles WHERE name IN ({placeholders})"
+            cursor = await conn.execute(query, names)
+            rows = await cursor.fetchall()
+            results = []
+            for row in rows:
+                # 不包含 properties（简化版）
+                pid, uid, name, model, skin_hash, cape_hash = row
+                results.append({"id": pid, "name": name})
+            return results
+
     async def upload_texture(
         self,
         access_token: str,
@@ -439,6 +512,19 @@ class YggdrasilBackend:
             if not p_row or p_row[0] != token_user_id:
                 raise ForbiddenOperationException("Unauthorized")
 
+            # 检查文件大小限制（从 settings 读取）
+            size_cur = await conn.execute(
+                "SELECT value FROM settings WHERE key='max_texture_size'"
+            )
+            size_row = await size_cur.fetchone()
+            max_size_kb = int(size_row[0]) if size_row else 1024
+            max_size_bytes = max_size_kb * 1024
+
+            if len(file_bytes) > max_size_bytes:
+                raise IllegalArgumentException(
+                    f"Texture file too large. Maximum size: {max_size_kb}KB"
+                )
+
             # 2. 检查图片安全性与规范
             try:
                 # 打开并验证为 PNG
@@ -457,8 +543,9 @@ class YggdrasilBackend:
                 img.save(normalized_io, format="PNG")
                 normalized_bytes = normalized_io.getvalue()
 
-                # 3. 计算 Hash（基于规范化后的数据）
-                texture_hash = self.crypto.compute_texture_hash(normalized_bytes)
+                # 3. 计算 Hash（基于像素数据，符合规范）
+                # 修复：应传入 Image 对象而非 PNG 字节
+                texture_hash = self.crypto.compute_texture_hash_from_image(img)
 
                 # 4. 保存文件 (保存到本地 textures/ 目录)，文件名使用 {hash}.png
                 textures_dir = os.path.join(os.path.dirname(__file__), "textures")

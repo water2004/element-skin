@@ -86,14 +86,8 @@ class Database:
                 )
                 await db.commit()
 
-            # 自动将编号最小的用户设为管理员
-            cur = await db.execute("SELECT id FROM users ORDER BY id LIMIT 1")
-            first_user = await cur.fetchone()
-            if first_user:
-                await db.execute(
-                    "UPDATE users SET is_admin=1 WHERE id=?", (first_user[0],)
-                )
-                await db.commit()
+            # 注意：不再在每次启动时自动设置管理员
+            # 第一个用户的管理员设置已在注册逻辑中处理
 
     def get_conn(self):
         return aiosqlite.connect(self.db_path)

@@ -67,6 +67,19 @@ class CryptoUtils:
         )
         return base64.b64encode(signature).decode("utf-8")
 
+    def get_public_key_pem(self) -> str:
+        """
+        返回PEM格式的公钥，用于API元数据响应
+        """
+        from cryptography.hazmat.primitives import serialization
+
+        public_key = self.private_key.public_key()
+        pem = public_key.public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        return pem.decode("utf-8")
+
     @staticmethod
     def get_offline_uuid(name: str) -> str:
         """
@@ -85,13 +98,20 @@ class CryptoUtils:
     @staticmethod
     def compute_texture_hash(image_bytes: bytes) -> str:
         """
-        实现规范中定义的特殊材质 Hash 算法
+        从PNG字节流计算材质Hash（规范算法：基于像素数据）
         """
         try:
             img = Image.open(BytesIO(image_bytes)).convert("RGBA")
+            return CryptoUtils.compute_texture_hash_from_image(img)
         except Exception:
             raise ValueError("Invalid image data")
 
+    @staticmethod
+    def compute_texture_hash_from_image(img: Image.Image) -> str:
+        """
+        实现规范中定义的特殊材质 Hash 算法：基于像素数据的SHA-256
+        规范要求计算缓冲区 (width, height, pixels) 的 SHA-256，而非 PNG 文件字节
+        """
         width, height = img.size
         # 缓冲区大小: w * h * 4 + 8
         buf = bytearray(width * height * 4 + 8)

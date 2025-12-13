@@ -1,0 +1,20 @@
+# 皮肤站基础配置文件
+# 修改后需重启后端生效
+# 运营配置（速率限制、材质大小等）请在管理面板修改
+
+# JWT 认证配置
+jwt:
+  secret: "dev-secret-please-change-in-production"  # 生产环境务必修改！
+
+# 数据库配置
+database:
+  path: "yggdrasil.db"
+
+# 材质存储配置
+textures:
+  directory: "textures"
+
+# 服务器配置
+server:
+  host: "0.0.0.0"
+  port: 8000
