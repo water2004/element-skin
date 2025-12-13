@@ -18,3 +18,4 @@ textures:
 server:
   host: "0.0.0.0"
   port: 8000
+  root_path: ""  # 子目录部署时配置，如 "/skin/api"

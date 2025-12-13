@@ -78,7 +78,7 @@ mkdir data
 
 **根目录部署**（前端在 `/`，后端在 `/authserver` 等）：
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 **前端子目录部署**（前端在 `/skin/`，后端在根路径）：
@@ -87,13 +87,30 @@ VITE_BASE_PATH=/skin/ docker compose up -d --build
 ```
 
 **前端+后端都在子目录**（前端在 `/skin/`，后端在 `/skin/api/`）：
+
+需要在 `config.yaml` 中配置 `server.root_path: "/skin/api"`，然后：
 ```bash
 VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d --build
 ```
 
-> **注意**: 修改 `VITE_BASE_PATH` 或 `VITE_API_BASE` 后必须使用 `--build` 重新构建前端镜像
+> **注意**: 修改环境变量后必须使用 `--build` 重新构建镜像
 
-### 3. 配置主机 Nginx
+### 3. 更新镜像
+
+代码修改后，需要重新构建镜像：
+
+```bash
+# 重新构建并启动（所有服务）
+docker compose up -d --build
+
+# 或者单独重建某个服务
+docker compose up -d --build backend   # 仅重建后端
+docker compose up -d --build frontend  # 仅重建前端
+```
+
+> **提示**: `--build` 参数会强制重新构建镜像，确保代码变更生效
+
+### 4. 配置主机 Nginx
 
 参考 `nginx-host.conf`，配置主机的 Nginx 反向代理。
 
@@ -123,19 +140,24 @@ location ~ ^/(authserver|...) {
 
 | 方案 | 前端路径 | 后端路径 | 前端配置 | 后端配置 | 适用场景 |
 |-----|---------|---------|---------|---------|---------|
-| 方案1 | `/` | `/authserver` 等 | `VITE_BASE_PATH=/` | 无 | 推荐，配置最简单 |
-| 方案2 | `/skin/` | `/authserver` 等 | `VITE_BASE_PATH=/skin/` | 无 | 前端与其他应用共存 |
+| 方案1 | `/` | `/authserver` 等 | 默认 | 默认 | 推荐，配置最简单 |
+| 方案2 | `/skin/` | `/authserver` 等 | `VITE_BASE_PATH=/skin/` | 默认 | 前端与其他应用共存 |
 | 方案3 | `/skin/` | `/skin/api/` | `VITE_BASE_PATH=/skin/`<br>`VITE_API_BASE=/skin/api` | `root_path="/skin/api"` | 完全隔离的子目录 |
 
-### 
 **方案3: 前端+后端都在子目录**（前端 `/skin/`，后端 `/skin/api/`）
 
-需要修改后端代码，在 `skin-backend/routes_reference.py` 中添加 `root_path`：
-```python
-app = FastAPI(root_path="/skin/api")
+在 `config.yaml` 中配置后端路径前缀：
+```yaml
+server:
+  root_path: "/skin/api"
 ```
 
-然后配置Nginx：
+然后启动：
+```bash
+VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d --build
+```
+
+配置Nginx：
 ```nginx
 location /skin/ {
     proxy_pass http://localhost:3000/;
@@ -239,9 +261,10 @@ VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d --build
 
 ### API 请求 404
 - 检查主机 Nginx 配置中的后端代理路径
-- **方案3**: 如后端在子目录，确认在 FastAPI 中设置了 `root_path="/skin/api"`
-- 如后端在子目录，确认前端设置了 `VITE_API_BASE=/skin/api`
+- **方案3**: 后端在子目录时，确认 `config.yaml` 中设置了 `server.root_path: "/skin/api"`
+- 确认前端设置了 `VITE_API_BASE=/skin/api`
 - 确认后端容器在 8000 端口运行
+- 检查是否已重新构建：`docker compose up -d --build backend`
 
 ### Minecraft 客户端连接失败
 - 后端 API 必须在根路径（`/authserver`）

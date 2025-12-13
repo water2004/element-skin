@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
         pass
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, root_path=config.get("server.root_path", ""))
 
 
 # 全局请求/响应日志中间件：打印每个收到的请求摘要与响应状态，便于诊断为什么游戏没有请求到 PNG
