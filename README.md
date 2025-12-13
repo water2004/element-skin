@@ -14,6 +14,20 @@
 
 ## 快速开始
 
+### RSA 密钥生成
+
+> **重要提示**: 首次部署前，必须生成 RSA 密钥对用于 Yggdrasil API 签名
+
+在 `skin-backend` 目录下运行：
+```bash
+cd skin-backend
+python gen_key.py
+```
+
+这会在 `skin-backend` 目录生成 `private.pem` 和 `public.pem` 文件。
+
+> Docker 部署时会自动在容器内生成密钥，但建议在宿主机提前生成，以便持久化保存。
+
 ### 开发环境
 
 #### 后端
@@ -213,6 +227,15 @@ VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d --build
 ### 样式丢失（子目录部署）
 - 检查 `VITE_BASE_PATH` 是否正确（必须以 `/` 开头和结尾）
 - 确认已重新构建：`docker compose up -d --build`
+
+### 前端构建失败
+- 如果没有 `package-lock.json`，Dockerfile 会自动使用 `npm install`
+- 检查 Node.js 版本是否为 20+
+
+### 后端密钥文件缺失
+- Docker 部署会在容器内自动生成 `private.pem` 和 `public.pem`
+- 建议在宿主机 `skin-backend` 目录提前生成：`cd skin-backend && python gen_key.py`
+- 生成后密钥会在容器启动时被使用
 
 ### API 请求 404
 - 检查主机 Nginx 配置中的后端代理路径

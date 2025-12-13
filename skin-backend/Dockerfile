@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 RUN mkdir -p /data/textures && \
-    python gen_key.py || true
+    cd /app && python gen_key.py
 
 EXPOSE 8000
 
