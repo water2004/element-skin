@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div style="max-width:500px; margin:0 auto; padding:40px 20px">
     <el-card>
       <h2>登录</h2>
       <el-form :model="form">
@@ -20,10 +20,10 @@
 <script setup>
 import { reactive } from 'vue'
 import axios from 'axios'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
 
 const form = reactive({ email: '', password: '' })
-
-import { useRouter } from 'vue-router'
 const router = useRouter()
 
 async function login() {
@@ -34,12 +34,24 @@ async function login() {
       password: form.password,
       requestUser: true,
     })
-    alert('登录成功')
-    if (res.data.accessToken) localStorage.setItem('accessToken', res.data.accessToken)
-    if (res.data.token) localStorage.setItem('jwt', res.data.token)
-    router.push('/dashboard')
+
+    if (res.data.accessToken) {
+      localStorage.setItem('accessToken', res.data.accessToken)
+      console.log('accessToken saved')
+    }
+    if (res.data.token) {
+      localStorage.setItem('jwt', res.data.token)
+      console.log('jwt saved')
+    }
+
+    ElMessage.success('登录成功')
+
+    // 等待一下再跳转，确保 localStorage 保存完成
+    setTimeout(() => {
+      router.push('/dashboard')
+    }, 300)
   } catch (e) {
-    alert('登录失败: ' + (e.response?.data?.errorMessage || e.message))
+    ElMessage.error('登录失败: ' + (e.response?.data?.errorMessage || e.message))
   }
 }
 </script>

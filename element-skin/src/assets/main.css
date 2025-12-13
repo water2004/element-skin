@@ -1,17 +1,18 @@
 @import './base.css';
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+  margin: 0;
+  padding: 0;
   font-weight: normal;
+  width: 100%;
+  min-height: 100vh;
 }
 
 /* 统一应用容器，配合 AppLayout.app-container 使用 */
 .app-container{
-  max-width: 960px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 20px;
 }
 
 a,
@@ -32,9 +33,5 @@ a,
   /* 大屏仍然使用居中容器，而不是两列布局，避免内容被强制分栏导致空白 */
   body {
     display: block;
-  }
-
-  #app {
-    padding: 0 4rem;
   }
 }

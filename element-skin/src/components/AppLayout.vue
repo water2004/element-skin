@@ -1,22 +1,8 @@
 <template>
   <el-container style="min-height:100vh">
-    <el-header>
+    <el-header class="layout-header-wrap">
       <div class="layout-header">
-        <div class="logo">皮肤站</div>
-        <el-menu mode="horizontal" :default-active="active">
-          <el-menu-item index="/">
-            <router-link to="/">首页</router-link>
-          </el-menu-item>
-          <el-menu-item index="/about">
-            <router-link to="/about">关于</router-link>
-          </el-menu-item>
-          <el-menu-item v-if="isLogged" index="/dashboard">
-            <router-link to="/dashboard">个人面板</router-link>
-          </el-menu-item>
-          <el-menu-item v-if="isAdmin" index="/admin">
-            <router-link to="/admin">管理面板</router-link>
-          </el-menu-item>
-        </el-menu>
+        <div class="logo" @click="go('/')">{{ siteName }}</div>
 
         <div class="header-actions">
           <el-button v-if="!isLogged" type="primary" @click="go('/login')">登录</el-button>
@@ -37,19 +23,22 @@
       </div>
     </el-header>
 
-    <el-main>
-      <div class="app-container">
-        <slot />
-      </div>
+    <el-main style="padding:0">
+      <slot />
     </el-main>
   </el-container>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 const router = useRouter()
+const cachedSiteName = localStorage.getItem('site_name_cache') || '皮肤站'
+const siteName = ref(cachedSiteName)
+
+const jwtToken = ref(localStorage.getItem('jwt') || '')
 
 function parseJwt(token) {
   if (!token) return null
@@ -64,11 +53,12 @@ function parseJwt(token) {
   }
 }
 
-const token = localStorage.getItem('jwt')
-const payload = parseJwt(token)
-const isLogged = computed(() => !!token)
-const isAdmin = computed(() => !!payload && !!payload.is_admin)
-const emailInitial = computed(() => payload?.sub?.slice(0,1).toUpperCase() || '?')
+const isLogged = computed(() => !!jwtToken.value)
+const payload = computed(() => parseJwt(jwtToken.value))
+const isAdmin = computed(() => !!payload.value && !!payload.value.is_admin)
+const emailInitial = computed(() => payload.value?.sub?.slice(0,1).toUpperCase() || '?')
+
+let timer = null
 
 function go(path){
   router.push(path)
@@ -77,11 +67,43 @@ function go(path){
 function logout(){
   localStorage.removeItem('jwt')
   localStorage.removeItem('accessToken')
+  jwtToken.value = ''
   router.push('/')
-  window.location.reload()
+  setTimeout(() => window.location.reload(), 100)
 }
 
-const active = router.currentRoute.value.path || '/'
+// 监听 localStorage 变化
+onMounted(async () => {
+  // 加载站点配置
+  try {
+    const res = await axios.get('/public/settings')
+    if (res.data.site_name) {
+      siteName.value = res.data.site_name
+      localStorage.setItem('site_name_cache', res.data.site_name)
+    }
+  } catch (e) {
+    console.warn('Failed to load site settings:', e)
+  }
+
+  window.addEventListener('storage', checkAuth)
+  // 定期检查 token 更新
+  timer = setInterval(checkAuth, 500)
+})
+
+onBeforeUnmount(() => {
+  if (timer) {
+    clearInterval(timer)
+    timer = null
+  }
+  window.removeEventListener('storage', checkAuth)
+})
+
+function checkAuth() {
+  const newToken = localStorage.getItem('jwt') || ''
+  if (newToken !== jwtToken.value) {
+    jwtToken.value = newToken
+  }
+}
 </script>
 
 <style scoped>
@@ -89,12 +111,19 @@ const active = router.currentRoute.value.path || '/'
   display:flex;
   align-items:center;
   justify-content:space-between;
+  gap: 12px;
 }
 .logo{
   font-weight:700;
   font-size:18px;
   color:var(--color-heading);
 }
-.header-actions{display:flex;align-items:center}
+.header-actions{display:flex;align-items:center; gap:8px}
 .app-container{max-width:960px;margin:24px auto}
+
+.layout-header-wrap{
+  padding: 12px 20px;
+  background: #f8f9fb;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
 </style>

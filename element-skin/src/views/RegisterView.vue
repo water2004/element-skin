@@ -1,5 +1,5 @@
 <template>
-  <div class="app-container">
+  <div style="max-width:500px; margin:0 auto; padding:40px 20px">
     <el-card>
       <h2>注册</h2>
       <el-form :model="form">

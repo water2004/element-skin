@@ -27,11 +27,47 @@ const router = createRouter({
       path: '/admin',
       name: 'admin',
       component: AdminView,
+      redirect: '/admin/settings',
+      children: [
+        {
+          path: 'settings',
+          name: 'admin-settings',
+          component: AdminView,
+        },
+        {
+          path: 'users',
+          name: 'admin-users',
+          component: AdminView,
+        },
+        {
+          path: 'invites',
+          name: 'admin-invites',
+          component: AdminView,
+        },
+      ],
     },
     {
       path: '/dashboard',
       name: 'dashboard',
       component: UserDashboard,
+      redirect: '/dashboard/wardrobe',
+      children: [
+        {
+          path: 'wardrobe',
+          name: 'wardrobe',
+          component: UserDashboard,
+        },
+        {
+          path: 'roles',
+          name: 'roles',
+          component: UserDashboard,
+        },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: UserDashboard,
+        },
+      ],
     },
     {
       path: '/about',

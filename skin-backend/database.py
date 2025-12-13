@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     preferred_language TEXT DEFAULT 'zh_CN',
+    display_name TEXT DEFAULT '',
     is_admin INTEGER DEFAULT 0
 );
 
@@ -46,6 +47,16 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS user_textures (
+    user_id TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    texture_type TEXT NOT NULL,
+    note TEXT DEFAULT '',
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY(user_id, hash, texture_type),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+);
 """
 
 
@@ -62,9 +73,25 @@ class Database:
             cur = await db.execute("PRAGMA table_info(users)")
             cols = await cur.fetchall()
             col_names = [c[1] for c in cols]
+            # 添加 is_admin 列
             if "is_admin" not in col_names:
                 await db.execute(
                     "ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0"
+                )
+                await db.commit()
+            # 添加 display_name 列
+            if "display_name" not in col_names:
+                await db.execute(
+                    "ALTER TABLE users ADD COLUMN display_name TEXT DEFAULT ''"
+                )
+                await db.commit()
+
+            # 自动将编号最小的用户设为管理员
+            cur = await db.execute("SELECT id FROM users ORDER BY id LIMIT 1")
+            first_user = await cur.fetchone()
+            if first_user:
+                await db.execute(
+                    "UPDATE users SET is_admin=1 WHERE id=?", (first_user[0],)
                 )
                 await db.commit()
 

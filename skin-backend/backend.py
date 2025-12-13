@@ -41,9 +41,31 @@ class YggdrasilBackend:
     # =========================
 
     async def _cleanup_tokens(self, user_id: str):
-        # 简单实现：删除该用户所有旧令牌（仅保留最近N个的逻辑此处省略，直接全清或保留不做限制）
-        # 生产环境应实现"吊销最旧令牌"
-        pass
+        # 删除过期令牌并仅保留最近 5 个令牌
+        cutoff = int(time.time() * 1000) - self.TOKEN_TTL
+        async with self.db.get_conn() as conn:
+            # 移除过期令牌
+            await conn.execute(
+                "DELETE FROM tokens WHERE user_id=? AND created_at < ?",
+                (user_id, cutoff),
+            )
+
+            # 查询该用户按时间倒序的所有令牌
+            cur = await conn.execute(
+                "SELECT access_token FROM tokens WHERE user_id=? ORDER BY created_at DESC",
+                (user_id,),
+            )
+            rows = await cur.fetchall()
+
+            # 保留最新 5 个，其余删除
+            surplus = rows[5:]
+            if surplus:
+                await conn.executemany(
+                    "DELETE FROM tokens WHERE access_token=?",
+                    [(r[0],) for r in surplus],
+                )
+
+            await conn.commit()
 
     async def _get_profile_json(
         self, profile_row, sign: bool = False, base_url: str = None
@@ -155,6 +177,9 @@ class YggdrasilBackend:
             )
             await conn.commit()
 
+            # 清理旧令牌，避免无限膨胀
+            await self._cleanup_tokens(user_id)
+
             resp = {
                 "accessToken": access_token,
                 "clientToken": client_token,
@@ -235,6 +260,9 @@ class YggdrasilBackend:
                 ),
             )
             await conn.commit()
+
+            # 清理旧令牌
+            await self._cleanup_tokens(user_id)
 
             resp = {
                 "accessToken": new_access_token,

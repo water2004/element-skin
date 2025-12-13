@@ -52,6 +52,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
+      '^/public': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
       // 注意: 不代理根路径 '/'，以免覆盖 Vite 的 index.html
     }
   }
