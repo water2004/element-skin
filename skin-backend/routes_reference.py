@@ -434,13 +434,22 @@ async def create_profile(payload: dict = Depends(get_current_user), body: dict =
     model = body.get("model", "default")
     if not name:
         raise HTTPException(status_code=400, detail="name required")
+
+    # 验证角色名格式（只允许字母、数字、下划线）
+    import re
+
+    if not re.match(r"^[a-zA-Z0-9_]{1,16}$", name):
+        raise HTTPException(
+            status_code=400, detail="角色名只能包含字母、数字、下划线，长度1-16字符"
+        )
+
     user_id = payload.get("sub")
     pid = uuid.uuid4().hex
     async with db.get_conn() as conn:
-        # ensure name unique
+        # 确保角色名全局唯一
         cur = await conn.execute("SELECT id FROM profiles WHERE name=?", (name,))
         if await cur.fetchone():
-            raise HTTPException(status_code=400, detail="profile name exists")
+            raise HTTPException(status_code=400, detail="角色名已被占用，请换一个名称")
         await conn.execute(
             "INSERT INTO profiles (id, user_id, name, texture_model) VALUES (?, ?, ?, ?)",
             (pid, user_id, name, model),
@@ -662,11 +671,32 @@ async def register(req: dict, request: Request):
             (uid, email, password_hash, 1 if is_first_user else 0),
         )
 
-        # 创建默认 profile
+        # 创建默认 profile（检查重复，自动添加后缀）
+        base_name = email.split("@")[0]
+        # 只保留字母数字下划线，限制长度
+        import re
+
+        base_name = re.sub(r"[^a-zA-Z0-9_]", "_", base_name)[:12]
+
+        # 查找可用的角色名
+        profile_name = base_name
+        suffix = 1
+        while True:
+            cur = await conn.execute(
+                "SELECT id FROM profiles WHERE name=?", (profile_name,)
+            )
+            if not await cur.fetchone():
+                break
+            # 角色名重复，添加数字后缀
+            profile_name = f"{base_name}_{suffix}"
+            suffix += 1
+            if suffix > 100:  # 防止无限循环
+                raise HTTPException(status_code=500, detail="无法生成唯一角色名")
+
         pid = uuid.uuid4().hex
         await conn.execute(
             "INSERT INTO profiles (id, user_id, name) VALUES (?, ?, ?)",
-            (pid, uid, email.split("@")[0]),
+            (pid, uid, profile_name),
         )
 
         # 如果使用了邀请码，标记为已使用
