@@ -62,11 +62,11 @@
                 </div>
                 <el-input
                   v-else
-                  ref="editingNoteInput"
                   v-model="editingNoteValue"
                   placeholder="输入备注，最多200字"
                   size="default"
                   class="texture-note-input"
+                  autofocus
                   @blur="finishEditNote(tex)"
                   @keyup.enter="finishEditNote(tex)"
                 />
@@ -276,7 +276,6 @@ const form = ref({ email: '', password: '', display_name: '' })
 const textures = ref([])
 const editingNoteHash = ref('')
 const editingNoteValue = ref('')
-const editingNoteInput = ref(null)
 const showUploadDialog = ref(false)
 const uploadForm = ref({ texture_type: 'skin', model: 'default', note: '', file: null })
 const uploadRef = ref(null)
@@ -318,9 +317,6 @@ function texturesUrl(hash) {
 function startEditNote(tex){
   editingNoteHash.value = tex.hash
   editingNoteValue.value = tex.note || ''
-  nextTick(() => {
-    editingNoteInput.value?.focus()
-  })
 }
 
 async function finishEditNote(tex){
@@ -330,7 +326,7 @@ async function finishEditNote(tex){
   editingNoteValue.value = ''
   if (updated === original) return
   try {
-    await axios.patch(`/me/textures/${tex.hash}`, { note: updated }, { headers: authHeaders() })
+    await axios.patch(`/me/textures/${tex.hash}/${tex.type}`, { note: updated }, { headers: authHeaders() })
     tex.note = updated
     ElMessage.success('备注已更新')
   } catch (e) {
