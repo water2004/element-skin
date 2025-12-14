@@ -540,6 +540,32 @@ async def list_my_textures(payload: dict = Depends(get_current_user)):
             {"hash": r[0], "type": r[1], "note": r[2], "created_at": r[3]} for r in rows
         ]
 
+    @app.patch("/me/textures/{hash}")
+    async def update_my_texture_note(
+        hash: str, payload: dict = Depends(get_current_user), body: dict = Body(...)
+    ):
+        """更新当前用户材质的备注文本"""
+        user_id = payload.get("sub")
+        note = body.get("note", "")
+        # 规范备注长度，避免过长内容
+        if not isinstance(note, str):
+            raise HTTPException(status_code=400, detail="note must be a string")
+        if len(note) > 200:
+            note = note[:200]
+        async with db.get_conn() as conn:
+            cur = await conn.execute(
+                "SELECT 1 FROM user_textures WHERE user_id=? AND hash=?",
+                (user_id, hash),
+            )
+            if not await cur.fetchone():
+                raise HTTPException(status_code=404, detail="texture not found")
+            await conn.execute(
+                "UPDATE user_textures SET note=? WHERE user_id=? AND hash=?",
+                (note, user_id, hash),
+            )
+            await conn.commit()
+        return {"ok": True, "hash": hash, "note": note}
+
 
 @app.delete("/me/textures/{hash}/{texture_type}")
 async def delete_my_texture(

@@ -94,6 +94,8 @@ onMounted(async () => {
     if (res.data.site_name) {
       siteName.value = res.data.site_name
       localStorage.setItem('site_name_cache', res.data.site_name)
+      // 更新浏览器标题
+      document.title = res.data.site_name
     }
   } catch (e) {
     console.warn('Failed to load site settings:', e)

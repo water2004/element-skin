@@ -19,6 +19,7 @@
             <el-icon><Setting /></el-icon>
             <span>个人资料</span>
           </el-menu-item>
+          <div v-if="user?.is_admin" class="menu-divider"></div>
           <el-menu-item v-if="user?.is_admin" index="/admin" class="admin-menu-item">
             <el-icon><Tools /></el-icon>
             <span>管理面板</span>
@@ -45,22 +46,39 @@
                   :width="200"
                   :height="280"
                 />
-                <img v-else :src="texturesUrl(tex.hash)" class="cape-preview" />
+                <CapeViewer
+                  v-else
+                  :capeUrl="texturesUrl(tex.hash)"
+                  :width="200"
+                  :height="280"
+                />
               </div>
               <div class="texture-info">
                 <div class="texture-type-badge" :class="tex.type">
                   {{ tex.type === 'skin' ? '皮肤' : '披风' }}
                 </div>
-                <div class="texture-note">{{ tex.note || '无备注' }}</div>
+                <div class="texture-note" @click="startEditNote(tex)" v-if="editingNoteHash !== tex.hash">
+                  {{ tex.note || '无备注' }}
+                </div>
+                <el-input
+                  v-else
+                  ref="editingNoteInput"
+                  v-model="editingNoteValue"
+                  placeholder="输入备注，最多200字"
+                  size="default"
+                  class="texture-note-input"
+                  @blur="finishEditNote(tex)"
+                  @keyup.enter="finishEditNote(tex)"
+                />
               </div>
               <div class="texture-actions">
-                <el-button type="primary" size="small" @click="openApplyDialog(tex)">
+                <el-button class="action-btn action-btn-primary" @click="openApplyDialog(tex)">
                   <el-icon><Check /></el-icon>
-                  使用
+                  <span>使用</span>
                 </el-button>
-                <el-button type="danger" size="small" @click="deleteMyTexture(tex.hash, tex.type)">
+                <el-button class="action-btn action-btn-danger" @click="deleteMyTexture(tex.hash, tex.type)">
                   <el-icon><Delete /></el-icon>
-                  删除
+                  <span>删除</span>
                 </el-button>
               </div>
             </div>
@@ -79,28 +97,28 @@
           </div>
 
           <div class="roles-grid">
-            <el-card v-for="profile in user.profiles || []" :key="profile.id" class="role-card">
+            <div v-for="profile in user.profiles || []" :key="profile.id" class="role-card">
               <div class="role-preview">
                 <SkinViewer
                   v-if="profile.skin_hash"
                   :skinUrl="texturesUrl(profile.skin_hash)"
                   :capeUrl="profile.cape_hash ? texturesUrl(profile.cape_hash) : null"
-                  :width="180"
-                  :height="240"
+                  :width="200"
+                  :height="280"
                 />
                 <el-empty v-else description="未设置皮肤" :image-size="120" />
               </div>
               <div class="role-info">
-                <h3>{{ profile.name }}</h3>
+                <div class="role-name">{{ profile.name }}</div>
                 <div class="role-model">模型: {{ profile.model || 'default' }}</div>
               </div>
               <div class="role-actions">
-                <el-button type="danger" size="small" @click="deleteRole(profile.id)">
+                <el-button class="action-btn action-btn-danger" @click="deleteRole(profile.id)">
                   <el-icon><Delete /></el-icon>
-                  删除
+                  <span>删除</span>
                 </el-button>
               </div>
-            </el-card>
+            </div>
           </div>
         </div>
 
@@ -148,8 +166,8 @@
 
     <!-- 上传对话框 -->
     <el-dialog v-model="showUploadDialog" title="上传纹理" width="500px" class="upload-dialog">
-      <el-form label-width="100px" :model="uploadForm">
-        <el-form-item label="选择文件">
+      <el-form label-width="100px" :model="uploadForm" class="upload-form">
+        <el-form-item label="选择文件" class="upload-form-item">
           <el-upload
             ref="uploadRef"
             :auto-upload="false"
@@ -157,6 +175,7 @@
             accept=".png"
             :on-change="handleFileChange"
             drag
+            class="upload-wrapper"
           >
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
             <div class="el-upload__text">
@@ -173,6 +192,12 @@
           <el-select v-model="uploadForm.texture_type" placeholder="选择类型" style="width:100%">
             <el-option label="皮肤 (Skin)" value="skin" />
             <el-option label="披风 (Cape)" value="cape" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="皮肤模型" v-if="uploadForm.texture_type === 'skin'">
+          <el-select v-model="uploadForm.model" placeholder="选择模型" style="width:100%">
+            <el-option label="普通 (4px 手臂)" value="default" />
+            <el-option label="纤细 (3px 手臂)" value="slim" />
           </el-select>
         </el-form-item>
         <el-form-item label="备注">
@@ -233,7 +258,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -241,6 +266,7 @@ import {
   Box, User, Setting, Upload, UploadFilled, Check, Delete, Plus, Tools
 } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
+import CapeViewer from '@/components/CapeViewer.vue'
 
 const route = useRoute()
 const user = ref(null)
@@ -248,8 +274,11 @@ const newRoleName = ref('')
 const showCreateRoleDialog = ref(false)
 const form = ref({ email: '', password: '', display_name: '' })
 const textures = ref([])
+const editingNoteHash = ref('')
+const editingNoteValue = ref('')
+const editingNoteInput = ref(null)
 const showUploadDialog = ref(false)
-const uploadForm = ref({ texture_type: 'skin', note: '', file: null })
+const uploadForm = ref({ texture_type: 'skin', model: 'default', note: '', file: null })
 const uploadRef = ref(null)
 const showApplyDialog = ref(false)
 const applyForm = ref({ profile_id: '', texture_type: '', hash: '' })
@@ -284,6 +313,30 @@ function authHeaders() {
 function texturesUrl(hash) {
   if (!hash) return ''
   return (import.meta.env.VITE_API_BASE || '') + '/static/textures/' + hash + '.png'
+}
+
+function startEditNote(tex){
+  editingNoteHash.value = tex.hash
+  editingNoteValue.value = tex.note || ''
+  nextTick(() => {
+    editingNoteInput.value?.focus()
+  })
+}
+
+async function finishEditNote(tex){
+  const original = tex.note || ''
+  const updated = editingNoteValue.value || ''
+  editingNoteHash.value = ''
+  editingNoteValue.value = ''
+  if (updated === original) return
+  try {
+    await axios.patch(`/me/textures/${tex.hash}`, { note: updated }, { headers: authHeaders() })
+    tex.note = updated
+    ElMessage.success('备注已更新')
+  } catch (e) {
+    console.error('update note error:', e)
+    ElMessage.error('更新备注失败')
+  }
 }
 
 async function fetchMe() {
@@ -345,13 +398,16 @@ async function doUpload() {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('texture_type', uploadForm.value.texture_type)
+  if (uploadForm.value.texture_type === 'skin') {
+    formData.append('model', uploadForm.value.model || 'default')
+  }
   formData.append('note', uploadForm.value.note || '')
 
   try {
     await axios.post('/me/textures', formData, { headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' } })
     ElMessage.success('上传成功')
     showUploadDialog.value = false
-    uploadForm.value = { texture_type: 'skin', note: '', file: null }
+    uploadForm.value = { texture_type: 'skin', model: 'default', note: '', file: null }
     if (uploadRef.value) {
       uploadRef.value.clearFiles()
     }
@@ -513,10 +569,10 @@ async function deleteAccount() {
   transform: translateX(0);
 }
 
-.sidebar-menu .admin-menu-item {
-  margin-top: 20px;
-  border-top: 1px solid #ebeef5;
-  padding-top: 8px;
+.menu-divider {
+  height: 1px;
+  background: #ebeef5;
+  margin: 8px 12px;
 }
 
 .sidebar-menu .admin-menu-item:hover {
@@ -598,11 +654,12 @@ async function deleteAccount() {
 
 .texture-type-badge {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  margin-bottom: 8px;
+  padding: 6px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 10px;
+  letter-spacing: 0.5px;
 }
 
 .texture-type-badge.skin {
@@ -618,6 +675,38 @@ async function deleteAccount() {
 .texture-note {
   font-size: 14px;
   color: #606266;
+  min-height: 22px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.texture-note:hover {
+  background: #f5f7fa;
+  color: #409eff;
+}
+
+.texture-note-input {
+  margin-top: 4px;
+}
+
+.texture-note-input :deep(.el-input__wrapper) {
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px #dcdfe6 inset;
+  transition: all 0.3s ease;
+}
+
+.texture-note-input :deep(.el-input__wrapper:hover) {
+  box-shadow: 0 0 0 1px #409eff inset;
+}
+
+.texture-note-input :deep(.el-input__wrapper.is-focus) {
+  box-shadow: 0 0 0 1px #409eff inset, 0 0 0 3px rgba(64, 158, 255, 0.1);
+}
+
+.texture-note-input :deep(.el-input__inner) {
+  font-size: 14px;
 }
 
 .texture-actions {
@@ -625,28 +714,77 @@ async function deleteAccount() {
   gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid #ebeef5;
+  background: #fafafa;
 }
 
 .texture-actions .el-button {
   flex: 1;
 }
 
-/* 角色管理样式 */
+.action-btn {
+  border: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.action-btn span {
+  font-size: 14px;
+}
+
+.action-btn .el-icon {
+  font-size: 16px;
+}
+
+.action-btn-primary {
+  background: linear-gradient(135deg, #409eff 0%, #5cadff 100%);
+  color: #fff;
+}
+
+.action-btn-primary:hover {
+  background: linear-gradient(135deg, #66b1ff 0%, #79bbff 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+}
+
+.action-btn-primary:active {
+  transform: translateY(0);
+}
+
+.action-btn-danger {
+  background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%);
+  color: #fff;
+}
+
+.action-btn-danger:hover {
+  background: linear-gradient(135deg, #f78989 0%, #f9a7a7 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.4);
+}
+
+.action-btn-danger:active {
+  transform: translateY(0);
+}
+
+/* 角色管理样式 - 统一为衣柜样式 */
 .create-role-card {
   margin-bottom: 24px;
 }
 
-/* 移除单独的工具栏，按钮与区块标题右侧对齐 */
-
 .roles-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 24px;
 }
 
 .role-card {
+  background: #fff;
   border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
 }
 
@@ -657,7 +795,7 @@ async function deleteAccount() {
 
 .role-preview {
   width: 100%;
-  height: 240px;
+  height: 280px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -669,22 +807,29 @@ async function deleteAccount() {
   text-align: center;
 }
 
-.role-info h3 {
+.role-name {
   font-size: 16px;
   font-weight: 600;
   color: #303133;
-  margin: 0 0 8px 0;
+  margin-bottom: 8px;
 }
 
 .role-model {
   font-size: 13px;
   color: #909399;
+  font-weight: 500;
 }
 
 .role-actions {
+  display: flex;
+  gap: 8px;
   padding: 12px 16px;
   border-top: 1px solid #ebeef5;
-  text-align: center;
+  background: #fafafa;
+}
+
+.role-actions .el-button {
+  flex: 1;
 }
 
 /* 个人资料样式 */
@@ -722,5 +867,45 @@ async function deleteAccount() {
 /* 上传对话框样式 */
 .upload-dialog :deep(.el-upload-dragger) {
   width: 100%;
+}
+
+.upload-form-item {
+  overflow: hidden;
+}
+
+.upload-form-item :deep(.el-form-item__content) {
+  overflow: hidden;
+}
+
+.upload-wrapper {
+  width: 100%;
+  overflow: hidden;
+}
+
+.upload-dialog :deep(.el-upload-list) {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.upload-dialog :deep(.el-upload-list__item) {
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.upload-dialog :deep(.el-upload-list__item-name) {
+  max-width: 280px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  display: inline-block !important;
+}
+
+.upload-dialog :deep(.el-icon--document) + span {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
 }
 </style>

@@ -6,6 +6,7 @@
           <el-icon size="24"><Tools /></el-icon>
           <span>管理面板</span>
         </div>
+        <div class="title-divider"></div>
         <el-menu :default-active="activeRoute" mode="vertical" router class="sidebar-menu">
           <el-menu-item index="/admin/settings">
             <el-icon><Setting /></el-icon>
@@ -481,12 +482,17 @@ watch(() => route.path, (newPath) => {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  padding: 20px;
-  margin-bottom: 20px;
+  padding: 20px 0;
+  margin: 0 16px 4px 16px;
   font-size: 18px;
   font-weight: 600;
   color: #303133;
-  border-bottom: 1px solid #ebeef5;
+}
+
+.title-divider {
+  height: 1px;
+  background: #ebeef5;
+  margin: 0 16px 4px 16px;
 }
 
 .sidebar-menu {
@@ -496,7 +502,8 @@ watch(() => route.path, (newPath) => {
 .sidebar-menu .el-menu-item {
   height: 50px;
   line-height: 50px;
-  margin: 4px 12px;
+  margin: 4px 16px;
+  padding: 0 16px !important;
   border-radius: 8px;
   transition: all 0.3s ease;
 }
@@ -516,6 +523,9 @@ watch(() => route.path, (newPath) => {
   padding: 30px;
   background: #f5f7fa;
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .section-header {
@@ -524,6 +534,8 @@ watch(() => route.path, (newPath) => {
   align-items: center;
   margin-bottom: 24px;
   animation: fadeIn 0.4s ease-out;
+  width: 100%;
+  max-width: 800px;
 }
 
 @@keyframes fadeIn {
@@ -545,7 +557,18 @@ watch(() => route.path, (newPath) => {
 }
 
 .settings-card {
+  width: 100%;
   max-width: 800px;
   padding: 30px;
+}
+
+.settings-section,
+.users-section,
+.invites-section {
+  width: 100%;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 </style>
