@@ -43,7 +43,7 @@
               <el-form-item label="站点名称">
                 <el-input v-model="siteSettings.site_name" placeholder="皮肤站" />
               </el-form-item>
-              <el-form-item label="站点地址">
+              <el-form-item label="后端 API 地址">
                 <el-input v-model="siteSettings.site_url" placeholder="https://skin.example.com" />
               </el-form-item>
               <el-form-item label="需要邀请码注册">
@@ -505,7 +505,25 @@ watch(() => route.path, (newPath) => {
   margin: 4px 16px;
   padding: 0 16px !important;
   border-radius: 8px;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-menu .el-menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-menu .el-menu-item:hover::before {
+  transform: translateX(0);
 }
 
 .sidebar-menu .el-menu-item:hover {
@@ -533,12 +551,23 @@ watch(() => route.path, (newPath) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
   max-width: 800px;
 }
 
-@@keyframes fadeIn {
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
   from {
     opacity: 0;
     transform: translateY(10px);
@@ -560,6 +589,35 @@ watch(() => route.path, (newPath) => {
   width: 100%;
   max-width: 800px;
   padding: 30px;
+  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s backwards;
+}
+
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.settings-card :deep(.el-form-item) {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-card :deep(.el-form-item:hover) {
+  transform: translateX(4px);
+}
+
+.settings-card :deep(.el-button) {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.settings-card :deep(.el-button:hover) {
+  transform: scale(1.05);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.3);
 }
 
 .settings-section,

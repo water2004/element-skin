@@ -45,6 +45,7 @@
                   :skinUrl="texturesUrl(tex.hash)"
                   :width="200"
                   :height="280"
+                  @load="handleTextureLoad(tex.hash)"
                 />
                 <CapeViewer
                   v-else
@@ -52,6 +53,14 @@
                   :width="200"
                   :height="280"
                 />
+                <!-- 皮肤分辨率标签 -->
+                <div
+                  v-if="tex.type === 'skin' && textureResolutions.get(tex.hash)"
+                  class="resolution-badge"
+                  :style="getResolutionBadgeStyle(textureResolutions.get(tex.hash))"
+                >
+                  {{ textureResolutions.get(tex.hash) }}x
+                </div>
               </div>
               <div class="texture-info">
                 <div class="texture-type-badge" :class="tex.type">
@@ -304,6 +313,7 @@ const newRoleName = ref('')
 const showCreateRoleDialog = ref(false)
 const form = ref({ email: '', password: '', display_name: '' })
 const textures = ref([])
+const textureResolutions = ref(new Map()) // 存储每个纹理的分辨率
 const editingNoteHash = ref('')
 const editingNoteValue = ref('')
 const showUploadDialog = ref(false)
@@ -407,8 +417,57 @@ async function fetchTextures() {
   try {
     const res = await axios.get('/me/textures', { headers: authHeaders() })
     textures.value = res.data
+    // 为每个皮肤纹理计算分辨率
+    textures.value.forEach(tex => {
+      if (tex.type === 'skin') {
+        loadTextureResolution(tex.hash)
+      }
+    })
   } catch (e) {
     console.error(e)
+  }
+}
+
+function loadTextureResolution(hash) {
+  const img = new Image()
+  img.crossOrigin = 'anonymous'
+  img.onload = () => {
+    const resolution = img.width // 假设是正方形或使用宽度
+    textureResolutions.value.set(hash, resolution)
+  }
+  img.src = texturesUrl(hash)
+}
+
+function handleTextureLoad(hash) {
+  // SkinViewer 加载完成后的回调（如果需要）
+}
+
+function getResolutionBadgeStyle(resolution) {
+  // 根据分辨率计算颜色，使用渐变色带
+  // 64x -> 绿色, 128x -> 黄色, 256x -> 紫色, 512x+ -> 红色
+  let hue = 0
+  if (resolution <= 64) {
+    hue = 120 // 绿色
+  } else if (resolution <= 128) {
+    // 64-128: 绿色到黄色 (120-60)
+    hue = 120 - ((resolution - 64) / 64) * 60
+  } else if (resolution <= 256) {
+    // 128-256: 黄色到橙色 (60-30)
+    hue = 60 - ((resolution - 128) / 128) * 30
+  } else if (resolution <= 512) {
+    // 256-512: 橙色到红色 (30-0)
+    hue = 30 - ((resolution - 256) / 256) * 30
+  } else {
+    // 512+: 红色到紫红 (0-330)
+    hue = 330
+  }
+
+  const saturation = 58 // 适中的饱和度，柔和但不暗淡
+  const lightness = 65 // 适中的亮度，明亮但不刺眼
+
+  return {
+    background: `linear-gradient(135deg, hsl(${hue}, ${saturation}%, ${lightness}%), hsl(${hue + 15}, ${saturation - 5}%, ${lightness - 3}%))`,
+    boxShadow: `0 2px 6px hsla(${hue}, ${saturation}%, ${lightness - 15}%, 0.25)` // 稍微增强阴影
   }
 }
 
@@ -597,6 +656,13 @@ async function deleteAccount() {
   font-weight: bold;
   font-size: 24px;
   margin-bottom: 12px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.user-avatar:hover {
+  transform: scale(1.15) rotate(8deg);
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
 }
 
 .user-name {
@@ -615,7 +681,25 @@ async function deleteAccount() {
   line-height: 50px;
   margin: 4px 12px;
   border-radius: 8px;
-  transition: all 0.3s ease;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.sidebar-menu .el-menu-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 3px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.sidebar-menu .el-menu-item:hover::before {
+  transform: translateX(0);
 }
 
 .sidebar-menu .el-menu-item:hover {
@@ -710,6 +794,34 @@ async function deleteAccount() {
   justify-content: center;
   align-items: center;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  overflow: hidden;
+}
+
+/* 分辨率标签 */
+.resolution-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  animation: badgeFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.3s backwards;
+  z-index: 10;
+}
+
+@keyframes badgeFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .cape-preview {
@@ -817,12 +929,12 @@ async function deleteAccount() {
 
 .action-btn-primary:hover {
   background: linear-gradient(135deg, #66b1ff 0%, #79bbff 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(64, 158, 255, 0.4);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
 }
 
 .action-btn-primary:active {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 .action-btn-danger {
@@ -847,22 +959,23 @@ async function deleteAccount() {
 }
 
 .action-btn-danger .btn-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  display: grid;
+  place-items: center;
   width: 100%;
   height: 100%;
 }
 
 .action-btn-danger .btn-label {
+  padding: 0;
+  margin: 0;
+  grid-area: 1 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   opacity: 1;
   transform: translateY(0) scale(1);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   font-weight: 500;
 }
 
@@ -877,6 +990,7 @@ async function deleteAccount() {
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
 }
 
 .action-btn-danger:hover .btn-label {
@@ -984,27 +1098,28 @@ async function deleteAccount() {
 }
 
 .action-btn-warning .btn-content {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  display: grid;
+  place-items: center;
   width: 100%;
   height: 100%;
 }
 
 /* 文本默认显示，完全居中 */
 .action-btn-warning .btn-label {
+  padding: 0;
+  margin: 0;
+  grid-area: 1 / 1;
   display: flex;
   align-items: center;
   justify-content: center;
   width: 100%;
   opacity: 1;
   transform: translateY(0) scale(1);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   font-weight: 500;
 }
 
-/* 图标默认隐藏，绝对定位在中心 */
+/* 图标默认隐藏，绝对定位完全脱离文档流 */
 .action-btn-warning .btn-icon {
   position: absolute;
   left: 50%;
@@ -1016,6 +1131,7 @@ async function deleteAccount() {
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none;
 }
 
 /* hover 时文本淡出下滑，图标旋转放大淡入 */
@@ -1046,12 +1162,34 @@ async function deleteAccount() {
   max-width: 600px;
   margin: 0 auto;
   padding: 30px;
+  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes cardSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .profile-header {
   display: flex;
   align-items: center;
   gap: 16px;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s backwards;
+}
+
+.profile-avatar {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.profile-avatar:hover {
+  transform: scale(1.1) rotate(5deg);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
 }
 
 .profile-meta h3 {
@@ -1059,18 +1197,34 @@ async function deleteAccount() {
   font-size: 18px;
   font-weight: 600;
   color: #303133;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s backwards;
 }
 
 .profile-meta p {
   margin: 6px 0 0;
   color: #909399;
   font-size: 13px;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.25s backwards;
 }
 
 .profile-actions {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.4s backwards;
+}
+
+.profile-form-card :deep(.el-form-item) {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) backwards;
+}
+
+.profile-form-card :deep(.el-form-item):nth-child(1) { animation-delay: 0.3s; }
+.profile-form-card :deep(.el-form-item):nth-child(2) { animation-delay: 0.35s; }
+.profile-form-card :deep(.el-form-item):nth-child(3) { animation-delay: 0.4s; }
+
+.profile-form-card :deep(.el-form-item:hover) {
+  transform: translateX(4px);
 }
 
 /* 上传对话框样式 */
