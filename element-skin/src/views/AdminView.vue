@@ -115,7 +115,7 @@
                   {{ row.profile_count || 0 }}
                 </template>
               </el-table-column>
-              <el-table-column label="操作" width="250" fixed="right">
+              <el-table-column label="操作" width="300" fixed="right">
                 <template #default="{ row }">
                   <el-button
                     size="small"
@@ -123,6 +123,13 @@
                     @click="toggleAdmin(row)"
                   >
                     {{ row.is_admin ? '取消管理员' : '设为管理员' }}
+                  </el-button>
+                  <el-button
+                    size="small"
+                    type="warning"
+                    @click="showResetPasswordDialog(row)"
+                  >
+                    重置密码
                   </el-button>
                   <el-button
                     size="small"
@@ -241,6 +248,43 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 重置用户密码对话框 -->
+    <el-dialog
+      v-model="resetPasswordDialogVisible"
+      title="重置用户密码"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-form label-width="100px">
+        <el-form-item label="用户邮箱">
+          <el-input :value="currentUser?.email" disabled />
+        </el-form-item>
+        <el-form-item label="新密码">
+          <el-input
+            v-model="resetPasswordForm.new_password"
+            type="password"
+            placeholder="请输入新密码（至少6位）"
+            show-password
+          />
+        </el-form-item>
+        <el-form-item label="确认密码">
+          <el-input
+            v-model="resetPasswordForm.confirm_password"
+            type="password"
+            placeholder="请再次输入新密码"
+            show-password
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resetPasswordDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmResetPassword" :loading="resetting">
+          <el-icon><Check /></el-icon>
+          确认重置
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -261,6 +305,10 @@ const inviteMode = ref('auto')
 const customInviteCode = ref('')
 const previewInviteCode = ref('')
 const creating = ref(false)
+const resetPasswordDialogVisible = ref(false)
+const currentUser = ref(null)
+const resetPasswordForm = ref({ new_password: '', confirm_password: '' })
+const resetting = ref(false)
 
 const siteSettings = ref({
   site_name: '皮肤站',
@@ -361,6 +409,42 @@ async function deleteUser(user) {
     if (e !== 'cancel') {
       ElMessage.error('删除失败: ' + (e.response?.data?.detail || e.message))
     }
+  }
+}
+
+function showResetPasswordDialog(user) {
+  currentUser.value = user
+  resetPasswordForm.value = { new_password: '', confirm_password: '' }
+  resetPasswordDialogVisible.value = true
+}
+
+async function confirmResetPassword() {
+  if (!resetPasswordForm.value.new_password) {
+    ElMessage.error('请输入新密码')
+    return
+  }
+  if (resetPasswordForm.value.new_password.length < 6) {
+    ElMessage.error('密码长度不能少于6个字符')
+    return
+  }
+  if (resetPasswordForm.value.new_password !== resetPasswordForm.value.confirm_password) {
+    ElMessage.error('两次输入的密码不一致')
+    return
+  }
+
+  try {
+    resetting.value = true
+    await axios.post('/admin/users/reset-password', {
+      user_id: currentUser.value.id,
+      new_password: resetPasswordForm.value.new_password
+    }, { headers: authHeaders() })
+    ElMessage.success('密码重置成功')
+    resetPasswordDialogVisible.value = false
+  } catch (error) {
+    console.error(error)
+    ElMessage.error(error.response?.data?.detail || '重置失败')
+  } finally {
+    resetting.value = false
   }
 }
 

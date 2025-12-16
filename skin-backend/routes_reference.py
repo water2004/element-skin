@@ -459,6 +459,44 @@ async def delete_me(payload: dict = Depends(get_current_user)):
     return {"ok": True}
 
 
+@app.post("/me/password")
+async def change_password(payload: dict = Depends(get_current_user), body: dict = None):
+    """用户修改自己的密码"""
+    if body is None:
+        raise HTTPException(status_code=400, detail="no data")
+
+    old_password = body.get("old_password")
+    new_password = body.get("new_password")
+
+    if not old_password or not new_password:
+        raise HTTPException(
+            status_code=400, detail="old_password and new_password required"
+        )
+
+    if len(new_password) < 6:
+        raise HTTPException(status_code=400, detail="新密码长度不能少于6个字符")
+
+    user_id = payload.get("sub")
+
+    async with db.get_conn() as conn:
+        # 验证旧密码
+        cur = await conn.execute("SELECT password FROM users WHERE id=?", (user_id,))
+        row = await cur.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="用户不存在")
+
+        if row[0] != old_password:
+            raise HTTPException(status_code=403, detail="旧密码错误")
+
+        # 更新密码
+        await conn.execute(
+            "UPDATE users SET password=? WHERE id=?", (new_password, user_id)
+        )
+        await conn.commit()
+
+    return {"ok": True, "message": "密码修改成功"}
+
+
 @app.post("/me/profiles")
 async def create_profile(payload: dict = Depends(get_current_user), body: dict = None):
     if body is None:

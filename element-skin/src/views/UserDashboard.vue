@@ -184,15 +184,25 @@
               <el-form-item label="显示名">
                 <el-input v-model="form.display_name" placeholder="显示名称（可选）" />
               </el-form-item>
-              <el-form-item label="新密码">
-                <el-input type="password" v-model="form.password" placeholder="留空则不修改密码" show-password />
+
+              <el-divider content-position="left">修改密码</el-divider>
+
+              <el-form-item label="旧密码">
+                <el-input type="password" v-model="form.old_password" placeholder="请输入旧密码" show-password />
               </el-form-item>
+              <el-form-item label="新密码">
+                <el-input type="password" v-model="form.new_password" placeholder="请输入新密码（留空则不修改）" show-password />
+              </el-form-item>
+              <el-form-item label="确认新密码">
+                <el-input type="password" v-model="form.confirm_password" placeholder="请再次输入新密码" show-password />
+              </el-form-item>
+
               <div class="profile-actions">
                 <el-button type="primary" @click="updateProfile" size="large">
                   <el-icon><Check /></el-icon>
                   保存修改
                 </el-button>
-                <el-button type="danger" @click="deleteAccount" size="large" v-if="!user.is_admin">
+                <el-button type="danger" @click="showDeleteDialog = true" size="large" v-if="!user.is_admin">
                   <el-icon><Delete /></el-icon>
                   注销账号
                 </el-button>
@@ -293,12 +303,47 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 注销账号确认对话框 -->
+    <el-dialog
+      v-model="showDeleteDialog"
+      title="确认注销账号"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-alert
+        title="警告：该操作不可逆！"
+        type="error"
+        description="注销账号后，您的所有数据（包括角色、皮肤、披风等）将被永久删除，无法恢复。"
+        :closable="false"
+        style="margin-bottom: 20px;"
+      />
+      <p style="font-size: 14px; color: #606266;">
+        请输入 <strong style="color: #f56c6c;">注销账号</strong> 来确认操作：
+      </p>
+      <el-input
+        v-model="deleteConfirmText"
+        placeholder="请输入：注销账号"
+        style="margin-top: 10px;"
+      />
+      <template #footer>
+        <el-button @click="showDeleteDialog = false">取消</el-button>
+        <el-button
+          type="danger"
+          @click="confirmDeleteAccount"
+          :disabled="deleteConfirmText !== '注销账号'"
+        >
+          <el-icon><Delete /></el-icon>
+          确认注销
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, computed, watch, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -308,6 +353,7 @@ import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
 
 const route = useRoute()
+const router = useRouter()
 const user = ref(null)
 const newRoleName = ref('')
 const showCreateRoleDialog = ref(false)
@@ -321,6 +367,8 @@ const uploadForm = ref({ texture_type: 'skin', model: 'default', note: '', file:
 const uploadRef = ref(null)
 const showApplyDialog = ref(false)
 const applyForm = ref({ profile_id: '', texture_type: '', hash: '' })
+const showDeleteDialog = ref(false)
+const deleteConfirmText = ref('')
 
 const emailInitial = computed(() => {
   const email = user.value?.email || user.value?.display_name || 'U'
@@ -595,23 +643,49 @@ async function clearRoleCape(pid) {
 
 async function updateProfile() {
   try {
-    const payload = { ...form.value }
-    if (!payload.password) delete payload.password
+    // 如果要修改密码，需要验证
+    if (form.value.new_password) {
+      if (!form.value.old_password) {
+        ElMessage.error('请输入旧密码')
+        return
+      }
+      if (form.value.new_password.length < 6) {
+        ElMessage.error('新密码长度不能少于6个字符')
+        return
+      }
+      if (form.value.new_password !== form.value.confirm_password) {
+        ElMessage.error('两次输入的新密码不一致')
+        return
+      }
+
+      // 修改密码
+      await axios.post('/me/password', {
+        old_password: form.value.old_password,
+        new_password: form.value.new_password
+      }, { headers: authHeaders() })
+
+      ElMessage.success('密码修改成功')
+      // 清空密码字段
+      form.value.old_password = ''
+      form.value.new_password = ''
+      form.value.confirm_password = ''
+    }
+
+    // 更新基本信息
+    const payload = {
+      email: form.value.email,
+      display_name: form.value.display_name
+    }
     await axios.patch('/me', payload, { headers: authHeaders() })
-    ElMessage.success('保存成功')
+    ElMessage.success('信息修改成功')
     fetchMe()
   } catch (e) {
     ElMessage.error('保存失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 
-async function deleteAccount() {
+async function confirmDeleteAccount() {
   try {
-    await ElMessageBox.confirm(
-      '确定要注销账号吗？此操作将删除您的所有数据！',
-      '危险操作',
-      { type: 'error', confirmButtonText: '确定注销' }
-    )
     await axios.delete('/me', { headers: authHeaders() })
     ElMessage.success('账号已注销')
     localStorage.removeItem('jwt')
@@ -620,9 +694,7 @@ async function deleteAccount() {
       router.push('/')
     }, 1000)
   } catch (e) {
-    if (e !== 'cancel') {
-      ElMessage.error('注销失败: ' + (e.response?.data?.detail || e.message))
-    }
+    ElMessage.error('注销失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 </script>

@@ -27,6 +27,17 @@
           />
         </el-form-item>
 
+        <el-form-item label="确认密码" prop="confirmPassword">
+          <el-input
+            v-model="form.confirmPassword"
+            type="password"
+            placeholder="请再次输入密码"
+            :prefix-icon="Lock"
+            show-password
+            @keyup.enter="register"
+          />
+        </el-form-item>
+
         <el-form-item label="邀请码 (若需要)" prop="invite">
           <el-input
             v-model="form.invite"
@@ -73,6 +84,7 @@ const loading = ref(false)
 const form = reactive({
   email: '',
   password: '',
+  confirmPassword: '',
   invite: ''
 })
 
@@ -84,6 +96,19 @@ const rules = {
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码至少需要6个字符', trigger: 'blur' }
+  ],
+  confirmPassword: [
+    { required: true, message: '请再次输入密码', trigger: 'blur' },
+    {
+      validator: (rule, value, callback) => {
+        if (value !== form.password) {
+          callback(new Error('两次输入的密码不一致'))
+        } else {
+          callback()
+        }
+      },
+      trigger: 'blur'
+    }
   ]
 }
 
