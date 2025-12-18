@@ -777,13 +777,19 @@ async def register(req: dict, request: Request):
             if not invite:
                 raise HTTPException(status_code=400, detail="invite code required")
             c = await conn.execute(
-                "SELECT code, used_by FROM invites WHERE code=?", (invite,)
+                "SELECT code, total_uses, used_count FROM invites WHERE code=?",
+                (invite,),
             )
             crow = await c.fetchone()
             if not crow:
                 raise HTTPException(status_code=400, detail="invalid invite code")
-            if crow[1]:
-                raise HTTPException(status_code=400, detail="invite code already used")
+
+            # 检查邀请码剩余次数
+            code, total_uses, used_count = crow
+            if total_uses is not None and used_count >= total_uses:
+                raise HTTPException(
+                    status_code=400, detail="invite code has no remaining uses"
+                )
 
         # 检查是否是第一个用户
         cur = await conn.execute("SELECT COUNT(*) FROM users")
@@ -832,10 +838,16 @@ async def register(req: dict, request: Request):
             (pid, uid, profile_name),
         )
 
-        # 如果使用了邀请码，标记为已使用
+        # 如果使用了邀请码，增加使用计数
         if require_invite and invite:
+            # 增加使用次数
             await conn.execute(
-                "UPDATE invites SET used_by=? WHERE code=?", (email, invite)
+                "UPDATE invites SET used_count = used_count + 1 WHERE code=?", (invite,)
+            )
+            # 如果这是第一次使用，设置 used_by（兼容旧逻辑）
+            await conn.execute(
+                "UPDATE invites SET used_by=? WHERE code=? AND used_by IS NULL",
+                (email, invite),
             )
 
         await conn.commit()
@@ -857,19 +869,6 @@ async def admin_generate_invite():
         )
         await conn.commit()
     return {"code": code}
-
-
-@app.get("/admin/invites")
-async def admin_list_invites():
-    async with db.get_conn() as conn:
-        cur = await conn.execute(
-            "SELECT code, created_by, used_by, created_at FROM invites"
-        )
-        rows = await cur.fetchall()
-        return [
-            {"code": r[0], "created_by": r[1], "used_by": r[2], "created_at": r[3]}
-            for r in rows
-        ]
 
 
 @app.get("/admin/users/list")
@@ -1157,12 +1156,18 @@ async def get_admin_invites(payload: dict = Depends(admin_required)):
     """获取邀请码列表"""
     async with db.get_conn() as conn:
         cur = await conn.execute(
-            "SELECT code, created_at, used_by FROM invites ORDER BY created_at DESC"
+            "SELECT code, created_at, used_by, total_uses, used_count FROM invites ORDER BY created_at DESC"
         )
         invites = []
         for row in await cur.fetchall():
             invites.append(
-                {"code": row[0], "created_at": row[1], "used_by": row[2] or None}
+                {
+                    "code": row[0],
+                    "created_at": row[1],
+                    "used_by": row[2] or None,
+                    "total_uses": row[3],
+                    "used_count": row[4] or 0,
+                }
             )
     return invites
 
@@ -1171,7 +1176,7 @@ async def get_admin_invites(payload: dict = Depends(admin_required)):
 async def create_admin_invite(
     payload: dict = Depends(admin_required), body: dict = Body(None)
 ):
-    """生成新邀请码（支持自定义或自动生成）"""
+    """生成新邀请码（支持自定义或自动生成，支持设置使用次数）"""
     import secrets
     import re
 
@@ -1195,6 +1200,15 @@ async def create_admin_invite(
     else:
         code = secrets.token_urlsafe(16)
 
+    # 获取使用次数（默认为1，NULL表示无限制）
+    total_uses = body.get("total_uses", 1) if body else 1
+    if total_uses is not None:
+        if not isinstance(total_uses, int) or total_uses < 1:
+            raise HTTPException(
+                status_code=400,
+                detail="total_uses must be a positive integer or null for unlimited",
+            )
+
     created_at = int(time.time() * 1000)
     async with db.get_conn() as conn:
         # 检查邀请码是否已存在
@@ -1203,10 +1217,11 @@ async def create_admin_invite(
             raise HTTPException(status_code=400, detail="invite code already exists")
 
         await conn.execute(
-            "INSERT INTO invites (code, created_at) VALUES (?, ?)", (code, created_at)
+            "INSERT INTO invites (code, created_at, total_uses, used_count) VALUES (?, ?, ?, 0)",
+            (code, created_at, total_uses),
         )
         await conn.commit()
-    return {"code": code}
+    return {"code": code, "total_uses": total_uses}
 
 
 @app.delete("/admin/invites/{code}")

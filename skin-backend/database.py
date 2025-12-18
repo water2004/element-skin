@@ -86,6 +86,30 @@ class Database:
                 )
                 await db.commit()
 
+            # 迁移：为 invites 表添加使用次数字段
+            cur = await db.execute("PRAGMA table_info(invites)")
+            invite_cols = await cur.fetchall()
+            invite_col_names = [c[1] for c in invite_cols]
+
+            # 添加 total_uses 列（总使用次数，NULL表示无限制，0表示一次性）
+            if "total_uses" not in invite_col_names:
+                await db.execute(
+                    "ALTER TABLE invites ADD COLUMN total_uses INTEGER DEFAULT 1"
+                )
+                await db.commit()
+
+            # 添加 used_count 列（已使用次数）
+            if "used_count" not in invite_col_names:
+                await db.execute(
+                    "ALTER TABLE invites ADD COLUMN used_count INTEGER DEFAULT 0"
+                )
+                await db.commit()
+                # 为已使用的邀请码设置 used_count = 1
+                await db.execute(
+                    "UPDATE invites SET used_count = 1 WHERE used_by IS NOT NULL"
+                )
+                await db.commit()
+
             # 注意：不再在每次启动时自动设置管理员
             # 第一个用户的管理员设置已在注册逻辑中处理
 

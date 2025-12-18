@@ -168,13 +168,22 @@
                   <el-text copyable>{{ row.code }}</el-text>
                 </template>
               </el-table-column>
-              <el-table-column label="状态" width="100">
+              <el-table-column label="使用次数" width="150">
                 <template #default="{ row }">
-                  <el-tag v-if="row.used_by" type="info">已使用</el-tag>
-                  <el-tag v-else type="success">未使用</el-tag>
+                  <span :style="{ color: getRemainingColor(row) }">
+                    {{ row.used_count || 0 }} / {{ row.total_uses || '∞' }}
+                  </span>
+                  <el-tag
+                    v-if="row.total_uses && row.used_count >= row.total_uses"
+                    type="danger"
+                    size="small"
+                    style="margin-left: 8px;"
+                  >
+                    已用完
+                  </el-tag>
                 </template>
               </el-table-column>
-              <el-table-column prop="used_by" label="使用者" min-width="200" />
+              <el-table-column prop="used_by" label="最后使用者" min-width="200" />
               <el-table-column label="创建时间" width="180">
                 <template #default="{ row }">
                   {{ formatDate(row.created_at) }}
@@ -237,6 +246,27 @@
             <el-icon><Refresh /></el-icon>
             换一个
           </el-button>
+        </el-form-item>
+
+        <el-form-item label="使用次数">
+          <el-radio-group v-model="inviteUsesMode" style="margin-bottom: 12px;">
+            <el-radio value="limited">限制次数</el-radio>
+            <el-radio value="unlimited">无限使用</el-radio>
+          </el-radio-group>
+          <el-input-number
+            v-if="inviteUsesMode === 'limited'"
+            v-model="inviteUses"
+            :min="1"
+            :max="1000"
+            controls-position="right"
+            style="width: 100%;"
+          />
+          <el-text v-if="inviteUsesMode === 'limited'" size="small" type="info" style="margin-top: 8px; display: block;">
+            设置该邀请码可以被使用的次数
+          </el-text>
+          <el-text v-else size="small" type="info" style="margin-top: 8px; display: block;">
+            该邀请码可以被无限次使用
+          </el-text>
         </el-form-item>
       </el-form>
 
@@ -309,6 +339,8 @@ const resetPasswordDialogVisible = ref(false)
 const currentUser = ref(null)
 const resetPasswordForm = ref({ new_password: '', confirm_password: '' })
 const resetting = ref(false)
+const inviteUsesMode = ref('limited')
+const inviteUses = ref(1)
 
 const siteSettings = ref({
   site_name: '皮肤站',
@@ -471,11 +503,22 @@ function showInviteDialog() {
   inviteMode.value = 'auto'
   customInviteCode.value = ''
   previewInviteCode.value = generateRandomCode()
+  inviteUsesMode.value = 'limited'
+  inviteUses.value = 1
   inviteDialogVisible.value = true
 }
 
 function refreshPreview() {
   previewInviteCode.value = generateRandomCode()
+}
+
+function getRemainingColor(row) {
+  if (!row.total_uses) return '#67c23a' // 无限制，绿色
+  const remaining = row.total_uses - (row.used_count || 0)
+  const percentage = remaining / row.total_uses
+  if (percentage <= 0) return '#f56c6c' // 红色
+  if (percentage <= 0.3) return '#e6a23c' // 黄色
+  return '#67c23a' // 绿色
 }
 
 async function confirmCreateInvite() {
@@ -499,7 +542,16 @@ async function confirmCreateInvite() {
 
   creating.value = true
   try {
-    const res = await axios.post('/admin/invites', { code }, { headers: authHeaders() })
+    const payload = { code }
+
+    // 添加使用次数
+    if (inviteUsesMode.value === 'unlimited') {
+      payload.total_uses = null
+    } else {
+      payload.total_uses = inviteUses.value
+    }
+
+    const res = await axios.post('/admin/invites', payload, { headers: authHeaders() })
     ElMessage.success('创建成功！邀请码：' + res.data.code)
     inviteDialogVisible.value = false
     loadInvites()

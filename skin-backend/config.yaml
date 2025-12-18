@@ -24,7 +24,7 @@ server:
   host: "0.0.0.0"
   port: 8000
   root_path: ""  # 子目录部署时配置，如 "/skin/api"
-  debug: false  # 开启后会输出所有HTTP请求和响应的详细信息（包括图片请求），用于调试
+  debug: true  # 开启后会输出所有HTTP请求和响应的详细信息（包括图片请求），用于调试
 
 # CORS 跨域配置
 cors:
