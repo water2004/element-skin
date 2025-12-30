@@ -5,6 +5,16 @@ import RegisterView from '../views/RegisterView.vue'
 import LoginView from '../views/LoginView.vue'
 import UserDashboard from '../views/UserDashboard.vue'
 
+// Dashboard Components
+import DashboardWardrobe from '@/components/dashboard/DashboardWardrobe.vue'
+import DashboardRoles from '@/components/dashboard/DashboardRoles.vue'
+import DashboardProfile from '@/components/dashboard/DashboardProfile.vue'
+
+// Admin Components
+import AdminSettings from '@/components/admin/AdminSettings.vue'
+import AdminUserList from '@/components/admin/AdminUserList.vue'
+import AdminInviteList from '@/components/admin/AdminInviteList.vue'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -25,47 +35,45 @@ const router = createRouter({
     },
     {
       path: '/admin',
-      name: 'admin',
       component: AdminView,
       redirect: '/admin/settings',
       children: [
         {
           path: 'settings',
           name: 'admin-settings',
-          component: AdminView,
+          component: AdminSettings,
         },
         {
           path: 'users',
           name: 'admin-users',
-          component: AdminView,
+          component: AdminUserList,
         },
         {
           path: 'invites',
           name: 'admin-invites',
-          component: AdminView,
+          component: AdminInviteList,
         },
       ],
     },
     {
       path: '/dashboard',
-      name: 'dashboard',
       component: UserDashboard,
       redirect: '/dashboard/wardrobe',
       children: [
         {
           path: 'wardrobe',
-          name: 'wardrobe',
-          component: UserDashboard,
+          name: 'dashboard-wardrobe',
+          component: DashboardWardrobe,
         },
         {
           path: 'roles',
-          name: 'roles',
-          component: UserDashboard,
+          name: 'dashboard-roles',
+          component: DashboardRoles,
         },
         {
           path: 'profile',
-          name: 'profile',
-          component: UserDashboard,
+          name: 'dashboard-profile',
+          component: DashboardProfile,
         },
       ],
     },

@@ -1,5 +1,5 @@
 <template>
-  <div class="register-container">
+  <div class="register-container bg-gradient-purple">
     <div class="register-card">
       <div class="register-header">
         <h1>注册账号</h1>
@@ -149,7 +149,6 @@ async function register() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
 }
 

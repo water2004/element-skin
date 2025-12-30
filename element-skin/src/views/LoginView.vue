@@ -1,5 +1,5 @@
 <template>
-  <div class="login-container">
+  <div class="login-container bg-gradient-purple">
     <div class="login-card">
       <div class="login-header">
         <h1>欢迎回来</h1>
@@ -115,7 +115,6 @@ async function login() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 20px;
 }
 

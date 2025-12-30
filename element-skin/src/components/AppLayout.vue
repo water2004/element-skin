@@ -9,13 +9,13 @@
           <el-popover v-if="isLogged" placement="bottom-end" :width="240" trigger="hover" popper-class="account-popover" :show-arrow="false" :offset="4">
             <template #reference>
               <div class="account-trigger">
-                <el-avatar size="small" class="account-avatar">{{ avatarInitial }}</el-avatar>
+                <el-avatar size="small" class="account-avatar bg-gradient-purple">{{ avatarInitial }}</el-avatar>
                 <span class="account-name">{{ accountName }}</span>
               </div>
             </template>
             <div class="account-panel">
               <div class="account-header">
-                <el-avatar :size="48" class="account-avatar">{{ avatarInitial }}</el-avatar>
+                <el-avatar :size="48" class="account-avatar bg-gradient-purple">{{ avatarInitial }}</el-avatar>
                 <div class="account-meta">
                   <h4>{{ accountName }}</h4>
                   <p>{{ isAdmin ? '管理员' : '普通用户' }}</p>
@@ -226,7 +226,6 @@ function authHeaders() {
 }
 
 .account-avatar {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color:#fff;
   font-weight:600;
   font-size: 18px;
