@@ -16,12 +16,13 @@ from fastapi.responses import Response
 
 from utils.jwt_utils import decode_jwt_token
 from database_module import Database
+from config_loader import Config
 
 router = APIRouter()
 security = HTTPBearer()
 
 
-def setup_routes(db: Database, backend, rate_limiter, config):
+def setup_routes(db: Database, backend, rate_limiter, config: Config):
     """设置路由（注入依赖）"""
 
     site_backend = backend

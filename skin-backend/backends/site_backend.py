@@ -9,11 +9,15 @@ from utils.jwt_utils import create_jwt_token
 from utils.uuid_utils import generate_random_uuid
 from utils.typing import User, InviteCode, PlayerProfile
 from database_module import Database
+from config_loader import Config
 
 
 class SiteBackend:
-    def __init__(self, db: Database):  # Use forward reference for type hint
+    def __init__(
+        self, db: Database, config: Config
+    ):  # Use forward reference for type hint
         self.db = db
+        self.config = config
 
     # ========== Auth & User ==========
 
@@ -257,8 +261,12 @@ class SiteBackend:
             "mojang_services_url": config.get("mojang.services_url"),
             "mojang_skin_domains": ",".join(config.get("mojang.skin_domains", [])),
             "mojang_cache_ttl": config.get("mojang.cache_ttl"),
-            "fallback_mojang_profile": settings.get("fallback_mojang_profile", "false") == "true",
-            "fallback_mojang_hasjoined": settings.get("fallback_mojang_hasjoined", "false") == "true",
+            "fallback_mojang_profile": settings.get("fallback_mojang_profile", "false")
+            == "true",
+            "fallback_mojang_hasjoined": settings.get(
+                "fallback_mojang_hasjoined", "false"
+            )
+            == "true",
         }
 
     async def save_admin_settings(self, body: dict):

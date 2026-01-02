@@ -24,7 +24,7 @@ private_key_path = config.get("keys.private_key", "private.pem")
 crypto = CryptoUtils(private_key_path)
 rate_limiter = RateLimiter(db)  # New dependency-injected rate limiter
 ygg_backend = YggdrasilBackend(db, crypto)
-site_backend = SiteBackend(db)
+site_backend = SiteBackend(db, config)
 
 
 @asynccontextmanager
