@@ -256,11 +256,11 @@ class SiteBackend:
                 "microsoft_redirect_uri", "http://localhost:8000/microsoft/callback"
             ),
             # Mojang API Settings (URLs from static config, switches from DB)
-            "mojang_session_url": config.get("mojang.session_url"),
-            "mojang_account_url": config.get("mojang.account_url"),
-            "mojang_services_url": config.get("mojang.services_url"),
-            "mojang_skin_domains": ",".join(config.get("mojang.skin_domains", [])),
-            "mojang_cache_ttl": config.get("mojang.cache_ttl"),
+            "mojang_session_url": self.config.get("mojang.session_url"),
+            "mojang_account_url": self.config.get("mojang.account_url"),
+            "mojang_services_url": self.config.get("mojang.services_url"),
+            "mojang_skin_domains": ",".join(self.config.get("mojang.skin_domains", [])),
+            "mojang_cache_ttl": self.config.get("mojang.cache_ttl"),
             "fallback_mojang_profile": settings.get("fallback_mojang_profile", "false")
             == "true",
             "fallback_mojang_hasjoined": settings.get(
