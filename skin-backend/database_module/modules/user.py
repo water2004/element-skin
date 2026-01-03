@@ -363,3 +363,38 @@ class UserModule:
         async with self.db.get_conn() as conn:
             await conn.execute("DELETE FROM invites WHERE code=?", (code,))
             await conn.commit()
+
+    # ========== Official (Mojang) Account Whitelist ==========
+
+    async def add_official_whitelist_user(self, username: str):
+        created_at = int(time.time() * 1000)
+        async with self.db.get_conn() as conn:
+            await conn.execute(
+                "INSERT OR IGNORE INTO official_whitelist (username, created_at) VALUES (?, ?)",
+                (username, created_at),
+            )
+            await conn.commit()
+
+    async def remove_official_whitelist_user(self, username: str):
+        async with self.db.get_conn() as conn:
+            await conn.execute(
+                "DELETE FROM official_whitelist WHERE username=?", (username,)
+            )
+            await conn.commit()
+
+    async def is_user_in_official_whitelist(self, username: str) -> bool:
+        async with self.db.get_conn() as conn:
+            async with conn.execute(
+                "SELECT 1 FROM official_whitelist WHERE username=? COLLATE NOCASE",
+                (username,),
+            ) as cur:
+                row = await cur.fetchone()
+                return row is not None
+
+    async def list_official_whitelist_users(self) -> list[dict]:
+        async with self.db.get_conn() as conn:
+            async with conn.execute(
+                "SELECT username, created_at FROM official_whitelist ORDER BY created_at DESC"
+            ) as cur:
+                rows = await cur.fetchall()
+                return [{"username": r[0], "created_at": r[1]} for r in rows]

@@ -86,7 +86,7 @@ import { computed, ref, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import {
-  Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer
+  Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -109,6 +109,7 @@ const dashboardLinks = [
 ]
 const adminNavLinks = [
   { path: '/admin/settings', title: '站点设置', icon: Setting },
+  { path: '/admin/mojang', title: 'Mojang API', icon: Link },
   { path: '/admin/users', title: '用户管理', icon: User },
   { path: '/admin/invites', title: '邀请码管理', icon: Tools },
   { path: '/dashboard', title: '返回面板', icon: Back },

@@ -62,6 +62,11 @@ CREATE TABLE IF NOT EXISTS user_textures (
     PRIMARY KEY(user_id, hash, texture_type),
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS official_whitelist (
+    username TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL
+);
 """
 
 class Database(BaseDB):
@@ -93,6 +98,9 @@ class Database(BaseDB):
             )
             await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_mojang_hasjoined', 'false')"
+            )
+            await conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_official_whitelist', 'false')"
             )
             await conn.commit()
 

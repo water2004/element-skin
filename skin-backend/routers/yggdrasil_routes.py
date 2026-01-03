@@ -202,6 +202,12 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
 
         # Fallback to Mojang
         if await db.setting.get("fallback_mojang_hasjoined", "false") == "true":
+            # Check Whitelist
+            if await db.setting.get("enable_official_whitelist", "false") == "true":
+                if not await db.user.is_user_in_official_whitelist(username):
+                    logger.info(f"[Fallback] Blocked non-whitelisted user: {username}")
+                    return Response(status_code=204)
+
             session_url = config.get("mojang.session_url")
             import aiohttp
 

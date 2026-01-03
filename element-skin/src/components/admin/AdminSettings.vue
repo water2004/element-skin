@@ -83,33 +83,6 @@
           <el-text size="small" type="info" style="margin-top:4px">必须与 Azure 应用配置中的重定向 URI 完全一致</el-text>
         </el-form-item>
 
-        <el-divider content-position="left">Mojang API 状态与兼容性</el-divider>
-        <el-form-item label="Session URL">
-          <el-input v-model="siteSettings.mojang_session_url" readonly disabled />
-        </el-form-item>
-        <el-form-item label="Account URL">
-          <el-input v-model="siteSettings.mojang_account_url" readonly disabled />
-        </el-form-item>
-        <el-form-item label="Services URL">
-          <el-input v-model="siteSettings.mojang_services_url" readonly disabled />
-        </el-form-item>
-        <el-form-item label="Skin Domains">
-          <el-input v-model="siteSettings.mojang_skin_domains" readonly disabled />
-        </el-form-item>
-        <el-form-item label="Cache TTL">
-          <el-input v-model="siteSettings.mojang_cache_ttl" readonly disabled>
-            <template #suffix>秒</template>
-          </el-input>
-        </el-form-item>
-        <el-form-item label="正版 Profile 转发">
-          <el-switch v-model="siteSettings.fallback_mojang_profile" />
-          <el-text size="small" style="margin-left: 8px">本地查无用户时尝试从 Mojang 获取</el-text>
-        </el-form-item>
-        <el-form-item label="正版 hasJoined 转发">
-          <el-switch v-model="siteSettings.fallback_mojang_hasjoined" />
-          <el-text size="small" style="margin-left: 8px">本地验证失败时尝试向 Mojang 验证</el-text>
-        </el-form-item>
-
         <el-form-item>
           <el-button type="primary" @click="saveSettings" size="large">
             <el-icon><Check /></el-icon>
@@ -139,14 +112,7 @@ const siteSettings = ref({
   jwt_expire_days: 7,
   microsoft_client_id: '',
   microsoft_client_secret: '',
-  microsoft_redirect_uri: '',
-  mojang_session_url: 'https://sessionserver.mojang.com',
-  mojang_account_url: 'https://api.mojang.com',
-  mojang_services_url: 'https://api.minecraftservices.com',
-  mojang_skin_domains: 'textures.minecraft.net',
-  mojang_cache_ttl: 60,
-  fallback_mojang_profile: false,
-  fallback_mojang_hasjoined: false
+  microsoft_redirect_uri: ''
 })
 
 function authHeaders() {

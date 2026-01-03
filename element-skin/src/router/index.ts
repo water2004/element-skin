@@ -15,6 +15,7 @@ import DashboardHome from '@/components/dashboard/DashboardHome.vue'
 import AdminSettings from '@/components/admin/AdminSettings.vue'
 import AdminUserList from '@/components/admin/AdminUserList.vue'
 import AdminInviteList from '@/components/admin/AdminInviteList.vue'
+import AdminMojang from '@/components/admin/AdminMojang.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -43,6 +44,11 @@ const router = createRouter({
           path: 'settings',
           name: 'admin-settings',
           component: AdminSettings,
+        },
+        {
+          path: 'mojang',
+          name: 'admin-mojang',
+          component: AdminMojang,
         },
         {
           path: 'users',

@@ -299,4 +299,17 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
         await db.user.delete_invite(code)
         return {"ok": True}
 
+    @router.get("/admin/official-whitelist")
+    async def get_official_whitelist(payload: dict = Depends(admin_required)):
+        return await site_backend.get_official_whitelist()
+
+    @router.post("/admin/official-whitelist")
+    async def add_official_whitelist(payload: dict = Depends(admin_required), body: dict = Body(...)):
+        username = body.get("username")
+        return await site_backend.add_official_whitelist_user(username)
+
+    @router.delete("/admin/official-whitelist/{username}")
+    async def remove_official_whitelist(username: str, payload: dict = Depends(admin_required)):
+        return await site_backend.remove_official_whitelist_user(username)
+
     return router

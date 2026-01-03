@@ -267,6 +267,7 @@ class SiteBackend:
                 "fallback_mojang_hasjoined", "false"
             )
             == "true",
+            "enable_official_whitelist": settings.get("enable_official_whitelist", "false") == "true",
         }
 
     async def save_admin_settings(self, body: dict):
@@ -285,6 +286,7 @@ class SiteBackend:
             "microsoft_redirect_uri",
             "fallback_mojang_profile",
             "fallback_mojang_hasjoined",
+            "enable_official_whitelist",
         ]:
             if key in body:
                 val = body[key]
@@ -293,6 +295,19 @@ class SiteBackend:
                 else:
                     value = str(val)
                 await self.db.setting.set(key, value)
+
+    async def get_official_whitelist(self):
+        return await self.db.user.list_official_whitelist_users()
+
+    async def add_official_whitelist_user(self, username: str):
+        if not username:
+             raise HTTPException(status_code=400, detail="Username required")
+        await self.db.user.add_official_whitelist_user(username)
+        return {"ok": True}
+
+    async def remove_official_whitelist_user(self, username: str):
+         await self.db.user.remove_official_whitelist_user(username)
+         return {"ok": True}
 
     async def get_admin_users(self):
         users = await self.db.user.list_users(limit=1000, offset=0)
