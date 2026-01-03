@@ -8,8 +8,12 @@
         <!-- Desktop Navigation -->
         <div class="desktop-nav">
           <el-menu mode="horizontal" :default-active="activeRoute" router :ellipsis="false">
-            <template v-for="item in navLinks" :key="item.path">
-              <el-menu-item :index="item.path" v-if="!item.adminOnly || isAdmin">
+            <template v-for="(item, index) in navLinks" :key="item.path">
+              <el-menu-item 
+                :index="item.path" 
+                v-if="!item.adminOnly || isAdmin"
+                :class="'nav-priority-' + (index + 1)"
+              >
                 <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
                 <span>{{ item.title }}</span>
               </el-menu-item>
@@ -19,7 +23,7 @@
 
         <div class="header-actions">
           <!-- Mobile Navigation Trigger -->
-          <div class="mobile-nav">
+          <div class="mobile-nav" v-if="isLogged">
             <el-button @click="drawer = true" :icon="MenuIcon" text circle />
           </div>
 
@@ -109,12 +113,12 @@ const dashboardLinks = [
   { path: '/dashboard/profile', title: '个人资料', icon: Setting },
 ]
 const adminNavLinks = [
+  { path: '/dashboard', title: '返回面板', icon: Back },
+  { path: '/admin/users', title: '用户管理', icon: User },
+  { path: '/admin/invites', title: '邀请码管理', icon: Tools },
   { path: '/admin/settings', title: '站点设置', icon: Setting },
   { path: '/admin/mojang', title: 'Mojang API', icon: Link },
   { path: '/admin/carousel', title: '首页图片', icon: Picture },
-  { path: '/admin/users', title: '用户管理', icon: User },
-  { path: '/admin/invites', title: '邀请码管理', icon: Tools },
-  { path: '/dashboard', title: '返回面板', icon: Back },
 ]
 
 const navLinks = computed(() => {
@@ -253,7 +257,8 @@ onUnmounted(() => {
 
 .is-home-layout .logo, 
 .is-home-layout :deep(.el-menu-item),
-.is-home-layout .account-name {
+.is-home-layout .account-name,
+.is-home-layout .mobile-nav :deep(.el-button) {
   color: #fff !important;
 }
 
@@ -268,8 +273,9 @@ onUnmounted(() => {
   color: #fff !important;
 }
 
-.is-home-layout .account-trigger:hover {
-  background: rgba(255, 255, 255, 0.15);
+.is-home-layout .account-trigger:hover,
+.is-home-layout .mobile-nav :deep(.el-button:hover) {
+  background: rgba(255, 255, 255, 0.15) !important;
 }
 
 .layout-header {
@@ -404,12 +410,23 @@ onUnmounted(() => {
 }
 
 /* --- Responsive Breakpoint --- */
-@media (max-width: 992px) {
+@media (max-width: 1200px) {
+  .nav-priority-6 { display: none !important; }
+  .mobile-nav { display: block; }
+}
+@media (max-width: 1100px) {
+  .nav-priority-5 { display: none !important; }
+}
+@media (max-width: 1000px) {
+  .nav-priority-4 { display: none !important; }
+}
+@media (max-width: 900px) {
+  .nav-priority-3 { display: none !important; }
+}
+
+@media (max-width: 768px) {
   .desktop-nav {
     display: none;
-  }
-  .mobile-nav {
-    display: block;
   }
   .layout-header {
     justify-content: space-between;

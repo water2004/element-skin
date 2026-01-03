@@ -436,12 +436,51 @@ onMounted(() => {
 .action-btn-danger {
   background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%);
   color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.action-btn-danger .btn-content {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.action-btn-danger .btn-label {
+  margin: 0;
+  grid-area: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.action-btn-danger .btn-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.6) rotate(-90deg);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  font-size: 16px;
+  pointer-events: none;
+}
+
+.action-btn-danger:hover .btn-label {
+  opacity: 0;
+  transform: translateY(8px) scale(0.8);
+}
+
+.action-btn-danger:hover .btn-icon {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1) rotate(0deg);
 }
 
 .action-btn-danger:hover {
-  background: linear-gradient(135deg, #f78989 0%, #f9a7a7 100%);
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(245, 108, 108, 0.4);
+  box-shadow: 0 6px 16px rgba(245, 108, 108, 0.25);
 }
 
 /* Upload Dialog Styles */
