@@ -3,6 +3,7 @@ set -e
 
 # 确保 /data 目录存在
 mkdir -p /data/textures
+mkdir -p /data/carousel
 
 # 如果密钥文件不存在，则生成
 if [ ! -f "/data/private.pem" ] || [ ! -f "/data/public.pem" ]; then

@@ -1,5 +1,5 @@
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'is-home-layout': isHome }">
     <el-header class="layout-header-wrap">
       <div class="layout-header">
         <!-- Logo -->
@@ -86,11 +86,12 @@ import { computed, ref, onMounted, onUnmounted, provide } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import {
-  Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link
+  Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link, Picture
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const { push } = useRouter()
+const isHome = computed(() => route.path === '/')
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
 const jwtToken = ref(localStorage.getItem('jwt') || '')
 const user = ref(null)
@@ -110,6 +111,7 @@ const dashboardLinks = [
 const adminNavLinks = [
   { path: '/admin/settings', title: '站点设置', icon: Setting },
   { path: '/admin/mojang', title: 'Mojang API', icon: Link },
+  { path: '/admin/carousel', title: '首页图片', icon: Picture },
   { path: '/admin/users', title: '用户管理', icon: User },
   { path: '/admin/invites', title: '邀请码管理', icon: Tools },
   { path: '/dashboard', title: '返回面板', icon: Back },
@@ -235,6 +237,39 @@ onUnmounted(() => {
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
   border-bottom: 1px solid #dcdfe6;
   height: 64px;
+  z-index: 100;
+  transition: all 0.3s;
+}
+
+.is-home-layout .layout-header-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: transparent;
+  border-bottom: none;
+  box-shadow: none;
+}
+
+.is-home-layout .logo, 
+.is-home-layout :deep(.el-menu-item),
+.is-home-layout .account-name {
+  color: #fff !important;
+}
+
+.is-home-layout :deep(.el-menu) {
+  background: transparent !important;
+  border-bottom: none !important;
+}
+
+.is-home-layout :deep(.el-menu-item:hover),
+.is-home-layout :deep(.el-menu-item.is-active) {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  color: #fff !important;
+}
+
+.is-home-layout .account-trigger:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .layout-header {
@@ -266,6 +301,10 @@ onUnmounted(() => {
   padding: 20px;
   flex: 1;
   overflow: auto;
+}
+
+.is-home-layout .app-main {
+  padding: 0;
 }
 
 /* --- Desktop Navigation --- */

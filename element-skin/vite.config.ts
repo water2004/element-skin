@@ -52,6 +52,10 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
+      '^/static/carousel': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
       '^/me': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,

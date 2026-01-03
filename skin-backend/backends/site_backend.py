@@ -2,6 +2,7 @@ from typing import Optional, Dict, List, Any
 import re
 import time
 import secrets
+import os
 from fastapi import HTTPException
 
 from utils.password_utils import hash_password, verify_password, needs_rehash
@@ -267,7 +268,10 @@ class SiteBackend:
                 "fallback_mojang_hasjoined", "false"
             )
             == "true",
-            "enable_official_whitelist": settings.get("enable_official_whitelist", "false") == "true",
+            "enable_official_whitelist": settings.get(
+                "enable_official_whitelist", "false"
+            )
+            == "true",
         }
 
     async def save_admin_settings(self, body: dict):
@@ -301,13 +305,51 @@ class SiteBackend:
 
     async def add_official_whitelist_user(self, username: str):
         if not username:
-             raise HTTPException(status_code=400, detail="Username required")
+            raise HTTPException(status_code=400, detail="Username required")
         await self.db.user.add_official_whitelist_user(username)
         return {"ok": True}
 
     async def remove_official_whitelist_user(self, username: str):
-         await self.db.user.remove_official_whitelist_user(username)
-         return {"ok": True}
+        await self.db.user.remove_official_whitelist_user(username)
+        return {"ok": True}
+
+    # ========== Carousel ==========
+
+    async def list_carousel_images(self) -> List[str]:
+        directory = self.config.get("carousel.directory", "carousel")
+        if not os.path.exists(directory):
+            return []
+
+        # List files and filter for images
+        files = os.listdir(directory)
+        images = [
+            f for f in files if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
+        ]
+        # Sort by name (or could be by mtime)
+        images.sort()
+        return images
+
+    async def upload_carousel_image(self, filename: str, content: bytes):
+        directory = self.config.get("carousel.directory", "carousel")
+        os.makedirs(directory, exist_ok=True)
+
+        file_path = os.path.join(directory, filename)
+        with open(file_path, "wb") as f:
+            f.write(content)
+        return {"filename": filename}
+
+    async def delete_carousel_image(self, filename: str):
+        directory = self.config.get("carousel.directory", "carousel")
+        file_path = os.path.join(directory, filename)
+
+        # Security check: ensure the filename doesn't contain path traversal
+        if os.path.dirname(os.path.abspath(file_path)) != os.path.abspath(directory):
+            raise HTTPException(status_code=400, detail="Invalid filename")
+
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            return {"ok": True}
+        raise HTTPException(status_code=404, detail="File not found")
 
     async def get_admin_users(self):
         users = await self.db.user.list_users(limit=1000, offset=0)

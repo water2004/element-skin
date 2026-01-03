@@ -55,7 +55,7 @@ coverage/
 
 ### Backend textures / uploaded assets (can be large)
 /skin-backend/textures/
-
+/skin-backend/carousel/
 ### Misc
 .cache/
 node_modules/

@@ -65,6 +65,11 @@ textures_path = config.get("textures.directory", "textures")
 os.makedirs(textures_path, exist_ok=True)
 app.mount("/static/textures", StaticFiles(directory=textures_path), name="textures")
 
+# 挂载轮播图目录
+carousel_path = config.get("carousel.directory", "carousel")
+os.makedirs(carousel_path, exist_ok=True)
+app.mount("/static/carousel", StaticFiles(directory=carousel_path), name="carousel")
+
 
 # ========== 异常处理器 ==========
 

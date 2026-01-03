@@ -19,6 +19,10 @@ database:
 textures:
   directory: "textures"
 
+# 轮播图配置
+carousel:
+  directory: "carousel"
+
 # 服务器配置
 server:
   host: "0.0.0.0"

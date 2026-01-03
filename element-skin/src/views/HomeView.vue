@@ -7,6 +7,7 @@ import axios from 'axios'
 const router = useRouter()
 const siteName = ref('皮肤站')
 const isLogged = ref(false)
+const carouselImages = ref([])
 
 onMounted(async () => {
   // 加载站点配置
@@ -17,6 +18,14 @@ onMounted(async () => {
     }
   } catch (e) {
     console.warn('Failed to load site settings:', e)
+  }
+
+  // 加载轮播图
+  try {
+    const res = await axios.get('/public/carousel')
+    carouselImages.value = res.data
+  } catch (e) {
+    console.warn('Failed to load carousel images:', e)
   }
 
   // 检查登录状态
@@ -43,55 +52,47 @@ function goLogin() {
 function goRegister() {
   router.push('/register')
 }
+
+function getCarouselUrl(filename) {
+  const base = import.meta.env.VITE_API_BASE || ''
+  return `${base}/static/carousel/${filename}`
+}
 </script>
 
 <template>
   <div class="home-container">
-    <div class="hero-section">
-      <div class="hero-content">
-        <h1 class="hero-title">{{ siteName }}</h1>
-        <p class="hero-subtitle">为您的 Minecraft 角色管理皮肤和披风</p>
-        <div class="hero-actions">
-          <el-button v-if="isLogged" type="primary" size="large" @click="goDashboard">
-            <el-icon><User /></el-icon>
-            <span style="margin-left:8px">进入个人面板</span>
-          </el-button>
-          <template v-else>
-            <el-button type="primary" size="large" @click="goLogin">
-              登录
-            </el-button>
-            <el-button size="large" @click="goRegister" style="margin-left:16px">
-              注册账号
-            </el-button>
-          </template>
-        </div>
+    <div class="hero-wrapper">
+      <!-- Background Carousel -->
+      <div v-if="carouselImages.length > 0" class="hero-carousel-bg">
+        <el-carousel height="100%" indicator-position="none" arrow="never" :interval="5000">
+          <el-carousel-item v-for="img in carouselImages" :key="img">
+            <div class="carousel-img-wrap">
+              <img :src="getCarouselUrl(img)" class="carousel-img" />
+              <div class="carousel-overlay"></div>
+            </div>
+          </el-carousel-item>
+        </el-carousel>
       </div>
-    </div>
+      <div v-else class="hero-gradient-bg"></div>
 
-    <div class="features-section">
-      <div class="container">
-        <h2 class="section-title">核心功能</h2>
-        <div class="features-grid">
-          <div class="feature-card">
-            <div class="feature-icon" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)">
-              <el-icon :size="36"><Picture /></el-icon>
-            </div>
-            <h3>皮肤与披风</h3>
-            <p>上传、预览、切换皮肤与披风，内置 3D 预览</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)">
-              <el-icon :size="36"><Files /></el-icon>
-            </div>
-            <h3>个人材质库</h3>
-            <p>一次上传，多角色复用，集中管理你的材质文件</p>
-          </div>
-          <div class="feature-card">
-            <div class="feature-icon" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)">
-              <el-icon :size="36"><Connection /></el-icon>
-            </div>
-            <h3>Yggdrasil 兼容</h3>
-            <p>遵循 Yggdrasil 规范，兼容主流启动器和客户端</p>
+      <!-- Hero Content -->
+      <div class="hero-section">
+        <div class="hero-content">
+          <h1 class="hero-title">{{ siteName }}</h1>
+          <p class="hero-subtitle">简洁、高效、现代的 Minecraft 皮肤管理站</p>
+          <div class="hero-actions">
+            <el-button v-if="isLogged" type="primary" size="large" @click="goDashboard" class="hero-btn">
+              <el-icon><User /></el-icon>
+              <span>进入个人面板</span>
+            </el-button>
+            <template v-else>
+              <el-button type="primary" size="large" @click="goLogin" class="hero-btn">
+                登录账号
+              </el-button>
+              <el-button size="large" @click="goRegister" class="hero-btn secondary">
+                即刻注册
+              </el-button>
+            </template>
           </div>
         </div>
       </div>
@@ -102,166 +103,172 @@ function goRegister() {
 <style scoped>
 .home-container {
   width: 100%;
-  min-height: calc(100vh - 60px);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.hero-wrapper {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  overflow: hidden;
+}
+
+.hero-carousel-bg, .hero-gradient-bg, :deep(.el-carousel) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+.hero-gradient-bg {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.carousel-img-wrap {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.carousel-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.carousel-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4); /* Darken for text readability */
 }
 
 .hero-section {
-  width: 100%;
-  min-height: 420px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  position: relative;
+  z-index: 2;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
-  padding: 48px 20px;
-  border-radius: 16px;
-  margin: 16px auto 0;
-  max-width: 1280px;
-  animation: fadeInScale 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes fadeInScale {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+  padding: 0 20px;
 }
 
 .hero-content {
   text-align: center;
   max-width: 800px;
-  animation: slideUpFade 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s both;
-}
-
-@keyframes slideUpFade {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  animation: fadeIn 0.8s ease-out;
 }
 
 .hero-title {
-  font-size: 48px;
-  font-weight: 700;
+  font-size: 56px;
+  font-weight: 800;
   margin: 0 0 16px 0;
-  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  letter-spacing: -1px;
 }
 
 .hero-subtitle {
-  font-size: 18px;
+  font-size: 20px;
   margin: 0 0 32px 0;
-  opacity: 0.95;
-  font-weight: 400;
+  opacity: 0.9;
+  font-weight: 300;
 }
 
 .hero-actions {
   display: flex;
   gap: 16px;
   justify-content: center;
-  align-items: center;
+}
+
+.hero-btn {
+  height: 48px;
+  padding: 0 32px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.3s;
+}
+
+.hero-btn.secondary {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.hero-btn.secondary:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: #fff;
 }
 
 .features-section {
-  width: 100%;
-  padding: 48px 20px 64px;
-  background: #f5f7fa;
+  padding: 80px 20px;
+  background: transparent;
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
-}
-
-.section-title {
-  font-size: 32px;
-  font-weight: 600;
-  text-align: center;
-  margin: 0 0 32px 0;
-  color: #303133;
 }
 
 .features-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 32px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
 }
 
 .feature-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 24px 20px;
   text-align: center;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+  padding: 20px;
 }
 
-.feature-card:hover {
-  transform: translateY(-6px) scale(1.02);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-}
-
-.feature-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto 16px;
-  color: #fff;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.feature-card:hover .feature-icon {
-  transform: scale(1.1) rotate(5deg);
+.feature-icon-simple {
+  font-size: 40px;
+  margin-bottom: 20px;
 }
 
 .feature-card h3 {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0 0 16px 0;
-  color: #303133;
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 12px 0;
+  color: #2c3e50;
 }
 
 .feature-card p {
-  font-size: 15px;
-  color: #606266;
+  font-size: 16px;
+  color: #7f8c8d;
   line-height: 1.6;
-  margin: 0;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 @media (max-width: 768px) {
+  .hero-wrapper {
+    height: 400px;
+    border-radius: 0;
+    margin-top: 0;
+  }
   .hero-title {
-    font-size: 42px;
+    font-size: 36px;
   }
-
-  .hero-subtitle {
-    font-size: 18px;
-  }
-
-  .hero-actions {
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .hero-actions .el-button {
-    width: 100%;
-  }
-
-  .section-title {
-    font-size: 32px;
-  }
-
   .features-grid {
     grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .hero-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .hero-btn {
+    width: 100%;
   }
 }
 </style>

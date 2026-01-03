@@ -13,6 +13,8 @@ from fastapi import (
 )
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import Response
+import os
+import uuid
 
 from utils.jwt_utils import decode_jwt_token
 from database_module import Database
@@ -311,5 +313,26 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
     @router.delete("/admin/official-whitelist/{username}")
     async def remove_official_whitelist(username: str, payload: dict = Depends(admin_required)):
         return await site_backend.remove_official_whitelist_user(username)
+
+    @router.get("/public/carousel")
+    async def get_carousel():
+        return await site_backend.list_carousel_images()
+
+    @router.post("/admin/carousel")
+    async def upload_carousel(
+        file: UploadFile = File(...),
+        payload: dict = Depends(admin_required)
+    ):
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in [".png", ".jpg", ".jpeg", ".webp"]:
+            raise HTTPException(status_code=400, detail="Unsupported file format")
+        
+        filename = f"{uuid.uuid4().hex}{ext}"
+        content = await file.read()
+        return await site_backend.upload_carousel_image(filename, content)
+
+    @router.delete("/admin/carousel/{filename}")
+    async def delete_carousel(filename: str, payload: dict = Depends(admin_required)):
+        return await site_backend.delete_carousel_image(filename)
 
     return router
