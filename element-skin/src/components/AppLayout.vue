@@ -1,6 +1,6 @@
 <template>
-  <div class="app-shell" :class="{ 'is-home-layout': isHome }">
-    <el-header class="layout-header-wrap">
+  <div class="app-shell" :class="{ 'is-home-layout': isHome, 'is-auth-layout': isAuthPage }">
+    <el-header class="layout-header-wrap" v-if="!isAuthPage">
       <div class="layout-header">
         <!-- Logo -->
         <div class="logo" @click="go('/')">{{ siteName }}</div>
@@ -96,6 +96,7 @@ import {
 const route = useRoute()
 const { push } = useRouter()
 const isHome = computed(() => route.path === '/')
+const isAuthPage = computed(() => ['/login', '/register', '/reset-password'].includes(route.path))
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
 const jwtToken = ref(localStorage.getItem('jwt') || '')
 const user = ref(null)
@@ -311,6 +312,10 @@ onUnmounted(() => {
 }
 
 .is-home-layout .app-main {
+  padding: 0;
+}
+
+.is-auth-layout .app-main {
   padding: 0;
 }
 
