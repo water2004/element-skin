@@ -132,24 +132,27 @@ def setup_routes(db: Database, config):
             }
 
             # 重定向回前端
-            frontend_url = config.get("frontend.url", "http://localhost:5173")
+            # 优先使用 server.site_url 作为前端地址（通常部署时 site_url 指向前端）
+            # 开发环境下默认为 localhost:5173
+            frontend_url = config.get("server.site_url", "http://localhost:5173")
+            
             return Response(
                 status_code=302,
                 headers={
-                    "Location": f"{frontend_url}/dashboard/roles?ms_token={temp_token}"
+                    "Location": f"{frontend_url.rstrip('/')}/dashboard/roles?ms_token={temp_token}"
                 },
             )
 
         except Exception as e:
             import urllib.parse
 
-            frontend_url = config.get("frontend.url", "http://localhost:5173")
+            frontend_url = config.get("server.site_url", "http://localhost:5173")
             error_msg = str(e).replace("\n", " ")
             error_msg_encoded = urllib.parse.quote(error_msg)
             return Response(
                 status_code=302,
                 headers={
-                    "Location": f"{frontend_url}/dashboard/roles?error={error_msg_encoded}"
+                    "Location": f"{frontend_url.rstrip('/')}/dashboard/roles?error={error_msg_encoded}"
                 },
             )
 
