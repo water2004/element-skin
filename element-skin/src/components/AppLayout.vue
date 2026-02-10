@@ -22,6 +22,15 @@
         </div>
 
         <div class="header-actions">
+          <!-- Theme Toggle -->
+          <el-button
+            class="theme-toggle"
+            :icon="isDark ? Sunny : Moon"
+            circle
+            text
+            @click="toggleTheme"
+          />
+
           <!-- Mobile Navigation Trigger -->
           <div class="mobile-nav" v-if="isLogged">
             <el-button @click="drawer = true" :icon="MenuIcon" text circle />
@@ -86,11 +95,11 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted, onUnmounted, provide } from 'vue'
+import { computed, ref, onMounted, onUnmounted, provide, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import axios from 'axios'
 import {
-  Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link, Picture, Message
+  Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link, Picture, Message, Moon, Sunny
 } from '@element-plus/icons-vue'
 
 const route = useRoute()
@@ -102,9 +111,55 @@ const jwtToken = ref(localStorage.getItem('jwt') || '')
 const user = ref(null)
 const drawer = ref(false)
 
+// --- Theme Management ---
+const isDark = ref(false)
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme')
+  if (savedTheme) {
+    isDark.value = savedTheme === 'dark'
+  } else {
+    isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
+  }
+  applyTheme()
+}
+
+function toggleTheme() {
+  isDark.value = !isDark.value
+  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+  applyTheme()
+}
+
+function applyTheme() {
+  // If it's home page, we force light mode to keep it "as is"
+  if (isHome.value) {
+    document.documentElement.classList.remove('dark')
+    return
+  }
+
+  if (isDark.value) {
+    document.documentElement.classList.add('dark')
+  } else {
+    document.documentElement.classList.remove('dark')
+  }
+}
+
+watch(isHome, () => {
+  applyTheme()
+})
+
+// Watch for system theme changes if no manual preference
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+  if (!localStorage.getItem('theme')) {
+    isDark.value = e.matches
+    applyTheme()
+  }
+})
+
 // Provide user and fetch function to all children
 provide('user', user)
 provide('fetchMe', fetchMe)
+provide('isDark', isDark)
 
 // --- Navigation Links ---
 const dashboardLinks = [
@@ -210,6 +265,7 @@ function checkAuth() {
 }
 
 onMounted(async () => {
+  initTheme()
   // Fetch site settings
   try {
     const res = await axios.get('/public/settings')
@@ -239,9 +295,10 @@ onUnmounted(() => {
 <style scoped>
 .layout-header-wrap {
   padding: 0 20px;
-  background: #fff;
+  background: var(--color-header-background);
+  backdrop-filter: blur(8px);
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-  border-bottom: 1px solid #dcdfe6;
+  border-bottom: 1px solid var(--color-border);
   height: 64px;
   z-index: 100;
   transition: all 0.3s;
@@ -255,11 +312,13 @@ onUnmounted(() => {
   background: transparent;
   border-bottom: none;
   box-shadow: none;
+  backdrop-filter: none;
 }
 
 .is-home-layout .logo, 
 .is-home-layout :deep(.el-menu-item),
 .is-home-layout .account-name,
+.is-home-layout .theme-toggle,
 .is-home-layout .mobile-nav :deep(.el-button) {
   color: #fff !important;
 }
@@ -275,8 +334,7 @@ onUnmounted(() => {
   color: #fff !important;
 }
 
-.is-home-layout .account-trigger:hover,
-.is-home-layout .mobile-nav :deep(.el-button:hover) {
+.is-home-layout .theme-toggle:hover {
   background: rgba(255, 255, 255, 0.15) !important;
 }
 
@@ -305,10 +363,16 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+.theme-toggle {
+  font-size: 20px;
+  transition: all 0.3s;
+}
+
 .app-main {
   padding: 20px;
   flex: 1;
   overflow: auto;
+  background-color: var(--color-background);
 }
 
 .is-home-layout .app-main {
@@ -329,6 +393,7 @@ onUnmounted(() => {
 .desktop-nav .el-menu {
   border-bottom: none;
   height: 100%;
+  background: transparent;
 }
 .desktop-nav .el-menu-item {
   font-size: 15px;
@@ -342,9 +407,9 @@ onUnmounted(() => {
 
 /* --- Account Popover --- */
 .account-trigger { display:flex; align-items:center; cursor:pointer; gap:8px; padding:6px 12px; border-radius:20px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) }
-.account-trigger:hover { background: #f0f2f5; }
-.account-name { font-size:14px; color:#303133; font-weight:500 }
-.account-popover { padding: 0 !important }
+.account-trigger:hover { background: var(--color-background-soft); }
+.account-name { font-size:14px; color: var(--color-text); font-weight:500 }
+.account-popover { padding: 0 !important; background: var(--color-popover-background) !important; border: 1px solid var(--color-border) !important; }
 
 .account-panel {
   display:flex;
@@ -352,6 +417,7 @@ onUnmounted(() => {
   padding: 20px;
   box-sizing: border-box;
   width: 100%;
+  background: var(--color-card-background);
 }
 .account-header {
   display:flex;
@@ -359,7 +425,7 @@ onUnmounted(() => {
   gap:12px;
   margin-bottom:16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--color-border);
 }
 .account-avatar {
   color:#fff;
@@ -371,7 +437,7 @@ onUnmounted(() => {
   margin:0;
   font-size:14px;
   font-weight:600;
-  color:#303133;
+  color: var(--color-heading);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -379,7 +445,7 @@ onUnmounted(() => {
 .account-meta p {
   margin:4px 0 0;
   font-size:12px;
-  color:#909399;
+  color: var(--color-text-light);
 }
 .account-actions {
   display:flex;
@@ -390,9 +456,9 @@ onUnmounted(() => {
 .action-btn {
   width: 100% !important;
   height: 38px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #606266;
+  border: 1px solid var(--color-border);
+  background: var(--color-card-background);
+  color: var(--color-text);
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
@@ -401,7 +467,7 @@ onUnmounted(() => {
   margin: 0 !important;
 }
 .action-btn:hover {
-  background: #f7f8fa;
+  background: var(--color-background-soft);
   border-color: #409eff;
   color: #409eff;
   transform: translateY(-2px);

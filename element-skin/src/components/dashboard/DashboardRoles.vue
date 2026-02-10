@@ -16,7 +16,7 @@
 
     <div class="common-grid">
       <div v-for="(profile, index) in user?.profiles || []" :key="profile.id" class="common-card" :style="{ '--delay-index': index }">
-        <div class="role-preview bg-gradient-purple">
+        <div class="role-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
           <SkinViewer
             v-if="profile.skin_hash"
             :skinUrl="texturesUrl(profile.skin_hash)"
@@ -117,10 +117,10 @@
       <template #footer>
         <div class="dialog-footer">
           <el-button @click="cancelMicrosoftLogin" :disabled="importing">取消</el-button>
-          <el-button 
+          <el-button
             v-if="microsoftStep === 'select-profile'"
-            type="primary" 
-            @click="importMicrosoftProfile" 
+            type="primary"
+            @click="importMicrosoftProfile"
             :loading="importing"
             :disabled="!microsoftProfile?.has_game"
           >
@@ -133,7 +133,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, inject } from 'vue'
+import { ref, onMounted, inject, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -143,6 +143,7 @@ import SkinViewer from '@/components/SkinViewer.vue'
 // Inject shared state from AppLayout
 const user = inject('user')
 const fetchMe = inject('fetchMe')
+const isDark = inject('isDark')
 
 const router = useRouter()
 
@@ -259,9 +260,9 @@ async function importMicrosoftProfile() {
     }
 
     await axios.post('/microsoft/import-profile', importData, { headers: authHeaders() })
-    
+
     ElMessage.success('正版角色导入成功！')
-    
+
     showMicrosoftLoginDialog.value = false
     // Delay clearing the profile slightly to allow transition, or just leave it since dialog is destroying anyway
     // But safely clearing it prevents state leak if reopened somehow without reload (unlikely but possible)
@@ -349,23 +350,25 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  transition: background 0.3s ease; /* Add transition for smooth theme change */
 }
 
 .role-info {
   padding: 16px;
   text-align: center;
+  background: var(--color-card-background);
 }
 
 .role-name {
   font-size: 16px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-heading);
   margin-bottom: 8px;
 }
 
 .role-model {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-light);
   font-weight: 500;
 }
 
@@ -374,8 +377,8 @@ onMounted(async () => {
   flex-direction: row;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid #ebeef5;
-  background: #fafafa;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background-soft);
   align-items: center;
 }
 
@@ -446,9 +449,9 @@ onMounted(async () => {
 }
 
 .action-btn-warning {
-  color: #606266; /* User requested dark text color */
+  color: var(--color-text); /* User requested dark text color */
   border-color: #f3d19e;
-  background: #fdf6ec;
+  background: rgba(230, 162, 60, 0.1);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   overflow: hidden;
@@ -516,7 +519,7 @@ onMounted(async () => {
   align-items: center;
   gap: 20px;
   padding: 20px;
-  background: #F5F7FA;
+  background: var(--color-background-soft);
   border-radius: 8px;
   width: 100%;
 }
@@ -528,14 +531,14 @@ onMounted(async () => {
 .profile-name {
   margin: 0 0 4px 0;
   font-size: 20px;
-  color: #303133;
+  color: var(--color-heading);
 }
 
 .profile-uuid {
   margin: 0;
   font-family: monospace;
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-light);
 }
 
 .centered-step {

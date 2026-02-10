@@ -35,10 +35,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Shared Utilities */
-.bg-gradient-purple {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+/* Global Dark Mode Backgrounds for Auth & Home Hero */
+html.dark .login-container,
+html.dark .register-container,
+html.dark .reset-container,
+html.dark .hero-gradient-bg {
+  background: var(--color-background-hero-dark);
 }
+
+/* Shared Utilities */
 
 /* Animations */
 @keyframes fadeIn {
@@ -74,7 +79,7 @@ body {
 .section-header h2 {
   font-size: 24px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-heading);
   margin: 0;
 }
 
@@ -87,13 +92,14 @@ body {
 
 .common-card {
   width: 240px;
-  background: #fff;
+  background: var(--color-card-background);
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
   animation-delay: calc(var(--delay-index, 0) * 0.05s);
+  border: 1px solid var(--color-border);
 }
 
 .common-card:hover {

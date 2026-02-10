@@ -10,7 +10,7 @@
 
     <div class="common-grid" v-if="textures.length > 0">
       <div class="common-card" v-for="(tex, index) in textures" :key="tex.hash + tex.type" :style="{ '--delay-index': index }">
-        <div class="texture-preview bg-gradient-purple">
+        <div class="texture-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
           <SkinViewer
             v-if="tex.type === 'skin'"
             :skinUrl="texturesUrl(tex.hash)"
@@ -157,6 +157,7 @@ import CapeViewer from '@/components/CapeViewer.vue'
 const user = inject('user')
 const fetchMe = inject('fetchMe')
 const userProfiles = computed(() => user.value?.profiles || [])
+const isDark = inject('isDark')
 
 const textures = ref([])
 const textureResolutions = ref(new Map())
@@ -336,6 +337,7 @@ onMounted(() => {
   align-items: center;
   position: relative;
   overflow: hidden;
+  transition: background 0.3s ease; /* Add transition for smooth theme change */
 }
 
 .resolution-badge {
@@ -355,6 +357,7 @@ onMounted(() => {
 .texture-info {
   padding: 16px;
   text-align: center;
+  background: var(--color-card-background);
 }
 
 .texture-type-badge {
@@ -368,18 +371,18 @@ onMounted(() => {
 }
 
 .texture-type-badge.skin {
-  background: #ecf5ff;
+  background: rgba(64, 158, 255, 0.1);
   color: #409eff;
 }
 
 .texture-type-badge.cape {
-  background: #f0f9ff;
+  background: rgba(103, 194, 58, 0.1);
   color: #67c23a;
 }
 
 .texture-note {
   font-size: 14px;
-  color: #606266;
+  color: var(--color-text);
   min-height: 22px;
   cursor: pointer;
   padding: 4px 8px;
@@ -388,7 +391,7 @@ onMounted(() => {
 }
 
 .texture-note:hover {
-  background: #f5f7fa;
+  background: var(--color-background-soft);
   color: #409eff;
 }
 
@@ -400,8 +403,8 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid #ebeef5;
-  background: #fafafa;
+  border-top: 1px solid var(--color-border);
+  background: var(--color-background-soft);
 }
 
 .texture-actions .el-button {

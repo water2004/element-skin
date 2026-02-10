@@ -139,6 +139,17 @@ onUnmounted(() => {
   max-width: 800px;
   padding: 30px;
   animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.1s backwards;
+  background: var(--color-card-background);
+  border: 1px solid var(--color-border);
+}
+
+.settings-card :deep(.el-form-item__label) {
+  color: var(--color-text);
+}
+
+.settings-card :deep(.el-divider__text) {
+  background-color: var(--color-card-background);
+  color: var(--color-heading);
 }
 
 .settings-card .el-form {

@@ -261,8 +261,9 @@ onMounted(() => {
 
 .list-card {
   width: 100%;
-  border: none;
+  border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--color-card-background);
 }
 
 .code-text {

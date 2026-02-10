@@ -125,7 +125,8 @@ function getCarouselUrl(filename) {
 }
 
 .hero-gradient-bg {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-background-hero-light);
+  transition: background 0.3s ease;
 }
 
 .carousel-img-wrap {

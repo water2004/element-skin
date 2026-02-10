@@ -32,12 +32,41 @@
 
   --color-heading: var(--vt-c-text-light-1);
   --color-text: var(--vt-c-text-light-1);
+  --color-text-light: var(--vt-c-text-light-2);
+
+  --color-card-background: var(--vt-c-white);
+  --color-header-background: rgba(255, 255, 255, 0.95);
+  --color-popover-background: var(--vt-c-white);
+
+  --color-background-hero-light: linear-gradient(135deg, #f0f2f5 0%, #e0e5ec 100%); /* Light, subtle grey/blue gradient */
+  --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%); /* Dark, subtle grey gradient */
 
   --section-gap: 160px;
 }
 
+/* Explicit dark mode class */
+html.dark {
+  --color-background: var(--vt-c-black);
+  --color-background-soft: var(--vt-c-black-soft);
+  --color-background-mute: var(--vt-c-black-mute);
+
+  --color-border: var(--vt-c-divider-dark-2);
+  --color-border-hover: var(--vt-c-divider-dark-1);
+
+  --color-heading: var(--vt-c-text-dark-1);
+  --color-text: var(--vt-c-text-dark-2);
+  --color-text-light: rgba(235, 235, 235, 0.48);
+
+  --color-card-background: var(--vt-c-black-soft);
+  --color-header-background: rgba(24, 24, 24, 0.95);
+  --color-popover-background: var(--vt-c-black-mute);
+  --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%); /* Dark, subtle grey gradient */
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  /* Only apply if the user hasn't explicitly set light mode */
+  html:not(.light) {
+    /* Same variables as .dark */
     --color-background: var(--vt-c-black);
     --color-background-soft: var(--vt-c-black-soft);
     --color-background-mute: var(--vt-c-black-mute);
@@ -47,6 +76,12 @@
 
     --color-heading: var(--vt-c-text-dark-1);
     --color-text: var(--vt-c-text-dark-2);
+    --color-text-light: rgba(235, 235, 235, 0.48);
+
+    --color-card-background: var(--vt-c-black-soft);
+    --color-header-background: rgba(24, 24, 24, 0.95);
+    --color-popover-background: var(--vt-c-black-mute);
+    --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%); /* Dark, subtle grey gradient */
   }
 }
 

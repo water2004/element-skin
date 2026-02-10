@@ -234,8 +234,9 @@ onMounted(async () => {
 .stats-card {
   border-radius: 12px;
   overflow: hidden;
-  border: none;
+  border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--color-card-background);
 }
 .stats-content {
   display: flex;
@@ -262,24 +263,26 @@ onMounted(async () => {
 }
 .stats-label {
   font-size: 14px;
-  color: #909399;
+  color: var(--color-text-light);
   margin-bottom: 4px;
 }
 .stats-value {
   font-size: 28px;
   font-weight: 700;
-  color: #303133;
+  color: var(--color-heading);
 }
 
 /* Config Section */
 .config-card {
   border-radius: 12px;
-  border: none;
+  border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--color-card-background);
 }
 .card-header {
   font-weight: 600;
   font-size: 18px;
+  color: var(--color-heading);
 }
 .config-content {
   display: flex;
@@ -290,7 +293,7 @@ onMounted(async () => {
 }
 .config-desc {
   font-size: 14px;
-  color: #606266;
+  color: var(--color-text);
   text-align: center;
   margin: 0;
 }
@@ -333,13 +336,14 @@ onMounted(async () => {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-heading);
 }
 .status-card-mojang {
   margin-bottom: 20px;
   border-radius: 12px;
-  border: none;
+  border: 1px solid var(--color-border);
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  background: var(--color-card-background);
 }
 .status-item {
   display: flex;
@@ -349,7 +353,7 @@ onMounted(async () => {
 }
 .status-label {
   font-size: 15px;
-  color: #606266;
+  color: var(--color-text);
   font-weight: 600;
 }
 .status-indicator {
@@ -360,9 +364,9 @@ onMounted(async () => {
   font-weight: 500;
   padding: 4px 12px;
   border-radius: 16px;
-  background: #f5f7fa;
+  background: var(--color-background-soft);
 }
-.status-indicator.online { color: #67c23a; background: #f0f9eb; }
-.status-indicator.checking { color: #409eff; background: #ecf5ff; }
-.status-indicator.offline { color: #f56c6c; background: #fef0f0; }
+.status-indicator.online { color: #67c23a; background: rgba(103, 194, 58, 0.1); }
+.status-indicator.checking { color: #409eff; background: rgba(64, 158, 255, 0.1); }
+.status-indicator.offline { color: #f56c6c; background: rgba(245, 108, 108, 0.1); }
 </style>

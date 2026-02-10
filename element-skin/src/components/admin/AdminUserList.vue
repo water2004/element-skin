@@ -584,7 +584,7 @@ onMounted(() => {
 
 .info-item {
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--color-background-soft);
   border-radius: 8px;
   display: flex;
   flex-direction: column;
@@ -597,13 +597,13 @@ onMounted(() => {
 
 .info-label {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-light);
   font-weight: 500;
 }
 
 .info-value {
   font-size: 15px;
-  color: #303133;
+  color: var(--color-heading);
   font-weight: 600;
 }
 
@@ -644,7 +644,7 @@ onMounted(() => {
 .duration-content {
   width: 100%;
   padding: 16px;
-  background: #f5f7fa;
+  background: var(--color-background-soft);
   border-radius: 8px;
 }
 
@@ -671,8 +671,9 @@ onMounted(() => {
 .list-card {
   width: 100%;
   max-width: 100%;
-  border: none;
+  border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--color-card-background);
 }
 
 @media (max-width: 768px) {

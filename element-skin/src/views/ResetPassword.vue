@@ -1,5 +1,5 @@
 <template>
-  <div class="reset-container bg-gradient-purple">
+  <div class="reset-container">
     <div class="reset-card">
       <div class="reset-header">
         <h1>重置密码</h1>
@@ -206,16 +206,19 @@ async function resetPassword() {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  background: var(--color-background-hero-light);
+  transition: background 0.3s ease;
 }
 
 .reset-card {
   width: 100%;
   max-width: 440px;
-  background: #fff;
+  background: var(--color-card-background);
   border-radius: 16px;
   padding: 40px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   animation: slideUp 0.5s ease-out;
+  border: 1px solid var(--color-border);
 }
 
 @keyframes slideUp {
@@ -238,13 +241,13 @@ async function resetPassword() {
   margin: 0 0 8px 0;
   font-size: 28px;
   font-weight: 600;
-  color: #303133;
+  color: var(--color-heading);
 }
 
 .reset-header p {
   margin: 0;
   font-size: 14px;
-  color: #909399;
+  color: var(--color-text-light);
 }
 
 .reset-footer {
@@ -254,7 +257,7 @@ async function resetPassword() {
 
 :deep(.el-form-item__label) {
   font-weight: 500;
-  color: #606266;
+  color: var(--color-text);
 }
 
 :deep(.el-input__wrapper) {

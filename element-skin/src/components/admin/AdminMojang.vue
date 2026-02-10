@@ -252,13 +252,21 @@ onMounted(() => {
 }
 .page-header h2 {
   font-weight: 600;
-  color: #303133;
+  color: var(--color-heading);
 }
 .card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  color: var(--color-heading);
 }
+
+.box-card {
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--color-card-background);
+}
+
 /* Limit inner content width */
 .admin-mojang .el-card__body {
   padding: 20px;
@@ -274,7 +282,7 @@ onMounted(() => {
 }
 .setting-desc {
   font-size: 13px;
-  color: #909399;
+  color: var(--color-text-light);
 }
 .status-item {
   display: flex;
@@ -282,7 +290,7 @@ onMounted(() => {
   align-items: center;
   padding: 8px;
   border-radius: 4px;
-  background: #f5f7fa;
+  background: var(--color-background-soft);
   margin-bottom: 8px; /* For mobile stacking if grid changes */
 }
 .status-name {
