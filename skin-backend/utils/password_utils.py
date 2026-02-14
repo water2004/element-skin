@@ -60,6 +60,6 @@ def validate_strong_password(password: str) -> list[str]:
     has_special = bool(re.search(r"[^\w\s]", password))
 
     if (has_upper + has_lower + has_digit) == 1 and not has_special:
-        errors.append("密码过于简单")
+        errors.append("请使用更复杂的密码")
 
     return errors
