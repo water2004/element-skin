@@ -8,6 +8,7 @@ import string
 from fastapi import HTTPException
 
 from utils.password_utils import hash_password, verify_password, needs_rehash
+from utils.password_utils import validate_strong_password
 from utils.jwt_utils import create_jwt_token
 from utils.email_utils import EmailSender
 from utils.uuid_utils import generate_random_uuid
@@ -100,10 +101,16 @@ class SiteBackend:
         return {"token": token, "user_id": user_id}
 
     async def register(self, email, password, invite_code=None, verification_code=None) -> str:
-        if len(password) < 6:
+        errors = validate_strong_password(password)
+        if errors:
             raise HTTPException(
-                status_code=400, detail="password must be at least 6 characters"
+                status_code=400, detail="；".join(errors)
             )
+        
+        # if len(password) < 6:
+        #     raise HTTPException(
+        #         status_code=400, detail="password must be at least 6 characters"
+        #     )
 
         allow_register = await self.db.setting.get("allow_register", "true")
         if allow_register != "true":
@@ -243,8 +250,15 @@ class SiteBackend:
         return True
 
     async def reset_password(self, email: str, new_password: str, verification_code: str):
-        if len(new_password) < 6:
-             raise HTTPException(status_code=400, detail="Password too short")
+
+        # if len(new_password) < 6:
+        #      raise HTTPException(status_code=400, detail="Password too short")
+
+        errors = validate_strong_password(new_password)
+        if errors:
+            raise HTTPException(
+                status_code=400, detail="；".join(errors)
+            )
              
         email_verify_enabled = await self.db.setting.get("email_verify_enabled", "false") == "true"
         if not email_verify_enabled:
@@ -265,8 +279,15 @@ class SiteBackend:
         return True
 
     async def change_password(self, user_id: str, old_password, new_password):
-        if len(new_password) < 6:
-            raise HTTPException(status_code=400, detail="新密码长度不能少于6个字符")
+        
+        # if len(new_password) < 6:
+        #     raise HTTPException(status_code=400, detail="新密码长度不能少于6个字符")
+
+        errors = validate_strong_password(new_password)
+        if errors:
+            raise HTTPException(
+                status_code=400, detail="；".join(errors)
+            )
 
         user_row = await self.db.user.get_by_id(user_id)
         if not user_row:

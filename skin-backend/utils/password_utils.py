@@ -1,7 +1,7 @@
 """密码哈希和验证工具"""
 
 import bcrypt
-
+import re
 
 def hash_password(password: str) -> str:
     """
@@ -48,3 +48,18 @@ def needs_rehash(hashed: str) -> bool:
         bool: 是否需要重新哈希（从明文升级到bcrypt）
     """
     return not hashed.startswith("$2")
+
+def validate_strong_password(password: str) -> list[str]:
+    errors: list[str] = []
+    if len(password) < 6:
+        errors.append("密码长度至少6位")
+
+    has_upper = bool(re.search(r"[A-Z]", password))
+    has_lower = bool(re.search(r"[a-z]", password))
+    has_digit = bool(re.search(r"\d", password))
+    has_special = bool(re.search(r"[^\w\s]", password))
+
+    if (has_upper + has_lower + has_digit) == 1 and not has_special:
+        errors.append("请使用更复杂的密码")
+
+    return errors

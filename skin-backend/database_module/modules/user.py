@@ -65,7 +65,9 @@ class UserModule:
         async with self.db.get_conn() as conn:
             await conn.execute("DELETE FROM profiles WHERE user_id=?", (user_id,))
             await conn.execute("DELETE FROM tokens WHERE user_id=?", (user_id,))
-            await conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,)) # Assuming session logic might need this, though session table structure is different in legacy
+            # await conn.execute("DELETE FROM sessions WHERE id=?", (user_id,))
+            # Assuming session logic might need this, though session table structure is different in legacy
+            # ↑ Agent 魅力时刻
             await conn.execute("DELETE FROM user_textures WHERE user_id=?", (user_id,))
             await conn.execute("DELETE FROM users WHERE id=?", (user_id,))
             await conn.commit()
