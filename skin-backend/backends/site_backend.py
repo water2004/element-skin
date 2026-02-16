@@ -35,13 +35,13 @@ class SiteBackend:
 
         # Validate email format
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-             raise HTTPException(status_code=400, detail="Invalid email format")
+            raise HTTPException(status_code=400, detail="Invalid email format")
 
         # For reset password, check if user exists
         if type == "reset":
             user = await self.db.user.get_by_email(email)
             if not user:
-                 return {"ok": True, "ttl": 0} 
+                return {"ok": True, "ttl": 0} 
 
         # For register, check if user exists
         if type == "register":
@@ -57,7 +57,7 @@ class SiteBackend:
         
         sent = await self.email_sender.send_verification_code(email, code, type)
         if not sent:
-             raise HTTPException(status_code=500, detail="Failed to send verification email")
+            raise HTTPException(status_code=500, detail="Failed to send verification email")
 
         return {"ok": True, "ttl": ttl}
 
@@ -101,11 +101,20 @@ class SiteBackend:
         return {"token": token, "user_id": user_id}
 
     async def register(self, email, password, invite_code=None, verification_code=None) -> str:
-        errors = validate_strong_password(password)
-        if errors:
+        if len(password) < 6:
             raise HTTPException(
-                status_code=400, detail="；".join(errors)
+                status_code=400, detail="密码长度至少6位"
             )
+
+        strong_password_enabled = (
+            await self.db.setting.get("password_strength_enabled", "true")
+        ) == "true"
+        if strong_password_enabled:
+            errors = validate_strong_password(password)
+            if errors:
+                raise HTTPException(
+                    status_code=400, detail="；".join(errors)
+                )
         
         # if len(password) < 6:
         #     raise HTTPException(
@@ -254,24 +263,33 @@ class SiteBackend:
         # if len(new_password) < 6:
         #      raise HTTPException(status_code=400, detail="Password too short")
 
-        errors = validate_strong_password(new_password)
-        if errors:
+        if len(new_password) < 6:
             raise HTTPException(
-                status_code=400, detail="；".join(errors)
+                status_code=400, detail="密码长度至少6位"
             )
-             
+
+        strong_password_enabled = (
+            await self.db.setting.get("password_strength_enabled", "true")
+        ) == "true"
+        if strong_password_enabled:
+            errors = validate_strong_password(new_password)
+            if errors:
+                raise HTTPException(
+                    status_code=400, detail="；".join(errors)
+                )
+
         email_verify_enabled = await self.db.setting.get("email_verify_enabled", "false") == "true"
         if not email_verify_enabled:
-             raise HTTPException(status_code=403, detail="Password reset via email is disabled")
+            raise HTTPException(status_code=403, detail="Password reset via email is disabled")
 
         is_valid = await self.verify_code(email, verification_code, "reset")
         if not is_valid:
-             raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+            raise HTTPException(status_code=400, detail="Invalid or expired verification code")
 
         user = await self.db.user.get_by_email(email)
         if not user:
-             raise HTTPException(status_code=404, detail="User not found")
-             
+            raise HTTPException(status_code=404, detail="User not found")
+
         new_hash = hash_password(new_password)
         await self.db.user.update_password(user.id, new_hash)
         
@@ -283,11 +301,20 @@ class SiteBackend:
         # if len(new_password) < 6:
         #     raise HTTPException(status_code=400, detail="新密码长度不能少于6个字符")
 
-        errors = validate_strong_password(new_password)
-        if errors:
+        if len(new_password) < 6:
             raise HTTPException(
-                status_code=400, detail="；".join(errors)
+                status_code=400, detail="密码长度至少6位"
             )
+
+        strong_password_enabled = (
+            await self.db.setting.get("password_strength_enabled", "true")
+        ) == "true"
+        if strong_password_enabled:
+            errors = validate_strong_password(new_password)
+            if errors:
+                raise HTTPException(
+                    status_code=400, detail="；".join(errors)
+                )
 
         user_row = await self.db.user.get_by_id(user_id)
         if not user_row:
@@ -388,6 +415,10 @@ class SiteBackend:
             "smtp_user": settings.get("smtp_user", ""),
             "smtp_ssl": settings.get("smtp_ssl", "true") == "true",
             "smtp_sender": settings.get("smtp_sender", ""),
+            "password_strength_enabled": settings.get(
+                "password_strength_enabled", "true"
+            )
+            == "true",
         }
 
     async def save_admin_settings(self, body: dict):
@@ -414,7 +445,8 @@ class SiteBackend:
             "smtp_user",
             "smtp_password",
             "smtp_ssl",
-            "smtp_sender"
+            "smtp_sender",
+            "password_strength_enabled",
         ]:
             if key in body:
                 val = body[key]
@@ -516,7 +548,7 @@ class SiteBackend:
         await self.db.user.ban(user_id, banned_until)
         return banned_until
 
-    async def create_invite(self, code, total_uses):
+    async def create_invite(self, code, total_uses, note: str = ""):
         if code:
             if len(code) < 6 or len(code) > 32:
                 raise HTTPException(status_code=400, detail="Invalid code length")
@@ -531,7 +563,7 @@ class SiteBackend:
 
         created_at = int(time.time() * 1000)
         await self.db.user.create_invite(
-            InviteCode(code, created_at, total_uses=total_uses)
+            InviteCode(code, created_at, total_uses=total_uses, note=note)
         )
         return code
 

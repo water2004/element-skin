@@ -31,6 +31,11 @@
           </template>
         </el-table-column>
         <el-table-column prop="used_by" label="最后使用者" min-width="150" />
+        <el-table-column prop="note" label="备注" min-width="180">
+          <template #default="{ row }">
+            {{ row.note || '-' }}
+          </template>
+        </el-table-column>
         <el-table-column label="创建时间" min-width="160">
           <template #default="{ row }">
             {{ formatDate(row.created_at) }}
@@ -113,6 +118,17 @@
             该邀请码可以被无限次使用
           </el-text>
         </el-form-item>
+
+        <el-form-item label="备注">
+          <el-input
+            v-model="inviteNote"
+            type="textarea"
+            :rows="3"
+            maxlength="200"
+            show-word-limit
+            placeholder="可选，填写备注"
+          />
+        </el-form-item>
       </el-form>
 
       <template #footer>
@@ -140,6 +156,7 @@ const previewInviteCode = ref('')
 const creating = ref(false)
 const inviteUsesMode = ref('limited')
 const inviteUses = ref(1)
+const inviteNote = ref('')
 
 function authHeaders() {
   const token = localStorage.getItem('jwt')
@@ -176,6 +193,7 @@ function showInviteDialog() {
   previewInviteCode.value = generateRandomCode()
   inviteUsesMode.value = 'limited'
   inviteUses.value = 1
+  inviteNote.value = ''
   inviteDialogVisible.value = true
 }
 
@@ -213,6 +231,10 @@ async function confirmCreateInvite() {
   creating.value = true
   try {
     const payload = { code }
+
+    if (inviteNote.value.trim()) {
+      payload.note = inviteNote.value.trim()
+    }
 
     if (inviteUsesMode.value === 'unlimited') {
       payload.total_uses = null

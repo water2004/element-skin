@@ -46,7 +46,8 @@ CREATE TABLE IF NOT EXISTS invites (
     used_by TEXT,
     total_uses INTEGER DEFAULT 1,
     used_count INTEGER DEFAULT 0,
-    created_at INTEGER
+    created_at INTEGER,
+    note TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS settings (
@@ -93,6 +94,14 @@ class Database(BaseDB):
             # 创建基础表结构
             await conn.executescript(INIT_SQL)
             await conn.commit()
+
+            cursor = await conn.execute("PRAGMA table_info(invites)")
+            columns = [row[1] for row in await cursor.fetchall()]
+            if "note" not in columns:
+                await conn.execute(
+                    "ALTER TABLE invites ADD COLUMN note TEXT DEFAULT ''"
+                )
+                await conn.commit()
             
             # 初始化默认设置
             await conn.execute(
@@ -112,6 +121,9 @@ class Database(BaseDB):
             )
             await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_official_whitelist', 'false')"
+            )
+            await conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('password_strength_enabled', 'false')"
             )
             
             # SMTP Default Settings

@@ -31,23 +31,39 @@
             <template #suffix>KB</template>
           </el-input>
         </el-form-item>
+
         <el-divider content-position="left">安全设置</el-divider>
+
         <el-form-item label="启用速率限制">
           <el-switch v-model="siteSettings.rate_limit_enabled" />
+          <el-text size="small" type="info" style="margin-left:12px;">
+            限制单位时间内的请求次数
+          </el-text>
         </el-form-item>
+
+        <el-form-item label="启用强密码检测">
+          <el-switch v-model="siteSettings.password_strength_enabled" />
+          <el-text size="small" type="info" style="margin-left:12px;">
+            关闭后仅保留最少6位长度限制
+          </el-text>
+        </el-form-item>
+
         <el-form-item label="登录失败限制" v-if="siteSettings.rate_limit_enabled">
           <el-input v-model="siteSettings.rate_limit_auth_attempts" type="number">
             <template #suffix>次</template>
           </el-input>
           <el-text size="small" type="info" style="margin-top:4px">每个时间窗口内允许的最大尝试次数</el-text>
         </el-form-item>
+
         <el-form-item label="时间窗口" v-if="siteSettings.rate_limit_enabled">
           <el-input v-model="siteSettings.rate_limit_auth_window" type="number">
             <template #suffix>分钟</template>
           </el-input>
           <el-text size="small" type="info" style="margin-top:4px">超限后需等待的时间</el-text>
         </el-form-item>
+
         <el-divider content-position="left">JWT 认证设置</el-divider>
+
         <el-form-item label="JWT 过期时间">
           <el-input v-model="siteSettings.jwt_expire_days" type="number">
             <template #suffix>天</template>
@@ -114,6 +130,7 @@ const siteSettings = ref({
   rate_limit_auth_attempts: 5,
   rate_limit_auth_window: 15,
   jwt_expire_days: 7,
+  password_strength_enabled: true,
   microsoft_client_id: '',
   microsoft_client_secret: '',
   microsoft_redirect_uri: ''

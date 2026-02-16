@@ -123,6 +123,7 @@ class InviteCode:
     used_by: str
     total_uses: int
     used_count: int
+    note: str
 
     def __init__(
         self,
@@ -131,12 +132,14 @@ class InviteCode:
         used_by: str = None,
         total_uses: int = 1,
         used_count: int = 0,
+        note: str = "",
     ):
         self.code = code
         self.created_at = created_at
         self.used_by = used_by
         self.total_uses = total_uses
         self.used_count = used_count
+        self.note = note
 
 
 class Token:
