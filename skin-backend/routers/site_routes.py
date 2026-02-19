@@ -270,6 +270,10 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
     async def get_admin_users(payload: dict = Depends(admin_required)):
         return await site_backend.get_admin_users()
 
+    @router.get("/admin/users/{user_id}")
+    async def get_single_user_admin(user_id: str, payload: dict = Depends(admin_required)):
+        return await site_backend.get_user_info(user_id)
+
     @router.post("/admin/users/{user_id}/toggle-admin")
     async def toggle_user_admin(user_id: str, payload: dict = Depends(admin_required)):
         actor_id = payload.get("sub")

@@ -78,21 +78,23 @@
     <!-- 用户详情对话框 -->
     <el-dialog
       v-model="userDetailDialogVisible"
-      :title="currentUser?.email || '用户详情'"
-      width="650px"
+      :title="currentUser?.display_name || currentUser?.email || '用户详情'"
+      width="750px"
       :close-on-click-modal="false"
       :destroy-on-close="true"
       class="user-detail-dialog"
     >
       <div v-if="currentUser" class="user-detail-content">
         <!-- 用户状态卡片 -->
-        <div class="user-status-card bg-gradient-purple">
-          <el-avatar :size="80" class="user-detail-avatar">
-            {{ currentUser.email.charAt(0).toUpperCase() }}
-          </el-avatar>
-          <div class="user-detail-info">
-            <h3>{{ currentUser.display_name || '未设置显示名' }}</h3>
-            <p class="user-email">{{ currentUser.email }}</p>
+        <el-card class="user-overview-card" shadow="hover">
+          <div class="user-status-header">
+            <el-avatar :size="64" class="user-detail-avatar">
+              {{ currentUser.email.charAt(0).toUpperCase() }}
+            </el-avatar>
+            <div class="user-detail-header-info">
+              <h3>{{ currentUser.display_name || '未设置显示名' }}</h3>
+              <p class="user-email">{{ currentUser.email }}</p>
+            </div>
             <div class="user-status-tag">
               <el-tag v-if="currentUser.is_admin" type="danger" size="large" effect="dark" class="status-tag">
                 <el-icon style="vertical-align: middle;"><User /></el-icon>
@@ -101,6 +103,7 @@
               <el-tag v-else-if="getUserBanStatus(currentUser)" type="warning" size="large" effect="dark" class="status-tag">
                 <el-icon style="vertical-align: middle;"><Warning /></el-icon>
                 <span style="margin-left: 6px; vertical-align: middle;">封禁中</span>
+                <span v-if="getUserBanStatus(currentUser)" style="margin-left: 4px;">({{ formatBanRemaining(currentUser.banned_until) }})</span>
               </el-tag>
               <el-tag v-else type="success" size="large" effect="dark" class="status-tag">
                 <el-icon style="vertical-align: middle;"><CircleCheck /></el-icon>
@@ -108,85 +111,125 @@
               </el-tag>
             </div>
           </div>
-        </div>
+        </el-card>
 
         <!-- 详细信息 -->
-        <div class="user-info-grid">
-          <div class="info-item">
-            <span class="info-label">用户ID</span>
-            <el-text class="info-value" copyable>{{ currentUser.id }}</el-text>
+        <el-card class="user-info-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>基本信息</span>
+            </div>
+          </template>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="用户ID">
+              <el-text class="info-value" copyable>{{ currentUser.id }}</el-text>
+            </el-descriptions-item>
+            <el-descriptions-item label="显示名">
+              {{ currentUser.display_name || '无' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="邮箱">
+              {{ currentUser.email }}
+            </el-descriptions-item>
+            <el-descriptions-item label="语言">
+              {{ currentUser.lang || 'zh_CN' }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </el-card>
+
+        <!-- 用户角色列表 -->
+        <el-card class="user-profiles-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>角色列表 ({{ currentUser.profiles?.length || 0 }})</span>
+            </div>
+          </template>
+          <div v-if="currentUser.profiles && currentUser.profiles.length > 0">
+            <el-table :data="currentUser.profiles" style="width: 100%" max-height="300px">
+              <el-table-column prop="name" label="角色名" min-width="120" />
+              <el-table-column prop="model" label="模型" width="100">
+                <template #default="{ row }">
+                  <el-tag :type="row.model === 'slim' ? 'success' : 'info'" size="small">{{ row.model }}</el-tag>
+                </template>
+              </el-table-column>
+              <el-table-column prop="id" label="角色ID" min-width="200">
+                <template #default="{ row }">
+                  <el-text copyable>{{ row.id }}</el-text>
+                </template>
+              </el-table-column>
+            </el-table>
           </div>
-          <div class="info-item">
-            <span class="info-label">角色数量</span>
-            <span class="info-value">{{ currentUser.profile_count || 0 }}</span>
-          </div>
-          <div v-if="getUserBanStatus(currentUser)" class="info-item info-full">
-            <span class="info-label">封禁剩余</span>
-            <span class="info-value ban-time">{{ formatBanRemaining(currentUser.banned_until) }}</span>
-          </div>
-        </div>
+          <el-empty v-else description="该用户暂无角色" />
+        </el-card>
 
         <!-- 操作按钮组 -->
-        <el-divider />
-
-        <div class="action-section">
-          <div class="action-row">
-            <el-button
-              class="action-btn"
-              :type="currentUser.is_admin ? 'warning' : 'primary'"
-              @click="toggleAdmin(currentUser)"
-              :disabled="isCurrentUserSelf(currentUser)"
-              size="large"
-            >
-              <el-icon><User /></el-icon>
-              <span>{{ currentUser.is_admin ? '取消管理员' : '设为管理员' }}</span>
-            </el-button>
-
-            <el-button
-              v-if="!getUserBanStatus(currentUser)"
-              class="action-btn"
-              type="warning"
-              @click="showBanDialog"
-              :disabled="currentUser.is_admin"
-              size="large"
-            >
-              <el-icon><Warning /></el-icon>
-              <span>封禁用户</span>
-            </el-button>
-            <el-button
-              v-else
-              class="action-btn"
-              type="success"
-              @click="unbanUser(currentUser)"
-              size="large"
-            >
-              <el-icon><CircleCheck /></el-icon>
-              <span>解除封禁</span>
-            </el-button>
+        <el-card class="user-actions-card" shadow="hover">
+          <template #header>
+            <div class="card-header">
+              <span>管理操作</span>
+            </div>
+          </template>
+          <div class="action-section">
+            <el-row :gutter="12">
+              <el-col :span="12">
+                <el-button
+                  class="action-btn"
+                  :type="currentUser.is_admin ? 'warning' : 'primary'"
+                  @click="toggleAdmin(currentUser)"
+                  :disabled="isCurrentUserSelf(currentUser)"
+                  size="large"
+                >
+                  <el-icon><User /></el-icon>
+                  <span>{{ currentUser.is_admin ? '取消管理员' : '设为管理员' }}</span>
+                </el-button>
+              </el-col>
+              <el-col :span="12">
+                <el-button
+                  v-if="!getUserBanStatus(currentUser)"
+                  class="action-btn"
+                  type="warning"
+                  @click="showBanDialog"
+                  :disabled="currentUser.is_admin || isCurrentUserSelf(currentUser)"
+                  size="large"
+                >
+                  <el-icon><Warning /></el-icon>
+                  <span>封禁用户</span>
+                </el-button>
+                <el-button
+                  v-else
+                  class="action-btn"
+                  type="success"
+                  @click="unbanUser(currentUser)"
+                  size="large"
+                >
+                  <el-icon><CircleCheck /></el-icon>
+                  <span>解除封禁</span>
+                </el-button>
+              </el-col>
+              <el-col :span="12">
+                <el-button
+                  class="action-btn"
+                  @click="showResetPasswordDialog(currentUser)"
+                  size="large"
+                >
+                  <el-icon><Key /></el-icon>
+                  <span>重置密码</span>
+                </el-button>
+              </el-col>
+              <el-col :span="12">
+                <el-button
+                  class="action-btn"
+                  type="danger"
+                  @click="deleteUser(currentUser)"
+                  :disabled="currentUser.is_admin || isCurrentUserSelf(currentUser)"
+                  size="large"
+                >
+                  <el-icon><Delete /></el-icon>
+                  <span>删除用户</span>
+                </el-button>
+              </el-col>
+            </el-row>
           </div>
-
-          <div class="action-row">
-            <el-button
-              class="action-btn"
-              @click="showResetPasswordDialog(currentUser)"
-              size="large"
-            >
-              <el-icon><Key /></el-icon>
-              <span>重置密码</span>
-            </el-button>
-
-            <el-button
-              class="action-btn"
-              type="danger"
-              @click="deleteUser(currentUser)"
-              :disabled="currentUser.is_admin"
-              size="large"
-            >
-              <el-icon><Delete /></el-icon>
-              <span>删除用户</span>
-            </el-button>
-          </div>
-        </div>
+        </el-card>
       </div>
     </el-dialog>
 
@@ -271,7 +314,7 @@
 import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Check, User, Warning, CircleCheck, Key, Delete } from '@element-plus/icons-vue'
+import { Refresh, Check, User, Warning, CircleCheck, Key, Delete, Picture } from '@element-plus/icons-vue'
 
 const users = ref([])
 const currentUser = ref(null)
@@ -354,9 +397,14 @@ function isCurrentUserSelf(user) {
   }
 }
 
-function showUserDetailDialog(user) {
-  currentUser.value = user
-  userDetailDialogVisible.value = true
+async function showUserDetailDialog(user) {
+  try {
+    const res = await axios.get(`/admin/users/${user.id}`, { headers: authHeaders() });
+    currentUser.value = res.data;
+    userDetailDialogVisible.value = true;
+  } catch (e) {
+    ElMessage.error('获取用户详情失败: ' + (e.response?.data?.detail || e.message));
+  }
 }
 
 async function toggleAdmin(user) {
@@ -519,103 +567,104 @@ onMounted(() => {
   align-items: center;
 }
 
-.user-detail-content {
-  padding: 0;
+.list-card {
+  width: 100%;
+  max-width: 100%;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  background: var(--color-card-background);
 }
 
-.user-status-card {
+/* User Detail Dialog Styles */
+.user-detail-dialog :deep(.el-dialog__body) {
+  padding: 0px 20px 20px 20px;
+}
+
+:v-deep.el-tag__content{
+  display: flex;
+}
+
+.user-detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.user-overview-card {
+  padding: 24px;
+  background: var(--el-color-primary-light-9); /* Neutral background */
+  color: var(--el-text-color-primary);
+  border: 1px solid var(--el-border-color-light);
+}
+
+.user-status-header {
   display: flex;
   align-items: center;
   gap: 24px;
-  padding: 24px;
-  border-radius: 12px;
-  margin-bottom: 24px;
-  color: white;
 }
 
 .user-detail-avatar {
-  background: rgba(255, 255, 255, 0.2);
+  background: var(--el-color-primary-light-3); /* Themed background */
   color: white;
   font-size: 32px;
   font-weight: 600;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+  border: 3px solid var(--el-color-primary-light-5);
   flex-shrink: 0;
 }
 
-.user-detail-info {
+.user-detail-header-info {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
   min-width: 0;
 }
 
-.user-detail-info h3 {
-  margin: 0 0 8px 0;
+.user-detail-header-info h3 {
+  margin: 0 0 4px 0;
   font-size: 24px;
   font-weight: 600;
-  width: 100%;
+  word-break: break-all;
 }
 
 .user-email {
-  margin: 0 0 12px 0;
+  margin: 0;
   opacity: 0.9;
   font-size: 14px;
-  width: 100%;
+  word-break: break-all;
 }
 
 .user-status-tag {
-  margin-top: 8px;
-  width: auto;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
-.user-status-tag .status-tag {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
+.user-info-card :deep(.el-descriptions__label) {
+  font-weight: 600;
+  color: var(--el-text-color-regular);
 }
 
-.user-info-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  margin-bottom: 16px;
+.user-profiles-card .profile-card {
+  margin-bottom: 0px;
 }
 
-.info-item {
-  padding: 16px;
-  background: var(--color-background-soft);
-  border-radius: 8px;
+.user-profiles-card .card-header {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.info-item.info-full {
-  grid-column: span 2;
+.profile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
 }
 
-.info-label {
-  font-size: 13px;
-  color: var(--color-text-light);
+.profile-descriptions :deep(.el-descriptions__label) {
+  width: 80px;
   font-weight: 500;
 }
 
-.info-value {
-  font-size: 15px;
-  color: var(--color-heading);
-  font-weight: 600;
-}
-
-.info-value.ban-time {
-  color: #e6a23c;
-  font-size: 16px;
-}
-
-.action-section {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+.user-actions-card .action-section {
+  padding: 10px 0;
 }
 
 .action-row {
@@ -625,9 +674,11 @@ onMounted(() => {
 }
 
 .action-btn {
-  flex: 1;
+  width: 100%;
 }
 
+
+/* Ban Dialog Specifics */
 .ban-duration-wrapper {
   width: 100%;
 }
@@ -668,20 +719,26 @@ onMounted(() => {
   padding-left: 4px;
 }
 
-.list-card {
-  width: 100%;
-  max-width: 100%;
-  border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  background: var(--color-card-background);
-}
-
 @media (max-width: 768px) {
   .users-section {
     padding: 0;
   }
   .list-card :deep(.el-card__body) {
     padding: 10px;
+  }
+  .user-overview-card {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+  .user-detail-header-info {
+    align-items: center;
+  }
+  .user-status-tag {
+    margin-left: 0;
+  }
+  .action-row {
+    grid-template-columns: 1fr; /* Stack buttons on small screens */
   }
 }
 </style>

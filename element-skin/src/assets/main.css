@@ -134,3 +134,8 @@ a,
     display: block;
   }
 }
+
+.el-tag__content {
+  display: flex;
+  align-items: center;
+}
