@@ -95,6 +95,7 @@ class Database(BaseDB):
             await conn.executescript(INIT_SQL)
             await conn.commit()
 
+            # 兼容旧库新增列
             cursor = await conn.execute("PRAGMA table_info(invites)")
             columns = [row[1] for row in await cursor.fetchall()]
             if "note" not in columns:
