@@ -80,8 +80,8 @@ CREATE TABLE IF NOT EXISTS verification_codes (
 """
 
 class Database(BaseDB):
-    def __init__(self, db_path="yggdrasil.db"):
-        super().__init__(db_path)
+    def __init__(self, db_path="yggdrasil.db", max_connections: int = 10):
+        super().__init__(db_path, max_connections)
         self.user = UserModule(self)
         self.setting = SettingModule(self)
         self.texture = TextureModule(self)

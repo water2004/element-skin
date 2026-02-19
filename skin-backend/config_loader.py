@@ -37,7 +37,7 @@ class Config:
                 "general_requests": 100,
                 "general_window_seconds": 60,
             },
-            "database": {"path": "yggdrasil.db"},
+            "database": {"path": "yggdrasil.db", "max_connections": 10},
             "textures": {"directory": "textures", "max_size_kb": 1024},
             "mojang": {
                 "session_url": "https://sessionserver.mojang.com",
