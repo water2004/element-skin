@@ -197,14 +197,14 @@ class YggdrasilBackend:
         if not token_data or not token_data.profile_id:
             return None
 
+        profile = await self.db.user.get_profile_by_id(token_data.profile_id)
+        if not profile or profile.name != username:
+            return None
+
         if await self.db.user.is_banned(profile.user_id):
             raise ForbiddenOperationException(
                 "Account is banned. Please contact administrator."
             )
-
-        profile = await self.db.user.get_profile_by_id(token_data.profile_id)
-        if not profile or profile.name != username:
-            return None
 
         return profile
 
