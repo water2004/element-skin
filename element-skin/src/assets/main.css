@@ -139,3 +139,7 @@ a,
   display: flex;
   align-items: center;
 }
+
+.el-button+.el-button {
+    margin-left: 0
+}
