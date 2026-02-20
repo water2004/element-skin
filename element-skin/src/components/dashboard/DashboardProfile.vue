@@ -8,7 +8,7 @@
       <div class="profile-header">
         <el-avatar :size="72" class="profile-avatar">{{ emailInitial }}</el-avatar>
         <div class="profile-meta">
-          <h3>{{ user?.display_name || '未设置显示名' }}</h3>
+          <h3>{{ user?.display_name || '未设置用户名' }}</h3>
           <p>{{ user?.email }}</p>
         </div>
       </div>
@@ -42,8 +42,8 @@
         <el-form-item label="邮箱">
           <el-input v-model="form.email" placeholder="请输入邮箱" />
         </el-form-item>
-        <el-form-item label="显示名">
-          <el-input v-model="form.display_name" placeholder="显示名称（可选）" />
+        <el-form-item label="用户名">
+          <el-input v-model="form.display_name" placeholder="请输入用户名" />
         </el-form-item>
 
         <el-divider content-position="left">修改密码</el-divider>

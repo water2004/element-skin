@@ -107,6 +107,7 @@ const { push } = useRouter()
 const isHome = computed(() => route.path === '/')
 const isAuthPage = computed(() => ['/login', '/register', '/reset-password'].includes(route.path))
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
+const enableSkinLibrary = ref(localStorage.getItem('enable_skin_library_cache') === 'true' || localStorage.getItem('enable_skin_library_cache') === null)
 const jwtToken = ref(localStorage.getItem('jwt') || '')
 const user = ref(null)
 const drawer = ref(false)
@@ -162,6 +163,13 @@ provide('fetchMe', fetchMe)
 provide('isDark', isDark)
 
 // --- Navigation Links ---
+const publicLinks = computed(() => {
+  const links = []
+  if (enableSkinLibrary.value) {
+    links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
+  }
+  return links
+})
 const dashboardLinks = [
   { path: '/dashboard/home', title: '仪表盘', icon: Odometer },
   { path: '/dashboard/wardrobe', title: '我的衣柜', icon: Box },
@@ -182,22 +190,25 @@ const navLinks = computed(() => {
   if (route.path.startsWith('/admin')) {
     return adminNavLinks
   }
+  const links = [...publicLinks.value]
   if (isLogged.value) {
-    const links = [...dashboardLinks]
+    links.push(...dashboardLinks)
     if (isAdmin.value) {
       links.push({ path: '/admin', title: '管理面板', icon: Tools })
     }
-    return links
   }
-  return []
+  return links
 })
 
 const drawerLinks = computed(() => {
-  if (!isLogged.value) return []
-  const links = [...dashboardLinks]
-  if (isAdmin.value) {
+  const links = [...publicLinks.value]
+  if (isLogged.value) {
     links.push({ isDivider: true })
-    links.push(...adminNavLinks)
+    links.push(...dashboardLinks)
+    if (isAdmin.value) {
+      links.push({ isDivider: true })
+      links.push(...adminNavLinks)
+    }
   }
   return links
 })
@@ -273,6 +284,10 @@ onMounted(async () => {
       siteName.value = res.data.site_name
       localStorage.setItem('site_name_cache', res.data.site_name)
       document.title = res.data.site_name
+    }
+    if (res.data.enable_skin_library !== undefined) {
+      enableSkinLibrary.value = res.data.enable_skin_library
+      localStorage.setItem('enable_skin_library_cache', res.data.enable_skin_library.toString())
     }
   } catch (e) {
     console.warn('Failed to load site settings:', e)

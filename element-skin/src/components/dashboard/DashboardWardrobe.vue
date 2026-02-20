@@ -107,6 +107,12 @@
         <el-form-item label="备注">
           <el-input v-model="uploadForm.note" placeholder="给这个纹理添加备注（可选）" />
         </el-form-item>
+        <el-form-item label="是否公开">
+          <el-switch v-model="uploadForm.is_public" />
+          <el-text size="small" type="info" style="margin-left: 12px">
+            公开后其他用户可以在皮肤库中看到并使用
+          </el-text>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="showUploadDialog = false">取消</el-button>
@@ -164,7 +170,7 @@ const textureResolutions = ref(new Map())
 const editingNoteHash = ref('')
 const editingNoteValue = ref('')
 const showUploadDialog = ref(false)
-const uploadForm = ref({ texture_type: 'skin', model: 'default', note: '', file: null })
+const uploadForm = ref({ texture_type: 'skin', model: 'default', note: '', is_public: false, file: null })
 const uploadRef = ref(null)
 const showApplyDialog = ref(false)
 const applyForm = ref({ profile_id: '', texture_type: '', hash: '' })
@@ -267,12 +273,13 @@ async function doUpload() {
     formData.append('model', uploadForm.value.model || 'default')
   }
   formData.append('note', uploadForm.value.note || '')
+  formData.append('is_public', uploadForm.value.is_public ? 'true' : 'false')
 
   try {
     await axios.post('/me/textures', formData, { headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' } })
     ElMessage.success('上传成功')
     showUploadDialog.value = false
-    uploadForm.value = { texture_type: 'skin', model: 'default', note: '', file: null }
+    uploadForm.value = { texture_type: 'skin', model: 'default', note: '', is_public: false, file: null }
     if (uploadRef.value) {
       uploadRef.value.clearFiles()
     }

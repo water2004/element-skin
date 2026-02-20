@@ -31,6 +31,7 @@ services:
       args:
         - VITE_BASE_PATH=${VITE_BASE_PATH:-/}
         - VITE_API_BASE=${VITE_API_BASE:-}
+        - BUILD_MODE=${BUILD_MODE:-standard}
     container_name: element-skin-frontend
     restart: unless-stopped
     ports:

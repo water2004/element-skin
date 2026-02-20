@@ -26,6 +26,9 @@
         <el-form-item label="允许用户注册">
           <el-switch v-model="siteSettings.allow_register" />
         </el-form-item>
+        <el-form-item label="启用公共皮肤库">
+          <el-switch v-model="siteSettings.enable_skin_library" />
+        </el-form-item>
         <el-form-item label="最大纹理大小">
           <el-input v-model="siteSettings.max_texture_size" type="number">
             <template #suffix>KB</template>
@@ -127,6 +130,7 @@ const siteSettings = ref({
   site_url: '',
   require_invite: false,
   allow_register: true,
+  enable_skin_library: true,
   max_texture_size: 1024,
   rate_limit_enabled: true,
   rate_limit_auth_attempts: 5,

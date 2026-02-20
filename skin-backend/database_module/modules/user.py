@@ -34,8 +34,8 @@ class UserModule:
     async def create(self, user: User):
         async with self.db.get_conn() as conn:
             await conn.execute(
-                "INSERT INTO users (id, email, password, is_admin) VALUES (?, ?, ?, ?)",
-                (user.id, user.email, user.password, user.is_admin),
+                "INSERT INTO users (id, email, password, is_admin, display_name) VALUES (?, ?, ?, ?, ?)",
+                (user.id, user.email, user.password, user.is_admin, user.display_name),
             )
             await conn.commit()
 
@@ -81,12 +81,13 @@ class UserModule:
     async def list_users(self, limit: int = 20, offset: int = 0) -> list[User]:
         async with self.db.get_conn() as conn:
             async with conn.execute(
-                "SELECT id, email, display_name, is_admin, banned_until FROM users ORDER BY email LIMIT ? OFFSET ?",
+                "SELECT id, email, display_name, is_admin, banned_until, preferred_language FROM users ORDER BY email LIMIT ? OFFSET ?",
                 (limit, offset),
             ) as cur:
                 rows = await cur.fetchall()
-                # Assuming empty password for listing safety
-                return [User(r[0], r[1], "", r[3], r[2], r[4]) for r in rows]
+                # SELECT Order: id(0), email(1), display_name(2), is_admin(3), banned_until(4), preferred_language(5)
+                # User Init: id, email, password, is_admin, preferred_language, display_name, banned_until
+                return [User(r[0], r[1], "", r[3], r[5], r[2], r[4]) for r in rows]
 
     async def toggle_admin(self, user_id: str) -> int:
         async with self.db.get_conn() as conn:
@@ -226,6 +227,16 @@ class UserModule:
             ) as cur:
                 row = await cur.fetchone()
                 return row[0] if row else 0
+
+    async def get_display_names_by_ids(self, user_ids: list[str]) -> dict[str, str]:
+        if not user_ids:
+            return {}
+        async with self.db.get_conn() as conn:
+            placeholders = ",".join("?" * len(user_ids))
+            query = f"SELECT id, display_name FROM users WHERE id IN ({placeholders})"
+            async with conn.execute(query, user_ids) as cur:
+                rows = await cur.fetchall()
+                return {r[0]: r[1] or "" for r in rows}
 
     # ========== Tokens ==========
     

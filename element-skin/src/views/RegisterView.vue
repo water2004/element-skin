@@ -7,6 +7,15 @@
       </div>
 
       <el-form :model="form" :rules="rules" ref="formRef" label-position="top" size="large">
+        <el-form-item label="用户名" prop="username">
+          <el-input
+            v-model="form.username"
+            placeholder="请输入用户名"
+            :prefix-icon="User"
+            @keyup.enter="register"
+          />
+        </el-form-item>
+
         <el-form-item label="邮箱地址" prop="email">
           <el-input
             v-model="form.email"
@@ -96,13 +105,14 @@ import { reactive, ref } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Message, Lock, Ticket, UserFilled } from '@element-plus/icons-vue'
+import { Message, Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const formRef = ref(null)
 const loading = ref(false)
 
 const form = reactive({
+  username: '',
   email: '',
   password: '',
   confirmPassword: '',
@@ -116,6 +126,12 @@ const countdown = ref(0)
 let timer = null
 
 const rules = {
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 3, message: '用户名至少需要3个字符', trigger: 'blur' },
+    { max: 20, message: '用户名长度不能超过20个字符', trigger: 'blur' },
+    { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '用户名仅支持中英文、数字和下划线', trigger: 'blur' }
+  ],
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
     { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
@@ -194,6 +210,7 @@ async function register() {
 
     // 在发送前trim邀请码
     const payload = {
+      username: form.username,
       email: form.email,
       password: form.password,
       invite: form.invite ? form.invite.trim() : '',

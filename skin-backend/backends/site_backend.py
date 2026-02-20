@@ -100,7 +100,18 @@ class SiteBackend:
 
         return {"token": token, "user_id": user_id}
 
-    async def register(self, email, password, invite_code=None, verification_code=None) -> str:
+    async def register(self, email, password, username, invite_code=None, verification_code=None) -> str:
+        if not username or not username.strip():
+            raise HTTPException(status_code=400, detail="Username is required")
+        
+        username = username.strip()
+
+        # Check if username (display_name) is taken
+        async with self.db.get_conn() as conn:
+            async with conn.execute("SELECT 1 FROM users WHERE display_name = ?", (username,)) as cur:
+                if await cur.fetchone():
+                    raise HTTPException(status_code=400, detail="Username already exists")
+
         enable_strong_password_check = await self.db.setting.get("enable_strong_password_check", "false") == "true"
         if enable_strong_password_check:
             errors = validate_strong_password(password)
@@ -153,9 +164,9 @@ class SiteBackend:
         password_hash = hash_password(password)
         user_id = generate_random_uuid()
         try:
-            await self.db.user.create(
-                User(user_id, email, password_hash, 1 if is_first_user else 0)
-            )
+            new_user = User(user_id, email, password_hash, 1 if is_first_user else 0)
+            new_user.display_name = username
+            await self.db.user.create(new_user)
         except Exception:
             raise HTTPException(status_code=400, detail="Email already registered")
 
@@ -224,8 +235,21 @@ class SiteBackend:
     async def update_user_info(self, user_id: str, data: Dict[str, Any]):
         if "email" in data and data["email"]:
             await self.db.user.update_email(user_id, data["email"])
-        if "display_name" in data and data["display_name"] is not None:
-            await self.db.user.update_display_name(user_id, data["display_name"])
+        
+        if "display_name" in data and data["display_name"]:
+            new_name = data["display_name"].strip()
+            if not new_name:
+                raise HTTPException(status_code=400, detail="Username cannot be empty")
+            
+            # Check for uniqueness if changed
+            user_row = await self.db.user.get_by_id(user_id)
+            if user_row and user_row.display_name != new_name:
+                async with self.db.get_conn() as conn:
+                    async with conn.execute("SELECT 1 FROM users WHERE display_name = ? AND id != ?", (new_name, user_id)) as cur:
+                        if await cur.fetchone():
+                            raise HTTPException(status_code=400, detail="Username already exists")
+            
+            await self.db.user.update_display_name(user_id, new_name)
 
         if "preferred_language" in data and data["preferred_language"]:
             async with self.db.get_conn() as conn:
@@ -378,6 +402,7 @@ class SiteBackend:
                 "enable_official_whitelist", "false"
             )
             == "true",
+            "enable_skin_library": settings.get("enable_skin_library", "true") == "true",
             # SMTP & Email Verification
             "email_verify_enabled": settings.get("email_verify_enabled", "false") == "true",
             "email_verify_ttl": int(settings.get("email_verify_ttl", "300")),
@@ -410,6 +435,7 @@ class SiteBackend:
             "fallback_mojang_profile",
             "fallback_mojang_hasjoined",
             "enable_official_whitelist",
+            "enable_skin_library",
             "email_verify_enabled",
             "email_verify_ttl",
             "enable_strong_password_check",

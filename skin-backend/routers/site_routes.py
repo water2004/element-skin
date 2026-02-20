@@ -15,6 +15,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import Response
 import os
 import uuid
+from typing import Optional
 
 from utils.jwt_utils import decode_jwt_token
 from database_module import Database
@@ -54,13 +55,14 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
 
         email = req.get("email")
         password = req.get("password")
+        username = req.get("username")
         invite = req.get("invite")
         code = req.get("code")
 
-        if not email or not password:
-            raise HTTPException(status_code=400, detail="email and password required")
+        if not email or not password or not username:
+            raise HTTPException(status_code=400, detail="email, password and username required")
 
-        user_id = await site_backend.register(email, password, invite, code)
+        user_id = await site_backend.register(email, password, username, invite, code)
         return {"id": user_id}
 
     @router.post("/send-verification-code")
@@ -142,14 +144,16 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
         file: UploadFile = File(...),
         texture_type: str = Form(...),
         note: str = Form(""),
+        is_public: str = Form("false"),
     ):
         user_id = payload.get("sub")
         content = await file.read()
+        public_bool = is_public.lower() == "true"
         try:
             texture_hash, texture_type = await db.texture.upload(
-                user_id, content, texture_type, note
+                user_id, content, texture_type, note, is_public=public_bool
             )
-            return {"hash": texture_hash, "type": texture_type, "note": note}
+            return {"hash": texture_hash, "type": texture_type, "note": note, "is_public": public_bool}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -180,6 +184,48 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
         await db.texture.delete_from_library(payload.get("sub"), hash, texture_type)
         return {"ok": True}
 
+    @router.post("/me/textures/{hash}/add")
+    async def add_texture_to_wardrobe(
+        hash: str, payload: dict = Depends(get_current_user)
+    ):
+        success = await db.texture.add_to_user_wardrobe(payload.get("sub"), hash)
+        if not success:
+            raise HTTPException(status_code=404, detail="Texture not found in library")
+        return {"ok": True}
+
+    @router.get("/public/skin-library")
+    async def get_skin_library(
+        page: int = 1,
+        limit: int = 20,
+        texture_type: Optional[str] = None
+    ):
+        enabled = await db.setting.get("enable_skin_library", "true")
+        if enabled != "true":
+            raise HTTPException(status_code=403, detail="Skin library is disabled by administrator")
+        
+        offset = (page - 1) * limit
+        total = await db.texture.count_library(texture_type=texture_type)
+        items = await db.texture.get_from_library(limit=limit, offset=offset, texture_type=texture_type)
+        
+        # 批量获取上传者名称
+        uploader_ids = list(set(r[3] for r in items if r[3]))
+        uploader_names = await db.user.get_display_names_by_ids(uploader_ids)
+        
+        return {
+            "total": total,
+            "items": [
+                {
+                    "hash": r[0],
+                    "type": r[1],
+                    "is_public": r[2],
+                    "uploader": r[3],
+                    "uploader_name": uploader_names.get(r[3], ""),
+                    "created_at": r[4]
+                }
+                for r in items
+            ]
+        }
+
     @router.post("/me/textures/{hash}/apply")
     async def apply_texture_to_profile(
         hash: str, payload: dict = Depends(get_current_user), body: dict = Body(...)
@@ -202,6 +248,7 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
         uuid: str = Form(...),
         texture_type: str = Form(...),
         model: str = Form(""),
+        is_public: str = Form("false"),
     ):
         """
         前端直接上传材质接口.
@@ -209,11 +256,12 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
         """
         content = await file.read()
         user_id = payload.get("sub")
+        public_bool = is_public.lower() == "true"
 
         try:
             # 1. 上传材质到用户库 (或直接保存文件)
             texture_hash, _ = await db.texture.upload(
-                user_id, content, texture_type, f"Direct upload to profile {uuid}"
+                user_id, content, texture_type, f"Direct upload to profile {uuid}", is_public=public_bool
             )
 
             # 2. 应用到角色
@@ -243,6 +291,7 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
             "site_name": settings.get("site_name", "皮肤站"),
             "site_url": settings.get("site_url", ""),
             "allow_register": settings.get("allow_register", "true") == "true",
+            "enable_skin_library": settings.get("enable_skin_library", "true") == "true",
             "email_verify_enabled": settings.get("email_verify_enabled", "false") == "true",
             "mojang_status_urls": {
                 "session": settings.get(

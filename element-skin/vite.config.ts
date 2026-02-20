@@ -4,6 +4,8 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
+const isLowMemory = process.env.BUILD_MODE === 'low-memory'
+
 // https://vite.dev/config/
 export default defineConfig({
   base: process.env.VITE_BASE_PATH || '/',
@@ -31,22 +33,16 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path,
       },
-      // Register, admin, me, textures etc
-      '^/site-login': {
+      // API routes that might conflict with frontend routes
+      // When a browser refreshes on these paths, it should serve index.html instead of proxying to the backend
+      '^/(admin|register|reset-password|site-login|me|public|microsoft|textures|send-verification-code)': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
-      },
-      '^/register': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
-      '^/admin': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
-      '^/textures': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
+        bypass: (req) => {
+          if (req.headers.accept?.indexOf('text/html') !== -1) {
+            return '/index.html';
+          }
+        }
       },
       '^/static/textures': {
         target: 'http://127.0.0.1:8000',
@@ -56,27 +52,21 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },
-      '^/me': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
-      '^/microsoft': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
-      '^/public': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
-      '^/send-verification-code': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
-      '^/reset-password': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true,
-      },
-      // 注意: 不代理根路径 '/'，以免覆盖 Vite 的 index.html
+    }
+  },
+  build: {
+    sourcemap: !isLowMemory,
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      // 在低内存模式下将 maxParallelFileOps 设为 1，以极大地减小内存占用
+      ...(isLowMemory ? { maxParallelFileOps: 1 } : {}),
+      output: {
+        manualChunks: {
+          'vendor-element': ['element-plus'],
+          'vendor-utils': ['axios', 'vue', 'vue-router', 'pinia'],
+          'vendor-render': ['three', 'skinview3d'],
+        }
+      }
     }
   }
 })

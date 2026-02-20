@@ -70,6 +70,9 @@ docker compose up -d --build
 
 # 子目录部署示例（前端在 /skin/，后端在 /skin/api/）
 VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d --build
+
+# 低内存环境部署（跳过前端类型检查，减少构建时内存占用）
+BUILD_MODE=low-memory docker compose up -d --build
 ```
 
 ### 3. 配置主机 Nginx

@@ -10,6 +10,7 @@
 
     <el-card class="list-card">
       <el-table :data="users" style="width: 100%">
+        <el-table-column prop="display_name" label="用户名" min-width="150" />
         <el-table-column prop="email" label="邮箱" min-width="220" />
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
@@ -124,7 +125,7 @@
             <el-descriptions-item label="用户ID">
               <el-text class="info-value" copyable>{{ currentUser.id }}</el-text>
             </el-descriptions-item>
-            <el-descriptions-item label="显示名">
+            <el-descriptions-item label="用户名">
               {{ currentUser.display_name || '无' }}
             </el-descriptions-item>
             <el-descriptions-item label="邮箱">

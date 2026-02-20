@@ -21,7 +21,7 @@ class TextureModule:
         os.makedirs(self.textures_dir, exist_ok=True)
 
     async def upload(
-        self, user_id: str, file_bytes: bytes, texture_type: str, note: str = ""
+        self, user_id: str, file_bytes: bytes, texture_type: str, note: str = "", is_public: bool = False
     ) -> Tuple[str, str]:
         """
         验证、保存并记录材质
@@ -42,18 +42,26 @@ class TextureModule:
         with open(file_path, "wb") as f:
             f.write(normalized_bytes)
 
-        await self.add_to_library(user_id, texture_hash, texture_type, note)
+        await self.add_to_library(user_id, texture_hash, texture_type, note, is_public)
 
         return texture_hash, texture_type
 
-    async def add_to_library(self, user_id: str, texture_hash: str, texture_type: str, note: str = "") -> bool:
+    async def add_to_library(self, user_id: str, texture_hash: str, texture_type: str, note: str = "", is_public: bool = False) -> bool:
         async with self.db.get_conn() as conn:
             created_at = int(time.time() * 1000)
             try:
+                # 记录用户材质
                 await conn.execute(
                     "INSERT OR IGNORE INTO user_textures (user_id, hash, texture_type, note, created_at) VALUES (?, ?, ?, ?, ?)",
                     (user_id, texture_hash, texture_type, note, created_at),
                 )
+                
+                # 记录到全局皮肤库（如果尚不存在）
+                await conn.execute(
+                    "INSERT OR IGNORE INTO skin_library (skin_hash, texture_type, is_public, uploader, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (texture_hash, texture_type, 1 if is_public else 0, user_id, created_at),
+                )
+                
                 await conn.commit()
                 return True
             except aiosqlite.IntegrityError:
@@ -105,3 +113,76 @@ class TextureModule:
                 (note, user_id, texture_hash, texture_type),
             )
             await conn.commit()
+
+    async def get_from_library(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        texture_type: Optional[str] = None,
+        only_public: bool = True,
+    ) -> list[tuple]:
+        """
+        获取皮肤库中的材质
+        """
+        async with self.db.get_conn() as conn:
+            query = "SELECT skin_hash, texture_type, is_public, uploader, created_at FROM skin_library"
+            conditions = []
+            params = []
+
+            if only_public:
+                conditions.append("is_public = 1")
+
+            if texture_type:
+                conditions.append("texture_type = ?")
+                params.append(texture_type)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+
+            query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+            async with conn.execute(query, params) as cur:
+                rows = await cur.fetchall()
+                # skin_hash, texture_type, is_public, uploader, created_at
+                return [(r[0], r[1], bool(r[2]), r[3], r[4]) for r in rows]
+
+    async def count_library(self, texture_type: Optional[str] = None, only_public: bool = True) -> int:
+        async with self.db.get_conn() as conn:
+            query = "SELECT COUNT(*) FROM skin_library"
+            conditions = []
+            params = []
+            if only_public:
+                conditions.append("is_public = 1")
+            if texture_type:
+                conditions.append("texture_type = ?")
+                params.append(texture_type)
+            
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            
+            async with conn.execute(query, params) as cur:
+                row = await cur.fetchone()
+                return row[0] if row else 0
+
+    async def add_to_user_wardrobe(self, user_id: str, texture_hash: str) -> bool:
+        """
+        从公共库添加材质到用户衣柜
+        """
+        async with self.db.get_conn() as conn:
+            # 获取材质信息
+            async with conn.execute(
+                "SELECT texture_type FROM skin_library WHERE skin_hash = ?", (texture_hash,)
+            ) as cur:
+                row = await cur.fetchone()
+                if not row:
+                    return False
+                texture_type = row[0]
+            
+            created_at = int(time.time() * 1000)
+            await conn.execute(
+                "INSERT OR IGNORE INTO user_textures (user_id, hash, texture_type, created_at) VALUES (?, ?, ?, ?)",
+                (user_id, texture_hash, texture_type, created_at),
+            )
+            await conn.commit()
+            return True

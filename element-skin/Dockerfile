@@ -8,10 +8,15 @@ COPY . .
 
 ARG VITE_BASE_PATH=/
 ARG VITE_API_BASE=
+ARG BUILD_MODE=standard
 ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 ENV VITE_API_BASE=${VITE_API_BASE}
 
-RUN npm run build
+RUN if [ "$BUILD_MODE" = "low-memory" ] || [ "$BUILD_MODE" = "fast" ]; then \
+      npm run build-fast; \
+    else \
+      npm run build; \
+    fi
 
 FROM nginx:1.25-alpine
 
