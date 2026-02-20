@@ -181,17 +181,24 @@ function formatStatusText(status) {
 
 // --- Lifecycle ---
 onMounted(async () => {
-  apiUrl.value = getApiUrl()
-
-  // Load Settings for Mojang Status
+  // Load Settings for Mojang Status and API URL
   try {
     const res = await axios.get('/public/settings')
+    
+    // Set API URL from backend settings, fallback to calculated one if empty
+    if (res.data.site_url) {
+      apiUrl.value = res.data.site_url.endsWith('/') ? res.data.site_url.slice(0, -1) : res.data.site_url
+    } else {
+      apiUrl.value = getApiUrl()
+    }
+
     if (res.data.mojang_status_urls) {
       mojangStatusUrls.value = res.data.mojang_status_urls
       checkMojangStatus()
     }
   } catch (e) {
-    console.warn('Failed to load Mojang status URLs')
+    console.warn('Failed to load public settings')
+    apiUrl.value = getApiUrl()
   }
 
   // Load User Stats (Textures)
