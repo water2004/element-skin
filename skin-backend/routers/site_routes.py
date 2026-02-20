@@ -80,7 +80,7 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
         password = req.get("password")
         code = req.get("code")
         if not email or not password or not code:
-             raise HTTPException(status_code=400, detail="email, password and code required")
+            raise HTTPException(status_code=400, detail="email, password and code required")
         await site_backend.reset_password(email, password, code)
         return {"ok": True}
 
@@ -310,6 +310,7 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
                 "used_by": row.used_by,
                 "total_uses": row.total_uses,
                 "used_count": row.used_count,
+                "note": row.note,
             }
             for row in invites
         ]
@@ -320,8 +321,9 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
     ):
         code = body.get("code") if body else None
         total_uses = body.get("total_uses", 1) if body else 1
-        new_code = await site_backend.create_invite(code, total_uses)
-        return {"code": new_code, "total_uses": total_uses}
+        note = body.get("note", "") if body else ""
+        new_code = await site_backend.create_invite(code, total_uses, note)
+        return {"code": new_code, "total_uses": total_uses, "note": note}
 
     @router.delete("/admin/invites/{code}")
     async def delete_admin_invite(code: str, payload: dict = Depends(admin_required)):

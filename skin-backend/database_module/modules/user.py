@@ -325,7 +325,7 @@ class UserModule:
     async def get_invite(self, code: str) -> InviteCode | None:
         async with self.db.get_conn() as conn:
             async with conn.execute(
-                "SELECT code, created_at, used_by, total_uses, used_count FROM invites WHERE code=?",
+                "SELECT code, created_at, used_by, total_uses, used_count, note FROM invites WHERE code=?",
                 (code,),
             ) as cur:
                 invite = await cur.fetchone()
@@ -336,8 +336,8 @@ class UserModule:
     async def create_invite(self, code: InviteCode):
         async with self.db.get_conn() as conn:
             await conn.execute(
-                "INSERT INTO invites (code, created_at, total_uses, used_count) VALUES (?, ?, ?, 0)",
-                (code.code, code.created_at, code.total_uses),
+                "INSERT INTO invites (code, created_at, total_uses, used_count, note) VALUES (?, ?, ?, 0, ?)",
+                (code.code, code.created_at, code.total_uses, code.note),
             )
             await conn.commit()
 
@@ -356,7 +356,7 @@ class UserModule:
     async def list_invites(self) -> list[InviteCode]:
         async with self.db.get_conn() as conn:
             async with conn.execute(
-                "SELECT code, created_at, used_by, total_uses, used_count FROM invites ORDER BY created_at DESC"
+                "SELECT code, created_at, used_by, total_uses, used_count, note FROM invites ORDER BY created_at DESC"
             ) as cur:
                 rows = await cur.fetchall()
                 return [InviteCode(*r) for r in rows]

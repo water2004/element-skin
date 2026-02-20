@@ -35,13 +35,13 @@ class SiteBackend:
 
         # Validate email format
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-             raise HTTPException(status_code=400, detail="Invalid email format")
+            raise HTTPException(status_code=400, detail="Invalid email format")
 
         # For reset password, check if user exists
         if type == "reset":
             user = await self.db.user.get_by_email(email)
             if not user:
-                 return {"ok": True, "ttl": 0} 
+                return {"ok": True, "ttl": 0} 
 
         # For register, check if user exists
         if type == "register":
@@ -57,7 +57,7 @@ class SiteBackend:
         
         sent = await self.email_sender.send_verification_code(email, code, type)
         if not sent:
-             raise HTTPException(status_code=500, detail="Failed to send verification email")
+            raise HTTPException(status_code=500, detail="Failed to send verification email")
 
         return {"ok": True, "ttl": ttl}
 
@@ -251,41 +251,41 @@ class SiteBackend:
         await self.db.user.delete(user_id)
         return True
 
-        async def reset_password(self, email: str, new_password: str, verification_code: str):
-            enable_strong_password_check = await self.db.setting.get("enable_strong_password_check", "false") == "true"
-            if enable_strong_password_check:
-                errors = validate_strong_password(new_password)
-                if errors:
-                    raise HTTPException(
-                        status_code=400, detail="；".join(errors)
-                    )
+    async def reset_password(self, email: str, new_password: str, verification_code: str):
+        enable_strong_password_check = await self.db.setting.get("enable_strong_password_check", "false") == "true"
+        if enable_strong_password_check:
+            errors = validate_strong_password(new_password)
+            if errors:
+                raise HTTPException(
+                    status_code=400, detail="；".join(errors)
+                )
              
         email_verify_enabled = await self.db.setting.get("email_verify_enabled", "false") == "true"
         if not email_verify_enabled:
-             raise HTTPException(status_code=403, detail="Password reset via email is disabled")
+            raise HTTPException(status_code=403, detail="Password reset via email is disabled")
 
         is_valid = await self.verify_code(email, verification_code, "reset")
         if not is_valid:
-             raise HTTPException(status_code=400, detail="Invalid or expired verification code")
+            raise HTTPException(status_code=400, detail="Invalid or expired verification code")
 
         user = await self.db.user.get_by_email(email)
         if not user:
-             raise HTTPException(status_code=404, detail="User not found")
-             
+            raise HTTPException(status_code=404, detail="User not found")
+
         new_hash = hash_password(new_password)
         await self.db.user.update_password(user.id, new_hash)
         
         await self.db.verification.delete_code(email, "reset")
         return True
 
-        async def change_password(self, user_id: str, old_password, new_password):
-            enable_strong_password_check = await self.db.setting.get("enable_strong_password_check", "false") == "true"
-            if enable_strong_password_check:
-                errors = validate_strong_password(new_password)
-                if errors:
-                    raise HTTPException(
-                        status_code=400, detail="；".join(errors)
-                    )
+    async def change_password(self, user_id: str, old_password, new_password):
+        enable_strong_password_check = await self.db.setting.get("enable_strong_password_check", "false") == "true"
+        if enable_strong_password_check:
+            errors = validate_strong_password(new_password)
+            if errors:
+                raise HTTPException(
+                    status_code=400, detail="；".join(errors)
+                )
 
         user_row = await self.db.user.get_by_id(user_id)
         if not user_row:
@@ -387,6 +387,10 @@ class SiteBackend:
             "smtp_user": settings.get("smtp_user", ""),
             "smtp_ssl": settings.get("smtp_ssl", "true") == "true",
             "smtp_sender": settings.get("smtp_sender", ""),
+            # "password_strength_enabled": settings.get(
+            #     "password_strength_enabled", "true"
+            # )
+            # == "true",
         }
 
     async def save_admin_settings(self, body: dict):
@@ -414,7 +418,8 @@ class SiteBackend:
             "smtp_user",
             "smtp_password",
             "smtp_ssl",
-            "smtp_sender"
+            "smtp_sender",
+            # "password_strength_enabled",
         ]:
             if key in body:
                 val = body[key]
@@ -516,7 +521,7 @@ class SiteBackend:
         await self.db.user.ban(user_id, banned_until)
         return banned_until
 
-    async def create_invite(self, code, total_uses):
+    async def create_invite(self, code, total_uses, note: str = ""):
         if code:
             if len(code) < 6 or len(code) > 32:
                 raise HTTPException(status_code=400, detail="Invalid code length")
@@ -531,7 +536,7 @@ class SiteBackend:
 
         created_at = int(time.time() * 1000)
         await self.db.user.create_invite(
-            InviteCode(code, created_at, total_uses=total_uses)
+            InviteCode(code, created_at, total_uses=total_uses, note=note)
         )
         return code
 
