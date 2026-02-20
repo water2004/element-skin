@@ -132,12 +132,6 @@ function toggleTheme() {
 }
 
 function applyTheme() {
-  // If it's home page, we force light mode to keep it "as is"
-  if (isHome.value) {
-    document.documentElement.classList.remove('dark')
-    return
-  }
-
   if (isDark.value) {
     document.documentElement.classList.add('dark')
   } else {
@@ -145,11 +139,7 @@ function applyTheme() {
   }
 }
 
-watch(isHome, () => {
-  applyTheme()
-})
-
-// Watch for system theme changes if no manual preference
+// Provide user and fetch function to all children
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
   if (!localStorage.getItem('theme')) {
     isDark.value = e.matches
@@ -330,12 +320,17 @@ onUnmounted(() => {
   backdrop-filter: none;
 }
 
-.is-home-layout .logo, 
-.is-home-layout :deep(.el-menu-item),
-.is-home-layout .account-name,
-.is-home-layout .theme-toggle,
-.is-home-layout .mobile-nav :deep(.el-button) {
+.is-home-layout .layout-header .logo, 
+.is-home-layout .layout-header :deep(.el-menu-item),
+.is-home-layout .layout-header .account-name,
+.is-home-layout .layout-header .theme-toggle,
+.is-home-layout .layout-header .mobile-nav :deep(.el-button),
+.is-home-layout .layout-header .header-actions :deep(.el-button:not(.el-button--primary)) {
   color: #fff !important;
+}
+
+.is-home-layout .layout-header .account-trigger:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .is-home-layout :deep(.el-menu) {
