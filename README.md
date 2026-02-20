@@ -43,6 +43,13 @@ npm run dev
 
 ## Docker 部署
 
+### 镜像地址 (GHCR)
+
+本项目支持自动构建镜像，你可以直接从 GitHub Container Registry 获取：
+
+- **后端**: `ghcr.io/water2004/element-skin-backend`
+- **前端**: `ghcr.io/water2004/element-skin-frontend`
+
 ### 1. 准备配置
 
 创建 `config.yaml`（参考 `skin-backend/config.yaml`）：
