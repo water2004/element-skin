@@ -107,7 +107,7 @@ const { push } = useRouter()
 const isHome = computed(() => route.path === '/')
 const isAuthPage = computed(() => ['/login', '/register', '/reset-password'].includes(route.path))
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
-const enableSkinLibrary = ref(true)
+const enableSkinLibrary = ref(localStorage.getItem('enable_skin_library_cache') === 'true' || localStorage.getItem('enable_skin_library_cache') === null)
 const jwtToken = ref(localStorage.getItem('jwt') || '')
 const user = ref(null)
 const drawer = ref(false)
@@ -287,6 +287,7 @@ onMounted(async () => {
     }
     if (res.data.enable_skin_library !== undefined) {
       enableSkinLibrary.value = res.data.enable_skin_library
+      localStorage.setItem('enable_skin_library_cache', res.data.enable_skin_library.toString())
     }
   } catch (e) {
     console.warn('Failed to load site settings:', e)
