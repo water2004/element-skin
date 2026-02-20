@@ -113,3 +113,36 @@ class TextureModule:
                 (note, user_id, texture_hash, texture_type),
             )
             await conn.commit()
+
+    async def get_from_library(
+        self,
+        limit: int = 20,
+        offset: int = 0,
+        texture_type: Optional[str] = None,
+        only_public: bool = True,
+    ) -> list[tuple]:
+        """
+        获取皮肤库中的材质
+        """
+        async with self.db.get_conn() as conn:
+            query = "SELECT skin_hash, texture_type, is_public, uploader, created_at FROM skin_library"
+            conditions = []
+            params = []
+
+            if only_public:
+                conditions.append("is_public = 1")
+
+            if texture_type:
+                conditions.append("texture_type = ?")
+                params.append(texture_type)
+
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+
+            query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            params.extend([limit, offset])
+
+            async with conn.execute(query, params) as cur:
+                rows = await cur.fetchall()
+                # skin_hash, texture_type, is_public, uploader, created_at
+                return [(r[0], r[1], bool(r[2]), r[3], r[4]) for r in rows]

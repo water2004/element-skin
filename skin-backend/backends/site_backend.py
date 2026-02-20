@@ -378,6 +378,7 @@ class SiteBackend:
                 "enable_official_whitelist", "false"
             )
             == "true",
+            "enable_skin_library": settings.get("enable_skin_library", "true") == "true",
             # SMTP & Email Verification
             "email_verify_enabled": settings.get("email_verify_enabled", "false") == "true",
             "email_verify_ttl": int(settings.get("email_verify_ttl", "300")),
@@ -410,6 +411,7 @@ class SiteBackend:
             "fallback_mojang_profile",
             "fallback_mojang_hasjoined",
             "enable_official_whitelist",
+            "enable_skin_library",
             "email_verify_enabled",
             "email_verify_ttl",
             "enable_strong_password_check",

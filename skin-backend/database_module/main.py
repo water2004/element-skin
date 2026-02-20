@@ -70,8 +70,7 @@ CREATE TABLE IF NOT EXISTS skin_library (
     texture_type TEXT NOT NULL,
     is_public INTEGER DEFAULT 0,
     uploader TEXT,
-    created_at INTEGER NOT NULL,
-    FOREIGN KEY(uploader) REFERENCES users(id)
+    created_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS official_whitelist (
@@ -149,6 +148,9 @@ class Database(BaseDB):
             )
             await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_official_whitelist', 'false')"
+            )
+            await conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_skin_library', 'true')"
             )
             # await conn.execute(
             #     "INSERT OR IGNORE INTO settings (key, value) VALUES ('password_strength_enabled', 'false')"
