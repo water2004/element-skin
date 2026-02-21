@@ -75,6 +75,9 @@
         <div class="gallery-info">
           <section class="info-section title-section">
             <div class="title-row">
+              <el-button text circle class="title-edit-btn" @click="focusNoteInput">
+                <el-icon><Edit /></el-icon>
+              </el-button>
               <el-input
                 ref="noteInputRef"
                 v-model="editingNoteValue"
@@ -83,9 +86,6 @@
                 @blur="updateNote"
                 @keyup.enter="updateNote"
               />
-              <el-button text circle class="title-edit-btn" @click="focusNoteInput">
-                <el-icon><Edit /></el-icon>
-              </el-button>
             </div>
           </section>
 
@@ -461,18 +461,13 @@ onMounted(() => {
   color: #67c23a;
 }
 
-.gallery-dialog :deep(.el-dialog) {
-  border-radius: 14px;
-  overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
-}
-
-.gallery-dialog :deep(.el-dialog__header) {
-  display: none;
-}
-
-.gallery-dialog :deep(.el-dialog__body) {
-  padding: 0;
+.gallery-dialog :deep(.el-dialog__headerbtn) {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  width: 32px;
+  height: 32px;
 }
 
 .gallery-container {
@@ -643,5 +638,37 @@ onMounted(() => {
 }
 .upload-wrapper {
   width: 100%;
+}
+</style>
+
+<!-- 全局样式：穿透 Teleport 渲染的 el-dialog -->
+<style>
+/* 针对 gallery-dialog 的全局覆盖，解决 Teleport 导致 scoped 样式失效问题 */
+.gallery-dialog.el-dialog {
+  padding: 0 !important;
+  --el-dialog-padding-primary: 0;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--el-border-color-lighter) !important;
+}
+
+.gallery-dialog.el-dialog .el-dialog__header {
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.gallery-dialog.el-dialog .el-dialog__body {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.gallery-dialog.el-dialog .el-dialog__headerbtn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
 }
 </style>
