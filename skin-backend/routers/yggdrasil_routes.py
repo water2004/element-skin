@@ -364,7 +364,9 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
     async def get_api_metadata(request: Request):
         """API元数据端点 (Yggdrasil服务发现)"""
         site_name = await db.setting.get("site_name", "Yggdrasil 皮肤站")
-        site_url = await db.setting.get("site_url", str(request.base_url).rstrip("/"))
+        # site_url = await db.setting.get("site_url", str(request.base_url).rstrip("/"))
+        # 从db获取的是后端地址, 从config获取的是前端地址
+        site_url = config.get("site_url", str(request.base_url)).rstrip("/")
 
         # 读取公钥
         public_key_pem = crypto.get_public_key_pem()
