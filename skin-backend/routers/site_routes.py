@@ -161,21 +161,25 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
     async def list_my_textures(payload: dict = Depends(get_current_user)):
         textures = await db.texture.get_for_user(payload.get("sub"))
         return [
-            {"hash": r[0], "type": r[1], "note": r[2], "created_at": r[3]}
+            {"hash": r[0], "type": r[1], "note": r[2], "created_at": r[3], "model": r[4]}
             for r in textures
         ]
 
     @router.patch("/me/textures/{hash}/{texture_type}")
-    async def update_my_texture_note(
+    async def update_my_texture(
         hash: str,
         texture_type: str,
         payload: dict = Depends(get_current_user),
         body: dict = Body(...),
     ):
         user_id = payload.get("sub")
-        note = body.get("note", "")
-        await db.texture.update_note(user_id, hash, texture_type, note)
-        return {"ok": True, "hash": hash, "texture_type": texture_type, "note": note}
+        if "note" in body:
+            await db.texture.update_note(user_id, hash, texture_type, body["note"])
+        if "model" in body:
+            await db.texture.update_model(user_id, hash, texture_type, body["model"])
+        
+        info = await db.texture.get_texture_info(user_id, hash, texture_type)
+        return {"ok": True, **info}
 
     @router.delete("/me/textures/{hash}/{texture_type}")
     async def delete_my_texture(
@@ -220,7 +224,8 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
                     "is_public": r[2],
                     "uploader": r[3],
                     "uploader_name": uploader_names.get(r[3], ""),
-                    "created_at": r[4]
+                    "created_at": r[4],
+                    "model": r[5]
                 }
                 for r in items
             ]

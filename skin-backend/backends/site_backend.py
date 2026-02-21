@@ -577,8 +577,15 @@ class SiteBackend:
         if not await self.db.user.verify_profile_ownership(user_id, profile_id):
             raise ValueError("Profile not yours")
 
+        # Get texture info to get the model
+        tex_info = await self.db.texture.get_texture_info(user_id, texture_hash, texture_type)
+        if not tex_info:
+            raise ValueError("Texture info not found")
+
         if texture_type.lower() == "skin":
             await self.db.user.update_profile_skin(profile_id, texture_hash)
+            # Also update profile's model to match skin's model
+            await self.db.user.update_profile_texture_model(profile_id, tex_info.get("model", "default"))
         elif texture_type.lower() == "cape":
             await self.db.user.update_profile_cape(profile_id, texture_hash)
         else:
