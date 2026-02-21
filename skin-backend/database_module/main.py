@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS user_textures (
     hash TEXT NOT NULL,
     texture_type TEXT NOT NULL,
     note TEXT DEFAULT '',
+    model TEXT DEFAULT 'default',
     created_at INTEGER NOT NULL,
     PRIMARY KEY(user_id, hash, texture_type),
     FOREIGN KEY(user_id) REFERENCES users(id)
@@ -70,6 +71,7 @@ CREATE TABLE IF NOT EXISTS skin_library (
     texture_type TEXT NOT NULL,
     is_public INTEGER DEFAULT 0,
     uploader TEXT,
+    model TEXT DEFAULT 'default',
     created_at INTEGER NOT NULL
 );
 
@@ -137,6 +139,24 @@ class Database(BaseDB):
             if "note" not in columns:
                 await conn.execute(
                     "ALTER TABLE invites ADD COLUMN note TEXT DEFAULT ''"
+                )
+                await conn.commit()
+
+            # 兼容旧库：user_textures 增加 model 列
+            cursor = await conn.execute("PRAGMA table_info(user_textures)")
+            columns = [row[1] for row in await cursor.fetchall()]
+            if "model" not in columns:
+                await conn.execute(
+                    "ALTER TABLE user_textures ADD COLUMN model TEXT DEFAULT 'default'"
+                )
+                await conn.commit()
+
+            # 兼容旧库：skin_library 增加 model 列
+            cursor = await conn.execute("PRAGMA table_info(skin_library)")
+            columns = [row[1] for row in await cursor.fetchall()]
+            if "model" not in columns:
+                await conn.execute(
+                    "ALTER TABLE skin_library ADD COLUMN model TEXT DEFAULT 'default'"
                 )
                 await conn.commit()
             
