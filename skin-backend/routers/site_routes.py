@@ -154,7 +154,7 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
             texture_hash, texture_type = await db.texture.upload(
                 user_id, content, texture_type, note, is_public=public_bool, model=model
             )
-            return {"hash": texture_hash, "type": texture_type, "note": note, "is_public": public_bool, "model": model}
+            return {"hash": texture_hash, "type": texture_type, "note": note, "is_public": 1 if public_bool else 0, "model": model}
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -162,7 +162,7 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
     async def list_my_textures(payload: dict = Depends(get_current_user)):
         textures = await db.texture.get_for_user(payload.get("sub"))
         return [
-            {"hash": r[0], "type": r[1], "note": r[2], "created_at": r[3], "model": r[4]}
+            {"hash": r[0], "type": r[1], "note": r[2], "created_at": r[3], "model": r[4], "is_public": r[5]}
             for r in textures
         ]
 
