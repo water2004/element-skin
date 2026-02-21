@@ -2,11 +2,9 @@ name: Docker Publish
 
 on:
   push:
-    branches: [ "main" ]
-    # Publish semver tags as releases.
-    tags: [ 'v*.*.*' ]
+    tags: [ 'v*.*.*' ]  # 只有推送符合版本号标签（如 v1.0.0）时才触发构建
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main" ]  # 监听 PR 合并到 main 但不触发构建
 
 env:
   REGISTRY: ghcr.io
@@ -52,8 +50,8 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}-${{ matrix.image_suffix }}
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
+            type=semver,pattern={{version}}  # 仅根据版本标签生成版本号
+            main  # 为每个版本添加 main 标签
             type=sha,format=short
 
       - name: Build and push Docker image
@@ -62,7 +60,9 @@ jobs:
         with:
           context: ${{ matrix.context }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ steps.meta.outputs.tags }}  # 使用生成的版本号标签
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}-${{ matrix.image_suffix }}:main  # 打上 main 标签
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
