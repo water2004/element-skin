@@ -279,6 +279,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .list-card {
@@ -286,6 +287,7 @@ onMounted(() => {
   border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   background: var(--color-card-background);
+  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .code-text {

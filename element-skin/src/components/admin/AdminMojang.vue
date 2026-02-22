@@ -1,6 +1,6 @@
 <template>
   <div class="admin-mojang">
-    <div class="page-header">
+    <div class="section-header">
       <h2>Mojang API 兼容与状态</h2>
     </div>
 
@@ -426,11 +426,12 @@ onMounted(() => {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.page-header {
+.section-header {
   margin-bottom: 24px;
 }
-.page-header h2 {
+.section-header h2 {
   font-weight: 600;
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
@@ -455,6 +456,7 @@ onMounted(() => {
   border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   background: var(--color-card-background);
+  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Limit inner content width */
