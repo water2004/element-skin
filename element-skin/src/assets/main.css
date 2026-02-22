@@ -130,7 +130,7 @@ html.motion-off .profile-form-card .el-divider {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
   animation-delay: calc(var(--delay-index, 0) * 0.05s);
   border: 1px solid var(--color-border);

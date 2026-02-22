@@ -264,7 +264,6 @@ onMounted(() => {
   align-items: center;
   position: relative;
   overflow: hidden;
-  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .resolution-badge {
@@ -284,7 +283,6 @@ onMounted(() => {
   padding: 12px 16px;
   text-align: center;
   background: var(--color-card-background);
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .texture-title {
@@ -295,7 +293,6 @@ onMounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  transition: color 0.3s ease;
 }
 
 .texture-meta-info {
@@ -304,7 +301,6 @@ onMounted(() => {
   justify-content: center;
   gap: 6px;
   color: var(--color-text-light);
-  transition: color 0.3s ease;
 }
 
 .meta-separator {
@@ -331,7 +327,6 @@ onMounted(() => {
   padding: 12px 16px;
   border-top: 1px solid var(--color-border);
   background: var(--color-background-soft);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .texture-actions .el-button {

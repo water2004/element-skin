@@ -271,7 +271,6 @@ async function confirmDeleteAccount() {
   display: flex;
   align-items: center;
   gap: 16px;
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s backwards;
 }
 
 .profile-avatar {
@@ -292,7 +291,6 @@ async function confirmDeleteAccount() {
   font-size: 18px;
   font-weight: 600;
   color: var(--color-heading);
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s backwards;
   transition: color 0.3s ease;
 }
 
@@ -300,7 +298,6 @@ async function confirmDeleteAccount() {
   margin: 6px 0 0;
   color: var(--color-text-light);
   font-size: 13px;
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.25s backwards;
   transition: color 0.3s ease;
 }
 
@@ -308,7 +305,6 @@ async function confirmDeleteAccount() {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.75s backwards;
 }
 
 .profile-form-card :deep(.el-form-item__label) {
@@ -318,11 +314,9 @@ async function confirmDeleteAccount() {
 
 .profile-form-card :deep(.el-form-item) {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
 .profile-form-card :deep(.el-divider) {
-  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
 .profile-form-card :deep(.el-divider__text) {
@@ -330,23 +324,6 @@ async function confirmDeleteAccount() {
   color: var(--color-heading);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
-
-/* 1. Email */
-.profile-form-card :deep(.el-form-item):nth-child(1) { animation-delay: 0.3s; }
-/* 2. Display Name */
-.profile-form-card :deep(.el-form-item):nth-child(2) { animation-delay: 0.35s; }
-/* 3. Password Divider */
-.profile-form-card :deep(.form-divider.password-divider) { animation-delay: 0.4s; }
-/* 4. Old Password */
-.profile-form-card :deep(.el-form-item):nth-child(4) { animation-delay: 0.45s; }
-/* 5. New Password */
-.profile-form-card :deep(.el-form-item):nth-child(5) { animation-delay: 0.5s; }
-/* 6. Confirm Password */
-.profile-form-card :deep(.el-form-item):nth-child(6) { animation-delay: 0.55s; }
-/* 7. Personalization Divider */
-.profile-form-card :deep(.form-divider.personalize-divider) { animation-delay: 0.6s; }
-/* 8. Motion Toggle */
-.profile-form-card :deep(.el-form-item):nth-child(8) { animation-delay: 0.65s; }
 
 .profile-form-card :deep(.el-form-item:hover) {
   transform: translateX(4px);

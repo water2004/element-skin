@@ -467,7 +467,6 @@ onMounted(() => {
   align-items: center;
   position: relative;
   overflow: hidden;
-  transition: background 0.3s ease, color 0.3s ease;
 }
 
 .resolution-badge {
@@ -491,7 +490,6 @@ onMounted(() => {
   align-items: center;
   gap: 6px;
   background: var(--color-card-background);
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .texture-note-simple {
@@ -503,7 +501,6 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;
-  transition: color 0.3s ease;
 }
 
 .texture-type-tag {
