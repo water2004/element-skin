@@ -22,6 +22,41 @@ class Config:
         else:
             print(f"Warning: Config file {self.config_path} not found, using defaults")
             self._data = self._get_defaults()
+        self._normalize_fallbacks()
+
+    def _normalize_fallbacks(self):
+        """确保 fallback 与 mojang 配置兼容"""
+        fallbacks = self._data.get("fallbacks")
+        mojang = self._data.get("mojang")
+
+        if not fallbacks:
+            if not mojang:
+                mojang = self._get_defaults().get("mojang", {})
+                self._data["mojang"] = mojang
+            self._data["fallbacks"] = [
+                {
+                    "name": mojang.get("name", "mojang"),
+                    "session_url": mojang.get("session_url"),
+                    "account_url": mojang.get("account_url"),
+                    "services_url": mojang.get("services_url"),
+                    "skin_domains": mojang.get("skin_domains", []),
+                    "cache_ttl": mojang.get("cache_ttl", 60),
+                }
+            ]
+        else:
+            # 兼容旧逻辑：确保每个服务都有 name，并回填 mojang
+            for idx, entry in enumerate(fallbacks):
+                if "name" not in entry or not entry.get("name"):
+                    entry["name"] = f"fallback_{idx + 1}"
+            if not mojang and fallbacks:
+                primary = fallbacks[0]
+                self._data["mojang"] = {
+                    "session_url": primary.get("session_url"),
+                    "account_url": primary.get("account_url"),
+                    "services_url": primary.get("services_url"),
+                    "skin_domains": primary.get("skin_domains", []),
+                    "cache_ttl": primary.get("cache_ttl", 60),
+                }
 
     def _get_defaults(self) -> Dict[str, Any]:
         """默认配置"""
@@ -46,6 +81,16 @@ class Config:
                 "skin_domains": ["textures.minecraft.net"],
                 "cache_ttl": 60,
             },
+            "fallbacks": [
+                {
+                    "name": "mojang",
+                    "session_url": "https://sessionserver.mojang.com",
+                    "account_url": "https://api.mojang.com",
+                    "services_url": "https://api.minecraftservices.com",
+                    "skin_domains": ["textures.minecraft.net"],
+                    "cache_ttl": 60,
+                }
+            ],
             "server": {"host": "0.0.0.0", "port": 8000, "debug": False},
         }
 

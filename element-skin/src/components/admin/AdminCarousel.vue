@@ -1,6 +1,6 @@
 <template>
   <div class="admin-carousel">
-    <div class="page-header">
+    <div class="section-header">
       <h2>首页轮播图管理</h2>
       <el-upload
         action="#"
@@ -124,16 +124,17 @@ onMounted(() => {
   max-width: 1000px;
   margin: 0 auto;
   width: 100%;
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.page-header {
+.section-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
 }
 
-.page-header h2 {
+.section-header h2 {
   font-weight: 600;
   color: var(--color-heading);
   margin: 0;
@@ -143,6 +144,7 @@ onMounted(() => {
   border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   background: var(--color-card-background);
+  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .mb-4 {
@@ -150,7 +152,7 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .page-header {
+  .section-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;

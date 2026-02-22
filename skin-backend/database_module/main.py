@@ -3,6 +3,7 @@ from .modules.user import UserModule
 from .modules.setting import SettingModule
 from .modules.texture import TextureModule
 from .modules.verification import VerificationModule
+from config_loader import config
 
 INIT_SQL = """
 CREATE TABLE IF NOT EXISTS users (
@@ -82,6 +83,25 @@ CREATE TABLE IF NOT EXISTS official_whitelist (
     created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS fallback_endpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    priority INTEGER NOT NULL,
+    session_url TEXT NOT NULL,
+    account_url TEXT NOT NULL,
+    services_url TEXT NOT NULL,
+    cache_ttl INTEGER NOT NULL,
+    skin_domains TEXT DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS whitelisted_users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    endpoint_id INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE(username, endpoint_id),
+    FOREIGN KEY(endpoint_id) REFERENCES fallback_endpoints(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS verification_codes (
     email TEXT,
     code TEXT NOT NULL,
@@ -113,6 +133,73 @@ class Database(BaseDB):
             await conn.executescript(INIT_SQL)
             await conn.commit()
 
+            # 迁移：从 config.yaml 的 mojang 初始化 fallback_endpoints
+            cursor = await conn.execute("SELECT COUNT(*) FROM fallback_endpoints")
+            row = await cursor.fetchone()
+            if row and row[0] == 0:
+                mojang = config.get("mojang", {})
+                skin_domains = mojang.get("skin_domains", []) or []
+                await conn.execute(
+                    """
+                    INSERT INTO fallback_endpoints (
+                        priority, session_url, account_url, services_url, cache_ttl, skin_domains
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        1,
+                        mojang.get("session_url", ""),
+                        mojang.get("account_url", ""),
+                        mojang.get("services_url", ""),
+                        int(mojang.get("cache_ttl", 60)),
+                        ",".join([str(item).strip() for item in skin_domains if str(item).strip()]),
+                    ),
+                )
+                await conn.commit()
+
+            # 兼容旧库：fallback_endpoints 增加 skin_domains 列
+            cursor = await conn.execute("PRAGMA table_info(fallback_endpoints)")
+            columns = [row[1] for row in await cursor.fetchall()]
+            if "skin_domains" not in columns:
+                await conn.execute(
+                    "ALTER TABLE fallback_endpoints ADD COLUMN skin_domains TEXT DEFAULT ''"
+                )
+                await conn.commit()
+                mojang_domains = config.get("mojang.skin_domains", []) or []
+                domains_csv = ",".join(
+                    [str(item).strip() for item in mojang_domains if str(item).strip()]
+                )
+                await conn.execute(
+                    """
+                    UPDATE fallback_endpoints
+                    SET skin_domains=?
+                    WHERE skin_domains IS NULL OR skin_domains = ''
+                    """,
+                    (domains_csv,),
+                )
+                await conn.commit()
+
+            # 迁移：official_whitelist -> whitelisted_users (绑定到优先级最高的 endpoint)
+            cursor = await conn.execute(
+                "SELECT id FROM fallback_endpoints ORDER BY priority ASC, id ASC LIMIT 1"
+            )
+            row = await cursor.fetchone()
+            if row:
+                endpoint_id = row[0]
+                cursor = await conn.execute(
+                    "SELECT username, created_at FROM official_whitelist"
+                )
+                rows = await cursor.fetchall()
+                for username, created_at in rows:
+                    await conn.execute(
+                        """
+                        INSERT OR IGNORE INTO whitelisted_users (username, endpoint_id, created_at)
+                        VALUES (?, ?, ?)
+                        """,
+                        (username, endpoint_id, created_at),
+                    )
+                await conn.commit()
+
             # 如果是新创建的 skin_library 表，从 user_textures 迁移现有数据
             if not skin_library_exists:
                 await conn.execute(
@@ -135,7 +222,7 @@ class Database(BaseDB):
             )
             await conn.commit()
 
-            # 兼容旧库新增列
+            # 兼容旧库：invites 新增 note 列
             cursor = await conn.execute("PRAGMA table_info(invites)")
             columns = [row[1] for row in await cursor.fetchall()]
             if "note" not in columns:
@@ -227,6 +314,14 @@ class Database(BaseDB):
             await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_mojang_hasjoined', 'false')"
             )
+            await conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_strategy', 'serial')"
+            )
+            # NOTE: fallback_services_json 已弃用，改用 fallback_endpoints 表存储结构化配置。
+            # fallback_services_json 是什么鬼，会不会有点逆天了
+            # await conn.execute(
+            #     "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_services_json', '')"
+            # )
             await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_official_whitelist', 'false')"
             )

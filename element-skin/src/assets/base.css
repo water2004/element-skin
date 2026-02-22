@@ -42,6 +42,13 @@
   --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%); /* Dark, subtle grey gradient */
 
   --section-gap: 160px;
+
+  --el-input-bg-color: var(--color-card-background);
+  --el-input-text-color: var(--color-text);
+  --el-input-border-color: var(--color-border);
+  --el-input-hover-border-color: var(--color-border-hover);
+  --el-input-placeholder-color: var(--color-text-light);
+  --el-fill-color-blank: var(--color-card-background);
 }
 
 /* Explicit dark mode class */

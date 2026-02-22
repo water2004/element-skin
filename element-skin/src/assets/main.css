@@ -83,6 +83,40 @@ html.dark .hero-gradient-bg {
   margin: 0;
 }
 
+html.motion-off .home-container,
+html.motion-off .dashboard-home,
+html.motion-off .roles-section,
+html.motion-off .wardrobe-section,
+html.motion-off .profile-section,
+html.motion-off .skin-library-container,
+html.motion-off .admin-carousel,
+html.motion-off .admin-mojang,
+html.motion-off .settings-section,
+html.motion-off .invites-section,
+html.motion-off .users-section {
+  animation: none !important;
+}
+
+html.motion-off .profile-form-card,
+html.motion-off .settings-card,
+html.motion-off .list-card,
+html.motion-off .box-card,
+html.motion-off .common-card,
+html.motion-off .hero-content,
+html.motion-off .resolution-badge {
+  animation: none !important;
+}
+
+html.motion-off .section-header,
+html.motion-off .profile-header,
+html.motion-off .profile-meta h3,
+html.motion-off .profile-meta p,
+html.motion-off .profile-actions,
+html.motion-off .profile-form-card .el-form-item,
+html.motion-off .profile-form-card .el-divider {
+  animation: none !important;
+}
+
 /* Grids and Cards */
 .common-grid {
   display: grid;
@@ -96,7 +130,7 @@ html.dark .hero-gradient-bg {
   border-radius: 12px;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
   animation-delay: calc(var(--delay-index, 0) * 0.05s);
   border: 1px solid var(--color-border);
@@ -138,6 +172,11 @@ a,
 .el-tag__content {
   display: flex;
   align-items: center;
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
 }
 
 .el-button+.el-button {

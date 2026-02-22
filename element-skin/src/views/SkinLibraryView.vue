@@ -249,6 +249,7 @@ onMounted(() => {
   margin: 0;
   color: var(--color-text-light);
   font-size: 16px;
+  transition: color 0.3s ease;
 }
 
 .library-grid-container {
@@ -263,7 +264,6 @@ onMounted(() => {
   align-items: center;
   position: relative;
   overflow: hidden;
-  transition: background 0.3s ease;
 }
 
 .resolution-badge {

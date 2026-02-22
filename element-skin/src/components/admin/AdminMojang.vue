@@ -1,6 +1,6 @@
 <template>
   <div class="admin-mojang">
-    <div class="page-header">
+    <div class="section-header">
       <h2>Mojang API 兼容与状态</h2>
     </div>
 
@@ -31,10 +31,59 @@
       <template #header>
         <div class="card-header">
           <span>兼容性设置</span>
-          <el-button type="primary" size="small" @click="saveSettings" :loading="saving">保存设置</el-button>
+          <div class="header-actions">
+            <el-button size="small" @click="addFallback">新增服务</el-button>
+            <el-button type="primary" size="small" @click="saveSettings" :loading="saving">保存设置</el-button>
+          </div>
         </div>
       </template>
       <el-form label-position="top">
+        <el-form-item label="Fallback 策略">
+          <el-select v-model="settings.fallback_strategy" placeholder="选择策略" style="width: 120px">
+            <el-option label="顺序尝试" value="serial" />
+            <el-option label="并发尝试" value="parallel" />
+          </el-select>
+          <span class="setting-desc">按优先级顺序或并发请求回退服务。</span>
+        </el-form-item>
+        <el-form-item label="Fallback 服务顺序">
+          <el-table :data="fallbacks" style="width: 100%" size="small">
+            <el-table-column label="Endpoint ID" min-width="40">
+              <template #default="scope">
+                <span class="mono">{{ scope.row.id ?? 'new' }}</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="URLs" min-width="200">
+              <template #default="scope">
+                <div class="fallback-urls">
+                  <el-input v-model="scope.row.session_url" size="small" placeholder="Session URL" />
+                  <el-input v-model="scope.row.account_url" size="small" placeholder="Account URL" />
+                  <el-input v-model="scope.row.services_url" size="small" placeholder="Services URL" />
+                </div>
+              </template>
+            </el-table-column>
+            <el-table-column label="Skin Domains" min-width="160">
+              <template #default="scope">
+                <el-input v-model="scope.row.skin_domains_text" size="small" placeholder="textures.minecraft.net" />
+              </template>
+            </el-table-column>
+            <el-table-column label="缓存 TTL" width="140">
+              <template #default="scope">
+                <el-input-number v-model="scope.row.cache_ttl" :min="1" :step="60" size="small" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="200" align="right">
+              <template #default="scope">
+                <div class="fallback-actions">
+                  <div class="fallback-actions-row">
+                    <el-button size="small" @click="moveUp(scope.$index)">上移</el-button>
+                    <el-button size="small" @click="moveDown(scope.$index)">下移</el-button>
+                    <el-button size="small" type="danger" @click="removeFallback(scope.$index)">删除</el-button>
+                  </div>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-form-item>
         <el-form-item label="转发 Profile 请求 (fallback_mojang_profile)">
           <div class="setting-row">
             <el-switch v-model="settings.fallback_mojang_profile" />
@@ -110,12 +159,14 @@ import { Refresh, Plus, Delete } from '@element-plus/icons-vue'
 const settings = ref({
   fallback_mojang_profile: false,
   fallback_mojang_hasjoined: false,
-  enable_official_whitelist: false
+  enable_official_whitelist: false,
+  fallback_strategy: 'serial'
 })
 const saving = ref(false)
 const statusUrls = ref({})
 const statusData = ref({})
 const checkingStatus = ref(false)
+const fallbacks = ref([])
 
 const whitelist = ref([])
 const loadingList = ref(false)
@@ -133,9 +184,12 @@ async function fetchSettings() {
     settings.value = {
       fallback_mojang_profile: res.data.fallback_mojang_profile,
       fallback_mojang_hasjoined: res.data.fallback_mojang_hasjoined,
-      enable_official_whitelist: res.data.enable_official_whitelist
+      enable_official_whitelist: res.data.enable_official_whitelist,
+      fallback_strategy: res.data.fallback_strategy || 'serial'
     }
-    statusUrls.value = {
+    fallbacks.value = Array.isArray(res.data.fallbacks) ? res.data.fallbacks : []
+    normalizeFallbackEntries()
+    statusUrls.value = res.data.fallback_status_urls || {
       session: res.data.mojang_session_url,
       account: res.data.mojang_account_url,
       services: res.data.mojang_services_url
@@ -149,7 +203,11 @@ async function fetchSettings() {
 async function saveSettings() {
   saving.value = true
   try {
-    await axios.post('/admin/settings', settings.value, { headers })
+    const payload = {
+      ...settings.value,
+      fallbacks: serializeFallbacks()
+    }
+    await axios.post('/admin/settings', payload, { headers })
     ElMessage.success('设置已保存')
     if (settings.value.enable_official_whitelist) {
       fetchWhitelist()
@@ -159,6 +217,82 @@ async function saveSettings() {
   } finally {
     saving.value = false
   }
+}
+
+function moveUp(index) {
+  if (index <= 0) return
+  const list = [...fallbacks.value]
+  const temp = list[index - 1]
+  list[index - 1] = list[index]
+  list[index] = temp
+  fallbacks.value = list
+  syncPriorityFromOrder()
+}
+
+function moveDown(index) {
+  const list = [...fallbacks.value]
+  if (index < 0 || index >= list.length - 1) return
+  const temp = list[index + 1]
+  list[index + 1] = list[index]
+  list[index] = temp
+  fallbacks.value = list
+  syncPriorityFromOrder()
+}
+
+function normalizeFallbackEntries() {
+  fallbacks.value = fallbacks.value.map((item, index) => ({
+    id: item.id ?? null,
+    priority: Number(item.priority || index + 1),
+    session_url: item.session_url || '',
+    account_url: item.account_url || '',
+    services_url: item.services_url || '',
+    cache_ttl: Number(item.cache_ttl || 60),
+    skin_domains_text: Array.isArray(item.skin_domains)
+      ? item.skin_domains.join(',')
+      : String(item.skin_domains || '')
+  }))
+  fallbacks.value.sort((a, b) => (a.priority || 0) - (b.priority || 0))
+  syncPriorityFromOrder()
+}
+
+function syncPriorityFromOrder() {
+  fallbacks.value = fallbacks.value.map((item, index) => ({
+    ...item,
+    priority: index + 1
+  }))
+}
+
+function addFallback() {
+  fallbacks.value.push({
+    id: null,
+    priority: fallbacks.value.length + 1,
+    session_url: '',
+    account_url: '',
+    services_url: '',
+    cache_ttl: 60,
+    skin_domains_text: ''
+  })
+  syncPriorityFromOrder()
+}
+
+function removeFallback(index) {
+  fallbacks.value.splice(index, 1)
+  syncPriorityFromOrder()
+}
+
+function serializeFallbacks() {
+  return fallbacks.value.map((item) => ({
+    id: item.id ?? null,
+    priority: Number(item.priority || 0),
+    session_url: (item.session_url || '').trim(),
+    account_url: (item.account_url || '').trim(),
+    services_url: (item.services_url || '').trim(),
+    cache_ttl: Number(item.cache_ttl || 60),
+    skin_domains: (item.skin_domains_text || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value)
+  }))
 }
 
 // --- Mojang Status ---
@@ -243,15 +377,22 @@ onMounted(() => {
 
 <style scoped>
 .admin-mojang {
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.page-header {
+.section-header {
   margin-bottom: 24px;
 }
-.page-header h2 {
+.section-header h2 {
   font-weight: 600;
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
   color: var(--color-heading);
 }
 .card-header {
@@ -260,11 +401,16 @@ onMounted(() => {
   align-items: center;
   color: var(--color-heading);
 }
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
 
 .box-card {
   border: 1px solid var(--color-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   background: var(--color-card-background);
+  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Limit inner content width */
@@ -273,6 +419,26 @@ onMounted(() => {
 }
 .admin-mojang .el-form {
   max-width: 100%;
+}
+.admin-mojang .el-table .cell {
+  white-space: normal;
+}
+.fallback-urls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.fallback-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.fallback-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .setting-row {
@@ -283,6 +449,7 @@ onMounted(() => {
 .setting-desc {
   font-size: 13px;
   color: var(--color-text-light);
+  margin-left: 12px;
 }
 .status-item {
   display: flex;

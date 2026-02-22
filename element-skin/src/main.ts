@@ -9,6 +9,9 @@ import axios from 'axios'
 import App from './App.vue'
 import router from './router'
 
+const motionDisabled = localStorage.getItem('motionDisabled') === '1'
+document.documentElement.classList.toggle('motion-off', motionDisabled)
+
 const app = createApp(App)
 
 app.use(createPinia())

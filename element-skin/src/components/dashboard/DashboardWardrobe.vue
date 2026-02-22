@@ -57,7 +57,7 @@
       class="gallery-dialog"
     >
       <div class="gallery-container" v-if="selectedTexture">
-        <div class="gallery-stage" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
+        <div class="gallery-stage">
           <SkinViewer
             v-if="selectedTexture.type === 'skin'"
             :skinUrl="texturesUrl(selectedTexture.hash)"
@@ -66,7 +66,7 @@
             :height="430"
           />
           <CapeViewer
-            v-else
+            v-else  
             :capeUrl="texturesUrl(selectedTexture.hash)"
             :width="320"
             :height="430"
@@ -467,7 +467,6 @@ onMounted(() => {
   align-items: center;
   position: relative;
   overflow: hidden;
-  transition: background 0.3s ease; /* Add transition for smooth theme change */
 }
 
 .resolution-badge {
@@ -543,6 +542,12 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   min-height: 560px;
+  background: var(--color-background-hero-light);
+  transition: background 0.3s ease;
+}
+
+:global(html.dark) .gallery-stage {
+  background: var(--color-background-hero-dark);
 }
 
 .gallery-info {

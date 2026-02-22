@@ -309,6 +309,9 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
     @router.get("/public/settings")
     async def get_public_settings():
         settings = await db.setting.get_all()
+        fallbacks = await site_backend.get_fallback_services()
+        primary = fallbacks[0] if fallbacks else None
+
         return {
             "site_name": settings.get("site_name", "皮肤站"),
             "site_url": settings.get("site_url", ""),
@@ -316,12 +319,14 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
             "enable_skin_library": settings.get("enable_skin_library", "true") == "true",
             "email_verify_enabled": settings.get("email_verify_enabled", "false") == "true",
             "mojang_status_urls": {
-                "session": settings.get(
-                    "mojang_session_url", "https://sessionserver.mojang.com"
+                "session": (primary or {}).get(
+                    "session_url", "https://sessionserver.mojang.com"
                 ),
-                "account": settings.get("mojang_account_url", "https://api.mojang.com"),
-                "services": settings.get(
-                    "mojang_services_url", "https://api.minecraftservices.com"
+                "account": (primary or {}).get(
+                    "account_url", "https://api.mojang.com"
+                ),
+                "services": (primary or {}).get(
+                    "services_url", "https://api.minecraftservices.com"
                 ),
             },
         }

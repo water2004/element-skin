@@ -16,7 +16,10 @@
 
     <div class="common-grid">
       <div v-for="(profile, index) in user?.profiles || []" :key="profile.id" class="common-card" :style="{ '--delay-index': index }">
-        <div class="role-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
+        <div
+          class="role-preview"
+          :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
+        >
           <SkinViewer
             v-if="profile.skin_hash"
             :skinUrl="texturesUrl(profile.skin_hash)"
@@ -351,7 +354,6 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  transition: background 0.3s ease; /* Add transition for smooth theme change */
 }
 
 .role-info {
