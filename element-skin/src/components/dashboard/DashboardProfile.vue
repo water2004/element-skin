@@ -264,6 +264,7 @@ async function confirmDeleteAccount() {
   animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   background: var(--color-card-background);
   border: 1px solid var(--color-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .profile-header {
@@ -292,6 +293,7 @@ async function confirmDeleteAccount() {
   font-weight: 600;
   color: var(--color-heading);
   animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.2s backwards;
+  transition: color 0.3s ease;
 }
 
 .profile-meta p {
@@ -299,6 +301,7 @@ async function confirmDeleteAccount() {
   color: var(--color-text-light);
   font-size: 13px;
   animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.25s backwards;
+  transition: color 0.3s ease;
 }
 
 .profile-actions {
@@ -310,6 +313,7 @@ async function confirmDeleteAccount() {
 
 .profile-form-card :deep(.el-form-item__label) {
   color: var(--color-text);
+  transition: color 0.3s ease;
 }
 
 .profile-form-card :deep(.el-form-item) {
@@ -324,6 +328,7 @@ async function confirmDeleteAccount() {
 .profile-form-card :deep(.el-divider__text) {
   background-color: var(--color-card-background);
   color: var(--color-heading);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* 1. Email */

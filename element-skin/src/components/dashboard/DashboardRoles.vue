@@ -16,7 +16,7 @@
 
     <div class="common-grid">
       <div v-for="(profile, index) in user?.profiles || []" :key="profile.id" class="common-card" :style="{ '--delay-index': index }">
-        <div class="role-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
+        <div class="role-preview">
           <SkinViewer
             v-if="profile.skin_hash"
             :skinUrl="texturesUrl(profile.skin_hash)"
@@ -144,7 +144,6 @@ import SkinViewer from '@/components/SkinViewer.vue'
 // Inject shared state from AppLayout
 const user = inject('user')
 const fetchMe = inject('fetchMe')
-const isDark = inject('isDark')
 
 const router = useRouter()
 
@@ -351,13 +350,19 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   align-items: center;
-  transition: background 0.3s ease; /* Add transition for smooth theme change */
+  background: var(--color-background-hero-light);
+  transition: background 0.3s ease;
+}
+
+:global(html.dark) .role-preview {
+  background: var(--color-background-hero-dark);
 }
 
 .role-info {
   padding: 16px;
   text-align: center;
   background: var(--color-card-background);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .role-name {
@@ -365,12 +370,14 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--color-heading);
   margin-bottom: 8px;
+  transition: color 0.3s ease;
 }
 
 .role-model {
   font-size: 13px;
   color: var(--color-text-light);
   font-weight: 500;
+  transition: color 0.3s ease;
 }
 
 .role-actions {
@@ -381,6 +388,7 @@ onMounted(async () => {
   border-top: 1px solid var(--color-border);
   background: var(--color-background-soft);
   align-items: center;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .role-actions .el-button {

@@ -383,6 +383,7 @@ onUnmounted(() => {
   flex: 1;
   overflow: auto;
   background-color: var(--color-background);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 .is-home-layout .app-main {
@@ -418,8 +419,8 @@ onUnmounted(() => {
 /* --- Account Popover --- */
 .account-trigger { display:flex; align-items:center; cursor:pointer; gap:8px; padding:6px 12px; border-radius:20px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) }
 .account-trigger:hover { background: var(--color-background-soft); }
-.account-name { font-size:14px; color: var(--color-text); font-weight:500 }
-.account-popover { padding: 0 !important; background: var(--color-popover-background) !important; border: 1px solid var(--color-border) !important; }
+.account-name { font-size:14px; color: var(--color-text); font-weight:500; transition: color 0.3s ease }
+.account-popover { padding: 0 !important; background: var(--color-popover-background) !important; border: 1px solid var(--color-border) !important; transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease }
 
 .account-panel {
   display:flex;
@@ -428,6 +429,7 @@ onUnmounted(() => {
   box-sizing: border-box;
   width: 100%;
   background: var(--color-card-background);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 .account-header {
   display:flex;
@@ -436,6 +438,7 @@ onUnmounted(() => {
   margin-bottom:16px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--color-border);
+  transition: border-color 0.3s ease;
 }
 .account-avatar {
   color:#fff;
@@ -451,11 +454,13 @@ onUnmounted(() => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color 0.3s ease;
 }
 .account-meta p {
   margin:4px 0 0;
   font-size:12px;
   color: var(--color-text-light);
+  transition: color 0.3s ease;
 }
 .account-actions {
   display:flex;
@@ -472,7 +477,7 @@ onUnmounted(() => {
   border-radius: 8px;
   font-size: 14px;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease, transform 0.3s ease;
   justify-content: center;
   margin: 0 !important;
 }

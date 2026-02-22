@@ -147,6 +147,7 @@ async function login() {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   animation: slideUp 0.5s ease-out;
   border: 1px solid var(--color-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 @keyframes slideUp {
@@ -170,12 +171,14 @@ async function login() {
   font-size: 28px;
   font-weight: 600;
   color: var(--color-heading);
+  transition: color 0.3s ease;
 }
 
 .login-header p {
   margin: 0;
   font-size: 14px;
   color: var(--color-text-light);
+  transition: color 0.3s ease;
 }
 
 .login-actions {
@@ -189,11 +192,13 @@ async function login() {
   margin-top: 24px;
   color: var(--color-text);
   font-size: 14px;
+  transition: color 0.3s ease;
 }
 
 :deep(.el-form-item__label) {
   font-weight: 500;
   color: var(--color-text);
+  transition: color 0.3s ease;
 }
 
 :deep(.el-input__wrapper) {
