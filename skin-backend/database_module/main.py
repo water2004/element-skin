@@ -228,6 +228,18 @@ class Database(BaseDB):
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_mojang_hasjoined', 'false')"
             )
             await conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_enabled_services', '')"
+            )
+            await conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_priority', '')"
+            )
+            await conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_strategy', 'serial')"
+            )
+            await conn.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_services_json', '')"
+            )
+            await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_official_whitelist', 'false')"
             )
             await conn.execute(

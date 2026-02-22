@@ -309,6 +309,25 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
     @router.get("/public/settings")
     async def get_public_settings():
         settings = await db.setting.get_all()
+        fallbacks = await site_backend.get_fallback_services()
+
+        def split_csv(value: str) -> list[str]:
+            return [item.strip() for item in value.split(",") if item.strip()]
+
+        enabled_services = split_csv(settings.get("fallback_enabled_services", ""))
+        priority = split_csv(settings.get("fallback_priority", ""))
+
+        candidates = [
+            f for f in fallbacks if not enabled_services or f.get("name") in enabled_services
+        ]
+        if priority:
+            by_name = {f.get("name"): f for f in candidates if f.get("name")}
+            ordered = [by_name[name] for name in priority if name in by_name]
+            ordered += [f for f in candidates if f.get("name") not in priority]
+        else:
+            ordered = candidates
+        primary = ordered[0] if ordered else None
+
         return {
             "site_name": settings.get("site_name", "皮肤站"),
             "site_url": settings.get("site_url", ""),
@@ -316,12 +335,14 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
             "enable_skin_library": settings.get("enable_skin_library", "true") == "true",
             "email_verify_enabled": settings.get("email_verify_enabled", "false") == "true",
             "mojang_status_urls": {
-                "session": settings.get(
-                    "mojang_session_url", "https://sessionserver.mojang.com"
+                "session": (primary or {}).get(
+                    "session_url", "https://sessionserver.mojang.com"
                 ),
-                "account": settings.get("mojang_account_url", "https://api.mojang.com"),
-                "services": settings.get(
-                    "mojang_services_url", "https://api.minecraftservices.com"
+                "account": (primary or {}).get(
+                    "account_url", "https://api.mojang.com"
+                ),
+                "services": (primary or {}).get(
+                    "services_url", "https://api.minecraftservices.com"
                 ),
             },
         }

@@ -19,6 +19,8 @@ import json
 import base64
 import time
 import logging
+import asyncio
+import aiohttp
 from backends.yggdrasil_backend import YggdrasilBackend
 from database_module import Database
 from config_loader import config
@@ -27,6 +29,98 @@ from config_loader import config
 logger = logging.getLogger("yggdrasil.fallback")
 
 router = APIRouter()
+
+
+def _split_csv(value: str) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+async def _get_fallback_services(db: Database) -> list[dict]:
+    services_json = await db.setting.get("fallback_services_json", "")
+    if services_json:
+        try:
+            services = json.loads(services_json)
+            if isinstance(services, list):
+                return services
+        except (TypeError, ValueError) as exc:
+            logger.warning("Invalid fallback_services_json, using config: %s", exc)
+
+    services = config.get("fallbacks", []) or []
+    if services and not services_json:
+        try:
+            await db.setting.set(
+                "fallback_services_json",
+                json.dumps(services, ensure_ascii=True),
+            )
+        except Exception as exc:
+            logger.warning("Failed to persist fallback services: %s", exc)
+    return services
+
+
+async def _collect_skin_domains(db: Database) -> list[str]:
+    fallbacks = await _get_fallback_services(db)
+    domains: list[str] = []
+    for entry in fallbacks:
+        for domain in entry.get("skin_domains", []) or []:
+            if domain and domain not in domains:
+                domains.append(domain)
+    if not domains:
+        domains = config.get("mojang.skin_domains", [])
+    return domains
+
+
+async def _resolve_fallbacks(db: Database) -> tuple[list[dict], str]:
+    services = await _get_fallback_services(db)
+    if not services:
+        return [], "serial"
+
+    enabled_raw = await db.setting.get("fallback_enabled_services", "")
+    priority_raw = await db.setting.get("fallback_priority", "")
+    strategy = await db.setting.get("fallback_strategy", "serial")
+
+    enabled = set(_split_csv(enabled_raw)) if enabled_raw else set()
+    priority = _split_csv(priority_raw) if priority_raw else []
+
+    filtered = [s for s in services if not enabled or s.get("name") in enabled]
+    if priority:
+        by_name = {s.get("name"): s for s in filtered if s.get("name")}
+        ordered = [by_name[name] for name in priority if name in by_name]
+        ordered += [s for s in filtered if s.get("name") not in priority]
+    else:
+        ordered = filtered
+
+    return ordered, strategy
+
+
+async def _run_fallbacks(services: list[dict], strategy: str, request_func):
+    if not services:
+        return None
+
+    async with aiohttp.ClientSession() as session:
+        async def run_one(service: dict):
+            return await request_func(service, session)
+
+        if strategy == "parallel":
+            tasks = [asyncio.create_task(run_one(s)) for s in services]
+            try:
+                for task in asyncio.as_completed(tasks):
+                    result = await task
+                    if result is not None:
+                        for other in tasks:
+                            if other is not task:
+                                other.cancel()
+                        return result
+            finally:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+            return None
+
+        for service in services:
+            result = await run_one(service)
+            if result is not None:
+                return result
+    return None
 
 
 async def get_profile_json(
@@ -200,7 +294,7 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
         if profile:
             return await get_profile_json(profile, crypto, sign=True, base_url=site_url)
 
-        # Fallback to Mojang
+        # Fallback to configured services
         if await db.setting.get("fallback_mojang_hasjoined", "false") == "true":
             # Check Whitelist
             if await db.setting.get("enable_official_whitelist", "false") == "true":
@@ -208,23 +302,25 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                     logger.info(f"[Fallback] Blocked non-whitelisted user: {username}")
                     return Response(status_code=204)
 
-            session_url = config.get("mojang.session_url")
-            import aiohttp
+            services, strategy = await _resolve_fallbacks(db)
 
-            try:
+            async def request_has_joined(service: dict, session: aiohttp.ClientSession):
+                session_url = service.get("session_url")
+                if not session_url:
+                    return None
                 params = {"username": username, "serverId": serverId}
                 if ip:
                     params["ip"] = ip
                 target_url = f"{session_url}/session/minecraft/hasJoined"
+                service_name = service.get("name", "unknown")
                 logger.info(
-                    f"[Fallback] Checking hasJoined via: {target_url} | User: {username}"
+                    f"[Fallback] Checking hasJoined via: {target_url} | Service: {service_name} | User: {username}"
                 )
-
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(
-                        target_url, params=params, timeout=5
-                    ) as resp:
-                        logger.info(f"[Fallback] hasJoined response: {resp.status}")
+                try:
+                    async with session.get(target_url, params=params, timeout=5) as resp:
+                        logger.info(
+                            f"[Fallback] hasJoined response: {resp.status} | Service: {service_name}"
+                        )
                         if resp.status == 200:
                             content = await resp.read()
                             return Response(
@@ -232,12 +328,21 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                                 status_code=200,
                                 media_type="application/json",
                             )
-                        elif resp.status != 204:
+                        if resp.status != 204:
                             logger.warning(
-                                f"[Fallback] hasJoined returned unexpected status: {resp.status}"
+                                f"[Fallback] hasJoined returned unexpected status: {resp.status} | Service: {service_name}"
                             )
-            except Exception as e:
-                logger.error(f"[Fallback] hasJoined failed: {e}")
+                except Exception as e:
+                    logger.error(
+                        f"[Fallback] hasJoined failed: {e} | Service: {service_name}"
+                    )
+                return None
+
+            fallback_response = await _run_fallbacks(
+                services, strategy, request_has_joined
+            )
+            if fallback_response is not None:
+                return fallback_response
 
         return Response(status_code=204)
 
@@ -251,18 +356,26 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                 profile, crypto, sign=not unsigned, base_url=site_url
             )
 
-        # Fallback to Mojang
+        # Fallback to configured services
         if await db.setting.get("fallback_mojang_profile", "false") == "true":
-            session_url = config.get("mojang.session_url")
-            import aiohttp
+            services, strategy = await _resolve_fallbacks(db)
 
-            try:
-                target_url = f"{session_url}/session/minecraft/profile/{uuid}?unsigned={str(unsigned).lower()}"
-                logger.info(f"[Fallback] Fetching profile via: {target_url}")
-
-                async with aiohttp.ClientSession() as session:
+            async def request_profile(service: dict, session: aiohttp.ClientSession):
+                session_url = service.get("session_url")
+                if not session_url:
+                    return None
+                target_url = (
+                    f"{session_url}/session/minecraft/profile/{uuid}?unsigned={str(unsigned).lower()}"
+                )
+                service_name = service.get("name", "unknown")
+                logger.info(
+                    f"[Fallback] Fetching profile via: {target_url} | Service: {service_name}"
+                )
+                try:
                     async with session.get(target_url, timeout=5) as resp:
-                        logger.info(f"[Fallback] Profile response: {resp.status}")
+                        logger.info(
+                            f"[Fallback] Profile response: {resp.status} | Service: {service_name}"
+                        )
                         if resp.status == 200:
                             content = await resp.read()
                             return Response(
@@ -270,12 +383,21 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                                 status_code=200,
                                 media_type="application/json",
                             )
-                        elif resp.status != 204:
+                        if resp.status != 204:
                             logger.warning(
-                                f"[Fallback] Profile fetch returned unexpected status: {resp.status}"
+                                f"[Fallback] Profile fetch returned unexpected status: {resp.status} | Service: {service_name}"
                             )
-            except Exception as e:
-                logger.error(f"[Fallback] Profile fetch failed: {e}")
+                except Exception as e:
+                    logger.error(
+                        f"[Fallback] Profile fetch failed: {e} | Service: {service_name}"
+                    )
+                return None
+
+            fallback_response = await _run_fallbacks(
+                services, strategy, request_profile
+            )
+            if fallback_response is not None:
+                return fallback_response
 
         return Response(status_code=204)
 
@@ -289,18 +411,24 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
         if p:
             return {"id": p.id, "name": p.name}
 
-        # Fallback to Mojang
+        # Fallback to configured services
         if await db.setting.get("fallback_mojang_profile", "false") == "true":
-            account_url = config.get("mojang.account_url")
-            import aiohttp
+            services, strategy = await _resolve_fallbacks(db)
 
-            try:
+            async def request_uuid(service: dict, session: aiohttp.ClientSession):
+                account_url = service.get("account_url")
+                if not account_url:
+                    return None
                 target_url = f"{account_url}/users/profiles/minecraft/{playerName}"
-                logger.info(f"[Fallback] Lookup UUID via: {target_url}")
-
-                async with aiohttp.ClientSession() as session:
+                service_name = service.get("name", "unknown")
+                logger.info(
+                    f"[Fallback] Lookup UUID via: {target_url} | Service: {service_name}"
+                )
+                try:
                     async with session.get(target_url, timeout=5) as resp:
-                        logger.info(f"[Fallback] UUID lookup response: {resp.status}")
+                        logger.info(
+                            f"[Fallback] UUID lookup response: {resp.status} | Service: {service_name}"
+                        )
                         if resp.status == 200:
                             content = await resp.read()
                             return Response(
@@ -308,12 +436,19 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                                 status_code=200,
                                 media_type="application/json",
                             )
-                        elif resp.status != 204:
+                        if resp.status != 204:
                             logger.warning(
-                                f"[Fallback] UUID lookup returned unexpected status: {resp.status}"
+                                f"[Fallback] UUID lookup returned unexpected status: {resp.status} | Service: {service_name}"
                             )
-            except Exception as e:
-                logger.error(f"[Fallback] UUID lookup failed: {e}")
+                except Exception as e:
+                    logger.error(
+                        f"[Fallback] UUID lookup failed: {e} | Service: {service_name}"
+                    )
+                return None
+
+            fallback_response = await _run_fallbacks(services, strategy, request_uuid)
+            if fallback_response is not None:
+                return fallback_response
 
         return Response(status_code=204)
 
@@ -327,36 +462,51 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
         # 1. 查询本地
         local_profiles = await backend.get_profiles_by_names(req, base_url=site_url)
 
-        # 2. 如果启用了转发，查询 Mojang 补全缺失的
+        # 2. 如果启用了转发，查询 Fallback 服务补全缺失的
         if await db.setting.get("fallback_mojang_profile", "false") == "true":
             found_names = {p["name"].lower() for p in local_profiles}
             missing_names = [n for n in req if n.lower() not in found_names]
             if missing_names:
-                account_url = config.get("mojang.account_url")
-                import aiohttp
+                services, strategy = await _resolve_fallbacks(db)
 
-                try:
+                async def request_bulk(service: dict, session: aiohttp.ClientSession):
+                    account_url = service.get("account_url")
+                    if not account_url:
+                        return None
                     target_url = f"{account_url}/profiles/minecraft"
+                    service_name = service.get("name", "unknown")
                     logger.info(
-                        f"[Fallback] Bulk lookup via: {target_url} | Missing: {len(missing_names)}"
+                        f"[Fallback] Bulk lookup via: {target_url} | Missing: {len(missing_names)} | Service: {service_name}"
                     )
-
-                    async with aiohttp.ClientSession() as session:
+                    try:
                         async with session.post(
                             target_url, json=missing_names, timeout=5
                         ) as resp:
                             logger.info(
-                                f"[Fallback] Bulk lookup response: {resp.status}"
+                                f"[Fallback] Bulk lookup response: {resp.status} | Service: {service_name}"
                             )
                             if resp.status == 200:
                                 mojang_profiles = await resp.json()
                                 if isinstance(mojang_profiles, list):
                                     logger.info(
-                                        f"[Fallback] Found {len(mojang_profiles)} profiles from Mojang"
+                                        f"[Fallback] Found {len(mojang_profiles)} profiles | Service: {service_name}"
                                     )
-                                    local_profiles.extend(mojang_profiles)
-                except Exception as e:
-                    logger.error(f"[Fallback] Bulk lookup failed: {e}")
+                                    return mojang_profiles
+                            if resp.status != 204:
+                                logger.warning(
+                                    f"[Fallback] Bulk lookup returned unexpected status: {resp.status} | Service: {service_name}"
+                                )
+                    except Exception as e:
+                        logger.error(
+                            f"[Fallback] Bulk lookup failed: {e} | Service: {service_name}"
+                        )
+                    return None
+
+                mojang_profiles = await _run_fallbacks(
+                    services, strategy, request_bulk
+                )
+                if isinstance(mojang_profiles, list):
+                    local_profiles.extend(mojang_profiles)
 
         return local_profiles
 
@@ -383,7 +533,7 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                 },
                 "feature.non_email_login": True,
             },
-            "skinDomains": config.get("mojang.skin_domains", [])
+            "skinDomains": await _collect_skin_domains(db)
             + [
                 (
                     site_url.replace("https://", "")
@@ -410,46 +560,48 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
         # 2. Fallback
 
         if await db.setting.get("fallback_mojang_profile", "false") == "true":
+            services, strategy = await _resolve_fallbacks(db)
 
-            services_url = config.get("mojang.services_url")
-
-            import aiohttp
-
-            try:
-
+            async def request_services_lookup(
+                service: dict, session: aiohttp.ClientSession
+            ):
+                services_url = service.get("services_url")
+                if not services_url:
+                    return None
                 target_url = (
                     f"{services_url}/minecraft/profile/lookup/name/{playerName}"
                 )
-
-                logger.info(f"[Fallback] Services lookup via: {target_url}")
-
-                async with aiohttp.ClientSession() as session:
-
+                service_name = service.get("name", "unknown")
+                logger.info(
+                    f"[Fallback] Services lookup via: {target_url} | Service: {service_name}"
+                )
+                try:
                     async with session.get(target_url, timeout=5) as resp:
-
                         logger.info(
-                            f"[Fallback] Services lookup response: {resp.status}"
+                            f"[Fallback] Services lookup response: {resp.status} | Service: {service_name}"
                         )
-
                         if resp.status == 200:
-
                             content = await resp.read()
-
                             return Response(
                                 content=content,
                                 status_code=200,
                                 media_type="application/json",
                             )
-
-                        elif resp.status != 204:
-
+                        if resp.status != 204:
                             logger.warning(
-                                f"[Fallback] Services lookup returned unexpected status: {resp.status}"
+                                f"[Fallback] Services lookup returned unexpected status: {resp.status} | Service: {service_name}"
                             )
+                except Exception as e:
+                    logger.error(
+                        f"[Fallback] Services lookup failed: {e} | Service: {service_name}"
+                    )
+                return None
 
-            except Exception as e:
-
-                logger.error(f"[Fallback] Services lookup failed: {e}")
+            fallback_response = await _run_fallbacks(
+                services, strategy, request_services_lookup
+            )
+            if fallback_response is not None:
+                return fallback_response
 
         return Response(status_code=204)
 

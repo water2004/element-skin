@@ -1,4 +1,5 @@
 from typing import Optional, Dict, List, Any
+import json
 import re
 import time
 import secrets
@@ -369,6 +370,29 @@ class SiteBackend:
 
     async def get_admin_settings(self):
         settings = await self.db.setting.get_all()
+
+        def split_csv(value: str) -> list[str]:
+            return [item.strip() for item in value.split(",") if item.strip()]
+
+        fallbacks = await self._get_fallback_services()
+        enabled_services = split_csv(settings.get("fallback_enabled_services", ""))
+        priority = split_csv(settings.get("fallback_priority", ""))
+        fallback_strategy = settings.get("fallback_strategy", "serial")
+
+        def select_primary():
+            candidates = [
+                f for f in fallbacks if not enabled_services or f.get("name") in enabled_services
+            ]
+            if priority:
+                by_name = {f.get("name"): f for f in candidates if f.get("name")}
+                ordered = [by_name[name] for name in priority if name in by_name]
+                ordered += [f for f in candidates if f.get("name") not in priority]
+            else:
+                ordered = candidates
+            return ordered[0] if ordered else None
+
+        primary_fallback = select_primary()
+        primary_domains = (primary_fallback or {}).get("skin_domains") or []
         return {
             "site_name": settings.get("site_name", "皮肤站"),
             "site_url": settings.get("site_url", ""),
@@ -387,11 +411,30 @@ class SiteBackend:
                 "microsoft_redirect_uri", "http://localhost:8000/microsoft/callback"
             ),
             # Mojang API Settings (URLs from static config, switches from DB)
-            "mojang_session_url": self.config.get("mojang.session_url"),
-            "mojang_account_url": self.config.get("mojang.account_url"),
-            "mojang_services_url": self.config.get("mojang.services_url"),
-            "mojang_skin_domains": ",".join(self.config.get("mojang.skin_domains", [])),
-            "mojang_cache_ttl": self.config.get("mojang.cache_ttl"),
+            "mojang_session_url": (primary_fallback or {}).get(
+                "session_url", self.config.get("mojang.session_url")
+            ),
+            "mojang_account_url": (primary_fallback or {}).get(
+                "account_url", self.config.get("mojang.account_url")
+            ),
+            "mojang_services_url": (primary_fallback or {}).get(
+                "services_url", self.config.get("mojang.services_url")
+            ),
+            "mojang_skin_domains": ",".join(
+                primary_domains or self.config.get("mojang.skin_domains", [])
+            ),
+            "mojang_cache_ttl": (primary_fallback or {}).get(
+                "cache_ttl", self.config.get("mojang.cache_ttl")
+            ),
+            "fallbacks": fallbacks,
+            "fallback_enabled_services": enabled_services,
+            "fallback_priority": priority,
+            "fallback_strategy": fallback_strategy,
+            "fallback_status_urls": {
+                "session": (primary_fallback or {}).get("session_url"),
+                "account": (primary_fallback or {}).get("account_url"),
+                "services": (primary_fallback or {}).get("services_url"),
+            },
             "fallback_mojang_profile": settings.get("fallback_mojang_profile", "false")
             == "true",
             "fallback_mojang_hasjoined": settings.get(
@@ -419,6 +462,13 @@ class SiteBackend:
         }
 
     async def save_admin_settings(self, body: dict):
+        if "fallbacks" in body:
+            fallbacks = self._validate_fallback_services(body.get("fallbacks"))
+            await self.db.setting.set(
+                "fallback_services_json",
+                json.dumps(fallbacks, ensure_ascii=True),
+            )
+
         for key in [
             "site_name",
             "site_url",
@@ -434,6 +484,9 @@ class SiteBackend:
             "microsoft_redirect_uri",
             "fallback_mojang_profile",
             "fallback_mojang_hasjoined",
+            "fallback_enabled_services",
+            "fallback_priority",
+            "fallback_strategy",
             "enable_official_whitelist",
             "enable_skin_library",
             "email_verify_enabled",
@@ -449,7 +502,11 @@ class SiteBackend:
         ]:
             if key in body:
                 val = body[key]
-                if isinstance(val, bool):
+                if key in ["fallback_enabled_services", "fallback_priority"] and isinstance(
+                    val, list
+                ):
+                    value = ",".join([str(item) for item in val if str(item).strip()])
+                elif isinstance(val, bool):
                     value = "true" if val else "false"
                 else:
                     value = str(val)
@@ -457,6 +514,97 @@ class SiteBackend:
                 if key == "smtp_password" and not value:
                     continue
                 await self.db.setting.set(key, value)
+
+    async def get_fallback_services(self) -> list[dict]:
+        return await self._get_fallback_services()
+
+    async def _get_fallback_services(self) -> list[dict]:
+        services_json = await self.db.setting.get("fallback_services_json", "")
+        if services_json:
+            try:
+                services = json.loads(services_json)
+                if isinstance(services, list):
+                    return services
+            except (TypeError, ValueError):
+                pass
+
+        services = self.config.get("fallbacks", []) or []
+        if services and not services_json:
+            await self.db.setting.set(
+                "fallback_services_json",
+                json.dumps(services, ensure_ascii=True),
+            )
+        return services
+
+    def _validate_fallback_services(self, services: Any) -> list[dict]:
+        if not isinstance(services, list):
+            raise HTTPException(status_code=400, detail="fallbacks must be a list")
+
+        normalized: list[dict] = []
+        seen_names: set[str] = set()
+        for idx, entry in enumerate(services, start=1):
+            if not isinstance(entry, dict):
+                raise HTTPException(status_code=400, detail="invalid fallback entry")
+
+            name = str(entry.get("name", "")).strip()
+            session_url = str(entry.get("session_url", "")).strip()
+            account_url = str(entry.get("account_url", "")).strip()
+            services_url = str(entry.get("services_url", "")).strip()
+            cache_ttl = entry.get("cache_ttl", 60)
+            skin_domains = entry.get("skin_domains", []) or []
+
+            if not name:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"fallback[{idx}] name is required",
+                )
+            if name in seen_names:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"fallback name duplicated: {name}",
+                )
+            if not session_url or not account_url or not services_url:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"fallback[{idx}] urls are required",
+                )
+
+            if isinstance(skin_domains, str):
+                skin_domains = [
+                    item.strip() for item in skin_domains.split(",") if item.strip()
+                ]
+            if not isinstance(skin_domains, list):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"fallback[{idx}] skin_domains invalid",
+                )
+
+            try:
+                cache_ttl = int(cache_ttl)
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"fallback[{idx}] cache_ttl invalid",
+                )
+            if cache_ttl <= 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"fallback[{idx}] cache_ttl must be positive",
+                )
+
+            normalized.append(
+                {
+                    "name": name,
+                    "session_url": session_url,
+                    "account_url": account_url,
+                    "services_url": services_url,
+                    "skin_domains": [str(item).strip() for item in skin_domains if str(item).strip()],
+                    "cache_ttl": cache_ttl,
+                }
+            )
+            seen_names.add(name)
+
+        return normalized
 
     async def get_official_whitelist(self):
         return await self.db.user.list_official_whitelist_users()
