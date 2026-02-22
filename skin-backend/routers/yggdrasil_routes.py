@@ -31,65 +31,39 @@ logger = logging.getLogger("yggdrasil.fallback")
 router = APIRouter()
 
 
-def _split_csv(value: str) -> list[str]:
-    return [item.strip() for item in value.split(",") if item.strip()]
-
-
 async def _get_fallback_services(db: Database) -> list[dict]:
-    services_json = await db.setting.get("fallback_services_json", "")
-    if services_json:
-        try:
-            services = json.loads(services_json)
-            if isinstance(services, list):
-                return services
-        except (TypeError, ValueError) as exc:
-            logger.warning("Invalid fallback_services_json, using config: %s", exc)
-
-    services = config.get("fallbacks", []) or []
-    if services and not services_json:
-        try:
-            await db.setting.set(
-                "fallback_services_json",
-                json.dumps(services, ensure_ascii=True),
-            )
-        except Exception as exc:
-            logger.warning("Failed to persist fallback services: %s", exc)
-    return services
+    async with db.get_conn() as conn:
+        async with conn.execute(
+            """
+            SELECT id, priority, session_url, account_url, services_url, cache_ttl
+            FROM fallback_endpoints
+            ORDER BY priority ASC, id ASC
+            """
+        ) as cur:
+            rows = await cur.fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "priority": r[1],
+                    "session_url": r[2],
+                    "account_url": r[3],
+                    "services_url": r[4],
+                    "cache_ttl": r[5],
+                }
+                for r in rows
+            ]
 
 
 async def _collect_skin_domains(db: Database) -> list[str]:
-    fallbacks = await _get_fallback_services(db)
-    domains: list[str] = []
-    for entry in fallbacks:
-        for domain in entry.get("skin_domains", []) or []:
-            if domain and domain not in domains:
-                domains.append(domain)
-    if not domains:
-        domains = config.get("mojang.skin_domains", [])
-    return domains
+    return config.get("mojang.skin_domains", [])
 
 
 async def _resolve_fallbacks(db: Database) -> tuple[list[dict], str]:
     services = await _get_fallback_services(db)
     if not services:
         return [], "serial"
-
-    enabled_raw = await db.setting.get("fallback_enabled_services", "")
-    priority_raw = await db.setting.get("fallback_priority", "")
     strategy = await db.setting.get("fallback_strategy", "serial")
-
-    enabled = set(_split_csv(enabled_raw)) if enabled_raw else set()
-    priority = _split_csv(priority_raw) if priority_raw else []
-
-    filtered = [s for s in services if not enabled or s.get("name") in enabled]
-    if priority:
-        by_name = {s.get("name"): s for s in filtered if s.get("name")}
-        ordered = [by_name[name] for name in priority if name in by_name]
-        ordered += [s for s in filtered if s.get("name") not in priority]
-    else:
-        ordered = filtered
-
-    return ordered, strategy
+    return services, strategy
 
 
 async def _run_fallbacks(services: list[dict], strategy: str, request_func):
@@ -296,13 +270,16 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
 
         # Fallback to configured services
         if await db.setting.get("fallback_mojang_hasjoined", "false") == "true":
+            services, strategy = await _resolve_fallbacks(db)
+
             # Check Whitelist
             if await db.setting.get("enable_official_whitelist", "false") == "true":
-                if not await db.user.is_user_in_official_whitelist(username):
+                primary_endpoint_id = services[0].get("id") if services else None
+                if primary_endpoint_id is not None and not await db.user.is_user_in_official_whitelist(
+                    username, primary_endpoint_id
+                ):
                     logger.info(f"[Fallback] Blocked non-whitelisted user: {username}")
                     return Response(status_code=204)
-
-            services, strategy = await _resolve_fallbacks(db)
 
             async def request_has_joined(service: dict, session: aiohttp.ClientSession):
                 session_url = service.get("session_url")
@@ -312,7 +289,7 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                 if ip:
                     params["ip"] = ip
                 target_url = f"{session_url}/session/minecraft/hasJoined"
-                service_name = service.get("name", "unknown")
+                service_name = service.get("id", "unknown")
                 logger.info(
                     f"[Fallback] Checking hasJoined via: {target_url} | Service: {service_name} | User: {username}"
                 )
@@ -367,7 +344,7 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                 target_url = (
                     f"{session_url}/session/minecraft/profile/{uuid}?unsigned={str(unsigned).lower()}"
                 )
-                service_name = service.get("name", "unknown")
+                service_name = service.get("id", "unknown")
                 logger.info(
                     f"[Fallback] Fetching profile via: {target_url} | Service: {service_name}"
                 )
@@ -420,7 +397,7 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                 if not account_url:
                     return None
                 target_url = f"{account_url}/users/profiles/minecraft/{playerName}"
-                service_name = service.get("name", "unknown")
+                service_name = service.get("id", "unknown")
                 logger.info(
                     f"[Fallback] Lookup UUID via: {target_url} | Service: {service_name}"
                 )
@@ -474,7 +451,7 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                     if not account_url:
                         return None
                     target_url = f"{account_url}/profiles/minecraft"
-                    service_name = service.get("name", "unknown")
+                    service_name = service.get("id", "unknown")
                     logger.info(
                         f"[Fallback] Bulk lookup via: {target_url} | Missing: {len(missing_names)} | Service: {service_name}"
                     )
@@ -571,7 +548,7 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                 target_url = (
                     f"{services_url}/minecraft/profile/lookup/name/{playerName}"
                 )
-                service_name = service.get("name", "unknown")
+                service_name = service.get("id", "unknown")
                 logger.info(
                     f"[Fallback] Services lookup via: {target_url} | Service: {service_name}"
                 )

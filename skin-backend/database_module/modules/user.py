@@ -379,35 +379,65 @@ class UserModule:
 
     # ========== Official (Mojang) Account Whitelist ==========
 
-    async def add_official_whitelist_user(self, username: str):
+    async def add_official_whitelist_user(self, username: str, endpoint_id: int):
         created_at = int(time.time() * 1000)
         async with self.db.get_conn() as conn:
             await conn.execute(
-                "INSERT OR IGNORE INTO official_whitelist (username, created_at) VALUES (?, ?)",
-                (username, created_at),
+                """
+                INSERT OR IGNORE INTO whitelisted_users (username, endpoint_id, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (username, endpoint_id, created_at),
             )
             await conn.commit()
 
-    async def remove_official_whitelist_user(self, username: str):
+    async def remove_official_whitelist_user(
+        self, username: str, endpoint_id: int | None = None
+    ):
         async with self.db.get_conn() as conn:
-            await conn.execute(
-                "DELETE FROM official_whitelist WHERE username=?", (username,)
-            )
+            if endpoint_id is None:
+                await conn.execute(
+                    "DELETE FROM whitelisted_users WHERE username=?", (username,)
+                )
+            else:
+                await conn.execute(
+                    "DELETE FROM whitelisted_users WHERE username=? AND endpoint_id=?",
+                    (username, endpoint_id),
+                )
             await conn.commit()
 
-    async def is_user_in_official_whitelist(self, username: str) -> bool:
+    async def is_user_in_official_whitelist(
+        self, username: str, endpoint_id: int | None = None
+    ) -> bool:
         async with self.db.get_conn() as conn:
-            async with conn.execute(
-                "SELECT 1 FROM official_whitelist WHERE username=? COLLATE NOCASE",
-                (username,),
-            ) as cur:
+            if endpoint_id is None:
+                query = (
+                    "SELECT 1 FROM whitelisted_users WHERE username=? COLLATE NOCASE"
+                )
+                params = (username,)
+            else:
+                query = (
+                    "SELECT 1 FROM whitelisted_users WHERE username=? COLLATE NOCASE AND endpoint_id=?"
+                )
+                params = (username, endpoint_id)
+            async with conn.execute(query, params) as cur:
                 row = await cur.fetchone()
                 return row is not None
 
-    async def list_official_whitelist_users(self) -> list[dict]:
+    async def list_official_whitelist_users(
+        self, endpoint_id: int | None = None
+    ) -> list[dict]:
         async with self.db.get_conn() as conn:
-            async with conn.execute(
-                "SELECT username, created_at FROM official_whitelist ORDER BY created_at DESC"
-            ) as cur:
+            if endpoint_id is None:
+                query = (
+                    "SELECT username, created_at FROM whitelisted_users ORDER BY created_at DESC"
+                )
+                params = ()
+            else:
+                query = (
+                    "SELECT username, created_at FROM whitelisted_users WHERE endpoint_id=? ORDER BY created_at DESC"
+                )
+                params = (endpoint_id,)
+            async with conn.execute(query, params) as cur:
                 rows = await cur.fetchall()
                 return [{"username": r[0], "created_at": r[1]} for r in rows]

@@ -1,5 +1,4 @@
 from typing import Optional, Dict, List, Any
-import json
 import re
 import time
 import secrets
@@ -371,28 +370,10 @@ class SiteBackend:
     async def get_admin_settings(self):
         settings = await self.db.setting.get_all()
 
-        def split_csv(value: str) -> list[str]:
-            return [item.strip() for item in value.split(",") if item.strip()]
-
         fallbacks = await self._get_fallback_services()
-        enabled_services = split_csv(settings.get("fallback_enabled_services", ""))
-        priority = split_csv(settings.get("fallback_priority", ""))
         fallback_strategy = settings.get("fallback_strategy", "serial")
-
-        def select_primary():
-            candidates = [
-                f for f in fallbacks if not enabled_services or f.get("name") in enabled_services
-            ]
-            if priority:
-                by_name = {f.get("name"): f for f in candidates if f.get("name")}
-                ordered = [by_name[name] for name in priority if name in by_name]
-                ordered += [f for f in candidates if f.get("name") not in priority]
-            else:
-                ordered = candidates
-            return ordered[0] if ordered else None
-
-        primary_fallback = select_primary()
-        primary_domains = (primary_fallback or {}).get("skin_domains") or []
+        primary_fallback = fallbacks[0] if fallbacks else None
+        primary_domains = self.config.get("mojang.skin_domains", [])
         return {
             "site_name": settings.get("site_name", "皮肤站"),
             "site_url": settings.get("site_url", ""),
@@ -427,8 +408,6 @@ class SiteBackend:
                 "cache_ttl", self.config.get("mojang.cache_ttl")
             ),
             "fallbacks": fallbacks,
-            "fallback_enabled_services": enabled_services,
-            "fallback_priority": priority,
             "fallback_strategy": fallback_strategy,
             "fallback_status_urls": {
                 "session": (primary_fallback or {}).get("session_url"),
@@ -464,10 +443,7 @@ class SiteBackend:
     async def save_admin_settings(self, body: dict):
         if "fallbacks" in body:
             fallbacks = self._validate_fallback_services(body.get("fallbacks"))
-            await self.db.setting.set(
-                "fallback_services_json",
-                json.dumps(fallbacks, ensure_ascii=True),
-            )
+            await self._save_fallback_endpoints(fallbacks)
 
         for key in [
             "site_name",
@@ -484,8 +460,6 @@ class SiteBackend:
             "microsoft_redirect_uri",
             "fallback_mojang_profile",
             "fallback_mojang_hasjoined",
-            "fallback_enabled_services",
-            "fallback_priority",
             "fallback_strategy",
             "enable_official_whitelist",
             "enable_skin_library",
@@ -502,11 +476,7 @@ class SiteBackend:
         ]:
             if key in body:
                 val = body[key]
-                if key in ["fallback_enabled_services", "fallback_priority"] and isinstance(
-                    val, list
-                ):
-                    value = ",".join([str(item) for item in val if str(item).strip()])
-                elif isinstance(val, bool):
+                if isinstance(val, bool):
                     value = "true" if val else "false"
                 else:
                     value = str(val)
@@ -519,64 +489,104 @@ class SiteBackend:
         return await self._get_fallback_services()
 
     async def _get_fallback_services(self) -> list[dict]:
-        services_json = await self.db.setting.get("fallback_services_json", "")
-        if services_json:
-            try:
-                services = json.loads(services_json)
-                if isinstance(services, list):
-                    return services
-            except (TypeError, ValueError):
-                pass
+        async with self.db.get_conn() as conn:
+            async with conn.execute(
+                """
+                SELECT id, priority, session_url, account_url, services_url, cache_ttl
+                FROM fallback_endpoints
+                ORDER BY priority ASC, id ASC
+                """
+            ) as cur:
+                rows = await cur.fetchall()
+                return [
+                    {
+                        "id": r[0],
+                        "priority": r[1],
+                        "session_url": r[2],
+                        "account_url": r[3],
+                        "services_url": r[4],
+                        "cache_ttl": r[5],
+                    }
+                    for r in rows
+                ]
 
-        services = self.config.get("fallbacks", []) or []
-        if services and not services_json:
-            await self.db.setting.set(
-                "fallback_services_json",
-                json.dumps(services, ensure_ascii=True),
-            )
-        return services
+    async def _save_fallback_endpoints(self, fallbacks: list[dict]):
+        async with self.db.get_conn() as conn:
+            async with conn.execute("SELECT id FROM fallback_endpoints") as cur:
+                existing_ids = {row[0] for row in await cur.fetchall()}
+
+            incoming_ids = {
+                entry["id"] for entry in fallbacks if entry.get("id") is not None
+            }
+            for endpoint_id in existing_ids - incoming_ids:
+                await conn.execute(
+                    "DELETE FROM fallback_endpoints WHERE id=?", (endpoint_id,)
+                )
+
+            for idx, entry in enumerate(fallbacks, start=1):
+                priority = idx
+                session_url = entry["session_url"]
+                account_url = entry["account_url"]
+                services_url = entry["services_url"]
+                cache_ttl = entry["cache_ttl"]
+                if entry.get("id") is not None:
+                    await conn.execute(
+                        """
+                        UPDATE fallback_endpoints
+                        SET priority=?, session_url=?, account_url=?, services_url=?, cache_ttl=?
+                        WHERE id=?
+                        """,
+                        (
+                            priority,
+                            session_url,
+                            account_url,
+                            services_url,
+                            cache_ttl,
+                            entry["id"],
+                        ),
+                    )
+                else:
+                    await conn.execute(
+                        """
+                        INSERT INTO fallback_endpoints (priority, session_url, account_url, services_url, cache_ttl)
+                        VALUES (?, ?, ?, ?, ?)
+                        """,
+                        (
+                            priority,
+                            session_url,
+                            account_url,
+                            services_url,
+                            cache_ttl,
+                        ),
+                    )
+            await conn.commit()
 
     def _validate_fallback_services(self, services: Any) -> list[dict]:
         if not isinstance(services, list):
             raise HTTPException(status_code=400, detail="fallbacks must be a list")
 
         normalized: list[dict] = []
-        seen_names: set[str] = set()
         for idx, entry in enumerate(services, start=1):
             if not isinstance(entry, dict):
                 raise HTTPException(status_code=400, detail="invalid fallback entry")
 
-            name = str(entry.get("name", "")).strip()
+            endpoint_id = entry.get("id")
+            if endpoint_id is not None:
+                try:
+                    endpoint_id = int(endpoint_id)
+                except (TypeError, ValueError):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"fallback[{idx}] id invalid",
+                    )
             session_url = str(entry.get("session_url", "")).strip()
             account_url = str(entry.get("account_url", "")).strip()
             services_url = str(entry.get("services_url", "")).strip()
             cache_ttl = entry.get("cache_ttl", 60)
-            skin_domains = entry.get("skin_domains", []) or []
-
-            if not name:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"fallback[{idx}] name is required",
-                )
-            if name in seen_names:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"fallback name duplicated: {name}",
-                )
             if not session_url or not account_url or not services_url:
                 raise HTTPException(
                     status_code=400,
                     detail=f"fallback[{idx}] urls are required",
-                )
-
-            if isinstance(skin_domains, str):
-                skin_domains = [
-                    item.strip() for item in skin_domains.split(",") if item.strip()
-                ]
-            if not isinstance(skin_domains, list):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"fallback[{idx}] skin_domains invalid",
                 )
 
             try:
@@ -594,30 +604,40 @@ class SiteBackend:
 
             normalized.append(
                 {
-                    "name": name,
+                    "id": endpoint_id,
                     "session_url": session_url,
                     "account_url": account_url,
                     "services_url": services_url,
-                    "skin_domains": [str(item).strip() for item in skin_domains if str(item).strip()],
                     "cache_ttl": cache_ttl,
                 }
             )
-            seen_names.add(name)
 
         return normalized
 
     async def get_official_whitelist(self):
-        return await self.db.user.list_official_whitelist_users()
+        primary = await self._get_primary_fallback_endpoint()
+        if not primary:
+            return []
+        return await self.db.user.list_official_whitelist_users(primary["id"])
 
     async def add_official_whitelist_user(self, username: str):
         if not username:
             raise HTTPException(status_code=400, detail="Username required")
-        await self.db.user.add_official_whitelist_user(username)
+        primary = await self._get_primary_fallback_endpoint()
+        if not primary:
+            raise HTTPException(status_code=400, detail="No fallback endpoint configured")
+        await self.db.user.add_official_whitelist_user(username, primary["id"])
         return {"ok": True}
 
     async def remove_official_whitelist_user(self, username: str):
-        await self.db.user.remove_official_whitelist_user(username)
+        primary = await self._get_primary_fallback_endpoint()
+        endpoint_id = primary["id"] if primary else None
+        await self.db.user.remove_official_whitelist_user(username, endpoint_id)
         return {"ok": True}
+
+    async def _get_primary_fallback_endpoint(self) -> dict | None:
+        fallbacks = await self._get_fallback_services()
+        return fallbacks[0] if fallbacks else None
 
     # ========== Carousel ==========
 

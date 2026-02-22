@@ -310,23 +310,7 @@ def setup_routes(db: Database, backend, rate_limiter, config: Config):
     async def get_public_settings():
         settings = await db.setting.get_all()
         fallbacks = await site_backend.get_fallback_services()
-
-        def split_csv(value: str) -> list[str]:
-            return [item.strip() for item in value.split(",") if item.strip()]
-
-        enabled_services = split_csv(settings.get("fallback_enabled_services", ""))
-        priority = split_csv(settings.get("fallback_priority", ""))
-
-        candidates = [
-            f for f in fallbacks if not enabled_services or f.get("name") in enabled_services
-        ]
-        if priority:
-            by_name = {f.get("name"): f for f in candidates if f.get("name")}
-            ordered = [by_name[name] for name in priority if name in by_name]
-            ordered += [f for f in candidates if f.get("name") not in priority]
-        else:
-            ordered = candidates
-        primary = ordered[0] if ordered else None
+        primary = fallbacks[0] if fallbacks else None
 
         return {
             "site_name": settings.get("site_name", "皮肤站"),
