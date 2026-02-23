@@ -133,6 +133,28 @@ class Database(BaseDB):
             await conn.executescript(INIT_SQL)
             await conn.commit()
 
+            # 兼容旧库：fallback_endpoints 增加 skin_domains 列
+            cursor = await conn.execute("PRAGMA table_info(fallback_endpoints)")
+            columns = [row[1] for row in await cursor.fetchall()]
+            if "skin_domains" not in columns:
+                await conn.execute(
+                    "ALTER TABLE fallback_endpoints ADD COLUMN skin_domains TEXT DEFAULT ''"
+                )
+                await conn.commit()
+                mojang_domains = config.get("mojang.skin_domains", []) or []
+                domains_csv = ",".join(
+                    [str(item).strip() for item in mojang_domains if str(item).strip()]
+                )
+                await conn.execute(
+                    """
+                    UPDATE fallback_endpoints
+                    SET skin_domains=?
+                    WHERE skin_domains IS NULL OR skin_domains = ''
+                    """,
+                    (domains_csv,),
+                )
+                await conn.commit()
+
             # 迁移：从 config.yaml 的 mojang 初始化 fallback_endpoints
             cursor = await conn.execute("SELECT COUNT(*) FROM fallback_endpoints")
             row = await cursor.fetchone()
@@ -154,28 +176,6 @@ class Database(BaseDB):
                         int(mojang.get("cache_ttl", 60)),
                         ",".join([str(item).strip() for item in skin_domains if str(item).strip()]),
                     ),
-                )
-                await conn.commit()
-
-            # 兼容旧库：fallback_endpoints 增加 skin_domains 列
-            cursor = await conn.execute("PRAGMA table_info(fallback_endpoints)")
-            columns = [row[1] for row in await cursor.fetchall()]
-            if "skin_domains" not in columns:
-                await conn.execute(
-                    "ALTER TABLE fallback_endpoints ADD COLUMN skin_domains TEXT DEFAULT ''"
-                )
-                await conn.commit()
-                mojang_domains = config.get("mojang.skin_domains", []) or []
-                domains_csv = ",".join(
-                    [str(item).strip() for item in mojang_domains if str(item).strip()]
-                )
-                await conn.execute(
-                    """
-                    UPDATE fallback_endpoints
-                    SET skin_domains=?
-                    WHERE skin_domains IS NULL OR skin_domains = ''
-                    """,
-                    (domains_csv,),
                 )
                 await conn.commit()
 
@@ -243,35 +243,35 @@ class Database(BaseDB):
             # 兼容旧库：skin_library 增加 model 列
             cursor = await conn.execute("PRAGMA table_info(skin_library)")
             columns = [row[1] for row in await cursor.fetchall()]
-        if "model" not in columns:
-            await conn.execute(
-                "ALTER TABLE skin_library ADD COLUMN model TEXT DEFAULT 'default'"
-            )
-            await conn.commit()
-
-        # 兼容旧库：skin_library 增加 name 列
-        cursor = await conn.execute("PRAGMA table_info(skin_library)")
-        columns = [row[1] for row in await cursor.fetchall()]
-        if "name" not in columns:
-            await conn.execute(
-                "ALTER TABLE skin_library ADD COLUMN name TEXT DEFAULT ''"
-            )
-            await conn.commit()
-            # 从上传者的 user_textures 中同步备注作为名称
-            await conn.execute(
-                """
-                UPDATE skin_library 
-                SET name = (
-                    SELECT note FROM user_textures 
-                    WHERE user_textures.hash = skin_library.skin_hash 
-                    AND user_textures.user_id = skin_library.uploader
-                    LIMIT 1
+            if "model" not in columns:
+                await conn.execute(
+                    "ALTER TABLE skin_library ADD COLUMN model TEXT DEFAULT 'default'"
                 )
-                WHERE uploader IS NOT NULL
-                """
-            )
-            await conn.commit()
-            
+                await conn.commit()
+
+            # 兼容旧库：skin_library 增加 name 列
+            cursor = await conn.execute("PRAGMA table_info(skin_library)")
+            columns = [row[1] for row in await cursor.fetchall()]
+            if "name" not in columns:
+                await conn.execute(
+                    "ALTER TABLE skin_library ADD COLUMN name TEXT DEFAULT ''"
+                )
+                await conn.commit()
+                # 从上传者的 user_textures 中同步备注作为名称
+                await conn.execute(
+                    """
+                    UPDATE skin_library 
+                    SET name = (
+                        SELECT note FROM user_textures 
+                        WHERE user_textures.hash = skin_library.skin_hash 
+                        AND user_textures.user_id = skin_library.uploader
+                        LIMIT 1
+                    )
+                    WHERE uploader IS NOT NULL
+                    """
+                )
+                await conn.commit()
+
             # 兼容旧库：user_textures 增加 is_public 列(0:私有, 1:公开, 2:非上传者)
             cursor = await conn.execute("PRAGMA table_info(user_textures)")
             columns = [row[1] for row in await cursor.fetchall()]
@@ -280,7 +280,7 @@ class Database(BaseDB):
                     "ALTER TABLE user_textures ADD COLUMN is_public INTEGER DEFAULT 0"
                 )
                 await conn.commit()
-                
+
                 # 数据迁移：根据 skin_library 补全 is_public 状态
                 await conn.execute(
                     """
@@ -297,7 +297,7 @@ class Database(BaseDB):
                     """
                 )
                 await conn.commit()
-            
+
             # 初始化默认设置
             await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('microsoft_client_id', '')"
@@ -331,7 +331,7 @@ class Database(BaseDB):
             # await conn.execute(
             #     "INSERT OR IGNORE INTO settings (key, value) VALUES ('password_strength_enabled', 'false')"
             # )
-            
+
             # SMTP Default Settings
             await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('email_verify_enabled', 'false')"
@@ -360,7 +360,7 @@ class Database(BaseDB):
             await conn.execute(
                 "INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_sender', 'SkinServer <no-reply@example.com>')"
             )
-            
+
             await conn.commit()
 
     # Proxy methods for backward compatibility or direct access if needed

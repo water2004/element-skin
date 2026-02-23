@@ -66,7 +66,7 @@
             :height="430"
           />
           <CapeViewer
-            v-else  
+            v-else
             :capeUrl="texturesUrl(selectedTexture.hash)"
             :width="320"
             :height="430"
