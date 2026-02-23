@@ -98,7 +98,7 @@ services:
     container_name: element-skin-frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3000:80"
 ```
 
 在项目的根目录下, 有一份完整的`docker-compose.yml`配置模板, 但若是使用ghcr镜像, 上面的配置已经足够
