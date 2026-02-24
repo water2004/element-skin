@@ -87,3 +87,17 @@ class FallbackModule:
                         ),
                     )
             await conn.commit()
+            
+    async def collect_skin_domains(self) -> list[str]:
+        async with self.db.get_conn() as conn:
+            async with conn.execute(
+                "SELECT skin_domains FROM fallback_endpoints WHERE skin_domains IS NOT NULL AND skin_domains != ''"
+            ) as cur:
+                rows = await cur.fetchall()
+                # 对于每一个非空的 skin_domains 字段，按逗号分割并收集所有域名
+                domains = []
+                for row in rows:
+                    raw = row[0]
+                    if raw:
+                        parts = [part.strip() for part in raw.split(",") if part.strip()]
+                        domains.extend(parts)

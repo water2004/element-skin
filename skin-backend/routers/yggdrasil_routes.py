@@ -30,21 +30,6 @@ logger = logging.getLogger("yggdrasil.fallback")
 
 router = APIRouter()
 
-async def _collect_skin_domains(db: Database) -> list[str]:
-    fallbacks = await db.fallback.list_endpoints()
-    domains: list[str] = []
-    for entry in fallbacks:
-        raw = entry.get("skin_domains")
-        if not raw:
-            continue
-        for domain in str(raw).split(","):
-            value = domain.strip()
-            if value and value not in domains:
-                domains.append(value)
-    if not domains:
-        domains = config.get("mojang.skin_domains", [])
-    return domains
-
 
 async def _resolve_fallbacks(db: Database) -> tuple[list[dict], str]:
     services = await db.fallback.list_endpoints()
@@ -498,7 +483,7 @@ def setup_routes(backend: YggdrasilBackend, db: Database, crypto, rate_limiter):
                 },
                 "feature.non_email_login": True,
             },
-            "skinDomains": await _collect_skin_domains(db)
+            "skinDomains": await db.fallback.collect_skin_domains()
             + [
                 (
                     site_url.replace("https://", "")
