@@ -1,160 +1,220 @@
 <template>
   <div class="admin-fallback">
-    <div class="section-header">
-      <h2>Fallback 服务配置</h2>
-      <p class="subtitle">配置外部 Yggdrasil 或 Mojang API 以支持正版登录与角色回退</p>
+    <div class="page-header">
+      <div class="header-content">
+        <el-icon class="header-icon"><Connection /></el-icon>
+        <div class="header-text">
+          <h2>Fallback 服务配置</h2>
+          <p class="subtitle">管理外部 Yggdrasil 或 Mojang API 的回退逻辑与白名单</p>
+        </div>
+      </div>
+      <el-button type="primary" :icon="Check" @click="saveSettings" :loading="saving" class="save-btn">
+        保存更改
+      </el-button>
     </div>
 
-    <!-- Global Settings -->
-    <el-card class="box-card mb-4" shadow="hover">
+    <!-- Global Strategy Card -->
+    <el-card class="modern-card mb-6" shadow="never">
       <template #header>
-        <div class="card-header">
-          <span>全局策略</span>
-          <el-button type="primary" size="small" @click="saveSettings" :loading="saving">保存所有设置</el-button>
+        <div class="card-header-title">
+          <el-icon><Setting /></el-icon>
+          <span>全局调度策略</span>
         </div>
       </template>
-      <el-form label-position="left" label-width="120px">
-        <el-form-item label="回退策略">
-          <el-radio-group v-model="settings.fallback_strategy">
-            <el-radio-button label="serial">顺序尝试</el-radio-button>
-            <el-radio-button label="parallel">并发尝试</el-radio-button>
-          </el-radio-group>
-          <span class="setting-desc ml-4">顺序尝试按优先级逐个回退；并发尝试则同时请求所有可用端点。</span>
-        </el-form-item>
-      </el-form>
+      <div class="strategy-container">
+        <el-radio-group v-model="settings.fallback_strategy" class="modern-radio">
+          <el-radio-button label="serial">
+            <div class="radio-content">
+              <el-icon><Sort /></el-icon>
+              <span>顺序重试</span>
+            </div>
+          </el-radio-button>
+          <el-radio-button label="parallel">
+            <div class="radio-content">
+              <el-icon><Operation /></el-icon>
+              <span>并发请求</span>
+            </div>
+          </el-radio-button>
+        </el-radio-group>
+        <div class="strategy-info">
+          <p v-if="settings.fallback_strategy === 'serial'">
+            系统将按照列表优先级顺序逐个尝试 Fallback 端点，直到获得成功响应或遍历完所有服务。
+          </p>
+          <p v-else>
+            系统将同时向所有启用的端点发起并发请求，并采用最快返回的有效响应，适用于追求高性能的场景。
+          </p>
+        </div>
+      </div>
     </el-card>
 
-    <!-- Endpoints Table -->
-    <el-card class="box-card mb-4" shadow="hover">
+    <!-- Endpoints List -->
+    <el-card class="modern-card" shadow="never">
       <template #header>
         <div class="card-header">
-          <span>Fallback 端点列表</span>
-          <el-button size="small" @click="addFallback" :icon="Plus">新增端点</el-button>
+          <div class="card-header-title">
+            <el-icon><List /></el-icon>
+            <span>Fallback 服务链</span>
+          </div>
+          <el-button size="small" :icon="Plus" @click="addFallback" plain>添加端点</el-button>
         </div>
       </template>
 
       <el-table 
         :data="fallbacks" 
-        style="width: 100%" 
         row-key="rowKey"
+        class="modern-table"
         @expand-change="handleExpandChange"
       >
         <el-table-column type="expand">
           <template #default="{ row }">
-            <div class="endpoint-expanded-content">
-              <!-- Endpoint Config -->
-              <div class="config-grid mb-4">
-                <div class="grid-item">
-                  <div class="label">Session URL</div>
-                  <el-input v-model="row.session_url" size="small" placeholder="https://..." />
-                </div>
-                <div class="grid-item">
-                  <div class="label">Account URL</div>
-                  <el-input v-model="row.account_url" size="small" placeholder="https://..." />
-                </div>
-                <div class="grid-item">
-                  <div class="label">Services URL</div>
-                  <el-input v-model="row.services_url" size="small" placeholder="https://..." />
-                </div>
-                <div class="grid-item">
-                  <div class="label">Skin Domains</div>
-                  <el-input v-model="row.skin_domains_text" size="small" placeholder="textures.minecraft.net" />
-                </div>
-              </div>
-
-              <!-- Functional Switches -->
-              <div class="switches-section">
-                <div class="setting-item">
-                  <el-switch v-model="row.enable_profile" />
-                  <div class="text">
-                    <span class="name">转发 Profile 请求</span>
-                    <span class="desc">查无此人时，尝试向此端点查询角色信息</span>
+            <div class="expanded-wrapper">
+              <div class="config-section">
+                <div class="section-title">API 接口定义</div>
+                <div class="url-grid">
+                  <div class="url-item">
+                    <label>Session URL</label>
+                    <el-input v-model="row.session_url" placeholder="https://sessionserver.mojang.com" />
                   </div>
-                </div>
-                <div class="setting-item">
-                  <el-switch v-model="row.enable_hasjoined" />
-                  <div class="text">
-                    <span class="name">转发 HasJoined 验证</span>
-                    <span class="desc">本地验证失败时，尝试向此端点验证会话 (支持正版登录)</span>
+                  <div class="url-item">
+                    <label>Account URL</label>
+                    <el-input v-model="row.account_url" placeholder="https://api.mojang.com" />
                   </div>
-                </div>
-                <div class="setting-item">
-                  <el-switch v-model="row.enable_whitelist" @change="(val) => onWhitelistToggle(row, val)" />
-                  <div class="text">
-                    <span class="name">启用端点白名单</span>
-                    <span class="desc">开启后，仅白名单内的用户会被转发至此端点进行 HasJoined 验证</span>
+                  <div class="url-item">
+                    <label>Services URL</label>
+                    <el-input v-model="row.services_url" placeholder="https://api.minecraftservices.com" />
+                  </div>
+                  <div class="url-item">
+                    <label>材质域名 (逗号分隔)</label>
+                    <el-input v-model="row.skin_domains_text" placeholder="textures.minecraft.net" />
                   </div>
                 </div>
               </div>
 
-              <!-- Inline Whitelist -->
-              <div v-if="row.enable_whitelist" class="inline-whitelist mt-4">
-                <el-divider content-position="left">端点白名单管理</el-divider>
-                
-                <div v-if="!row.id" class="empty-state">
-                  <el-alert title="请先保存设置，保存后即可为此端点添加白名单用户。" type="warning" :closable="false" show-icon />
+              <div class="config-section mt-6">
+                <div class="section-title">功能与权限控制</div>
+                <div class="features-panel">
+                  <div class="feature-card" :class="{ active: row.enable_profile }">
+                    <div class="feature-main">
+                      <el-switch v-model="row.enable_profile" />
+                      <div class="feature-info">
+                        <span class="f-name">Profile 转发</span>
+                        <span class="f-desc">允许向此端点查询 UUID 和皮肤材质</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="feature-card" :class="{ active: row.enable_hasjoined }">
+                    <div class="feature-main">
+                      <el-switch v-model="row.enable_hasjoined" />
+                      <div class="feature-info">
+                        <span class="f-name">Auth 认证回退</span>
+                        <span class="f-desc">本地验证失败后尝试以此端点验证 session</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="feature-card" :class="{ active: row.enable_whitelist }">
+                    <div class="feature-main">
+                      <el-switch v-model="row.enable_whitelist" @change="(val) => onWhitelistToggle(row, val)" />
+                      <div class="feature-info">
+                        <span class="f-name">开启白名单</span>
+                        <span class="f-desc">仅允许特定玩家使用此端点进行验证</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                
-                <div v-else class="whitelist-controls">
-                  <div class="add-user-bar mb-2">
-                    <el-input 
-                      v-model="row._new_user" 
-                      placeholder="输入正版用户名" 
-                      size="small"
-                      @keyup.enter="addUser(row)"
-                    >
-                      <template #append>
-                        <el-button @click="addUser(row)" :loading="row._adding">添加</el-button>
-                      </template>
-                    </el-input>
+              </div>
+
+              <!-- Whitelist Section -->
+              <transition name="el-zoom-in-top">
+                <div v-if="row.enable_whitelist" class="whitelist-section mt-6">
+                  <div class="section-header-small">
+                    <div class="section-title">端点白名单列表</div>
+                    <div class="add-user-form" v-if="row.id">
+                      <el-input 
+                        v-model="row._new_user" 
+                        placeholder="输入 Minecraft ID" 
+                        size="small"
+                        @keyup.enter="addUser(row)"
+                      >
+                        <template #append>
+                          <el-button @click="addUser(row)" :loading="row._adding">添加</el-button>
+                        </template>
+                      </el-input>
+                    </div>
                   </div>
                   
-                  <el-table :data="row._whitelist || []" size="small" border style="width: 100%" max-height="300">
-                    <el-table-column prop="username" label="用户名" />
-                    <el-table-column prop="created_at" label="添加时间" width="160">
-                      <template #default="scope">
-                        {{ new Date(scope.row.created_at).toLocaleDateString() }}
-                      </template>
-                    </el-table-column>
-                    <el-table-column label="操作" width="60" align="center">
-                      <template #default="scope">
-                        <el-button type="danger" :icon="Delete" size="small" @click="removeUser(row, scope.row.username)" link />
-                      </template>
-                    </el-table-column>
-                  </el-table>
+                  <div v-if="!row.id" class="save-notice">
+                    <el-icon><InfoFilled /></el-icon>
+                    <span>请先保存端点设置，随后即可管理白名单用户。</span>
+                  </div>
+                  
+                  <div v-else class="whitelist-table-wrapper">
+                    <el-table :data="row._whitelist || []" size="small" class="inner-table" max-height="250">
+                      <el-table-column prop="username" label="玩家 ID" />
+                      <el-table-column prop="created_at" label="授权时间" width="160">
+                        <template #default="scope">
+                          {{ new Date(scope.row.created_at).toLocaleDateString() }}
+                        </template>
+                      </el-table-column>
+                      <el-table-column label="操作" width="60" align="center">
+                        <template #default="scope">
+                          <el-button type="danger" :icon="Delete" size="small" @click="removeUser(row, scope.row.username)" link />
+                        </template>
+                      </el-table-column>
+                    </el-table>
+                  </div>
                 </div>
+              </transition>
+            </div>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="服务备注" min-width="240">
+          <template #default="scope">
+            <div class="note-container">
+              <div class="priority-pill">{{ scope.$index + 1 }}</div>
+              <el-input 
+                v-model="scope.row.note" 
+                placeholder="设置端点备注 (如: Mojang 官方)" 
+                class="flat-input"
+              />
+              <div class="row-indicators">
+                <el-tooltip content="Profile 转发" v-if="scope.row.enable_profile">
+                  <el-icon class="i-profile"><User /></el-icon>
+                </el-tooltip>
+                <el-tooltip content="Auth 认证" v-if="scope.row.enable_hasjoined">
+                  <el-icon class="i-auth"><Lock /></el-icon>
+                </el-tooltip>
+                <el-tooltip content="白名单保护" v-if="scope.row.enable_whitelist">
+                  <el-icon class="i-whitelist"><ShieldCheck /></el-icon>
+                </el-tooltip>
               </div>
             </div>
           </template>
         </el-table-column>
 
-        <el-table-column label="端点备注 (及优先级)" min-width="200">
+        <el-table-column label="缓存 (秒)" width="120" align="center">
           <template #default="scope">
-            <div class="note-cell">
-              <span class="priority-badge">{{ scope.$index + 1 }}</span>
-              <el-input v-model="scope.row.note" size="small" placeholder="例如：Mojang 官方 / 某皮肤站" class="note-input" />
-              <div class="status-tags ml-2">
-                <el-tag v-if="scope.row.enable_profile" size="small" type="success" effect="plain" class="mini-tag">P</el-tag>
-                <el-tag v-if="scope.row.enable_hasjoined" size="small" type="primary" effect="plain" class="mini-tag">A</el-tag>
-                <el-tag v-if="scope.row.enable_whitelist" size="small" type="warning" effect="plain" class="mini-tag">W</el-tag>
-              </div>
+            <el-input-number 
+              v-model="scope.row.cache_ttl" 
+              :min="0" 
+              :controls="false" 
+              size="small" 
+              class="narrow-num"
+            />
+          </template>
+        </el-table-column>
+
+        <el-table-column label="调度控制" width="160" align="right">
+          <template #default="scope">
+            <div class="action-btns">
+              <el-tooltip content="上移">
+                <el-button :icon="ArrowUp" size="small" circle @click="moveUp(scope.$index)" :disabled="scope.$index === 0" />
+              </el-tooltip>
+              <el-tooltip content="下移">
+                <el-button :icon="ArrowDown" size="small" circle @click="moveDown(scope.$index)" :disabled="scope.$index === fallbacks.length - 1" />
+              </el-tooltip>
+              <el-button :icon="Delete" size="small" type="danger" circle plain @click="removeFallback(scope.$index)" />
             </div>
-          </template>
-        </el-table-column>
-
-        <el-table-column label="缓存 (秒)" width="100">
-          <template #default="scope">
-            <el-input v-model.number="scope.row.cache_ttl" size="small" />
-          </template>
-        </el-table-column>
-
-        <el-table-column label="排序与操作" width="180" align="right">
-          <template #default="scope">
-            <el-button-group>
-              <el-button size="small" :icon="ArrowUp" @click="moveUp(scope.$index)" :disabled="scope.$index === 0" />
-              <el-button size="small" :icon="ArrowDown" @click="moveDown(scope.$index)" :disabled="scope.$index === fallbacks.length - 1" />
-              <el-button size="small" type="danger" :icon="Delete" @click="removeFallback(scope.$index)" />
-            </el-button-group>
           </template>
         </el-table-column>
       </el-table>
@@ -166,7 +226,10 @@
 import { ref, onMounted, reactive } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
+import { 
+  Plus, Delete, ArrowUp, ArrowDown, Connection, Check, Setting, 
+  Sort, Operation, List, InfoFilled, User, Lock, Ticket as ShieldCheck 
+} from '@element-plus/icons-vue'
 
 const settings = ref({
   fallback_strategy: 'serial'
@@ -177,7 +240,6 @@ const saving = ref(false)
 const jwt = localStorage.getItem('jwt')
 const headers = { Authorization: 'Bearer ' + jwt }
 
-// --- Data Fetching ---
 async function fetchSettings() {
   try {
     const res = await axios.get('/admin/settings', { headers })
@@ -198,7 +260,7 @@ async function fetchSettings() {
     })
     fallbacks.value.sort((a, b) => a.priority - b.priority)
   } catch (e) {
-    ElMessage.error('无法加载 Fallback 配置')
+    ElMessage.error('加载 Fallback 配置失败')
   }
 }
 
@@ -222,16 +284,15 @@ async function saveSettings() {
       }))
     }
     await axios.post('/admin/settings', payload, { headers })
-    ElMessage.success('设置已保存')
+    ElMessage.success('配置已更新')
     await fetchSettings()
   } catch (e) {
-    ElMessage.error('保存设置失败')
+    ElMessage.error('保存失败')
   } finally {
     saving.value = false
   }
 }
 
-// --- List Management ---
 function addFallback() {
   fallbacks.value.push(reactive({
     id: null,
@@ -260,17 +321,21 @@ function removeFallback(index) {
 
 function moveUp(index) {
   if (index === 0) return
-  const temp = fallbacks.value[index]
-  fallbacks.value[index] = fallbacks.value[index - 1]
-  fallbacks.value[index - 1] = temp
+  const list = [...fallbacks.value]
+  const temp = list[index]
+  list[index] = list[index - 1]
+  list[index - 1] = temp
+  fallbacks.value = list
   syncPriority()
 }
 
 function moveDown(index) {
   if (index === fallbacks.value.length - 1) return
-  const temp = fallbacks.value[index]
-  fallbacks.value[index] = fallbacks.value[index + 1]
-  fallbacks.value[index + 1] = temp
+  const list = [...fallbacks.value]
+  const temp = list[index]
+  list[index] = list[index + 1]
+  list[index + 1] = temp
+  fallbacks.value = list
   syncPriority()
 }
 
@@ -280,7 +345,6 @@ function syncPriority() {
   })
 }
 
-// --- Whitelist Management ---
 function handleExpandChange(row, expandedRows) {
   const isExpanded = expandedRows.find(r => r.rowKey === row.rowKey)
   if (isExpanded && row.enable_whitelist && row.id && !row._loaded) {
@@ -304,7 +368,7 @@ async function fetchWhitelist(row) {
     row._whitelist = res.data
     row._loaded = true
   } catch (e) {
-    ElMessage.error(`加载白名单失败: ${row.note || row.session_url}`)
+    ElMessage.error(`白名单加载失败: ${row.note || '未命名端点'}`)
   }
 }
 
@@ -316,11 +380,11 @@ async function addUser(row) {
       username: row._new_user,
       endpoint_id: row.id
     }, { headers })
-    ElMessage.success('用户已添加')
+    ElMessage.success('用户添加成功')
     row._new_user = ''
     await fetchWhitelist(row)
   } catch (e) {
-    ElMessage.error('添加失败')
+    ElMessage.error('添加用户失败')
   } finally {
     row._adding = false
   }
@@ -328,12 +392,16 @@ async function addUser(row) {
 
 async function removeUser(row, username) {
   try {
-    await ElMessageBox.confirm(`确定要移除 ${username} 吗？`, '警告', { type: 'warning' })
+    await ElMessageBox.confirm(`确定要移除授权用户 ${username} 吗？`, '移除确认', { 
+      confirmButtonText: '确定移除',
+      cancelButtonText: '取消',
+      type: 'warning' 
+    })
     await axios.delete(`/admin/official-whitelist/${username}`, {
       headers,
       params: { endpoint_id: row.id }
     })
-    ElMessage.success('已移除')
+    ElMessage.success('已移除授权')
     await fetchWhitelist(row)
   } catch (e) {}
 }
@@ -343,99 +411,233 @@ onMounted(fetchSettings)
 
 <style scoped>
 .admin-fallback {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
-}
-.section-header { margin-bottom: 24px; }
-.section-header h2 { margin: 0 0 4px 0; color: var(--color-heading); }
-.subtitle { color: var(--color-text-light); font-size: 14px; }
-
-.box-card { border: 1px solid var(--color-border); background: var(--color-card-background); }
-.card-header { display: flex; justify-content: space-between; align-items: center; font-weight: 600; }
-
-.setting-desc { font-size: 13px; color: var(--color-text-light); }
-
-.note-cell { display: flex; align-items: center; }
-.note-input { flex: 1; }
-
-.priority-badge {
-  display: inline-block;
-  min-width: 20px;
-  height: 20px;
-  line-height: 20px;
-  text-align: center;
-  border-radius: 4px;
-  background: var(--color-primary-light-9);
-  color: var(--color-primary);
-  font-weight: bold;
-  font-size: 12px;
-  margin-right: 8px;
-  padding: 0 4px;
+  padding: 20px 0;
 }
 
-.mini-tag {
-  padding: 0 4px;
-  height: 18px;
-  line-height: 16px;
-  font-size: 10px;
-}
-
-.endpoint-expanded-content {
-  padding: 24px 40px;
-  background: var(--color-background-soft);
-  border-radius: 4px;
-}
-
-.config-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-.grid-item .label {
-  font-size: 12px;
-  color: var(--color-text-light);
-  margin-bottom: 4px;
-}
-
-.switches-section {
+/* Page Header */
+.page-header {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-  background: var(--color-card-background);
-  padding: 16px;
-  border-radius: 8px;
-  border: 1px solid var(--color-border);
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
 }
-
-.setting-item {
+.header-content {
   display: flex;
   align-items: center;
   gap: 16px;
 }
-.setting-item .text {
+.header-icon {
+  font-size: 32px;
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  padding: 12px;
+  border-radius: 12px;
+}
+.header-text h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-heading);
+}
+.header-text .subtitle {
+  margin: 4px 0 0 0;
+  color: var(--color-text-light);
+  font-size: 14px;
+}
+
+/* Modern Card */
+.modern-card {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.card-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--color-heading);
+}
+
+/* Strategy Panel */
+.strategy-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 10px 0;
+}
+.modern-radio :deep(.el-radio-button__inner) {
+  height: 48px;
+  display: flex;
+  align-items: center;
+  padding: 0 30px;
+  border-radius: 8px !important;
+  margin-right: 12px;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: none !important;
+}
+.modern-radio :deep(.el-radio-button.is-active .el-radio-button__inner) {
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary) !important;
+}
+.radio-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.strategy-info {
+  font-size: 13px;
+  color: var(--color-text-light);
+  background: var(--color-background-soft);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border-left: 4px solid var(--el-color-primary);
+}
+
+/* Note Column */
+.note-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.priority-pill {
+  background: var(--el-color-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: bold;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.flat-input :deep(.el-input__wrapper) {
+  box-shadow: none !important;
+  padding: 0;
+  background: transparent;
+}
+.flat-input :deep(.el-input__inner) {
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+.row-indicators {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.row-indicators .el-icon {
+  font-size: 14px;
+}
+.i-profile { color: var(--el-color-success); }
+.i-auth { color: var(--el-color-primary); }
+.i-whitelist { color: var(--el-color-warning); }
+
+/* Expanded Area */
+.expanded-wrapper {
+  padding: 24px 30px;
+  background: var(--color-background-soft);
+  border-top: 1px solid var(--color-border);
+}
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.url-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+.url-item label {
+  display: block;
+  font-size: 12px;
+  color: var(--color-text-light);
+  margin-bottom: 6px;
+}
+
+/* Features Panel */
+.features-panel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.feature-card {
+  background: var(--color-card-background);
+  border: 1px solid var(--color-border);
+  padding: 16px;
+  border-radius: 10px;
+  transition: all 0.3s;
+}
+.feature-card.active {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-color-primary-light-9);
+}
+.feature-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.feature-info {
   display: flex;
   flex-direction: column;
 }
-.setting-item .name { font-weight: 500; font-size: 14px; }
-.setting-item .desc { font-size: 12px; color: var(--color-text-light); }
+.f-name { font-size: 14px; font-weight: 600; color: var(--color-heading); }
+.f-desc { font-size: 11px; color: var(--color-text-light); margin-top: 2px; }
 
-.inline-whitelist {
+/* Whitelist Section */
+.whitelist-section {
   background: var(--color-card-background);
-  padding: 16px;
-  border-radius: 8px;
   border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 20px;
+}
+.section-header-small {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+.add-user-form { width: 300px; }
+.save-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--el-color-warning);
+  font-size: 13px;
+  padding: 12px;
+  background: var(--el-color-warning-light-9);
+  border-radius: 6px;
 }
 
-.add-user-bar { max-width: 400px; }
+/* Helpers */
+.mb-6 { margin-bottom: 24px; }
+.mt-6 { margin-top: 24px; }
+.narrow-num :deep(.el-input__inner) { text-align: center; }
 
-.mb-2 { margin-bottom: 8px; }
-.mb-4 { margin-bottom: 16px; }
-.mt-4 { margin-top: 16px; }
-.ml-2 { margin-left: 8px; }
-.ml-4 { margin-left: 16px; }
+.action-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
 
 @media (max-width: 768px) {
-  .endpoint-expanded-content { padding: 16px; }
-  .config-grid { grid-template-columns: 1fr; }
+  .url-grid, .features-panel { grid-template-columns: 1fr; }
+  .expanded-wrapper { padding: 16px; }
+  .section-header-small { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .add-user-form { width: 100%; }
 }
 </style>
