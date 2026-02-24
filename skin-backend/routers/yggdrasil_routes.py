@@ -30,13 +30,8 @@ logger = logging.getLogger("yggdrasil.fallback")
 
 router = APIRouter()
 
-
-async def _get_fallback_services(db: Database) -> list[dict]:
-    return await db.fallback.list_endpoints()
-
-
 async def _collect_skin_domains(db: Database) -> list[str]:
-    fallbacks = await _get_fallback_services(db)
+    fallbacks = await db.fallback.list_endpoints()
     domains: list[str] = []
     for entry in fallbacks:
         raw = entry.get("skin_domains")
@@ -52,7 +47,7 @@ async def _collect_skin_domains(db: Database) -> list[str]:
 
 
 async def _resolve_fallbacks(db: Database) -> tuple[list[dict], str]:
-    services = await _get_fallback_services(db)
+    services = await db.fallback.list_endpoints()
     if not services:
         return [], "serial"
     strategy = await db.setting.get("fallback_strategy", "serial")
