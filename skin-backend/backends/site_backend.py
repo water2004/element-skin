@@ -517,6 +517,17 @@ class SiteBackend:
                     for item in str(raw_domains).split(",")
                     if item.strip()
                 ]
+            
+            # Validate whitelist if present
+            whitelist = entry.get("whitelist")
+            clean_whitelist = None
+            if whitelist is not None:
+                if not isinstance(whitelist, list):
+                     raise HTTPException(
+                        status_code=400,
+                        detail=f"fallback[{idx}] whitelist must be a list",
+                    )
+                clean_whitelist = [str(u).strip() for u in whitelist if str(u).strip()]
 
             try:
                 cache_ttl = int(cache_ttl)
@@ -525,10 +536,10 @@ class SiteBackend:
                     status_code=400,
                     detail=f"fallback[{idx}] cache_ttl invalid",
                 )
-            if cache_ttl <= 0:
+            if cache_ttl < 0:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"fallback[{idx}] cache_ttl must be positive",
+                    detail=f"fallback[{idx}] cache_ttl must be non-negative",
                 )
 
             normalized.append(
@@ -543,6 +554,7 @@ class SiteBackend:
                     "enable_hasjoined": bool(entry.get("enable_hasjoined", True)),
                     "enable_whitelist": bool(entry.get("enable_whitelist", False)),
                     "note": str(entry.get("note", "")).strip(),
+                    "whitelist": clean_whitelist,
                 }
             )
 

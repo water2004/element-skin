@@ -131,8 +131,11 @@
               <transition name="el-zoom-in-top">
                 <div v-if="row.enable_whitelist" class="whitelist-section mt-6">
                   <div class="section-header-small">
-                    <div class="section-title">端点白名单列表</div>
-                    <div class="add-user-form" v-if="row.id">
+                    <div class="section-title">
+                      端点白名单列表
+                      <el-tag v-if="hasWhitelistChanges(row)" size="small" type="warning" effect="dark" class="ml-2">有未保存更改</el-tag>
+                    </div>
+                    <div class="add-user-form">
                       <el-input 
                         v-model="row._new_user" 
                         placeholder="输入 Minecraft ID" 
@@ -140,21 +143,16 @@
                         @keyup.enter="addUser(row)"
                       >
                         <template #append>
-                          <el-button @click="addUser(row)" :loading="row._adding">添加</el-button>
+                          <el-button @click="addUser(row)">添加</el-button>
                         </template>
                       </el-input>
                     </div>
                   </div>
                   
-                  <div v-if="!row.id" class="save-notice">
-                    <el-icon><InfoFilled /></el-icon>
-                    <span>请先保存端点设置，随后即可管理白名单用户。</span>
-                  </div>
-                  
-                  <div v-else class="whitelist-table-wrapper">
+                  <div class="whitelist-table-wrapper">
                     <el-table :data="row._whitelist || []" size="small" class="inner-table" max-height="250">
                       <el-table-column prop="username" label="玩家 ID" />
-                      <el-table-column prop="created_at" label="授权时间" width="160">
+                      <el-table-column prop="created_at" label="添加时间" width="160">
                         <template #default="scope">
                           {{ new Date(scope.row.created_at).toLocaleDateString() }}
                         </template>
@@ -217,10 +215,10 @@
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
 import axios from 'axios'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
 import { 
   Plus, Delete, ArrowUp, ArrowDown, Connection, Check, Setting, 
-  Sort, Operation, List, InfoFilled, User, Lock, Ticket as ShieldCheck 
+  Sort, Operation, List, User, Lock, Ticket as ShieldCheck 
 } from '@element-plus/icons-vue'
 
 const settings = ref({
@@ -238,18 +236,25 @@ async function fetchSettings() {
     settings.value.fallback_strategy = res.data.fallback_strategy || 'serial'
     
     const raw = Array.isArray(res.data.fallbacks) ? res.data.fallbacks : []
-    fallbacks.value = raw.map((item, index) => {
-      return reactive({
+    
+    // We update the array but try to preserve existing objects to maintain expansion state and local changes
+    const newFallbacks = raw.map((item, index) => {
+      const existing = fallbacks.value.find(f => (f.id && f.id === item.id) || (f.session_url === item.session_url && f.note === item.note))
+      
+      const row = reactive({
         ...item,
-        rowKey: item.id || `new_${Date.now()}_${index}`,
+        rowKey: item.id || (existing ? existing.rowKey : `new_${Date.now()}_${index}`),
         note: item.note || '',
         skin_domains_text: Array.isArray(item.skin_domains) ? item.skin_domains.join(',') : String(item.skin_domains || ''),
-        _whitelist: [],
-        _new_user: '',
-        _adding: false,
-        _loaded: false
+        _whitelist: existing ? existing._whitelist : [], 
+        _initialWhitelist: existing ? existing._initialWhitelist : [],
+        _new_user: existing ? existing._new_user : '',
+        _loaded: existing ? existing._loaded : false
       })
+      return row
     })
+    
+    fallbacks.value = newFallbacks
     fallbacks.value.sort((a, b) => a.priority - b.priority)
   } catch (e) {
     ElMessage.error('加载 Fallback 配置失败')
@@ -257,8 +262,10 @@ async function fetchSettings() {
 }
 
 async function saveSettings() {
+  const loading = ElLoading.service({ text: '正在同步配置与白名单...', background: 'rgba(0, 0, 0, 0.7)' })
   saving.value = true
   try {
+    // 1. Save Endpoint Settings
     const payload = {
       fallback_strategy: settings.value.fallback_strategy,
       fallbacks: fallbacks.value.map(item => ({
@@ -276,13 +283,54 @@ async function saveSettings() {
       }))
     }
     await axios.post('/admin/settings', payload, { headers })
-    ElMessage.success('配置已更新')
+
+    // 2. Refresh to ensure we have IDs for new endpoints
+    const res = await axios.get('/admin/settings', { headers })
+    const updatedFallbacksFromDB = res.data.fallbacks || []
+    
+    // 3. Sync Whitelists for each endpoint
+    for (const localRow of fallbacks.value) {
+      // Find the corresponding DB ID
+      const dbEndpoint = updatedFallbacksFromDB.find(f => f.session_url === localRow.session_url && f.note === localRow.note)
+      if (!dbEndpoint || !dbEndpoint.id) continue
+
+      const endpointId = dbEndpoint.id
+      localRow.id = endpointId // Update local ID immediately
+      
+      if (localRow._loaded && hasWhitelistChanges(localRow)) {
+        const initialNames = localRow._initialWhitelist.map(u => u.username.toLowerCase())
+        const currentNames = localRow._whitelist.map(u => u.username.toLowerCase())
+
+        const toAdd = localRow._whitelist.filter(u => !initialNames.includes(u.username.toLowerCase()))
+        const toRemove = localRow._initialWhitelist.filter(u => !currentNames.includes(u.username.toLowerCase()))
+
+        const promises = [
+           ...toAdd.map(u => axios.post('/admin/official-whitelist', { username: u.username, endpoint_id: endpointId }, { headers })),
+           ...toRemove.map(u => axios.delete(`/admin/official-whitelist/${u.username}`, { headers, params: { endpoint_id: endpointId } }))
+        ]
+        await Promise.all(promises)
+        
+        // Update local "initial" state to reflect successful sync
+        localRow._initialWhitelist = JSON.parse(JSON.stringify(localRow._whitelist))
+      }
+    }
+
+    ElMessage.success('所有配置及白名单已成功同步')
     await fetchSettings()
   } catch (e) {
-    ElMessage.error('保存失败')
+    console.error(e)
+    ElMessage.error('保存失败: ' + (e.response?.data?.detail || e.message))
   } finally {
     saving.value = false
+    loading.close()
   }
+}
+
+function hasWhitelistChanges(row) {
+  if (!row._loaded) return false
+  const initial = row._initialWhitelist.map(u => u.username.toLowerCase()).sort().join(',')
+  const current = row._whitelist.map(u => u.username.toLowerCase()).sort().join(',')
+  return initial !== current
 }
 
 function addFallback() {
@@ -300,9 +348,9 @@ function addFallback() {
     note: '',
     skin_domains_text: '',
     _whitelist: [],
+    _initialWhitelist: [],
     _new_user: '',
-    _adding: false,
-    _loaded: false
+    _loaded: true 
   }))
 }
 
@@ -357,51 +405,37 @@ async function fetchWhitelist(row) {
       headers,
       params: { endpoint_id: row.id }
     })
-    row._whitelist = res.data
+    row._whitelist = JSON.parse(JSON.stringify(res.data))
+    row._initialWhitelist = JSON.parse(JSON.stringify(res.data))
     row._loaded = true
   } catch (e) {
     ElMessage.error(`白名单加载失败: ${row.note || '未命名端点'}`)
   }
 }
 
-async function addUser(row) {
-  if (!row._new_user || !row.id) return
-  row._adding = true
-  try {
-    await axios.post('/admin/official-whitelist', {
-      username: row._new_user,
-      endpoint_id: row.id
-    }, { headers })
-    ElMessage.success('用户添加成功')
-    row._new_user = ''
-    await fetchWhitelist(row)
-  } catch (e) {
-    ElMessage.error('添加用户失败')
-  } finally {
-    row._adding = false
+function addUser(row) {
+  if (!row._new_user) return
+  const username = row._new_user.trim()
+  if (row._whitelist.some(u => u.username.toLowerCase() === username.toLowerCase())) {
+    ElMessage.warning('用户已在列表中')
+    return
   }
+  row._whitelist.unshift({
+    username: username,
+    created_at: Date.now()
+  })
+  row._new_user = ''
 }
 
-async function removeUser(row, username) {
-  try {
-    await ElMessageBox.confirm(`确定要移除授权用户 ${username} 吗？`, '移除确认', { 
-      confirmButtonText: '确定移除',
-      cancelButtonText: '取消',
-      type: 'warning' 
-    })
-    await axios.delete(`/admin/official-whitelist/${username}`, {
-      headers,
-      params: { endpoint_id: row.id }
-    })
-    ElMessage.success('已移除授权')
-    await fetchWhitelist(row)
-  } catch (e) {}
+function removeUser(row, username) {
+  row._whitelist = row._whitelist.filter(u => u.username !== username)
 }
 
 onMounted(fetchSettings)
 </script>
 
 <style scoped>
+/* ... (Style section remains unchanged) */
 .admin-fallback {
   max-width: 1100px;
   margin: 0 auto;
@@ -604,27 +638,18 @@ onMounted(fetchSettings)
   margin-bottom: 15px;
 }
 .add-user-form { width: 300px; }
-.save-notice {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--el-color-warning);
-  font-size: 13px;
-  padding: 12px;
-  background: var(--el-color-warning-light-9);
-  border-radius: 6px;
-}
 
 /* Helpers */
 .mb-6 { margin-bottom: 24px; }
 .mt-6 { margin-top: 24px; }
-.narrow-num :deep(.el-input__inner) { text-align: center; }
 
 .action-btns {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
 }
+
+.ml-2 { margin-left: 8px; }
 
 @media (max-width: 768px) {
   .url-grid, .features-panel { grid-template-columns: 1fr; }
