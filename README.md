@@ -25,9 +25,6 @@
 
 在宿主机创建 `config.yaml` 文件。这是系统运行的核心配置。
 
-<details>
-<summary><b>📄 点击展开查看 config.yaml 模板（必须配置）</b></summary>
-
 ```yaml
 # Element-Skin 配置文件
 
@@ -54,9 +51,9 @@ server:
   # ⚠️ 如果使用方案A (GHCR镜像)，此处必须保留为 /skinapi
   # 如果是本地构建且自定义路径，请根据实际情况修改
   root_path: "/skinapi" 
-  # ⚠️ 站点的外部访问地址 (用于 OAuth 回调及 Yggdrasil 发现服务)
+  # ⚠️ 站点的外部访问地址
   site_url: "http://yourdomain.com" 
-  # ⚠️ 后端 API 外部访问地址 (用于 Yggdrasil 材质 URL)
+  # ⚠️ 后端 API 外部访问地址
   api_url: "http://yourdomain.com/skinapi" 
 
 # CORS 跨域配置
@@ -73,7 +70,6 @@ mojang:
     - "textures.minecraft.net"
   cache_ttl: 3600
 ```
-</details>
 
 ### 2. 选择部署方案
 
@@ -101,6 +97,9 @@ services:
     restart: unless-stopped
     ports:
       - "3000:80"
+    volumes:
+      - ./data/textures:/usr/share/nginx/html/static/textures:ro
+      - ./data/carousel:/usr/share/nginx/html/static/carousel:ro
 ```
 
 在项目的根目录下, 有一份完整的`docker-compose.yml`配置模板, 但若是使用ghcr镜像, 上面的配置已经足够
