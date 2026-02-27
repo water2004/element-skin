@@ -25,13 +25,7 @@
         </div>
       </template>
       <el-form label-position="top" :model="settings.site">
-        <el-row :gutter="20">
-          <el-col :span="24">
-            <el-form-item label="站点名称">
-              <el-input v-model="settings.site.site_name" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+
         <el-row :gutter="20">
           <el-col :span="8">
             <el-form-item label="允许新用户注册">
@@ -53,6 +47,20 @@
           <el-input-number v-model="settings.site.max_texture_size" :min="64" :step="128" />
         </el-form-item>
         <el-divider />
+                <el-row :gutter="20">
+          <el-col :span="24">
+            <el-form-item label="站点名称">
+              <el-input v-model="settings.site.site_name" placeholder="皮肤站" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="24">
+            <el-form-item label="站点副标题">
+              <el-input v-model="settings.site.site_subtitle" placeholder="简洁、高效、现代的 Minecraft 皮肤管理站" />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-row :gutter="20">
           <el-col :span="24">
             <el-form-item label="页脚附加信息">
@@ -155,6 +163,7 @@ import {
 const settings = reactive({
   site: {
     site_name: '',
+    site_subtitle: '',
     require_invite: false,
     allow_register: true,
     enable_skin_library: true,

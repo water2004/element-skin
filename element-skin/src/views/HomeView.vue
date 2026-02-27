@@ -5,7 +5,8 @@ import { User, Picture, Files, Connection } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const router = useRouter()
-const siteName = ref('皮肤站')
+const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
+const siteSubtitle = ref(localStorage.getItem('site_subtitle_cache') || '简洁、高效、现代的 Minecraft 皮肤管理站')
 const isLogged = ref(false)
 const carouselImages = ref([])
 
@@ -15,6 +16,11 @@ onMounted(async () => {
     const res = await axios.get('/public/settings')
     if (res.data.site_name) {
       siteName.value = res.data.site_name
+      localStorage.setItem('site_name_cache', res.data.site_name)
+    }
+    if (res.data.site_subtitle) {
+      siteSubtitle.value = res.data.site_subtitle
+      localStorage.setItem('site_subtitle_cache', res.data.site_subtitle)
     }
   } catch (e) {
     console.warn('Failed to load site settings:', e)
@@ -79,7 +85,7 @@ function getCarouselUrl(filename) {
       <div class="hero-section">
         <div class="hero-content">
           <h1 class="hero-title">{{ siteName }}</h1>
-          <p class="hero-subtitle">简洁、高效、现代的 Minecraft 皮肤管理站</p>
+          <p class="hero-subtitle">{{ siteSubtitle }}</p>
           <div class="hero-actions">
             <el-button v-if="isLogged" type="primary" size="large" @click="goDashboard" class="hero-btn">
               <el-icon><User /></el-icon>

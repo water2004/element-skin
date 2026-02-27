@@ -20,6 +20,7 @@ class AdminBackend:
         s = await self.db.setting.get_all()
         return {
             "site_name": s.get("site_name", "皮肤站"),
+            "site_subtitle": s.get("site_subtitle", "简洁、高效、现代的 Minecraft 皮肤管理站"),
             "require_invite": s.get("require_invite", "false") == "true",
             "allow_register": s.get("allow_register", "true") == "true",
             "enable_skin_library": s.get("enable_skin_library", "true") == "true",
@@ -73,6 +74,7 @@ class AdminBackend:
         allowed_keys = {
             "site": [
                 "site_name",
+                "site_subtitle",
                 "require_invite",
                 "allow_register",
                 "enable_skin_library",
