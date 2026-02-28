@@ -75,24 +75,24 @@
                 <el-row :gutter="20">
                   <el-col :span="12">
                     <el-form-item label="ICP 备案信息">
-                      <el-input v-model="settings.site.filing_icp" />
+                      <el-input v-model="settings.site.filing_icp" placeholder="留空则不展示" />
                     </el-form-item>
                   </el-col>
                   <el-col :span="12">
                     <el-form-item label="ICP 备案链接">
-                      <el-input v-model="settings.site.filing_icp_link" />
+                      <el-input v-model="settings.site.filing_icp_link" placeholder="留空则不展示" />
                     </el-form-item>
                   </el-col>
                 </el-row>
                 <el-row :gutter="20">
                   <el-col :span="12">
                     <el-form-item label="公安备案信息">
-                      <el-input v-model="settings.site.filing_mps" />
+                      <el-input v-model="settings.site.filing_mps" placeholder="留空则不展示" />
                     </el-form-item>
                   </el-col>
                   <el-col :span="12">
                     <el-form-item label="公安备案链接">
-                      <el-input v-model="settings.site.filing_mps_link" />
+                      <el-input v-model="settings.site.filing_mps_link" placeholder="留空则不展示" />
                     </el-form-item>
                   </el-col>
                 </el-row>

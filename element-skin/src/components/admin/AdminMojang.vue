@@ -440,6 +440,7 @@ onMounted(fetchSettings)
   max-width: 1100px;
   margin: 0 auto;
   padding: 20px 0;
+  animation: fadeIn 0.4s ease-out;
 }
 
 /* Page Header */
@@ -656,5 +657,10 @@ onMounted(fetchSettings)
   .expanded-wrapper { padding: 16px; }
   .section-header-small { flex-direction: column; align-items: flex-start; gap: 10px; }
   .add-user-form { width: 100%; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 </style>
