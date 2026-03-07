@@ -1,7 +1,10 @@
 <template>
   <div class="profile-section">
-    <div class="section-header">
-      <h2>个人资料</h2>
+    <div class="library-header">
+      <div class="header-content">
+        <h1>个人资料</h1>
+        <p>管理您的账号安全与个性化设置</p>
+      </div>
     </div>
 
     <el-card class="profile-form-card">
@@ -255,6 +258,30 @@ async function confirmDeleteAccount() {
 <style scoped>
 .profile-section {
   animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.library-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.header-content h1 {
+  font-size: 32px;
+  margin: 0 0 8px 0;
+  background: linear-gradient(135deg, var(--color-heading) 0%, #409eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header-content p {
+  margin: 0;
+  color: var(--color-text-light);
+  font-size: 16px;
+  transition: color 0.3s ease;
 }
 
 .profile-form-card {

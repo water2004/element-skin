@@ -1,13 +1,16 @@
 <template>
   <div class="roles-section">
-    <div class="section-header">
-      <h2>角色管理</h2>
+    <div class="library-header">
+      <div class="header-content">
+        <h1>角色管理</h1>
+        <p>创建并管理您的 Minecraft 角色身份</p>
+      </div>
       <div class="header-actions">
-        <el-button type="success" size="large" @click="startMicrosoftAuth">
+        <el-button type="success" size="large" @click="startMicrosoftAuth" class="action-btn-success">
           <el-icon><Connection /></el-icon>
           <span style="margin-left:8px">绑定正版角色</span>
         </el-button>
-        <el-button type="primary" size="large" @click="showCreateRoleDialog = true">
+        <el-button type="primary" size="large" @click="showCreateRoleDialog = true" class="action-btn-primary">
           <el-icon><Plus /></el-icon>
           <span style="margin-left:8px">新建角色</span>
         </el-button>
@@ -339,13 +342,59 @@ onMounted(async () => {
   animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.common-grid {
-  justify-content: center;
+.library-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.header-content h1 {
+  font-size: 32px;
+  margin: 0 0 8px 0;
+  background: linear-gradient(135deg, var(--color-heading) 0%, #409eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header-content p {
+  margin: 0;
+  color: var(--color-text-light);
+  font-size: 16px;
+  transition: color 0.3s ease;
 }
 
 .header-actions {
   display: flex;
   gap: 12px;
+}
+
+.action-btn-primary {
+  background: linear-gradient(135deg, #409eff 0%, #5cadff 100%);
+  color: #fff;
+  border: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.action-btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
+}
+
+.action-btn-success {
+  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
+  color: #fff;
+  border: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.action-btn-success:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4);
 }
 
 .role-preview {

@@ -1,8 +1,11 @@
 <template>
   <div class="wardrobe-section">
-    <div class="section-header">
-      <h2>我的衣柜</h2>
-      <el-button type="primary" @click="showUploadDialog = true" size="large">
+    <div class="library-header">
+      <div class="header-content">
+        <h1>我的衣柜</h1>
+        <p>管理并应用您的皮肤与披风纹理</p>
+      </div>
+      <el-button type="primary" @click="showUploadDialog = true" size="large" class="action-btn-primary">
         <el-icon><Upload /></el-icon>
         <span style="margin-left:8px">上传纹理</span>
       </el-button>
@@ -443,6 +446,43 @@ onMounted(() => {
 <style scoped>
 .wardrobe-section {
   animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.library-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 40px;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.header-content h1 {
+  font-size: 32px;
+  margin: 0 0 8px 0;
+  background: linear-gradient(135deg, var(--color-heading) 0%, #409eff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.header-content p {
+  margin: 0;
+  color: var(--color-text-light);
+  font-size: 16px;
+  transition: color 0.3s ease;
+}
+
+.action-btn-primary {
+  background: linear-gradient(135deg, #409eff 0%, #5cadff 100%);
+  color: #fff;
+  border: none;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.action-btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
 }
 
 .common-grid {
