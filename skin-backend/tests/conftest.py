@@ -61,6 +61,11 @@ def test_env_setup():
     # 恢复 (可选，如果是 session 级别其实无所谓)
     db.db_path = original_db_path
 
+@pytest.fixture(scope="session")
+def test_config(test_env_setup):
+    """提供覆盖后的配置对象"""
+    return config
+
 @pytest.fixture(scope="function")
 async def db_session(test_env_setup):
     """
