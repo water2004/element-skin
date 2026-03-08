@@ -1,24 +1,28 @@
 <template>
-  <div class="admin-fallback">
+  <div class="admin-fallback animate-fade-in">
     <div class="page-header">
-      <div class="header-content">
-        <el-icon class="header-icon"><Connection /></el-icon>
-        <div class="header-text">
+      <div class="page-header-content">
+        <div class="page-header-icon"><Connection /></div>
+        <div class="page-header-text">
           <h2>Fallback 服务配置</h2>
           <p class="subtitle">管理外部 Yggdrasil 或 Mojang API 的回退逻辑与白名单</p>
         </div>
       </div>
-      <el-button type="primary" :icon="Check" @click="saveSettings" :loading="saving" class="save-btn">
-        保存更改
-      </el-button>
+      <div class="page-header-actions">
+        <el-button type="primary" :icon="Check" @click="saveSettings" :loading="saving" class="hover-lift">
+          保存更改
+        </el-button>
+      </div>
     </div>
 
     <!-- Global Strategy Card -->
-    <el-card class="modern-card mb-6" shadow="never">
+    <el-card class="surface-card mb-6" shadow="never">
       <template #header>
-        <div class="card-header-title">
-          <el-icon><Setting /></el-icon>
-          <span>全局调度策略</span>
+        <div class="card-header-flex">
+          <div class="title-group">
+            <el-icon><Setting /></el-icon>
+            <span>全局调度策略</span>
+          </div>
         </div>
       </template>
       <div class="strategy-container">
@@ -36,7 +40,7 @@
             </div>
           </el-radio-button>
         </el-radio-group>
-        <div class="strategy-info">
+        <div class="strategy-info-box">
           <p v-if="settings.fallback_strategy === 'serial'">
             系统将按照列表优先级顺序逐个尝试 Fallback 端点，直到获得成功响应或遍历完所有服务。
           </p>
@@ -48,14 +52,14 @@
     </el-card>
 
     <!-- Endpoints List -->
-    <el-card class="modern-card" shadow="never">
+    <el-card class="surface-card" shadow="never">
       <template #header>
-        <div class="card-header">
-          <div class="card-header-title">
+        <div class="card-header-flex">
+          <div class="title-group">
             <el-icon><List /></el-icon>
             <span>Fallback 服务链</span>
           </div>
-          <el-button size="small" :icon="Plus" @click="addFallback" plain>添加端点</el-button>
+          <el-button size="small" :icon="Plus" @click="addFallback" plain class="hover-lift">添加端点</el-button>
         </div>
       </template>
 
@@ -69,7 +73,7 @@
           <template #default="{ row }">
             <div class="expanded-wrapper">
               <div class="config-section">
-                <div class="section-title">API 接口定义</div>
+                <div class="section-title-label">API 接口定义</div>
                 <div class="url-grid">
                   <div class="url-item">
                     <label>Session URL</label>
@@ -95,30 +99,30 @@
               </div>
 
               <div class="config-section mt-6">
-                <div class="section-title">功能与权限控制</div>
+                <div class="section-title-label">功能与权限控制</div>
                 <div class="features-panel">
-                  <div class="feature-card" :class="{ active: row.enable_profile }">
-                    <div class="feature-main">
+                  <div class="feature-card-item" :class="{ active: row.enable_profile }">
+                    <div class="feature-main-box">
                       <el-switch v-model="row.enable_profile" />
-                      <div class="feature-info">
+                      <div class="feature-info-box">
                         <span class="f-name">Profile 转发</span>
                         <span class="f-desc">允许向此端点查询 UUID 和皮肤材质</span>
                       </div>
                     </div>
                   </div>
-                  <div class="feature-card" :class="{ active: row.enable_hasjoined }">
-                    <div class="feature-main">
+                  <div class="feature-card-item" :class="{ active: row.enable_hasjoined }">
+                    <div class="feature-main-box">
                       <el-switch v-model="row.enable_hasjoined" />
-                      <div class="feature-info">
+                      <div class="feature-info-box">
                         <span class="f-name">Auth 认证回退</span>
                         <span class="f-desc">本地验证失败后尝试以此端点验证 session</span>
                       </div>
                     </div>
                   </div>
-                  <div class="feature-card" :class="{ active: row.enable_whitelist }">
-                    <div class="feature-main">
+                  <div class="feature-card-item" :class="{ active: row.enable_whitelist }">
+                    <div class="feature-main-box">
                       <el-switch v-model="row.enable_whitelist" @change="(val) => onWhitelistToggle(row, val)" />
-                      <div class="feature-info">
+                      <div class="feature-info-box">
                         <span class="f-name">开启白名单</span>
                         <span class="f-desc">仅允许特定玩家使用此端点进行验证</span>
                       </div>
@@ -129,13 +133,13 @@
 
               <!-- Whitelist Section -->
               <transition name="el-zoom-in-top">
-                <div v-if="row.enable_whitelist" class="whitelist-section mt-6">
+                <div v-if="row.enable_whitelist" class="whitelist-box mt-6">
                   <div class="section-header-small">
-                    <div class="section-title">
+                    <div class="section-title-label">
                       端点白名单列表
                       <el-tag v-if="hasWhitelistChanges(row)" size="small" type="warning" effect="dark" class="ml-2">有未保存更改</el-tag>
                     </div>
-                    <div class="add-user-form">
+                    <div class="add-user-form-box">
                       <el-input 
                         v-model="row._new_user" 
                         placeholder="输入 Minecraft ID" 
@@ -173,13 +177,13 @@
         <el-table-column label="服务备注" min-width="240">
           <template #default="scope">
             <div class="note-container">
-              <div class="priority-pill">{{ scope.$index + 1 }}</div>
+              <div class="priority-pill-box">{{ scope.$index + 1 }}</div>
               <el-input 
                 v-model="scope.row.note" 
                 placeholder="设置端点备注 (如: Mojang 官方)" 
-                class="flat-input"
+                class="flat-input-box"
               />
-              <div class="row-indicators">
+              <div class="row-indicators-box">
                 <el-tooltip content="Profile 转发" v-if="scope.row.enable_profile">
                   <el-icon class="i-profile"><User /></el-icon>
                 </el-tooltip>
@@ -196,7 +200,7 @@
 
         <el-table-column label="调度控制" width="160" align="right">
           <template #default="scope">
-            <div class="action-btns">
+            <div class="action-btns-box">
               <el-tooltip content="上移">
                 <el-button :icon="ArrowUp" size="small" circle @click="moveUp(scope.$index)" :disabled="scope.$index === 0" />
               </el-tooltip>
@@ -237,7 +241,6 @@ async function fetchSettings() {
     
     const raw = Array.isArray(res.data.fallbacks) ? res.data.fallbacks : []
     
-    // We update the array but try to preserve existing objects to maintain expansion state and local changes
     const newFallbacks = raw.map((item, index) => {
       const existing = fallbacks.value.find(f => (f.id && f.id === item.id) || (f.session_url === item.session_url && f.note === item.note))
       
@@ -265,7 +268,6 @@ async function saveSettings() {
   const loading = ElLoading.service({ text: '正在同步配置与白名单...', background: 'rgba(0, 0, 0, 0.7)' })
   saving.value = true
   try {
-    // 1. Save Endpoint Settings
     const payload = {
       fallback_strategy: settings.value.fallback_strategy,
       fallbacks: fallbacks.value.map(item => ({
@@ -284,18 +286,15 @@ async function saveSettings() {
     }
     await axios.post('/admin/settings/fallback', payload, { headers })
 
-    // 2. Refresh to ensure we have IDs for new endpoints
     const res = await axios.get('/admin/settings/fallback', { headers })
     const updatedFallbacksFromDB = res.data.fallbacks || []
     
-    // 3. Sync Whitelists for each endpoint
     for (const localRow of fallbacks.value) {
-      // Find the corresponding DB ID
       const dbEndpoint = updatedFallbacksFromDB.find(f => f.session_url === localRow.session_url && f.note === localRow.note)
       if (!dbEndpoint || !dbEndpoint.id) continue
 
       const endpointId = dbEndpoint.id
-      localRow.id = endpointId // Update local ID immediately
+      localRow.id = endpointId 
       
       if (localRow._loaded && hasWhitelistChanges(localRow)) {
         const initialNames = localRow._initialWhitelist.map(u => u.username.toLowerCase())
@@ -309,8 +308,6 @@ async function saveSettings() {
            ...toRemove.map(u => axios.delete(`/admin/official-whitelist/${u.username}`, { headers, params: { endpoint_id: endpointId } }))
         ]
         await Promise.all(promises)
-        
-        // Update local "initial" state to reflect successful sync
         localRow._initialWhitelist = JSON.parse(JSON.stringify(localRow._whitelist))
       }
     }
@@ -435,63 +432,21 @@ onMounted(fetchSettings)
 </script>
 
 <style scoped>
-/* ... (Style section remains unchanged) */
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/layout.css";
+@import "@/assets/styles/cards.css";
+@import "@/assets/styles/headers.css";
+@import "@/assets/styles/tags.css";
+@import "@/assets/styles/buttons.css";
+
 .admin-fallback {
   max-width: 1100px;
   margin: 0 auto;
   padding: 20px 0;
-  animation: fadeIn 0.4s ease-out;
 }
 
-/* Page Header */
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 30px;
-}
-.header-content {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.header-icon {
-  font-size: 32px;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  padding: 12px;
-  border-radius: 12px;
-}
-.header-text h2 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--color-heading);
-}
-.header-text .subtitle {
-  margin: 4px 0 0 0;
-  color: var(--color-text-light);
-  font-size: 14px;
-}
-
-/* Modern Card */
-.modern-card {
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.card-header-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  color: var(--color-heading);
-}
+.card-header-flex { display: flex; justify-content: space-between; align-items: center; }
+.card-header-flex .title-group { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--color-heading); }
 
 /* Strategy Panel */
 .strategy-container {
@@ -500,28 +455,13 @@ onMounted(fetchSettings)
   gap: 16px;
   padding: 10px 0;
 }
-.modern-radio :deep(.el-radio-button__inner) {
-  height: 48px;
-  display: flex;
-  align-items: center;
-  padding: 0 30px;
-  border-radius: 8px !important;
-  margin-right: 12px;
-  border: 1px solid var(--color-border) !important;
-  box-shadow: none !important;
-}
-.modern-radio :deep(.el-radio-button.is-active .el-radio-button__inner) {
-  background-color: var(--el-color-primary-light-9);
-  color: var(--el-color-primary);
-  border-color: var(--el-color-primary) !important;
-}
 .radio-content {
   display: flex;
   align-items: center;
   gap: 8px;
   font-weight: 500;
 }
-.strategy-info {
+.strategy-info-box {
   font-size: 13px;
   color: var(--color-text-light);
   background: var(--color-background-soft);
@@ -531,12 +471,8 @@ onMounted(fetchSettings)
 }
 
 /* Note Column */
-.note-container {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.priority-pill {
+.note-container { display: flex; align-items: center; gap: 10px; }
+.priority-pill-box {
   background: var(--el-color-primary);
   color: #fff;
   font-size: 11px;
@@ -549,118 +485,43 @@ onMounted(fetchSettings)
   border-radius: 6px;
   flex-shrink: 0;
 }
-.flat-input :deep(.el-input__wrapper) {
-  box-shadow: none !important;
-  padding: 0;
-  background: transparent;
-}
-.flat-input :deep(.el-input__inner) {
-  font-weight: 500;
-  color: var(--color-text-primary);
-}
-.row-indicators {
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
-}
-.row-indicators .el-icon {
-  font-size: 14px;
-}
+.flat-input-box :deep(.el-input__wrapper) { box-shadow: none !important; padding: 0; background: transparent; }
+.flat-input-box :deep(.el-input__inner) { font-weight: 500; color: var(--color-heading); }
+.row-indicators-box { display: flex; gap: 6px; margin-left: auto; }
+.row-indicators-box .el-icon { font-size: 14px; }
 .i-profile { color: var(--el-color-success); }
 .i-auth { color: var(--el-color-primary); }
 .i-whitelist { color: var(--el-color-warning); }
 
 /* Expanded Area */
-.expanded-wrapper {
-  padding: 24px 30px;
-  background: var(--color-background-soft);
-  border-top: 1px solid var(--color-border);
-}
-.section-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--color-text-secondary);
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-.url-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-.url-item label {
-  display: block;
-  font-size: 12px;
-  color: var(--color-text-light);
-  margin-bottom: 6px;
-}
+.expanded-wrapper { padding: 24px 30px; background: var(--color-background-soft); border-top: 1px solid var(--color-border); }
+.section-title-label { font-size: 13px; font-weight: 600; color: var(--color-text-light); margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.url-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.url-item label { display: block; font-size: 12px; color: var(--color-text-light); margin-bottom: 6px; }
 
 /* Features Panel */
-.features-panel {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-.feature-card {
-  background: var(--color-card-background);
-  border: 1px solid var(--color-border);
-  padding: 16px;
-  border-radius: 10px;
-  transition: all 0.3s;
-}
-.feature-card.active {
-  border-color: var(--el-color-primary-light-5);
-  background: var(--el-color-primary-light-9);
-}
-.feature-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-}
-.feature-info {
-  display: flex;
-  flex-direction: column;
-}
+.features-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.feature-card-item { background: var(--color-card-background); border: 1px solid var(--color-border); padding: 16px; border-radius: 10px; transition: var(--transition-base); }
+.feature-card-item.active { border-color: var(--el-color-primary-light-5); background: rgba(64, 158, 255, 0.05); }
+.feature-main-box { display: flex; align-items: flex-start; gap: 12px; }
+.feature-info-box { display: flex; flex-direction: column; }
 .f-name { font-size: 14px; font-weight: 600; color: var(--color-heading); }
 .f-desc { font-size: 11px; color: var(--color-text-light); margin-top: 2px; }
 
 /* Whitelist Section */
-.whitelist-section {
-  background: var(--color-card-background);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 20px;
-}
-.section-header-small {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-.add-user-form { width: 300px; }
+.whitelist-box { background: var(--color-card-background); border: 1px solid var(--color-border); border-radius: 10px; padding: 20px; }
+.section-header-small { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.add-user-form-box { width: 300px; }
 
-/* Helpers */
 .mb-6 { margin-bottom: 24px; }
 .mt-6 { margin-top: 24px; }
-
-.action-btns {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
 .ml-2 { margin-left: 8px; }
+.action-btns-box { display: flex; gap: 8px; justify-content: flex-end; }
 
 @media (max-width: 768px) {
   .url-grid, .features-panel { grid-template-columns: 1fr; }
   .expanded-wrapper { padding: 16px; }
   .section-header-small { flex-direction: column; align-items: flex-start; gap: 10px; }
-  .add-user-form { width: 100%; }
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  .add-user-form-box { width: 100%; }
 }
 </style>

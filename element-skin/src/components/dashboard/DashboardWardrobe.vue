@@ -1,25 +1,25 @@
 <template>
-  <div class="wardrobe-section">
-    <div class="library-header">
-      <div class="header-content">
+  <div class="wardrobe-section animate-fade-in">
+    <div class="page-header">
+      <div class="page-header-content">
         <h1>我的衣柜</h1>
         <p>管理并应用您的皮肤与披风纹理</p>
       </div>
-      <el-button type="primary" @click="showUploadDialog = true" size="large" class="action-btn-primary">
+      <el-button @click="showUploadDialog = true" size="large" class="btn-gradient btn-gradient-primary">
         <el-icon><Upload /></el-icon>
         <span style="margin-left:8px">上传纹理</span>
       </el-button>
     </div>
 
-    <div class="common-grid" v-if="textures.length > 0">
+    <div class="auto-grid" v-if="textures.length > 0">
       <div
-        class="common-card clickable-card"
+        class="surface-card hoverable animate-card-slide clickable-card"
         v-for="(tex, index) in textures"
         :key="tex.hash + tex.type"
         :style="{ '--delay-index': index }"
         @click="openDetailDialog(tex)"
       >
-        <div class="texture-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
+        <div class="item-card-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
           <SkinViewer
             v-if="tex.type === 'skin'"
             :skinUrl="texturesUrl(tex.hash)"
@@ -33,20 +33,19 @@
             :width="200"
             :height="280"
           />
-          <!-- 皮肤分辨率标签 -->
           <div
             v-if="tex.type === 'skin' && textureResolutions.get(tex.hash)"
-            class="resolution-badge"
+            class="floating-badge"
             :style="getResolutionBadgeStyle(textureResolutions.get(tex.hash))"
           >
             {{ textureResolutions.get(tex.hash) }}x
           </div>
         </div>
-        <div class="texture-info-simple">
-          <div class="texture-type-tag" :class="tex.type">
+        <div class="item-card-info">
+          <div class="type-tag" :class="tex.type">
             {{ tex.type === 'skin' ? '皮肤' : '披风' }}
           </div>
-          <div class="texture-note-simple">{{ tex.note || '未命名纹理' }}</div>
+          <div class="item-card-title">{{ tex.note || '未命名纹理' }}</div>
         </div>
       </div>
     </div>
@@ -57,10 +56,10 @@
       v-model="showDetailDialog"
       width="800px"
       destroy-on-close
-      class="gallery-dialog"
+      class="dialog-viewer"
     >
-      <div class="gallery-container" v-if="selectedTexture">
-        <div class="gallery-stage">
+      <div class="viewer-layout" v-if="selectedTexture">
+        <div class="viewer-stage">
           <SkinViewer
             v-if="selectedTexture.type === 'skin'"
             :skinUrl="texturesUrl(selectedTexture.hash)"
@@ -76,10 +75,10 @@
           />
         </div>
 
-        <div class="gallery-info" v-loading="isDetailLoading">
+        <div class="viewer-info-panel" v-loading="isDetailLoading">
           <template v-if="selectedTexture">
-            <section class="info-section title-section">
-            <div class="title-row">
+            <section class="viewer-section title-section">
+            <div class="viewer-title-row">
               <el-button text circle class="title-edit-btn" @click="focusNoteInput">
                 <el-icon><Edit /></el-icon>
               </el-button>
@@ -87,28 +86,30 @@
                 ref="noteInputRef"
                 v-model="editingNoteValue"
                 placeholder="未命名纹理"
-                class="gallery-note-input"
+                class="viewer-title-input"
                 @blur="updateNote"
                 @keyup.enter="updateNote"
               />
             </div>
           </section>
 
-          <section class="info-section meta-section">
-            <span class="meta-chip">{{ textureResolutions.get(selectedTexture.hash) || '--' }}px</span>
-            <span class="meta-chip hash-chip">{{ selectedTexture.hash }}</span>
+          <section class="viewer-section meta-section">
+            <div class="viewer-title-row">
+              <span class="meta-chip">{{ textureResolutions.get(selectedTexture.hash) || '--' }}px</span>
+              <span class="meta-chip hash">{{ selectedTexture.hash }}</span>
+            </div>
           </section>
 
-          <section class="info-section" v-if="selectedTexture.type === 'skin'">
-            <div class="section-label">模型选择</div>
+          <section class="viewer-section" v-if="selectedTexture.type === 'skin'">
+            <div class="viewer-section-label">模型选择</div>
             <el-radio-group v-model="selectedTexture.model" @change="updateModel" class="capsule-radio">
               <el-radio-button value="default">Default</el-radio-button>
               <el-radio-button value="slim">Slim</el-radio-button>
             </el-radio-group>
           </section>
 
-          <section class="info-section" v-if="!isDetailLoading && selectedTexture.is_public !== 2">
-            <div class="section-label">公开状态</div>
+          <section class="viewer-section" v-if="!isDetailLoading && selectedTexture.is_public !== 2">
+            <div class="viewer-section-label">公开状态</div>
             <div class="public-toggle-row">
               <el-switch
                 v-model="selectedTexture.is_public"
@@ -122,8 +123,8 @@
             </div>
           </section>
 
-          <section class="info-section">
-            <div class="section-label">应用到角色</div>
+          <section class="viewer-section">
+            <div class="viewer-section-label">应用到角色</div>
             <div class="apply-row">
               <el-select v-model="applyForm.profile_id" placeholder="选择目标" class="gallery-select">
                 <el-option
@@ -139,7 +140,7 @@
             </div>
           </section>
 
-          <section class="info-section footer-section">
+          <section class="viewer-section footer-section">
             <el-button type="danger" plain class="gallery-delete-btn" @click="confirmDelete">
               删除纹理
             </el-button>
@@ -247,8 +248,6 @@ function texturesUrl(hash) {
 }
 
 async function openDetailDialog(tex) {
-  // 先设置基础信息用于预览展示
-  // 显式设置 is_public 为 2 (隐藏)，直到详情加载完成，防止 el-switch 状态错误
   selectedTexture.value = { ...tex, is_public: 2 }
   editingNoteValue.value = tex.note || ''
   applyForm.value.hash = tex.hash
@@ -260,7 +259,6 @@ async function openDetailDialog(tex) {
   
   try {
     const res = await axios.get(`/me/textures/${tex.hash}/${tex.type}`, { headers: authHeaders() })
-    // 更新为完整信息（包含 is_public 等）
     selectedTexture.value = res.data
     editingNoteValue.value = res.data.note || ''
   } catch (e) {
@@ -284,7 +282,6 @@ async function updateNote() {
   try {
     await axios.patch(`/me/textures/${tex.hash}/${tex.type}`, { note: updated }, { headers: authHeaders() })
     tex.note = updated
-    // 同步更新本地列表，避免重新获取
     const localTex = textures.value.find(t => t.hash === tex.hash && t.type === tex.type)
     if (localTex) localTex.note = updated
     ElMessage.success('备注已更新')
@@ -299,7 +296,6 @@ async function updateModel(val) {
   try {
     await axios.patch(`/me/textures/${tex.hash}/${tex.type}`, { model: val }, { headers: authHeaders() })
     tex.model = val
-    // 同步更新本地列表
     const localTex = textures.value.find(t => t.hash === tex.hash && t.type === tex.type)
     if (localTex) localTex.model = val
     ElMessage.success(`模型已切换为 ${val === 'slim' ? '纤细' : '普通'}`)
@@ -309,16 +305,13 @@ async function updateModel(val) {
 }
 
 async function updateIsPublic(val) {
-  // 数据加载中或对象为空时，拒绝任何更新操作
   if (!selectedTexture.value || isDetailLoading.value) return
-  
   const tex = selectedTexture.value
   try {
     await axios.patch(`/me/textures/${tex.hash}/${tex.type}`, { is_public: val === 1 }, { headers: authHeaders() })
     ElMessage.success(val === 1 ? '材质已公开' : '材质已设为私有')
   } catch (e) {
     ElMessage.error('更新公开状态失败')
-    // 恢复原状态
     tex.is_public = val === 1 ? 0 : 1
   }
 }
@@ -341,32 +334,21 @@ function loadTextureResolution(hash) {
   const img = new Image()
   img.crossOrigin = 'anonymous'
   img.onload = () => {
-    const resolution = img.width
-    textureResolutions.value.set(hash, resolution)
+    textureResolutions.value.set(hash, img.width)
   }
   img.src = texturesUrl(hash)
 }
 
 function getResolutionBadgeStyle(resolution) {
   let hue = 0
-  if (resolution <= 64) {
-    hue = 120
-  } else if (resolution <= 128) {
-    hue = 120 - ((resolution - 64) / 64) * 60
-  } else if (resolution <= 256) {
-    hue = 60 - ((resolution - 128) / 128) * 30
-  } else if (resolution <= 512) {
-    hue = 30 - ((resolution - 256) / 256) * 30
-  } else {
-    hue = 330
-  }
-
-  const saturation = 58
-  const lightness = 65
-
+  if (resolution <= 64) hue = 120
+  else if (resolution <= 128) hue = 120 - ((resolution - 64) / 64) * 60
+  else if (resolution <= 256) hue = 60 - ((resolution - 128) / 128) * 30
+  else if (resolution <= 512) hue = 30 - ((resolution - 256) / 256) * 30
+  else hue = 330
   return {
-    background: `linear-gradient(135deg, hsl(${hue}, ${saturation}%, ${lightness}%), hsl(${hue + 15}, ${saturation - 5}%, ${lightness - 3}%))`,
-    boxShadow: `0 2px 6px hsla(${hue}, ${saturation}%, ${lightness - 15}%, 0.25)`
+    background: `linear-gradient(135deg, hsl(${hue}, 58%, 65%), hsl(${hue + 15}, 53%, 62%))`,
+    boxShadow: `0 2px 6px hsla(${hue}, 58%, 50%, 0.25)`
   }
 }
 
@@ -430,7 +412,7 @@ async function doApply() {
       texture_type: applyForm.value.texture_type
     }, { headers: authHeaders() })
     ElMessage.success('已应用')
-    fetchMe() // Refresh parent (user profiles)
+    fetchMe()
     fetchTextures()
   } catch (e) {
     ElMessage.error('应用失败: ' + (e.response?.data?.detail || e.message))
@@ -444,243 +426,33 @@ onMounted(() => {
 })
 </script>
 
+<style>
+/* Global Styles for Teleported Elements */
+@import "@/assets/styles/dialogs.css";
+@import "@/assets/styles/item-viewer.css";
+@import "@/assets/styles/item-cards.css";
+</style>
+
 <style scoped>
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/layout.css";
+@import "@/assets/styles/buttons.css";
+@import "@/assets/styles/cards.css";
+@import "@/assets/styles/tags.css";
+
 .wardrobe-section {
-  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.library-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 40px;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.header-content h1 {
-  font-size: 32px;
-  margin: 0 0 8px 0;
-  background: linear-gradient(135deg, var(--color-heading) 0%, #409eff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.header-content p {
-  margin: 0;
-  color: var(--color-text-light);
-  font-size: 16px;
-  transition: color 0.3s ease;
-}
-
-.action-btn-primary {
-  background: linear-gradient(135deg, #409eff 0%, #5cadff 100%);
-  color: #fff;
-  border: none;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.action-btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
-}
-
-.common-grid {
-  justify-content: center;
 }
 
 .clickable-card {
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.clickable-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--el-box-shadow-light);
-}
-
-.texture-preview {
-  width: 100%;
-  height: 280px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  position: relative;
-  overflow: hidden;
-}
-
-.resolution-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  backdrop-filter: blur(4px);
-  animation: badgeFadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) 0.3s backwards;
-  z-index: 10;
-}
-
-.texture-info-simple {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  background: var(--color-card-background);
-}
-
-.texture-note-simple {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text);
-  max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: center;
-}
-
-.texture-type-tag {
-  font-size: 10px;
-  padding: 1px 8px;
-  border-radius: 10px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.texture-type-tag.skin {
-  background: rgba(64, 158, 255, 0.1);
-  color: #409eff;
-}
-
-.texture-type-tag.cape {
-  background: rgba(103, 194, 58, 0.1);
-  color: #67c23a;
-}
-
-.gallery-dialog :deep(.el-dialog__headerbtn) {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 10;
-  width: 32px;
-  height: 32px;
-}
-
-.gallery-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  min-height: 560px;
-}
-
-.gallery-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 560px;
-  background: var(--color-background-hero-light);
-  transition: background 0.3s ease;
-}
-
-:global(html.dark) .gallery-stage {
-  background: var(--color-background-hero-dark);
-}
-
-.gallery-info {
-  background: var(--color-card-background);
-  padding: 24px;
-  display: flex;
-  flex-direction: column;
-  min-height: 560px;
-  border-left: 1px solid var(--el-border-color-lighter);
-}
-
-.info-section {
-  padding: 14px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .title-section {
   padding-top: 0;
 }
 
-.title-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.gallery-note-input {
-  flex: 1;
-}
-
-.gallery-note-input :deep(.el-input__wrapper) {
-  box-shadow: none !important;
-  background: transparent !important;
-  padding: 0;
-}
-
-.gallery-note-input :deep(.el-input__inner) {
-  height: 44px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--color-text);
-}
-
 .title-edit-btn {
   color: var(--el-text-color-secondary);
-}
-
-.meta-section {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.meta-chip {
-  display: inline-flex;
-  align-items: center;
-  max-width: 100%;
-  height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--color-background-soft);
-  font-size: 12px;
-  color: var(--el-text-color-regular);
-}
-
-.hash-chip {
-  max-width: 240px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.section-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--el-text-color-regular);
-  margin-bottom: 10px;
-}
-
-.capsule-radio :deep(.el-radio-button__inner) {
-  border-radius: 8px !important;
-  margin-right: 6px;
-  border: 1px solid var(--el-border-color-lighter) !important;
-  background: transparent;
-  font-weight: 500;
-}
-
-.capsule-radio :deep(.el-radio-button__orig-radio:checked + .el-radio-button__inner) {
-  background: var(--el-color-primary) !important;
-  border-color: var(--el-color-primary) !important;
-  color: #fff !important;
 }
 
 .apply-row {
@@ -705,7 +477,7 @@ onMounted(() => {
 
 .gallery-select :deep(.el-input__wrapper) {
   border-radius: 8px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--color-border);
   background: var(--color-background-soft);
   box-shadow: none !important;
 }
@@ -726,68 +498,11 @@ onMounted(() => {
   border-radius: 8px;
 }
 
-@media (max-width: 900px) {
-  .gallery-dialog {
-    --el-dialog-width: 94vw;
-  }
-
-  .gallery-container {
-    grid-template-columns: 1fr;
-  }
-
-  .gallery-stage {
-    min-height: 340px;
-  }
-
-  .gallery-info {
-    min-height: auto;
-    border-left: 0;
-    border-top: 1px solid var(--el-border-color-lighter);
-    padding: 16px;
-  }
-
-  .hash-chip {
-    max-width: 100%;
-  }
-}
-
 /* Upload Dialog Styles */
 .upload-dialog :deep(.el-upload-dragger) {
   width: 100%;
 }
 .upload-wrapper {
   width: 100%;
-}
-</style>
-
-<!-- 全局样式：穿透 Teleport 渲染的 el-dialog -->
-<style>
-/* 针对 gallery-dialog 的全局覆盖，解决 Teleport 导致 scoped 样式失效问题 */
-.gallery-dialog.el-dialog {
-  padding: 0 !important;
-  --el-dialog-padding-primary: 0;
-  border-radius: 14px !important;
-  overflow: hidden !important;
-  border: 1px solid var(--el-border-color-lighter) !important;
-}
-
-.gallery-dialog.el-dialog .el-dialog__header {
-  padding: 0 !important;
-  margin: 0 !important;
-  height: 0 !important;
-  min-height: 0 !important;
-  overflow: visible !important;
-}
-
-.gallery-dialog.el-dialog .el-dialog__body {
-  padding: 0 !important;
-  margin: 0 !important;
-}
-
-.gallery-dialog.el-dialog .el-dialog__headerbtn {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  z-index: 10;
 }
 </style>

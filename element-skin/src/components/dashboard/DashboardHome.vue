@@ -1,30 +1,30 @@
 <template>
-  <div class="dashboard-home">
+  <div class="dashboard-home animate-fade-in">
     <!-- Stats Section -->
     <div class="stats-section">
       <el-row :gutter="20">
         <el-col :xs="24" :sm="12">
-          <el-card shadow="hover" class="stats-card">
-            <div class="stats-content">
-              <div class="stats-icon bg-blue">
+          <el-card shadow="hover" class="surface-card">
+            <div class="stats-card-content">
+              <div class="stats-card-icon bg-gradient-blue">
                 <el-icon><Box /></el-icon>
               </div>
-              <div class="stats-info">
-                <div class="stats-label">材质数量</div>
-                <div class="stats-value">{{ textureCount }}</div>
+              <div class="stats-card-info">
+                <div class="stats-card-label">材质数量</div>
+                <div class="stats-card-value">{{ textureCount }}</div>
               </div>
             </div>
           </el-card>
         </el-col>
         <el-col :xs="24" :sm="12">
-          <el-card shadow="hover" class="stats-card">
-            <div class="stats-content">
-              <div class="stats-icon bg-purple">
+          <el-card shadow="hover" class="surface-card">
+            <div class="stats-card-content">
+              <div class="stats-card-icon bg-gradient-purple">
                 <el-icon><User /></el-icon>
               </div>
-              <div class="stats-info">
-                <div class="stats-label">角色数量</div>
-                <div class="stats-value">{{ profileCount }}</div>
+              <div class="stats-card-info">
+                <div class="stats-card-label">角色数量</div>
+                <div class="stats-card-value">{{ profileCount }}</div>
               </div>
             </div>
           </el-card>
@@ -34,7 +34,7 @@
 
     <!-- Quick Config Section -->
     <div class="config-section">
-      <el-card shadow="hover" class="config-card">
+      <el-card shadow="hover" class="surface-card config-card">
         <template #header>
           <div class="card-header">
             <span>快速配置启动器</span>
@@ -81,10 +81,10 @@
         <div v-if="mojangStatusUrls">
           <el-row :gutter="20">
             <el-col :xs="24" :sm="8" v-for="(url, key) in mojangStatusUrls" :key="key">
-              <el-card shadow="hover" class="status-card-mojang">
+              <el-card shadow="hover" class="surface-card status-card-mojang">
                 <div class="status-item">
                   <div class="status-label">{{ key.toUpperCase() }} API</div>
-                  <div class="status-indicator" :class="getMojangStatus(key)">
+                  <div class="status-tag" :class="getMojangStatus(key)">
                     <el-icon v-if="getMojangStatus(key) === 'online'"><Check /></el-icon>
                     <el-icon v-else-if="getMojangStatus(key) === 'checking'"><Loading /></el-icon>
                     <el-icon v-else><Warning /></el-icon>
@@ -230,62 +230,17 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/cards.css";
+@import "@/assets/styles/tags.css";
+
 .dashboard-home {
-  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   flex-direction: column;
   gap: 24px;
 }
 
-/* Stats Section */
-.stats-card {
-  border-radius: 12px;
-  overflow: hidden;
-  border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  background: var(--color-card-background);
-}
-.stats-content {
-  display: flex;
-  align-items: center;
-  padding: 20px;
-}
-.stats-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  color: white;
-  margin-right: 20px;
-}
-.bg-blue { background: linear-gradient(135deg, #409eff, #337ecc); }
-.bg-purple { background: linear-gradient(135deg, #a0cfff, #8c9eff); /* Adjusted to match theme potentially */ background: linear-gradient(135deg, #b37feb, #8553cf); }
-
-.stats-info {
-  display: flex;
-  flex-direction: column;
-}
-.stats-label {
-  font-size: 14px;
-  color: var(--color-text-light);
-  margin-bottom: 4px;
-}
-.stats-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--color-heading);
-}
-
-/* Config Section */
-.config-card {
-  border-radius: 12px;
-  border: 1px solid var(--color-border);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  background: var(--color-card-background);
-}
+/* Config Section Specifics */
 .card-header {
   font-weight: 600;
   font-size: 18px;
@@ -323,13 +278,13 @@ onMounted(async () => {
 }
 .drag-btn:hover {
   transform: translateY(-2px);
-  color: white; /* Ensure text stays white on hover if primary */
+  color: white;
 }
 .drag-btn:active {
   transform: translateY(0);
 }
 
-/* Mojang Status Section */
+/* Mojang Status Section Specifics */
 .mojang-status-section {
     margin-top: 12px;
 }
@@ -345,35 +300,18 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--color-heading);
 }
-.status-card-mojang {
-  margin-bottom: 20px;
-  border-radius: 12px;
-  border: 1px solid var(--color-border);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-  background: var(--color-card-background);
+.status-card-mojang :deep(.el-card__body) {
+  padding: 0;
 }
 .status-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px;
+  padding: 12px 16px;
 }
 .status-label {
   font-size: 15px;
   color: var(--color-text);
   font-weight: 600;
 }
-.status-indicator {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 16px;
-  background: var(--color-background-soft);
-}
-.status-indicator.online { color: #67c23a; background: rgba(103, 194, 58, 0.1); }
-.status-indicator.checking { color: #409eff; background: rgba(64, 158, 255, 0.1); }
-.status-indicator.offline { color: #f56c6c; background: rgba(245, 108, 108, 0.1); }
 </style>

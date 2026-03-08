@@ -1,5 +1,5 @@
 <template>
-  <div class="skin-library-container">
+  <div class="skin-library-container animate-fade-in">
     <div v-if="isDisabled" class="disabled-container">
       <el-empty description="皮肤库已关闭">
         <template #extra>
@@ -8,24 +8,24 @@
       </el-empty>
     </div>
     <template v-else>
-      <div class="library-header">
-      <div class="header-content">
-        <h1>皮肤库</h1>
-        <p>探索并收藏精美材质</p>
+      <div class="page-header">
+        <div class="page-header-content">
+          <h1>皮肤库</h1>
+          <p>探索并收藏精美材质</p>
+        </div>
+        <div class="page-header-actions">
+          <el-radio-group v-model="filterType" @change="handleFilterChange" size="large" class="capsule-radio">
+            <el-radio-button value="">全部</el-radio-button>
+            <el-radio-button value="skin">皮肤</el-radio-button>
+            <el-radio-button value="cape">披风</el-radio-button>
+          </el-radio-group>
+        </div>
       </div>
-      <div class="header-filters">
-        <el-radio-group v-model="filterType" @change="handleFilterChange" size="large">
-          <el-radio-button value="">全部</el-radio-button>
-          <el-radio-button value="skin">皮肤</el-radio-button>
-          <el-radio-button value="cape">披风</el-radio-button>
-        </el-radio-group>
-      </div>
-    </div>
 
     <div class="library-grid-container" v-loading="loading">
-      <div class="common-grid" v-if="items.length > 0">
+      <div class="auto-grid" v-if="items.length > 0">
         <div 
-          class="common-card" 
+          class="surface-card hoverable animate-card-slide" 
           v-for="(item, index) in items" 
           :key="item.hash"
           :style="{ '--delay-index': index % 20 }"
@@ -47,7 +47,7 @@
             />
             <div
               v-if="item.type === 'skin' && textureResolutions.get(item.hash)"
-              class="resolution-badge"
+              class="floating-badge"
               :style="getResolutionBadgeStyle(textureResolutions.get(item.hash))"
             >
               {{ textureResolutions.get(item.hash) }}x
@@ -68,7 +68,7 @@
           </div>
           <div class="texture-actions">
             <el-button 
-              class="action-btn action-btn-primary" 
+              class="btn-gradient btn-gradient-primary" 
               @click="addToWardrobe(item.hash)"
               :disabled="!isLogged"
             >
@@ -215,11 +215,15 @@ onMounted(() => {
 </script>
 
 <style scoped>
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/layout.css";
+@import "@/assets/styles/buttons.css";
+@import "@/assets/styles/cards.css";
+@import "@/assets/styles/tags.css";
+
 .skin-library-container {
-  max-width: 1400px;
   margin: 0 0;
   padding: 0;
-  animation: fadeIn 0.4s ease;
 }
 
 .disabled-container {
@@ -227,30 +231,6 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   min-height: 60vh;
-}
-
-.library-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 40px;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.header-content h1 {
-  font-size: 32px;
-  margin: 0 0 8px 0;
-  background: linear-gradient(135deg, var(--color-heading) 0%, #409eff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.header-content p {
-  margin: 0;
-  color: var(--color-text-light);
-  font-size: 16px;
-  transition: color 0.3s ease;
 }
 
 .library-grid-container {
@@ -265,19 +245,6 @@ onMounted(() => {
   align-items: center;
   position: relative;
   overflow: hidden;
-}
-
-.resolution-badge {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  padding: 4px 10px;
-  border-radius: 6px;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  backdrop-filter: blur(4px);
-  z-index: 10;
 }
 
 .texture-info {
@@ -334,37 +301,9 @@ onMounted(() => {
   flex: 1;
 }
 
-.action-btn {
-  border: none;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.action-btn-primary {
-  background: linear-gradient(135deg, #409eff 0%, #5cadff 100%);
-  color: #fff;
-}
-
-.action-btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
-}
-
 .pagination-container {
   margin-top: 40px;
   display: flex;
   justify-content: center;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@media (max-width: 768px) {
-  .library-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 }
 </style>

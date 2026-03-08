@@ -1,0 +1,43 @@
+/* Navigation and Action Links */
+
+/* 1. Sidebar/Navigation Links */
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  color: var(--color-text);
+  text-decoration: none;
+  font-weight: 500;
+  margin-bottom: 4px;
+  /* Motion handled by animations.css hover-shift-x or variables */
+  transition: var(--transition-base);
+}
+
+.nav-link:hover {
+  background: var(--color-background-soft);
+  color: var(--el-color-primary);
+}
+
+.nav-link.active {
+  background: rgba(64, 158, 255, 0.1);
+  color: var(--el-color-primary);
+  font-weight: 600;
+}
+
+.nav-link .el-icon {
+  font-size: 18px;
+}
+
+/* 2. Text/Inline Links */
+.inline-link {
+  color: var(--el-color-primary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: var(--transition-fast);
+}
+
+.inline-link:hover {
+  border-bottom-color: currentColor;
+}

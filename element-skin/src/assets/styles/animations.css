@@ -1,0 +1,74 @@
+/* Global Animation Definitions */
+
+:root {
+  --transition-base: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-bounce: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 1. Keyframes */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes cardSlideIn {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes badgeFadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 2. Animation Classes */
+.animate-fade-in {
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* Fix: Added animation-delay and both fill mode for staggered entrance */
+.animate-card-slide {
+  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: calc(var(--delay-index, 0) * 0.05s);
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* 3. Reusable Transition/Transform Classes */
+.hover-lift {
+  transition: var(--transition-base);
+}
+.hover-lift:hover:not(:disabled) {
+  transform: translateY(-4px);
+}
+
+.hover-shift-x {
+  transition: var(--transition-base);
+}
+.hover-shift-x:hover:not(:disabled) {
+  transform: translateX(6px);
+}
+
+.hover-scale {
+  transition: var(--transition-bounce);
+}
+.hover-scale:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+/* Motion-off support */
+html.motion-off *,
+html.motion-off *::before,
+html.motion-off *::after {
+  animation-duration: 0s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0s !important;
+}

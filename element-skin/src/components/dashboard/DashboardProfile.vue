@@ -1,13 +1,13 @@
 <template>
-  <div class="profile-section">
-    <div class="library-header">
-      <div class="header-content">
+  <div class="profile-section animate-fade-in">
+    <div class="page-header">
+      <div class="page-header-content">
         <h1>个人资料</h1>
         <p>管理您的账号安全与个性化设置</p>
       </div>
     </div>
 
-    <el-card class="profile-form-card">
+    <el-card class="profile-form-card surface-card animate-card-slide">
       <div class="profile-header">
         <el-avatar :size="72" class="profile-avatar">{{ emailInitial }}</el-avatar>
         <div class="profile-meta">
@@ -256,42 +256,17 @@ async function confirmDeleteAccount() {
 </script>
 
 <style scoped>
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/layout.css";
+@import "@/assets/styles/cards.css";
+
 .profile-section {
-  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.library-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 40px;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.header-content h1 {
-  font-size: 32px;
-  margin: 0 0 8px 0;
-  background: linear-gradient(135deg, var(--color-heading) 0%, #409eff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.header-content p {
-  margin: 0;
-  color: var(--color-text-light);
-  font-size: 16px;
-  transition: color 0.3s ease;
 }
 
 .profile-form-card {
   max-width: 600px;
   margin: 0 auto;
   padding: 30px;
-  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  background: var(--color-card-background);
-  border: 1px solid var(--color-border);
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
 }
 
 .profile-header {
@@ -341,9 +316,6 @@ async function confirmDeleteAccount() {
 
 .profile-form-card :deep(.el-form-item) {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.profile-form-card :deep(.el-divider) {
 }
 
 .profile-form-card :deep(.el-divider__text) {

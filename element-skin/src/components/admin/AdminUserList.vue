@@ -1,19 +1,21 @@
 <template>
-  <div class="users-section">
+  <div class="users-section animate-fade-in">
     <div class="page-header">
-      <div class="header-content">
-        <el-icon class="header-icon"><UserFilled /></el-icon>
-        <div class="header-text">
+      <div class="page-header-content">
+        <div class="page-header-icon"><UserFilled /></div>
+        <div class="page-header-text">
           <h2>用户管理</h2>
           <p class="subtitle">管理站内所有用户及其角色的状态与权限</p>
         </div>
       </div>
-      <el-button type="primary" :icon="Refresh" @click="refreshUsers" plain>
-        刷新列表
-      </el-button>
+      <div class="page-header-actions">
+        <el-button type="primary" :icon="Refresh" @click="refreshUsers" plain class="hover-lift">
+          刷新列表
+        </el-button>
+      </div>
     </div>
 
-    <el-card class="modern-card" shadow="never">
+    <el-card class="surface-card" shadow="never">
       <el-table :data="users" style="width: 100%" class="modern-table" v-loading="loading">
         <el-table-column prop="display_name" label="用户名" min-width="150">
           <template #default="{ row }">
@@ -43,8 +45,9 @@
               type="primary"
               @click="showUserDetailDialog(row)"
               plain
+              class="hover-lift"
             >
-              详情 / 管理
+              管理
             </el-button>
           </template>
         </el-table-column>
@@ -56,7 +59,7 @@
       v-model="userDetailDialogVisible"
       :title="currentUser?.display_name || currentUser?.email || '用户详情'"
       width="800px"
-      class="modern-dialog"
+      class="dialog-viewer"
       destroy-on-close
     >
       <div v-if="currentUser" class="user-detail-container">
@@ -102,8 +105,8 @@
           
           <el-tab-pane label="危险操作">
             <div class="actions-grid">
-              <div class="action-card">
-                <div class="action-text">
+              <div class="action-card-item">
+                <div class="action-text-box">
                   <div class="a-title">管理权限</div>
                   <div class="a-desc">授予或撤销该用户的管理员权限。</div>
                 </div>
@@ -111,13 +114,14 @@
                   :type="currentUser.is_admin ? 'warning' : 'primary'" 
                   @click="toggleAdmin(currentUser)"
                   :disabled="isCurrentUserSelf(currentUser)"
+                  class="hover-lift"
                 >
                   {{ currentUser.is_admin ? '撤销管理' : '设为管理' }}
                 </el-button>
               </div>
 
-              <div class="action-card">
-                <div class="action-text">
+              <div class="action-card-item">
+                <div class="action-text-box">
                   <div class="a-title">账号封禁</div>
                   <div class="a-desc">暂时禁止该用户登录 Minecraft 客户端。</div>
                 </div>
@@ -126,26 +130,27 @@
                   type="warning" 
                   @click="showBanDialog"
                   :disabled="currentUser.is_admin || isCurrentUserSelf(currentUser)"
+                  class="hover-lift"
                 >
                   执行封禁
                 </el-button>
-                <el-button v-else type="success" @click="unbanUser(currentUser)">
+                <el-button v-else type="success" @click="unbanUser(currentUser)" class="hover-lift">
                   解除封禁
                 </el-button>
               </div>
 
-              <div class="action-card">
-                <div class="action-text">
+              <div class="action-card-item">
+                <div class="action-text-box">
                   <div class="a-title">强制重置密码</div>
                   <div class="a-desc">系统管理员手动为该用户设置新密码。</div>
                 </div>
-                <el-button @click="showResetPasswordDialog(currentUser)">
+                <el-button @click="showResetPasswordDialog(currentUser)" class="hover-lift">
                   重置密码
                 </el-button>
               </div>
 
-              <div class="action-card dangerous">
-                <div class="action-text">
+              <div class="action-card-item dangerous">
+                <div class="action-text-box">
                   <div class="a-title">注销账号</div>
                   <div class="a-desc">永久删除该用户及其所有关联的角色、皮肤。</div>
                 </div>
@@ -153,6 +158,7 @@
                   type="danger" 
                   @click="deleteUser(currentUser)"
                   :disabled="currentUser.is_admin || isCurrentUserSelf(currentUser)"
+                  class="hover-lift"
                 >
                   删除用户
                 </el-button>
@@ -182,7 +188,7 @@
     <!-- Ban User Dialog -->
     <el-dialog v-model="banDialogVisible" title="设置封禁时长" width="450px">
       <div class="ban-dialog-body">
-        <el-radio-group v-model="banDurationType" class="mb-4">
+        <el-radio-group v-model="banDurationType" class="mb-4 capsule-radio">
           <el-radio-button value="preset">快速选择</el-radio-button>
           <el-radio-button value="custom">精确小时</el-radio-button>
         </el-radio-group>
@@ -218,7 +224,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Refresh, Check, UserFilled, Warning, CircleCheck, Key, Delete 
+  Refresh, UserFilled, Warning, CircleCheck 
 } from '@element-plus/icons-vue'
 
 const users = ref([])
@@ -343,7 +349,9 @@ async function unbanUser(user) {
 const getUserBanStatus = (user) => user.banned_until && Date.now() < user.banned_until
 const isCurrentUserSelf = (user) => {
   try {
-    return JSON.parse(atob(localStorage.getItem('jwt').split('.')[1])).sub === user.id
+    const token = localStorage.getItem('jwt')
+    if (!token) return false
+    return JSON.parse(atob(token.split('.')[1])).sub === user.id
   } catch (e) { return false }
 }
 const formatBanRemaining = (ts) => {
@@ -360,43 +368,49 @@ const formatBanUntilTime = () => {
 onMounted(refreshUsers)
 </script>
 
+<style>
+@import "@/assets/styles/dialogs.css";
+</style>
+
 <style scoped>
-.users-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; animation: fadeIn 0.4s ease-out; }
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/layout.css";
+@import "@/assets/styles/cards.css";
+@import "@/assets/styles/tags.css";
+@import "@/assets/styles/buttons.css";
+@import "@/assets/styles/headers.css";
 
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.header-content { display: flex; align-items: center; gap: 16px; }
-.header-icon { font-size: 28px; color: var(--el-color-primary); background: var(--el-color-primary-light-9); padding: 10px; border-radius: 10px; }
-.header-text h2 { margin: 0; font-size: 20px; font-weight: 600; }
-.header-text .subtitle { margin: 2px 0 0 0; color: var(--color-text-light); font-size: 13px; }
+.users-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
 
-.modern-card { border: 1px solid var(--color-border); border-radius: 12px; }
 .user-cell { display: flex; align-items: center; }
 
 /* Dialog Styles */
+.user-detail-container { padding: 24px; }
 .identity-panel { display: flex; align-items: center; gap: 24px; padding: 20px; background: var(--color-background-soft); border-radius: 12px; }
 .panel-avatar { background: var(--el-color-primary-light-3); color: white; font-weight: bold; border: 2px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .panel-info { flex: 1; }
-.panel-name { display: flex; align-items: center; }
-.panel-name h3 { margin: 0; font-size: 20px; }
-.panel-email { color: var(--color-text-secondary); margin-top: 4px; }
+.panel-name { display: flex; align-items: center; gap: 8px; }
+.panel-name h3 { margin: 0; font-size: 20px; color: var(--color-heading); }
+.panel-email { color: var(--color-text-light); margin-top: 4px; }
 .panel-id { font-size: 11px; font-family: monospace; color: var(--color-text-light); margin-top: 4px; }
 .panel-status { text-align: right; }
 .ban-timer { font-size: 12px; color: var(--el-color-warning); margin-top: 4px; }
 
 .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 10px 0; }
-.action-card { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--color-background-soft); border-radius: 10px; border: 1px solid var(--color-border); }
-.action-card.dangerous { border-color: var(--el-color-danger-light-8); }
-.a-title { font-weight: 600; font-size: 14px; }
+.action-card-item { display: flex; justify-content: space-between; align-items: center; padding: 16px; background: var(--color-background-soft); border-radius: 10px; border: 1px solid var(--color-border); }
+.action-card-item.dangerous { border-color: rgba(245, 108, 108, 0.3); }
+.action-text-box { flex: 1; margin-right: 12px; }
+.a-title { font-weight: 600; font-size: 14px; color: var(--color-heading); }
 .a-desc { font-size: 12px; color: var(--color-text-light); margin-top: 2px; }
 
-.preset-durations { display: flex; gap: 8px; flex-wrap: wrap; }
-.ban-preview { font-size: 13px; color: var(--color-text-secondary); padding: 10px; background: var(--color-background-mute); border-radius: 6px; }
+.ban-preview { font-size: 13px; color: var(--color-text-light); padding: 10px; background: var(--color-background-mute); border-radius: 6px; }
 .ban-preview span { font-weight: bold; color: var(--el-color-primary); }
 
 .mr-2 { margin-right: 8px; }
-.ml-2 { margin-left: 8px; }
 .mb-4 { margin-bottom: 16px; }
 .mb-6 { margin-bottom: 24px; }
 
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 768px) {
+  .actions-grid { grid-template-columns: 1fr; }
+}
 </style>

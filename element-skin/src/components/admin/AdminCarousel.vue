@@ -1,21 +1,23 @@
 <template>
-  <div class="admin-carousel">
+  <div class="admin-carousel animate-fade-in">
     <div class="page-header">
-      <div class="header-content">
-        <el-icon class="header-icon"><PictureFilled /></el-icon>
-        <div class="header-text">
+      <div class="page-header-content">
+        <div class="page-header-icon"><PictureFilled /></div>
+        <div class="page-header-text">
           <h2>首页图库管理</h2>
           <p class="subtitle">上传并管理首页展示的轮播图片，建议使用高清横屏大图</p>
         </div>
       </div>
-      <el-upload
-        action="#"
-        :http-request="uploadCarousel"
-        :show-file-list="false"
-        accept=".png,.jpg,.jpeg,.webp"
-      >
-        <el-button type="primary" :icon="Upload" size="large">上传图片</el-button>
-      </el-upload>
+      <div class="page-header-actions">
+        <el-upload
+          action="#"
+          :http-request="uploadCarousel"
+          :show-file-list="false"
+          accept=".png,.jpg,.jpeg,.webp"
+        >
+          <el-button type="primary" :icon="Upload" size="large" class="hover-lift">上传图片</el-button>
+        </el-upload>
+      </div>
     </div>
 
     <el-alert
@@ -28,7 +30,7 @@
     />
 
     <div class="carousel-grid" v-loading="loading">
-      <div v-for="row in carouselImages" :key="row.filename" class="carousel-item-card">
+      <div v-for="row in carouselImages" :key="row.filename" class="surface-card hover-lift carousel-item-card">
         <el-image 
           :src="getCarouselUrl(row.filename)" 
           fit="cover" 
@@ -108,17 +110,16 @@ onMounted(fetchCarousel)
 </script>
 
 <style scoped>
-.admin-carousel { max-width: 1000px; margin: 0 auto; padding: 20px 0; animation: fadeIn 0.4s ease-out; }
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/layout.css";
+@import "@/assets/styles/cards.css";
+@import "@/assets/styles/headers.css";
+@import "@/assets/styles/buttons.css";
 
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.header-content { display: flex; align-items: center; gap: 16px; }
-.header-icon { font-size: 28px; color: var(--el-color-primary); background: var(--el-color-primary-light-9); padding: 10px; border-radius: 10px; }
-.header-text h2 { margin: 0; font-size: 20px; font-weight: 600; }
-.header-text .subtitle { margin: 2px 0 0 0; color: var(--color-text-light); font-size: 13px; }
+.admin-carousel { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
 
 .carousel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
-.carousel-item-card { background: var(--color-card-background); border: 1px solid var(--color-border); border-radius: 12px; overflow: hidden; transition: transform 0.3s, box-shadow 0.3s; }
-.carousel-item-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+.carousel-item-card { overflow: hidden; }
 
 .item-preview { width: 100%; height: 160px; cursor: zoom-in; }
 .item-info { padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; background: var(--color-background-soft); }
@@ -127,10 +128,7 @@ onMounted(fetchCarousel)
 .empty-placeholder { grid-column: 1 / -1; padding: 40px 0; }
 .mb-6 { margin-bottom: 24px; }
 
-@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
 @media (max-width: 768px) {
-  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
   .carousel-grid { grid-template-columns: 1fr; }
 }
 </style>

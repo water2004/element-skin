@@ -1,12 +1,12 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Picture, Files, Connection } from '@element-plus/icons-vue'
+import { User } from '@element-plus/icons-vue'
 import axios from 'axios'
 
 const router = useRouter()
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
-const siteSubtitle = ref(localStorage.getItem('site_subtitle_cache') || '简洁、高效、现代的 Minecraft 皮肤管理站')
+const siteSubtitle = ref(localStorage.getItem('site_subtitle_cache') || '简洁、高效、现代的 Minecraft 皮肤 management 站')
 const isLogged = ref(false)
 const carouselImages = ref([])
 
@@ -47,17 +47,9 @@ onMounted(async () => {
   }
 })
 
-function goDashboard() {
-  router.push('/dashboard')
-}
-
-function goLogin() {
-  router.push('/login')
-}
-
-function goRegister() {
-  router.push('/register')
-}
+function goDashboard() { router.push('/dashboard') }
+function goLogin() { router.push('/login') }
+function goRegister() { router.push('/register') }
 
 function getCarouselUrl(filename) {
   const base = import.meta.env.BASE_URL
@@ -67,39 +59,37 @@ function getCarouselUrl(filename) {
 
 <template>
   <div class="home-container">
-    <div class="hero-wrapper">
-      <!-- Background Carousel -->
-      <div v-if="carouselImages.length > 0" class="hero-carousel-bg">
-        <el-carousel height="100%" indicator-position="none" arrow="never" :interval="5000">
-          <el-carousel-item v-for="img in carouselImages" :key="img">
-            <div class="carousel-img-wrap">
-              <img :src="getCarouselUrl(img)" class="carousel-img" />
-              <div class="carousel-overlay"></div>
-            </div>
-          </el-carousel-item>
-        </el-carousel>
-      </div>
-      <div v-else class="hero-gradient-bg"></div>
-
-      <!-- Hero Content -->
-      <div class="hero-section">
-        <div class="hero-content">
-          <h1 class="hero-title">{{ siteName }}</h1>
-          <p class="hero-subtitle">{{ siteSubtitle }}</p>
-          <div class="hero-actions">
-            <el-button v-if="isLogged" type="primary" size="large" @click="goDashboard" class="hero-btn">
-              <el-icon><User /></el-icon>
-              <span>进入个人面板</span>
-            </el-button>
-            <template v-else>
-              <el-button type="primary" size="large" @click="goLogin" class="hero-btn">
-                登录账号
-              </el-button>
-              <el-button size="large" @click="goRegister" class="hero-btn secondary">
-                即刻注册
-              </el-button>
-            </template>
+    <!-- Background is FIXED and outside of main content flow -->
+    <div v-if="carouselImages.length > 0" class="hero-bg-fixed">
+      <el-carousel height="100%" indicator-position="none" arrow="never" :interval="5000">
+        <el-carousel-item v-for="img in carouselImages" :key="img">
+          <div class="carousel-img-wrap">
+            <img :src="getCarouselUrl(img)" class="carousel-img" />
+            <div class="carousel-overlay"></div>
           </div>
+        </el-carousel-item>
+      </el-carousel>
+    </div>
+    <div v-else class="hero-bg-fixed is-gradient"></div>
+
+    <!-- Main Content -->
+    <div class="hero-section">
+      <div class="hero-content animate-fade-in">
+        <h1 class="hero-title">{{ siteName }}</h1>
+        <p class="hero-subtitle">{{ siteSubtitle }}</p>
+        <div class="hero-actions">
+          <el-button v-if="isLogged" size="large" @click="goDashboard" class="btn-glass btn-glass-primary hero-btn">
+            <el-icon><User /></el-icon>
+            <span>进入个人面板</span>
+          </el-button>
+          <template v-else>
+            <el-button size="large" @click="goLogin" class="btn-glass btn-glass-primary hero-btn">
+              登录账号
+            </el-button>
+            <el-button size="large" @click="goRegister" class="btn-glass hero-btn">
+              即刻注册
+            </el-button>
+          </template>
         </div>
       </div>
     </div>
@@ -107,199 +97,51 @@ function getCarouselUrl(filename) {
 </template>
 
 <style scoped>
-.home-container {
-  width: 100%;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/buttons.css";
 
-.hero-wrapper {
+.home-container { 
+  width: 100%; 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
   position: relative;
-  width: 100%;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  overflow: hidden; /* Prevent any accidental content overflow */
 }
 
-.hero-carousel-bg, .hero-gradient-bg, :deep(.el-carousel) {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
+/* FIXED Background logic - Using 100% instead of 100vw to avoid scrollbar calculation issues */
+.hero-bg-fixed {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 0;
+}
+.hero-bg-fixed.is-gradient {
+  background: linear-gradient(135deg, #1a1a1a 0%, #333333 100%);
+}
+
+.hero-bg-fixed :deep(.el-carousel) {
   height: 100%;
-  z-index: 1;
 }
 
-.hero-gradient-bg {
-  background: var(--color-background-hero-light);
-  transition: background 0.3s ease;
-}
-
-.carousel-img-wrap {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-
-.carousel-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.carousel-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.4); /* Darken for text readability */
+.carousel-img-wrap { width: 100%; height: 100%; position: relative; }
+.carousel-img { width: 100%; height: 100%; object-fit: cover; }
+.carousel-overlay { 
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+  background: rgba(0, 0, 0, 0.45); 
 }
 
 .hero-section {
-  position: relative;
-  z-index: 2;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  padding: 0 20px;
+  position: relative; z-index: 1; flex: 1; display: flex; align-items: center; justify-content: center; color: #fff; padding: 0 20px;
 }
 
-.hero-content {
-  text-align: center;
-  max-width: 800px;
-  animation: fadeIn 0.8s ease-out;
-}
+.hero-content { text-align: center; max-width: 800px; }
+.hero-title { font-size: 56px; font-weight: 800; margin: 0 0 16px 0; letter-spacing: -1.5px; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
+.hero-subtitle { font-size: 20px; margin: 0 0 32px 0; opacity: 0.95; font-weight: 400; }
 
-.hero-title {
-  font-size: 56px;
-  font-weight: 800;
-  margin: 0 0 16px 0;
-  letter-spacing: -1px;
-}
-
-.hero-subtitle {
-  font-size: 20px;
-  margin: 0 0 32px 0;
-  opacity: 0.9;
-  font-weight: 300;
-}
-
-.hero-actions {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-}
-
-.hero-btn {
-  height: 48px;
-  padding: 0 32px;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 12px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-/* 首页蓝色半透明按钮 */
-.hero-btn:not(.secondary) {
-  background: rgba(64, 158, 255, 0.25) !important;
-  border: 1px solid rgba(64, 158, 255, 0.3) !important;
-  color: #fff !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.hero-btn:not(.secondary):hover {
-  background: rgba(64, 158, 255, 0.4) !important;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-}
-
-/* 首页白色半透明按钮 */
-.hero-btn.secondary {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border: 1px solid rgba(255, 255, 255, 0.2) !important;
-  color: #fff !important;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.hero-btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.2) !important;
-  transform: translateY(-2px);
-}
-
-.features-section {
-  padding: 80px 20px;
-  background: transparent;
-}
-
-.container {
-  max-width: 1100px;
-  margin: 0 auto;
-}
-
-.features-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 40px;
-}
-
-.feature-card {
-  text-align: center;
-  padding: 20px;
-}
-
-.feature-icon-simple {
-  font-size: 40px;
-  margin-bottom: 20px;
-}
-
-.feature-card h3 {
-  font-size: 22px;
-  font-weight: 700;
-  margin: 0 0 12px 0;
-  color: #2c3e50;
-}
-
-.feature-card p {
-  font-size: 16px;
-  color: #7f8c8d;
-  line-height: 1.6;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+.hero-actions { display: flex; gap: 16px; justify-content: center; }
+.hero-btn { height: 52px; padding: 0 36px; font-size: 16px; font-weight: 600; border-radius: 14px; }
 
 @media (max-width: 768px) {
-  .hero-wrapper {
-    height: 400px;
-    border-radius: 0;
-    margin-top: 0;
-  }
-  .hero-title {
-    font-size: 36px;
-  }
-  .features-grid {
-    grid-template-columns: 1fr;
-    gap: 20px;
-  }
-  .hero-actions {
-    flex-direction: column;
-    gap: 12px;
-  }
-  .hero-btn {
-    width: 100%;
-  }
+  .hero-title { font-size: 36px; }
+  .hero-actions { flex-direction: column; gap: 12px; }
+  .hero-btn { width: 100%; }
 }
 </style>

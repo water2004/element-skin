@@ -1,0 +1,95 @@
+/* Viewer Layout (Stage + Sidebar) */
+
+.viewer-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 560px;
+}
+
+.viewer-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 560px;
+  background: var(--color-background-hero-light);
+  transition: background 0.3s ease;
+}
+
+html.dark .viewer-stage {
+  background: var(--color-background-hero-dark);
+}
+
+.viewer-info-panel {
+  background: var(--color-card-background);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  min-height: 560px;
+  border-left: 1px solid var(--color-border);
+  position: relative;
+}
+
+.viewer-section {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.viewer-section-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text-light);
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.viewer-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 48px; /* Safe distance for close button */
+}
+
+.viewer-title-input {
+  flex: 1;
+}
+
+/* Base wrapper styling */
+.viewer-title-input .el-input__wrapper {
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 0 !important;
+  border: none !important;
+  transition: box-shadow 0.2s ease;
+}
+
+/* Focus indicator - subtle underline */
+.viewer-title-input .el-input__wrapper.is-focus {
+  box-shadow: 0 2px 0 var(--el-color-primary) !important;
+  border-radius: 0 !important;
+}
+
+.viewer-title-input .el-input__inner {
+  height: 48px;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--color-heading);
+  line-height: 48px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 900px) {
+  .viewer-layout {
+    grid-template-columns: 1fr;
+    min-height: auto;
+  }
+  .viewer-stage {
+    min-height: 340px;
+  }
+  .viewer-info-panel {
+    min-height: auto;
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+    padding: 16px;
+  }
+}

@@ -1,0 +1,52 @@
+/* Global Overrides for el-dialog */
+
+/* Clean viewer dialog without any padding */
+.dialog-viewer.el-dialog {
+  padding: 0 !important;
+  border-radius: 14px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--color-border);
+  background: var(--color-card-background);
+}
+
+.dialog-viewer .el-dialog__header {
+  padding: 0 !important;
+  margin: 0 !important;
+  height: 0 !important;
+}
+
+.dialog-viewer .el-dialog__body {
+  padding: 0 !important;
+}
+
+/* Float the close button with visibility background */
+.dialog-viewer .el-dialog__headerbtn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 1000;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background-soft);
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dialog-viewer .el-dialog__headerbtn:hover {
+  background: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+}
+
+.dialog-viewer .el-dialog__headerbtn:hover .el-dialog__close {
+  color: #fff !important;
+}
+
+/* Ensure icons fit nicely */
+.dialog-viewer .el-dialog__headerbtn .el-icon {
+  font-size: 16px;
+  color: var(--color-text-light);
+}

@@ -282,9 +282,43 @@ element-skin/
 - [ ] 批量材质导入工具
 
 ### 测试
-- [ ] 测试框架
-- [ ] 单元测试覆盖核心功能
-- [ ] 集成测试覆盖主要用户流程
+- [x] 分层自动化测试框架 (Pytest + Asyncio)
+- [x] 数据库层 (Database Layer) 全接口覆盖
+- [ ] 业务逻辑层 (Backend Logic Layer) 完整覆盖
+- [ ] API 接口层 (Integration Layer) 核心流程覆盖
+
+---
+
+## 🧪 自动化测试
+
+项目采用了分层测试架构，确保从底层数据库到顶层 API 的稳定性。
+
+### 测试架构
+1.  **数据库层 (tests/database/)**: 验证 SQL 逻辑、数据迁移及缓存一致性。
+2.  **业务逻辑层 (tests/backends/)**: 验证核心业务规则（如注册权限、材质级联更新）。
+3.  **API 接口层 (tests/api/)**: 模拟真实 HTTP 请求，验证路由、中间件及响应格式。
+
+### 运行测试
+测试会自动创建临时数据库和文件目录，不会影响本地开发数据。
+
+```bash
+cd skin-backend
+# 安装测试依赖
+pip install -r requirements.txt
+
+# 运行所有测试
+pytest tests/
+
+# 查看详细输出
+pytest -v
+```
+
+### 编写新测试
+利用 `tests/conftest.py` 中预定义的 Fixtures 可以极速编写测试：
+- `db_session`: 获取一个干净的临时数据库实例。
+- `user_factory`: 快速创建测试用户。
+- `auth_headers` / `admin_headers`: 自动生成带 JWT 的请求头。
+- `client`: 异步 API 客户端。
 
 ## 📄 许可证
 

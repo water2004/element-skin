@@ -1,24 +1,24 @@
 <template>
-  <div class="roles-section">
-    <div class="library-header">
-      <div class="header-content">
+  <div class="roles-section animate-fade-in">
+    <div class="page-header">
+      <div class="page-header-content">
         <h1>角色管理</h1>
         <p>创建并管理您的 Minecraft 角色身份</p>
       </div>
-      <div class="header-actions">
-        <el-button type="success" size="large" @click="startMicrosoftAuth" class="action-btn-success">
+      <div class="page-header-actions">
+        <el-button size="large" @click="startMicrosoftAuth" class="btn-gradient btn-gradient-success">
           <el-icon><Connection /></el-icon>
           <span style="margin-left:8px">绑定正版角色</span>
         </el-button>
-        <el-button type="primary" size="large" @click="showCreateRoleDialog = true" class="action-btn-primary">
+        <el-button size="large" @click="showCreateRoleDialog = true" class="btn-gradient btn-gradient-primary">
           <el-icon><Plus /></el-icon>
           <span style="margin-left:8px">新建角色</span>
         </el-button>
       </div>
     </div>
 
-    <div class="common-grid">
-      <div v-for="(profile, index) in user?.profiles || []" :key="profile.id" class="common-card" :style="{ '--delay-index': index }">
+    <div class="auto-grid">
+      <div v-for="(profile, index) in user?.profiles || []" :key="profile.id" class="surface-card hoverable animate-card-slide" :style="{ '--delay-index': index }">
         <div
           class="role-preview"
           :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
@@ -39,38 +39,32 @@
         </div>
         <div class="role-actions">
           <el-button
-            class="action-btn action-btn-danger"
+            class="btn-gradient btn-gradient-danger btn-icon-swap"
             @click="deleteRole(profile.id)"
             size="default"
           >
-            <span class="btn-content">
-              <el-icon class="btn-icon"><Delete /></el-icon>
-              <span class="btn-label">删除</span>
-            </span>
+            <span class="btn-label">删除</span>
+            <el-icon class="btn-icon"><Delete /></el-icon>
           </el-button>
 
           <el-button
             v-if="profile.skin_hash"
-            class="action-btn action-btn-warning"
+            class="btn-soft-warning btn-icon-swap"
             @click="clearRoleSkin(profile.id)"
             size="default"
           >
-            <span class="btn-content">
-              <el-icon class="btn-icon"><Close /></el-icon>
-              <span class="btn-label">皮肤</span>
-            </span>
+            <span class="btn-label">皮肤</span>
+            <el-icon class="btn-icon"><Close /></el-icon>
           </el-button>
 
           <el-button
             v-if="profile.cape_hash"
-            class="action-btn action-btn-warning"
+            class="btn-soft-warning btn-icon-swap"
             @click="clearRoleCape(profile.id)"
             size="default"
           >
-            <span class="btn-content">
-              <el-icon class="btn-icon"><Close /></el-icon>
-              <span class="btn-label">披风</span>
-            </span>
+            <span class="btn-label">披风</span>
+            <el-icon class="btn-icon"><Close /></el-icon>
           </el-button>
         </div>
       </div>
@@ -338,64 +332,12 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-/* Previous Styles ... */
+@import "@/assets/styles/animations.css";
+@import "@/assets/styles/layout.css";
+@import "@/assets/styles/buttons.css";
+@import "@/assets/styles/cards.css";
+
 .roles-section {
-  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.library-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 40px;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.header-content h1 {
-  font-size: 32px;
-  margin: 0 0 8px 0;
-  background: linear-gradient(135deg, var(--color-heading) 0%, #409eff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.header-content p {
-  margin: 0;
-  color: var(--color-text-light);
-  font-size: 16px;
-  transition: color 0.3s ease;
-}
-
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.action-btn-primary {
-  background: linear-gradient(135deg, #409eff 0%, #5cadff 100%);
-  color: #fff;
-  border: none;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.action-btn-primary:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
-}
-
-.action-btn-success {
-  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%);
-  color: #fff;
-  border: none;
-  font-weight: 500;
-  transition: all 0.3s ease;
-}
-
-.action-btn-success:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4);
 }
 
 .role-preview {
@@ -440,122 +382,7 @@ onMounted(async () => {
   min-width: 0;
 }
 
-/* Action Buttons Styles */
-.action-btn {
-  border: none;
-  font-weight: 500;
-  transition: all 0.3s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.action-btn-danger {
-  background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%);
-  color: #fff;
-  position: relative;
-  overflow: hidden;
-}
-
-.action-btn-danger .btn-content {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-}
-
-.action-btn-danger .btn-label {
-  margin: 0;
-  grid-area: 1 / 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.action-btn-danger .btn-icon {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(0.6) rotate(-90deg);
-  opacity: 0;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  font-size: 16px;
-  pointer-events: none;
-}
-
-.action-btn-danger:hover .btn-label {
-  opacity: 0;
-  transform: translateY(8px) scale(0.8);
-}
-
-.action-btn-danger:hover .btn-icon {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1) rotate(0deg);
-}
-
-.action-btn-danger:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(245, 108, 108, 0.25);
-}
-
-.action-btn-warning {
-  color: var(--color-text); /* User requested dark text color */
-  border-color: #f3d19e;
-  background: rgba(230, 162, 60, 0.1);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
-  overflow: hidden;
-}
-
-.action-btn-warning .btn-content {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  height: 100%;
-}
-
-.action-btn-warning .btn-label {
-  margin: 0;
-  grid-area: 1 / 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.action-btn-warning .btn-icon {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%) scale(0.6) rotate(-90deg);
-  opacity: 0;
-  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  font-size: 16px;
-  pointer-events: none;
-}
-
-.action-btn-warning:hover .btn-label {
-  opacity: 0;
-  transform: translateY(8px) scale(0.8);
-}
-
-.action-btn-warning:hover .btn-icon {
-  opacity: 1;
-  transform: translate(-50%, -50%) scale(1) rotate(0deg);
-}
-
-.action-btn-warning:hover {
-  color: #fff;
-  background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(251,140,0,0.18);
-}
-
-/* Microsoft Login New Styles */
+/* Microsoft Login Specific Styles */
 .microsoft-login-content {
   padding: 10px 0;
 }
@@ -592,45 +419,5 @@ onMounted(async () => {
   font-family: monospace;
   font-size: 13px;
   color: var(--color-text-light);
-}
-
-.centered-step {
-  padding: 40px 0;
-}
-
-.loading-spinner {
-  position: relative;
-  width: 48px;
-  height: 48px;
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.spinner-ring {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  border: 3px solid #EBEEF5;
-  border-top-color: #409EFF;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.spinner-icon {
-  font-size: 20px;
-  color: #409EFF;
-}
-
-.loading-text {
-  color: #606266;
-  font-size: 14px;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 </style>
