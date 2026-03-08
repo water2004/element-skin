@@ -8,7 +8,7 @@ from httpx import AsyncClient, ASGITransport
 
 # 导入应用实例和配置对象
 # 注意：这会触发 routes_reference 模块级代码执行，包括 db = Database(...)
-from routes_reference import app, db, config, site_backend, admin_backend
+from routes_reference import app, db, config, site_backend, admin_backend, ygg_backend, crypto
 from utils.jwt_utils import create_jwt_token
 from utils.typing import User
 from utils.password_utils import hash_password
@@ -159,3 +159,13 @@ def site_backend_fixture(db_session):
 def admin_backend_fixture(db_session):
     """提供 admin_backend 实例"""
     return admin_backend
+
+@pytest.fixture
+def ygg_backend_fixture(db_session):
+    """提供 ygg_backend 实例"""
+    return ygg_backend
+
+@pytest.fixture
+def crypto_fixture():
+    """提供 crypto 实例"""
+    return crypto
