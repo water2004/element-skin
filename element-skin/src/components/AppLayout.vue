@@ -383,8 +383,9 @@ onUnmounted(() => {
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .theme-toggle { font-size: 20px; border-radius: 8px; }
 
-.app-main { padding: 20px; flex: 1; display: flex; flex-direction: column; background-color: var(--color-background); }
+.app-main { padding: 20px; flex: 1; display: flex; flex-direction: column; background-color: var(--color-background); transition: padding 0.3s ease; }
 .is-home-layout .app-main { padding: 0; flex: 1; height: 0; min-height: 0; }
+.is-auth-layout .app-main { padding: 0 !important; }
 
 /* Account */
 .account-trigger { display:flex; align-items:center; cursor:pointer; gap:8px; padding:6px 12px; border-radius:20px; transition: background-color 0.2s; }
