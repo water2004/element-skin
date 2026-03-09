@@ -2,7 +2,7 @@
 
 .footer-container {
   width: 100%;
-  padding: 24px 20px;
+  padding: 8px 20px; /* Minimal padding */
   transition: var(--transition-base);
   flex-shrink: 0;
   position: relative;
@@ -15,7 +15,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 0; /* Zero gap between rows */
   text-align: center;
 }
 
@@ -24,7 +24,7 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  line-height: 1.4;
+  line-height: 1.2; /* Tighter line height */
 }
 
 .footer-link-item {
@@ -70,8 +70,8 @@
 
 .footer-credits {
   font-size: 11px;
-  opacity: 0.5;
-  margin-top: 4px;
+  opacity: 0.6;
+  margin-top: 0;
 }
 
 /* 1. Home Variant: Transparent, stays in flow */
@@ -79,15 +79,21 @@
   background: transparent !important;
   color: #ffffff !important;
   border-top: none !important;
+  padding: 24px 20px !important; /* Keep outer padding for height */
 }
 
-.footer-home .footer-link-item {
-  color: #ffffff !important;
+.footer-home .footer-content {
+  gap: 2px; /* Tighter gap between rows */
+}
+
+.footer-home .footer-credits {
+  margin-top: 0;
 }
 
 .footer-home .footer-link-item:hover {
   color: #ffffff !important;
-  opacity: 1;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  text-decoration: underline !important; /* Restore underline for home */
 }
 
 /* 2. Standard Variant: Flow with card background */
@@ -95,7 +101,9 @@
   border-top: 1px solid var(--color-border);
   background: var(--color-card-background);
   color: var(--color-text-light);
+  padding: 8px 20px !important; /* Tight padding for content focus */
 }
+
 
 .footer-standard .footer-link-item:hover {
   color: var(--el-color-primary) !important;
