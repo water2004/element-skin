@@ -148,20 +148,6 @@ html.motion-off .profile-form-card .el-divider {
   padding: 20px;
 }
 
-a,
-.green {
-  text-decoration: none;
-  color: hsla(160, 100%, 37%, 1);
-  transition: 0.4s;
-  padding: 3px;
-}
-
-@media (hover: hover) {
-  a:hover {
-    background-color: hsla(160, 100%, 37%, 0.2);
-  }
-}
-
 @media (min-width: 1024px) {
   /* 大屏仍然使用居中容器，而不是两列布局，避免内容被强制分栏导致空白 */
   body {

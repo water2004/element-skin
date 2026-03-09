@@ -2,7 +2,7 @@
 
 .footer-container {
   width: 100%;
-  padding: 24px 20px;
+  padding: 8px 20px; /* Minimal padding */
   transition: var(--transition-base);
   flex-shrink: 0;
   position: relative;
@@ -15,7 +15,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 0; /* Zero gap between rows */
   text-align: center;
 }
 
@@ -24,7 +24,7 @@
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  line-height: 1.4;
+  line-height: 1.2; /* Tighter line height */
 }
 
 .footer-link-item {
@@ -33,41 +33,67 @@
   align-items: center;
   color: inherit;
   opacity: 0.7;
-  transition: var(--transition-fast);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   text-decoration: none;
+  padding: 4px 10px !important;
+  border-radius: 6px;
+  margin: 0 -2px;
 }
 
 .footer-link-item:hover {
   opacity: 1;
-  color: var(--el-color-primary);
-  text-decoration: underline;
+  text-decoration: none !important;
 }
 
-.footer-link-item + .footer-link-item::before {
-  content: "";
-  display: inline-block;
-  width: 1px;
-  height: 10px;
-  background: currentColor;
-  margin: 0 12px;
-  opacity: 0.15;
+.footer-home .footer-link-item:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+.footer-standard .footer-link-item:hover {
+  background-color: var(--color-background-soft) !important;
+}
+
+.footer-text-item {
+  font-size: 12px;
+  opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px !important;
+}
+
+.footer-separator {
+  font-size: 10px;
+  margin: 0 5px;
+  opacity: 0.6;
+  user-select: none;
 }
 
 .footer-credits {
   font-size: 11px;
-  opacity: 0.5;
-  margin-top: 4px;
+  opacity: 0.6;
+  margin-top: 0;
 }
 
 /* 1. Home Variant: Transparent, stays in flow */
 .footer-home {
   background: transparent !important;
-  color: #fff !important;
+  color: #ffffff !important;
   border-top: none !important;
+  padding: 24px 20px !important; /* Keep outer padding for height */
+}
+
+.footer-home .footer-content {
+  gap: 2px; /* Tighter gap between rows */
+}
+
+.footer-home .footer-credits {
+  margin-top: 0;
 }
 
 .footer-home .footer-link-item:hover {
-  color: #fff;
+  color: #ffffff !important;
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  text-decoration: underline !important; /* Restore underline for home */
 }
 
 /* 2. Standard Variant: Flow with card background */
@@ -75,6 +101,12 @@
   border-top: 1px solid var(--color-border);
   background: var(--color-card-background);
   color: var(--color-text-light);
+  padding: 8px 20px !important; /* Tight padding for content focus */
+}
+
+
+.footer-standard .footer-link-item:hover {
+  color: var(--el-color-primary) !important;
 }
 
 @media (max-width: 768px) {

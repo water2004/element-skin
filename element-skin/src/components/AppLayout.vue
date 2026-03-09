@@ -103,15 +103,23 @@
     >
       <div class="footer-content">
         <div class="footer-row">
-          <span v-if="footerText" class="footer-link-item">{{ footerText }}</span>
-          <a v-if="filingIcp" :href="filingIcpLink || '#'" target="_blank" class="footer-link-item">{{ filingIcp }}</a>
-          <a v-if="filingMps" :href="filingMpsLink || '#'" target="_blank" class="footer-link-item">
-            <img src="https://www.beian.gov.cn/img/ghs.png" style="width:13px; margin-right:4px;" />
-            {{ filingMps }}
-          </a>
+          <span v-if="footerText" class="footer-text-item">{{ footerText }}</span>
+          
+          <template v-if="filingIcp">
+            <span class="footer-separator">|</span>
+            <a :href="filingIcpLink || '#'" target="_blank" class="footer-link-item">{{ filingIcp }}</a>
+          </template>
+
+          <template v-if="filingMps">
+            <span class="footer-separator">|</span>
+            <a :href="filingMpsLink || '#'" target="_blank" class="footer-link-item">
+              <img src="https://www.beian.gov.cn/img/ghs.png" style="width:13px; margin-right:4px;" />
+              {{ filingMps }}
+            </a>
+          </template>
         </div>
         <div class="footer-credits">
-          Powered by <a :href="repoUrl" target="_blank" style="color:inherit; text-decoration:none; opacity:0.8;">{{ repoLabel }}</a>
+          Powered by <a :href="repoUrl" target="_blank" class="footer-link-item">{{ repoLabel }}</a>
         </div>
       </div>
     </footer>
@@ -351,11 +359,13 @@ onUnmounted(() => {
 
 .is-home-layout .header-actions :deep(.el-button--primary) {
   background: rgba(64, 158, 255, 0.3) !important; border: 1px solid rgba(64, 158, 255, 0.4) !important;
-  color: #fff !important; backdrop-filter: blur(8px);
+  color: #fff !important; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px;
 }
 .is-home-layout .hero-register-btn {
   background: rgba(255, 255, 255, 0.15) !important; border: 1px solid rgba(255, 255, 255, 0.25) !important;
-  color: #fff !important; backdrop-filter: blur(8px); border-radius: 8px; height: 32px; padding: 0 15px; font-size: 14px;
+  color: #fff !important; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  border-radius: 8px; height: 32px; padding: 0 15px; font-size: 14px;
 }
 
 /* Mobile Drawer reset - Respect Global Theme */
@@ -373,8 +383,9 @@ onUnmounted(() => {
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .theme-toggle { font-size: 20px; border-radius: 8px; }
 
-.app-main { padding: 20px; flex: 1; display: flex; flex-direction: column; background-color: var(--color-background); }
+.app-main { padding: 20px; flex: 1; display: flex; flex-direction: column; background-color: var(--color-background); transition: padding 0.3s ease; }
 .is-home-layout .app-main { padding: 0; flex: 1; height: 0; min-height: 0; }
+.is-auth-layout .app-main { padding: 0 !important; }
 
 /* Account */
 .account-trigger { display:flex; align-items:center; cursor:pointer; gap:8px; padding:6px 12px; border-radius:20px; transition: background-color 0.2s; }

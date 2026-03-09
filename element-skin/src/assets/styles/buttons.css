@@ -83,23 +83,26 @@
 
 /* Glass Buttons Hover */
 .btn-glass {
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
   border: 1px solid rgba(255, 255, 255, 0.2) !important;
   color: #fff !important;
-  backdrop-filter: blur(8px);
-  transition: all 0.3s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .btn-glass:hover {
-  background: rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.35) !important;
   transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
 }
 .btn-glass-primary {
-  background: rgba(64, 158, 255, 0.25) !important;
+  background: rgba(64, 158, 255, 0.2) !important;
   border: 1px solid rgba(64, 158, 255, 0.3) !important;
 }
 .btn-glass-primary:hover {
-  background: rgba(64, 158, 255, 0.4) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  background: rgba(64, 158, 255, 0.35) !important;
+  box-shadow: 0 8px 32px rgba(64, 158, 255, 0.25);
 }
 
 /* Outline Buttons Hover */
