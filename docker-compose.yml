@@ -26,8 +26,8 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - ./skin-backend/textures:/app/textures
-      - ./skin-backend/carousel:/app/carousel
+      - ./static/textures:/app/textures
+      - ./static/carousel:/app/carousel
       - ./config.yaml:/app/config.yaml
     ports:
       - "8000:8000"
