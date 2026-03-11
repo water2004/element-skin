@@ -82,51 +82,55 @@ mojang:
 ```yaml
 version: '3.8'
 services:
+  db:
+    image: postgres:18-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: elementskin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: elementskin
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
   backend:
-    image: ghcr.io/water2004/element-skin-backend:main
-    container_name: element-skin-backend
-    restart: unless-stopped
-    ports:
-      - "8000:8000"
+    build:
+      context: .
+      dockerfile: skin-backend/Dockerfile
+    restart: always
+    environment:
+      - DATABASE_DSN=postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable
     volumes:
       - ./config.yaml:/app/config.yaml:ro
-      - ./data:/data
-  frontend:
-    image: ghcr.io/water2004/element-skin-frontend:main
-    container_name: element-skin-frontend
-    restart: unless-stopped
+      - ./frontend:/app/frontend           # 👈 前端、皮肤、轮播图全部在这里
     ports:
-      - "3000:80"
-    volumes:
-      - ./data/textures:/usr/share/nginx/html/static/textures:ro
-      - ./data/carousel:/usr/share/nginx/html/static/carousel:ro
+      - "8000:8000"
 ```
 
-在项目的根目录下, 有一份完整的`docker-compose.yml`配置模板, 但若是使用ghcr镜像, 上面的配置已经足够
+**Nginx 主机配置 (推荐方案)**
+只需将 Nginx 的 `root` 指向宿主机的 `./frontend` 目录。
 
-**Nginx 主机配置**
 ```nginx
 server {
     listen 80;
     server_name yourdomain.com;
 
+    # 1. 前端根目录 (index.html, assets, 以及皮肤 static/)
+    root /your/path/to/frontend; 
+    index index.html;
+
     location / {
-        proxy_pass http://localhost:3000/; # 注意末尾的 /
+        try_files $uri $uri/ /index.html;
     }
 
-    # 后端 API 转发
-    # 注意：使用 GHCR 镜像时，后端必须匹配 /skinapi 路径
+    # 2. 后端 API 转发
     location /skinapi/ {
-        proxy_pass http://localhost:8000; # 注意末尾没有 /
+        proxy_pass http://localhost:8000;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
     }
     
-    # 处理不带斜杠的请求
+    # 直接转发不带斜杠的 API 请求
     location = /skinapi {
-        proxy_pass http://localhost:8000/skinapi/; # 注意末尾的 /
+        proxy_pass http://localhost:8000/skinapi/;
         proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
     }
 }
 ```
@@ -134,49 +138,65 @@ server {
 ---
 
 #### 方案 B：子目录部署 (本地构建)
-*适用于将皮肤站部署在 `https://example.com/skin/` 这样的子路径下。此方案需要本地编译前端。*
+*适用于将皮肤站部署在 `https://example.com/skin/` 这样的子路径下。*
 
-**启动命令**
-根据你的路径需求，修改项目根目录下的`docker-compose.yml`, 并使用对应的环境变量启动：
+**启动与构建参数**
+根据你的路径需求，在启动时传入环境变量。前端会根据这些参数编译，并自动释放到宿主机的 `./frontend` 目录：
 
 | 场景 | 前端路径 | 后端路径 | 启动命令 |
 |-----|---------|---------|---------|
 | **场景 1** | `/skin/` | `/skinapi` | `VITE_BASE_PATH=/skin/ docker compose up -d --build` |
 | **场景 2** | `/skin/` | `/skin/api/` | `VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d --build` |
 
-> 💡 **低内存模式**: 如果构建时内存不足，可添加 `BUILD_MODE=low-memory` 环境变量跳过类型检查。
-
 **Nginx 主机配置 (对应场景 1)**
 ```nginx
+# 1. 前端静态文件
 location /skin/ {
-    proxy_pass http://localhost:3000/; # 末尾有 /，去除 /skin/ 前缀
+    alias /your/path/to/frontend/;
+    index index.html;
+    try_files $uri $uri/ /skin/index.html;
 }
+location = /skin {
+    alias /your/path/to/frontend/;
+    try_files $uri $uri/ /skin/index.html;
+}
+
+# 2. 后端 API 转发
 location /skinapi/ {
-    proxy_pass http://localhost:8000;  # 末尾无 /，保留完整路径
+    proxy_pass http://localhost:8000;
     proxy_set_header Host $host;
 }
-# 处理不带斜杠的请求
-location /skinapi {
-    proxy_pass http://localhost:8000/skinapi/;  # 末尾有 /
+location = /skinapi {
+    proxy_pass http://localhost:8000/skinapi/;
     proxy_set_header Host $host;
 }
 ```
 
 **Nginx 主机配置 (对应场景 2)**
 ```nginx
+# 1. 前端静态文件
 location /skin/ {
-    proxy_pass http://localhost:3000/;
+    alias /your/path/to/frontend/;
+    index index.html;
+    try_files $uri $uri/ /skin/index.html;
 }
+location = /skin {
+    alias /your/path/to/frontend/;
+    try_files $uri $uri/ /skin/index.html;
+}
+
+# 2. 后端 API 转发 (嵌套路径)
 location /skin/api/ {
     proxy_pass http://localhost:8000;
     proxy_set_header Host $host;
 }
-# 处理不带斜杠的请求
-location /skin/api {
+location = /skin/api {
     proxy_pass http://localhost:8000/skin/api/;
     proxy_set_header Host $host;
 }
 ```
+
+> 💡 **低内存模式**: 如果构建时内存不足，可添加 `BUILD_MODE=low-memory` 环境变量跳过类型检查。
 
 ---
 
