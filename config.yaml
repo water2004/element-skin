@@ -1,4 +1,4 @@
-# Element-Skin 配置文件
+# Element-Skin 生产环境配置文件
 
 jwt:
   secret: "prod-secret-please-change-to-a-very-long-string-in-production"  # ⚠️ 生产环境必须修改
@@ -9,7 +9,7 @@ keys:
   public_key: "/app/public.pem"
 
 database:
-  dsn: "postgresql://postgres:12345678@db:5432/elementskin?sslmode=disable"
+  dsn: "postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable"
   max_connections: 20
 
 textures:
@@ -21,9 +21,9 @@ carousel:
 server:
   host: "0.0.0.0"
   port: 8000
-  root_path: ""  # 子目录部署时配置，如 "/skin/api"
-  site_url: "http://yourdomain.com" # 前端站点外部访问地址
-  api_url: "http://yourdomain.com/skinapi" # 后端 API 外部访问地址 (用于 Yggdrasil 材质 URL)
+  root_path: ""
+  site_url: "http://yourdomain.com"
+  api_url: "http://yourdomain.com/skinapi"
 
 # CORS 跨域配置
 cors:

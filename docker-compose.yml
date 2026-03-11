@@ -4,10 +4,11 @@ services:
     restart: always
     environment:
       POSTGRES_USER: elementskin
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: password123
       POSTGRES_DB: elementskin
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - ./pgdata:/var/lib/postgresql/data
+      - ./skin-backend/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U elementskin"]
       interval: 5s
@@ -20,14 +21,14 @@ services:
       dockerfile: Dockerfile
     restart: always
     environment:
-      - DATABASE_DSN=postgresql://elementskin:password@db:5432/elementskin
+      - DATABASE_DSN=postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable
     depends_on:
       db:
         condition: service_healthy
     volumes:
       - ./skin-backend/textures:/app/textures
       - ./skin-backend/carousel:/app/carousel
-      - ./skin-backend/config.yaml:/app/config.yaml
+      - ./config.yaml:/app/config.yaml
     ports:
       - "8000:8000"
 
@@ -40,6 +41,3 @@ services:
       - "80:80"
     depends_on:
       - backend
-
-volumes:
-  pgdata:
