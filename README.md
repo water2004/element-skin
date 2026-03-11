@@ -192,7 +192,38 @@ location /skin/api {
 
 ## 🛠️ 本地开发环境
 
-### 后端 (Python 3.14+)
+### 本地开发环境
+
+#### 1. 数据库配置 (PostgreSQL 18+)
+本地开发需要手动安装并初始化数据库：
+
+1.  **安装 PostgreSQL**: 确保本地已安装 PostgreSQL 18（或 16+）。
+2.  **创建数据库**: 使用 `psql` 或 GUI 工具（如 pgAdmin/DBeaver）创建用户和数据库：
+    ```sql
+    -- 建议创建专用用户和库
+    CREATE USER elementskin WITH PASSWORD 'password123';
+    CREATE DATABASE elementskin OWNER elementskin;
+    ```
+3.  **初始化表结构 (关键)**: 必须确保 `init.sql` 运行在 **目标数据库** (`elementskin`) 中，而不是默认的 `postgres` 库：
+    *   **命令行方式 (推荐)**:
+        ```bash
+        -- 注意：-d 参数必须指定为你创建的数据库名
+        psql -h localhost -U elementskin -d elementskin -f init.sql
+        ```
+    *   **psql Shell 内部方式**:
+        ```sql
+        \c elementskin          -- 1. 先切换到目标数据库
+        \i init.sql             -- 2. 执行初始化脚本
+        \dt                     -- 3. 验证：确保能看到 settings 等 11 张表
+        ```
+4.  **修改配置**: 编辑 `skin-backend/config.yaml` 中的 `database.dsn`，确保最后的数据库名与上述步骤一致：
+    ```yaml
+    database:
+      # 必须匹配：.../数据库名?sslmode...
+      dsn: "postgresql://elementskin:password123@localhost:5432/elementskin?sslmode=disable"
+    ```
+
+#### 2. 后端 (Python 3.14+)
 ```bash
 cd skin-backend
 python -m venv .venv
@@ -203,7 +234,7 @@ python gen_key.py                # 生成密钥
 $env:PYTHONPATH='.'; ..\.venv\Scripts\python.exe -m pytest tests/
 ```
 
-### 前端 (Node.js)
+#### 3. 前端 (Node.js)
 ```bash
 cd element-skin
 npm install
