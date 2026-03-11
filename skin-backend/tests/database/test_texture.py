@@ -64,7 +64,9 @@ async def test_texture_upload_and_library(db_session, user_factory):
     user2 = await user_factory()
     success = await db_session.texture.add_to_user_wardrobe(user2.id, tex_hash)
     assert success is True
-    assert len(await db_session.texture.get_for_user(user2.id)) == 1
+    user2_textures = await db_session.texture.get_for_user(user2.id)
+    assert len(user2_textures) == 1
+    assert user2_textures[0][5] == 2 # 状态 2 表示非上传者
     
     # 8. Delete
     await db_session.texture.delete_from_library(user.id, tex_hash, "skin")
@@ -82,7 +84,7 @@ async def test_texture_model_cascade_update(db_session, user_factory):
     # 2. 创建角色并应用该皮肤
     from utils.typing import PlayerProfile
     pid = generate_random_uuid()
-    await db_session.user.create_profile(PlayerProfile(pid, user.id, "ModelTester", "default"))
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "ModelTester", "default", None, None))
     await db_session.user.update_profile_skin(pid, tex_hash)
     
     # 3. 更新材质模型为 slim

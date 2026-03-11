@@ -5,7 +5,9 @@ from .modules.texture import TextureModule
 from .modules.verification import VerificationModule
 from .modules.fallback import FallbackModule
 from config_loader import config
+import asyncio
 
+# PostgreSQL 兼容语法
 INIT_SQL = """
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -13,8 +15,8 @@ CREATE TABLE IF NOT EXISTS users (
     password TEXT NOT NULL,
     preferred_language TEXT DEFAULT 'zh_CN',
     display_name TEXT DEFAULT '',
-    is_admin INTEGER DEFAULT 0,
-    banned_until INTEGER DEFAULT NULL
+    is_admin BOOLEAN DEFAULT FALSE,
+    banned_until BIGINT DEFAULT NULL
 );
 
 CREATE TABLE IF NOT EXISTS profiles (
@@ -32,14 +34,14 @@ CREATE TABLE IF NOT EXISTS tokens (
     client_token TEXT NOT NULL,
     user_id TEXT NOT NULL,
     profile_id TEXT,
-    created_at INTEGER NOT NULL
+    created_at BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
     server_id TEXT PRIMARY KEY,
     access_token TEXT NOT NULL,
     ip TEXT,
-    created_at INTEGER NOT NULL
+    created_at BIGINT NOT NULL
 );
  
 CREATE TABLE IF NOT EXISTS invites (
@@ -48,7 +50,7 @@ CREATE TABLE IF NOT EXISTS invites (
     used_by TEXT,
     total_uses INTEGER DEFAULT 1,
     used_count INTEGER DEFAULT 0,
-    created_at INTEGER,
+    created_at BIGINT,
     note TEXT DEFAULT ''
 );
 
@@ -64,7 +66,7 @@ CREATE TABLE IF NOT EXISTS user_textures (
     note TEXT DEFAULT '',
     model TEXT DEFAULT 'default',
     is_public INTEGER DEFAULT 0,
-    created_at INTEGER NOT NULL,
+    created_at BIGINT NOT NULL,
     PRIMARY KEY(user_id, hash, texture_type),
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
@@ -76,28 +78,28 @@ CREATE TABLE IF NOT EXISTS skin_library (
     uploader TEXT,
     model TEXT DEFAULT 'default',
     name TEXT DEFAULT '',
-    created_at INTEGER NOT NULL
+    created_at BIGINT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS fallback_endpoints (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     priority INTEGER NOT NULL,
     session_url TEXT NOT NULL,
     account_url TEXT NOT NULL,
     services_url TEXT NOT NULL,
     cache_ttl INTEGER NOT NULL,
     skin_domains TEXT DEFAULT '',
-    enable_profile INTEGER DEFAULT 1,
-    enable_hasjoined INTEGER DEFAULT 1,
-    enable_whitelist INTEGER DEFAULT 0,
+    enable_profile BOOLEAN DEFAULT TRUE,
+    enable_hasjoined BOOLEAN DEFAULT TRUE,
+    enable_whitelist BOOLEAN DEFAULT FALSE,
     note TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS whitelisted_users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id SERIAL PRIMARY KEY,
     username TEXT NOT NULL,
     endpoint_id INTEGER NOT NULL,
-    created_at INTEGER NOT NULL,
+    created_at BIGINT NOT NULL,
     UNIQUE(username, endpoint_id),
     FOREIGN KEY(endpoint_id) REFERENCES fallback_endpoints(id) ON DELETE CASCADE
 );
@@ -106,15 +108,15 @@ CREATE TABLE IF NOT EXISTS verification_codes (
     email TEXT,
     code TEXT NOT NULL,
     type TEXT NOT NULL,
-    created_at INTEGER NOT NULL,
-    expires_at INTEGER NOT NULL,
+    created_at BIGINT NOT NULL,
+    expires_at BIGINT NOT NULL,
     PRIMARY KEY(email, type)
 );
 """
 
 class Database(BaseDB):
-    def __init__(self, db_path="yggdrasil.db", max_connections: int = 10):
-        super().__init__(db_path, max_connections)
+    def __init__(self, dsn: str, max_connections: int = 10):
+        super().__init__(dsn, max_connections)
         self.user = UserModule(self)
         self.setting = SettingModule(self)
         self.texture = TextureModule(self)
@@ -122,277 +124,34 @@ class Database(BaseDB):
         self.fallback = FallbackModule(self)
 
     async def init(self):
-        """初始化表结构及执行迁移"""
+        """初始化表结构"""
         async with self.get_conn() as conn:
-            # 检查 skin_library 是否已存在，用于后续判断是否需要从 user_textures 迁移数据
-            cursor = await conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='skin_library'"
-            )
-            skin_library_exists = await cursor.fetchone() is not None
-
-            # 检查 fallback_endpoints 是否已存在，用于后续兼容旧库
-            cursor = await conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='fallback_endpoints'"
-            )
-            fallback_endpoints_exists = await cursor.fetchone() is not None
-
-            # 检查 official_whitelist 是否已存在，用于后续兼容旧库
-            cursor = await conn.execute(
-                "SELECT name FROM sqlite_master WHERE type='table' AND name='official_whitelist'"
-            )
-            official_whitelist_exists = await cursor.fetchone() is not None
-
             # 创建基础表结构
-            await conn.executescript(INIT_SQL)
-            await conn.commit()
-
-            # 兼容旧库：fallback_endpoints 增加 skin_domains 列
-            cursor = await conn.execute("PRAGMA table_info(fallback_endpoints)")
-            columns = [row[1] for row in await cursor.fetchall()]
-            if "skin_domains" not in columns:
+            await conn.execute(INIT_SQL)
+            
+            # 初始化默认设置 (PostgreSQL ON CONFLICT)
+            settings_to_init = [
+                ('microsoft_client_id', ''),
+                ('microsoft_client_secret', ''),
+                ('microsoft_redirect_uri', 'http://localhost:8000/microsoft/callback'),
+                ('fallback_strategy', 'serial'),
+                ('enable_skin_library', 'true'),
+                ('email_verify_enabled', 'false'),
+                ('enable_strong_password_check', 'false'),
+                ('email_verify_ttl', '300'),
+                ('smtp_host', 'smtp.example.com'),
+                ('smtp_port', '465'),
+                ('smtp_user', 'user@example.com'),
+                ('smtp_password', 'password'),
+                ('smtp_ssl', 'true'),
+                ('smtp_sender', 'SkinServer <no-reply@example.com>')
+            ]
+            for key, val in settings_to_init:
                 await conn.execute(
-                    "ALTER TABLE fallback_endpoints ADD COLUMN skin_domains TEXT DEFAULT ''"
+                    "INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING",
+                    key, val
                 )
-                await conn.commit()
-                mojang_domains = config.get("mojang.skin_domains", []) or []
-                domains_csv = ",".join(
-                    [str(item).strip() for item in mojang_domains if str(item).strip()]
-                )
-                await conn.execute(
-                    """
-                    UPDATE fallback_endpoints
-                    SET skin_domains=?
-                    WHERE skin_domains IS NULL OR skin_domains = ''
-                    """,
-                    (domains_csv,),
-                )
-                await conn.commit()
-
-            # 兼容旧库：fallback_endpoints 增加 enable_profile, enable_hasjoined, enable_whitelist 列
-            cursor = await conn.execute("PRAGMA table_info(fallback_endpoints)")
-            columns = [row[1] for row in await cursor.fetchall()]
-            if "enable_profile" not in columns:
-                await conn.execute(
-                    "ALTER TABLE fallback_endpoints ADD COLUMN enable_profile INTEGER DEFAULT 1"
-                )
-            if "enable_hasjoined" not in columns:
-                await conn.execute(
-                    "ALTER TABLE fallback_endpoints ADD COLUMN enable_hasjoined INTEGER DEFAULT 1"
-                )
-            if "enable_whitelist" not in columns:
-                await conn.execute(
-                    "ALTER TABLE fallback_endpoints ADD COLUMN enable_whitelist INTEGER DEFAULT 0"
-                )
-            if "note" not in columns:
-                await conn.execute(
-                    "ALTER TABLE fallback_endpoints ADD COLUMN note TEXT DEFAULT ''"
-                )
-            await conn.commit()
-
-            # 如果是新创建的 fallback_endpoints 表，从 config.yaml 迁移现有数据
-            if not fallback_endpoints_exists:
-                mojang = config.get("mojang", {})
-                skin_domains = mojang.get("skin_domains", []) or []
-                await conn.execute(
-                    """
-                    INSERT INTO fallback_endpoints (
-                        priority, session_url, account_url, services_url, cache_ttl, skin_domains,
-                        enable_profile, enable_hasjoined, enable_whitelist, note
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        1,
-                        mojang.get("session_url", ""),
-                        mojang.get("account_url", ""),
-                        mojang.get("services_url", ""),
-                        int(mojang.get("cache_ttl", 60)),
-                        ",".join([str(item).strip() for item in skin_domains if str(item).strip()]),
-                        1,
-                        1,
-                        0,
-                        'Mojang Official'
-                    ),
-                )
-                await conn.commit()
-
-            # 迁移：official_whitelist -> whitelisted_users (绑定到优先级最高的 endpoint)
-            # 如果存在official_whitelist，则将其中的用户迁移到 whitelisted_users，并关联到优先级最高的 fallback_endpoints 记录
-            if official_whitelist_exists:
-                cursor = await conn.execute(
-                    "SELECT id FROM fallback_endpoints ORDER BY priority ASC, id ASC LIMIT 1"
-                )
-                row = await cursor.fetchone()
-                if row:
-                    endpoint_id = row[0]
-                    cursor = await conn.execute(
-                        "SELECT username, created_at FROM official_whitelist"
-                    )
-                    rows = await cursor.fetchall()
-                    for username, created_at in rows:
-                        await conn.execute(
-                            """
-                            INSERT OR IGNORE INTO whitelisted_users (username, endpoint_id, created_at)
-                            VALUES (?, ?, ?)
-                            """,
-                            (username, endpoint_id, created_at),
-                        )
-                    await conn.commit()
-                # 迁移完成后删除旧表
-                await conn.execute("DROP TABLE IF EXISTS official_whitelist")
-                await conn.commit()
-
-            # 如果是新创建的 skin_library 表，从 user_textures 迁移现有数据
-            if not skin_library_exists:
-                await conn.execute(
-                    """
-                    INSERT OR IGNORE INTO skin_library (skin_hash, texture_type, is_public, uploader, created_at)
-                    SELECT hash, texture_type, 0, user_id, created_at 
-                    FROM user_textures 
-                    GROUP BY hash
-                    """
-                )
-                await conn.commit()
-
-            # 迁移：为没有显示名（用户名）的用户设置默认用户名
-            await conn.execute(
-                """
-                UPDATE users 
-                SET display_name = SUBSTR(email, 1, INSTR(email, '@') - 1)
-                WHERE display_name IS NULL OR display_name = ''
-                """
-            )
-            await conn.commit()
-
-            # 兼容旧库：invites 新增 note 列
-            cursor = await conn.execute("PRAGMA table_info(invites)")
-            columns = [row[1] for row in await cursor.fetchall()]
-            if "note" not in columns:
-                await conn.execute(
-                    "ALTER TABLE invites ADD COLUMN note TEXT DEFAULT ''"
-                )
-                await conn.commit()
-
-            # 兼容旧库：user_textures 增加 model 列
-            cursor = await conn.execute("PRAGMA table_info(user_textures)")
-            columns = [row[1] for row in await cursor.fetchall()]
-            if "model" not in columns:
-                await conn.execute(
-                    "ALTER TABLE user_textures ADD COLUMN model TEXT DEFAULT 'default'"
-                )
-                await conn.commit()
-
-            # 兼容旧库：skin_library 增加 model 列
-            cursor = await conn.execute("PRAGMA table_info(skin_library)")
-            columns = [row[1] for row in await cursor.fetchall()]
-            if "model" not in columns:
-                await conn.execute(
-                    "ALTER TABLE skin_library ADD COLUMN model TEXT DEFAULT 'default'"
-                )
-                await conn.commit()
-
-            # 兼容旧库：skin_library 增加 name 列
-            cursor = await conn.execute("PRAGMA table_info(skin_library)")
-            columns = [row[1] for row in await cursor.fetchall()]
-            if "name" not in columns:
-                await conn.execute(
-                    "ALTER TABLE skin_library ADD COLUMN name TEXT DEFAULT ''"
-                )
-                await conn.commit()
-                # 从上传者的 user_textures 中同步备注作为名称
-                await conn.execute(
-                    """
-                    UPDATE skin_library 
-                    SET name = (
-                        SELECT note FROM user_textures 
-                        WHERE user_textures.hash = skin_library.skin_hash 
-                        AND user_textures.user_id = skin_library.uploader
-                        LIMIT 1
-                    )
-                    WHERE uploader IS NOT NULL
-                    """
-                )
-                await conn.commit()
-
-            # 兼容旧库：user_textures 增加 is_public 列(0:私有, 1:公开, 2:非上传者)
-            cursor = await conn.execute("PRAGMA table_info(user_textures)")
-            columns = [row[1] for row in await cursor.fetchall()]
-            if "is_public" not in columns:
-                await conn.execute(
-                    "ALTER TABLE user_textures ADD COLUMN is_public INTEGER DEFAULT 0"
-                )
-                await conn.commit()
-
-                # 数据迁移：根据 skin_library 补全 is_public 状态
-                await conn.execute(
-                    """
-                    UPDATE user_textures 
-                    SET is_public = (
-                        SELECT CASE 
-                            WHEN sl.uploader = user_textures.user_id THEN sl.is_public 
-                            ELSE 2 
-                        END
-                        FROM skin_library sl 
-                        WHERE sl.skin_hash = user_textures.hash
-                    )
-                    WHERE hash IN (SELECT skin_hash FROM skin_library)
-                    """
-                )
-                await conn.commit()
-
-            # 初始化默认设置
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('microsoft_client_id', '')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('microsoft_client_secret', '')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('microsoft_redirect_uri', 'http://localhost:8000/microsoft/callback')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('fallback_strategy', 'serial')"
-            )
-
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_skin_library', 'true')"
-            )
-
-            # SMTP Default Settings
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('email_verify_enabled', 'false')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('enable_strong_password_check', 'false')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('email_verify_ttl', '300')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_host', 'smtp.example.com')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_port', '465')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_user', 'user@example.com')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_password', 'password')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_ssl', 'true')"
-            )
-            await conn.execute(
-                "INSERT OR IGNORE INTO settings (key, value) VALUES ('smtp_sender', 'SkinServer <no-reply@example.com>')"
-            )
-
-            await conn.commit()
 
         # 初始化模块缓存
         await self.setting.init()
         await self.fallback.init()
-
-    # Proxy methods for backward compatibility or direct access if needed
-    # But strictly speaking, the user asked for db.user.xxx
-    # We will only expose raw connection via get_conn()

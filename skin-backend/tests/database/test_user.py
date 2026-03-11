@@ -46,7 +46,7 @@ async def test_user_management(db_session, user_factory):
     # Toggle Admin
     status = await db_session.user.toggle_admin(user.id)
     assert status == 1
-    assert (await db_session.user.get_by_id(user.id)).is_admin == 1
+    assert (await db_session.user.get_by_id(user.id)).is_admin is True
     
     # List & Delete
     await user_factory(email="second@test.com")
@@ -61,7 +61,7 @@ async def test_profile_management(db_session, user_factory):
     """测试角色(Profile)相关接口"""
     user = await user_factory()
     pid = generate_random_uuid()
-    profile = PlayerProfile(pid, user.id, "Player1", "default")
+    profile = PlayerProfile(pid, user.id, "Player1", "default", None, None)
     
     # Create
     await db_session.user.create_profile(profile)
@@ -85,7 +85,7 @@ async def test_profile_management(db_session, user_factory):
     assert updated.texture_model == "slim"
     
     # Search & Bulk display name
-    await db_session.user.create_profile(PlayerProfile(generate_random_uuid(), user.id, "Player2"))
+    await db_session.user.create_profile(PlayerProfile(generate_random_uuid(), user.id, "Player2", "default", None, None))
     results = await db_session.user.search_profiles_by_names(["Player1", "Player2"])
     assert len(results) == 2
     
@@ -158,7 +158,7 @@ async def test_user_edge_cases(db_session):
 async def test_invite_management(db_session):
     """测试邀请码逻辑"""
     code_str = "INVITE_CODE"
-    invite = InviteCode(code_str, int(time.time() * 1000), total_uses=5, used_count=0, note="test")
+    invite = InviteCode(code_str, int(time.time() * 1000), used_by=None, total_uses=5, used_count=0, note="test")
     
     await db_session.user.create_invite(invite)
     

@@ -13,7 +13,8 @@ keys:
 
 # 数据库配置
 database:
-  path: "yggdrasil.db"
+  dsn: "postgresql://elementskin:password@localhost:5432/elementskin"
+  max_connections: 20
 
 # 材质存储配置
 textures:

@@ -1,43 +1,45 @@
-version: '3.8'
-networks:
-  element-skin:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.18.0.0/16
-          gateway: 172.18.0.1
-
 services:
-  # 后端服务
+  db:
+    image: postgres:18-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: elementskin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: elementskin
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elementskin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   backend:
     build:
       context: ./skin-backend
-      network: host
-    container_name: element-skin-backend
-    restart: unless-stopped
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - DATABASE_DSN=postgresql://elementskin:password@db:5432/elementskin
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./skin-backend/textures:/app/textures
+      - ./skin-backend/carousel:/app/carousel
+      - ./skin-backend/config.yaml:/app/config.yaml
     ports:
       - "8000:8000"
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./data:/data
-    networks:
-      - element-skin
 
-  # 前端服务
   frontend:
     build:
       context: ./element-skin
-      network: host
-      args:
-        - VITE_BASE_PATH=${VITE_BASE_PATH:-/}
-        - VITE_API_BASE=${VITE_API_BASE:-/skinapi}
-        - BUILD_MODE=${BUILD_MODE:-standard}
-    container_name: element-skin-frontend
-    restart: unless-stopped
+      dockerfile: Dockerfile
+    restart: always
     ports:
-      - "3000:80"
-    volumes:
-      - ./data/textures:/usr/share/nginx/html/static/textures:ro
-      - ./data/carousel:/usr/share/nginx/html/static/carousel:ro
-    networks:
-      - element-skin
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

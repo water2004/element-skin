@@ -27,39 +27,39 @@ def event_loop():
 def test_env_setup():
     """
     配置测试环境：
-    1. 创建临时数据库文件
+    1. 配置测试数据库 DSN
     2. 创建临时材质目录
     3. 覆盖全局配置对象
     """
-    # 创建临时目录
+    # 创建临时目录用于存储材质
     temp_dir = tempfile.mkdtemp()
-    db_path = os.path.join(temp_dir, "test_yggdrasil.db")
     textures_dir = os.path.join(temp_dir, "test_textures")
     os.makedirs(textures_dir, exist_ok=True)
 
-    # 备份原始配置 (虽然是在内存中修改对象，但是个好习惯)
-    original_db_path = db.db_path
-    original_texture_dir = site_backend.db.texture.textures_dir # TextureModule 初始化时读取了配置
+    # 测试数据库 DSN (建议在环境变量中配置，或者使用默认的测试库)
+    test_dsn = os.getenv("TEST_DATABASE_DSN", "postgresql://elementskin:password@localhost:5432/elementskin_test")
 
-    # 覆盖全局 DB 对象的路径
-    # 注意：所有引用了这个 db 对象的地方都会受影响，包括 app 中的 routers
-    db.db_path = db_path
+    # 备份原始配置
+    original_dsn = db.dsn
+    
+    # 覆盖全局 DB 对象的 DSN
+    db.dsn = test_dsn
     
     # 覆盖 Config 对象中的配置
-    config._data["database"]["path"] = db_path
+    config._data["database"]["dsn"] = test_dsn
     config._data["textures"]["directory"] = textures_dir
-    # 覆盖 TextureModule 中的路径 (因为它在初始化时已经读取了配置)
+    # 覆盖 TextureModule 中的路径
     db.texture.textures_dir = textures_dir
 
     yield {
-        "db_path": db_path,
+        "dsn": test_dsn,
         "textures_dir": textures_dir
     }
 
-    # 清理
+    # 清理材质目录
     shutil.rmtree(temp_dir)
-    # 恢复 (可选，如果是 session 级别其实无所谓)
-    db.db_path = original_db_path
+    # 恢复 DSN
+    db.dsn = original_dsn
 
 @pytest.fixture(scope="session")
 def test_config(test_env_setup):
@@ -70,30 +70,25 @@ def test_config(test_env_setup):
 async def db_session(test_env_setup):
     """
     数据库会话 Fixture：
-    每个测试函数运行前初始化表结构，运行后清空数据（或重建库）。
-    为了速度，这里选择 truncate/delete 数据而不是重建文件，或者简单地依赖 session 隔离。
-    但在 SQLite 中，删除文件重建可能更快更干净。
-    这里采用：每次测试前 connect & init，测试后 close。
-    由于 test_env_setup 是 session 级的，文件路径不变。
-    我们可以在每个 function 级别删除数据库文件并重新初始化。
+    每个测试函数运行前重置数据库。
     """
-    db_path = test_env_setup["db_path"]
-    
-    # 确保文件不存在（干净的状态）
-    if os.path.exists(db_path):
-        os.remove(db_path)
-        
-    # 连接并初始化表结构
+    # 连接数据库
     await db.connect()
+    
+    # 重置公共模式 (快速重置所有表)
+    async with db.get_conn() as conn:
+        await conn.execute("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        # 重新授予权限 (如果是特定用户)
+        await conn.execute("GRANT ALL ON SCHEMA public TO public;")
+        await conn.execute(f"GRANT ALL ON SCHEMA public TO {os.getenv('POSTGRES_USER', 'elementskin')};")
+
+    # 重新初始化表结构
     await db.init()
     
     yield db
     
     # 关闭连接
     await db.close()
-    # 清理文件
-    if os.path.exists(db_path):
-        os.remove(db_path)
 
 @pytest.fixture(scope="function")
 async def client(db_session) -> AsyncGenerator[AsyncClient, None]:
@@ -111,7 +106,6 @@ async def client(db_session) -> AsyncGenerator[AsyncClient, None]:
 def user_factory(db_session):
     """
     用户工厂：快速创建测试用户
-    使用方法: user = await user_factory(email="...", is_admin=True)
     """
     async def _create(
         email: str = None, 
@@ -127,7 +121,7 @@ def user_factory(db_session):
             
         hashed_pw = hash_password(password)
         # User 构造函数: id, email, password, is_admin, preferred_language, display_name, banned_until
-        user = User(uid, email, hashed_pw, 1 if is_admin else 0, "zh_CN", username)
+        user = User(uid, email, hashed_pw, is_admin, "zh_CN", username)
         await db_session.user.create(user)
         return user
     return _create
@@ -139,7 +133,7 @@ async def auth_headers(user_factory):
     """
     user = await user_factory(is_admin=False)
     token = create_jwt_token(user.id, is_admin=False, expire_days=1)
-    return {"Authorization": f"Bearer {token}", "X-User-ID": user.id} # 方便测试中获取 ID
+    return {"Authorization": f"Bearer {token}", "X-User-ID": user.id}
 
 @pytest.fixture
 async def admin_headers(user_factory):
@@ -152,20 +146,16 @@ async def admin_headers(user_factory):
 
 @pytest.fixture
 def site_backend_fixture(db_session):
-    """提供 site_backend 实例"""
     return site_backend
 
 @pytest.fixture
 def admin_backend_fixture(db_session):
-    """提供 admin_backend 实例"""
     return admin_backend
 
 @pytest.fixture
 def ygg_backend_fixture(db_session):
-    """提供 ygg_backend 实例"""
     return ygg_backend
 
 @pytest.fixture
 def crypto_fixture():
-    """提供 crypto 实例"""
     return crypto

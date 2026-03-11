@@ -4,7 +4,7 @@ import pytest
 async def test_setting_crud_and_cache(db_session):
     """测试设置项的读写、默认值和缓存一致性"""
     
-    # 1. 初始状态 (从 conftest 的 db_session 获取)
+    # 1. 初始状态 (conftest 的 db_session 会调用 db.init())
     # Database.init() 会预填一些默认值，如 enable_skin_library='true'
     val = await db_session.setting.get("enable_skin_library")
     assert val == "true"

@@ -8,26 +8,22 @@ class VerificationModule:
     async def create_code(self, email: str, code: str, type: str, ttl: int):
         created_at = int(time.time() * 1000)
         expires_at = created_at + (ttl * 1000)
-        async with self.db.get_conn() as conn:
-            # Upsert code
-            await conn.execute(
-                "INSERT OR REPLACE INTO verification_codes (email, code, type, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
-                (email, code, type, created_at, expires_at),
-            )
-            await conn.commit()
+        # Upsert code
+        await self.db.execute(
+            "INSERT INTO verification_codes (email, code, type, created_at, expires_at) VALUES ($1, $2, $3, $4, $5) "
+            "ON CONFLICT (email, type) DO UPDATE SET code = EXCLUDED.code, created_at = EXCLUDED.created_at, expires_at = EXCLUDED.expires_at",
+            email, code, type, created_at, expires_at,
+        )
 
     async def get_code(self, email: str, type: str):
-        async with self.db.get_conn() as conn:
-            async with conn.execute(
-                "SELECT code, expires_at FROM verification_codes WHERE email=? AND type=?",
-                (email, type),
-            ) as cur:
-                return await cur.fetchone()
+        row = await self.db.fetchrow(
+            "SELECT code, expires_at FROM verification_codes WHERE email=$1 AND type=$2",
+            email, type,
+        )
+        return row
 
     async def delete_code(self, email: str, type: str):
-        async with self.db.get_conn() as conn:
-            await conn.execute(
-                "DELETE FROM verification_codes WHERE email=? AND type=?",
-                (email, type),
-            )
-            await conn.commit()
+        await self.db.execute(
+            "DELETE FROM verification_codes WHERE email=$1 AND type=$2",
+            email, type,
+        )

@@ -16,7 +16,7 @@ async def test_verification_code_logic(db_session):
     # 2. Get & Verify
     record = await db_session.verification.get_code(email, v_type)
     assert record is not None
-    assert record[0] == code
+    assert record[0] == code # record['code']
     
     # 3. Check Expiry
     await asyncio.sleep(1.1)

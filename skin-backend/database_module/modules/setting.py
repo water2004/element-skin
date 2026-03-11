@@ -7,13 +7,8 @@ class SettingModule:
 
     async def init(self):
         """Initialize cache from database"""
-        self._cache = await self._load_all_from_db()
-
-    async def _load_all_from_db(self) -> dict:
-        async with self.db.get_conn() as conn:
-            async with conn.execute("SELECT key, value FROM settings") as cur:
-                rows = await cur.fetchall()
-                return {row[0]: row[1] for row in rows}
+        rows = await self.db.fetch("SELECT key, value FROM settings")
+        self._cache = {row[0]: row[1] for row in rows}
 
     async def get(self, key: str, default: str = None) -> str:
         """Get from cache with fallback to default"""
@@ -21,12 +16,10 @@ class SettingModule:
 
     async def set(self, key: str, value: str):
         """Update both DB and cache"""
-        async with self.db.get_conn() as conn:
-            await conn.execute(
-                "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-                (key, value),
-            )
-            await conn.commit()
+        await self.db.execute(
+            "INSERT INTO settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value",
+            key, value,
+        )
         self._cache[key] = value
 
     async def get_all(self) -> dict:

@@ -20,9 +20,9 @@ from utils.cached_static import CachedStaticFiles
 from routers import yggdrasil_routes, site_routes, microsoft_routes, admin_routes
 
 # ========== 初始化核心组件 ==========
-db_path = config.get("database.path", "yggdrasil.db")
+db_dsn = config.get("database.dsn", "postgresql://elementskin:password@localhost:5432/elementskin")
 max_conns = config.get("database.max_connections", 10)
-db = Database(db_path, max_connections=max_conns)
+db = Database(db_dsn, max_connections=max_conns)
 private_key_path = config.get("keys.private_key", "private.pem")
 crypto = CryptoUtils(private_key_path)
 rate_limiter = RateLimiter(db)  # New dependency-injected rate limiter

@@ -4,12 +4,11 @@ import pytest
 async def test_fallback_endpoints(db_session):
     """测试外部节点 CRUD 及其缓存逻辑"""
     
-    # 1. 默认状态 (Database.init 会添加一个默认 Mojang 节点)
+    # 1. 默认状态 (不再自动添加节点)
     endpoints = await db_session.fallback.list_endpoints()
-    assert len(endpoints) == 1
-    assert endpoints[0]["note"] == "Mojang Official"
+    assert len(endpoints) == 0
     
-    # 2. Save new endpoints (replace existing)
+    # 2. Save new endpoints
     new_eps = [
         {
             "id": None,
@@ -26,6 +25,8 @@ async def test_fallback_endpoints(db_session):
     updated_eps = await db_session.fallback.list_endpoints()
     assert len(updated_eps) == 1
     assert updated_eps[0]["note"] == "CustomEP"
+    # 获取数据库分配的 ID
+    endpoint_id = updated_eps[0]["id"]
     
     # 3. Cache Check: Skin Domains
     domains = await db_session.fallback.collect_skin_domains()
@@ -39,7 +40,21 @@ async def test_fallback_endpoints(db_session):
 @pytest.mark.asyncio
 async def test_fallback_whitelist(db_session):
     """测试外部节点的白名单及其高效缓存"""
-    endpoint_id = 1
+    # 先创建一个 endpoint
+    new_eps = [
+        {
+            "id": None,
+            "priority": 1,
+            "session_url": "s1", "account_url": "a1", "services_url": "v1",
+            "cache_ttl": 60, "skin_domains": "d1",
+            "enable_profile": True, "enable_hasjoined": True, "enable_whitelist": True,
+            "note": "TestEP"
+        }
+    ]
+    await db_session.fallback.save_endpoints(new_eps)
+    endpoints = await db_session.fallback.list_endpoints()
+    endpoint_id = endpoints[0]["id"]
+    
     username = "WhitelistedPlayer"
     
     # 1. Add to whitelist
