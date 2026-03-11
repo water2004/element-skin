@@ -121,10 +121,19 @@ if __name__ == "__main__":
     print(f"Port: {port}")
     print(f"Debug: {debug}")
 
+    # Windows 系统或未安装 uvloop 时使用默认循环
+    loop_type = "auto"
+    try:
+        import uvloop
+        loop_type = "uvloop"
+    except ImportError:
+        pass
+
     uvicorn.run(
         "routes_reference:app",
         host=host,
         port=port,
         reload=debug,
+        loop=loop_type,
         log_level="info" if debug else "warning",
     )

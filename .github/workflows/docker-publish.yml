@@ -2,9 +2,10 @@ name: Docker Publish
 
 on:
   push:
-    tags: [ 'v*.*.*' ]  # 只有推送符合版本号标签（如 v1.0.0）时才触发构建
+    branches: [ 'dev', 'main' ]
+    tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ "main" ]  # 监听 PR 合并到 main 但不触发构建
+    branches: [ "main" ]
 
 env:
   REGISTRY: ghcr.io
@@ -51,7 +52,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}-${{ matrix.image_suffix }}
           tags: |
             type=semver,pattern={{version}}
-            main
+            type=ref,event=branch
             type=sha,format=short
 
       - name: Build and push Docker image
@@ -60,9 +61,7 @@ jobs:
         with:
           context: ${{ matrix.context }}
           push: ${{ github.event_name != 'pull_request' }}
-          tags: |
-            ${{ steps.meta.outputs.tags }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_PREFIX }}-${{ matrix.image_suffix }}:main  
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
