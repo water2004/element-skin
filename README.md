@@ -204,24 +204,13 @@ location /skin/api {
     CREATE USER elementskin WITH PASSWORD 'password123';
     CREATE DATABASE elementskin OWNER elementskin;
     ```
-3.  **初始化表结构 (关键)**: 必须确保 `init.sql` 运行在 **目标数据库** (`elementskin`) 中，而不是默认的 `postgres` 库：
-    *   **命令行方式 (推荐)**:
-        ```bash
-        -- 注意：-d 参数必须指定为你创建的数据库名
-        psql -h localhost -U elementskin -d elementskin -f init.sql
-        ```
-    *   **psql Shell 内部方式**:
-        ```sql
-        \c elementskin          -- 1. 先切换到目标数据库
-        \i init.sql             -- 2. 执行初始化脚本
-        \dt                     -- 3. 验证：确保能看到 settings 等 11 张表
-        ```
-4.  **修改配置**: 编辑 `skin-backend/config.yaml` 中的 `database.dsn`，确保最后的数据库名与上述步骤一致：
+3.  **修改配置**: 编辑 `skin-backend/config.yaml` 中的 `database.dsn`：
     ```yaml
     database:
       # 必须匹配：.../数据库名?sslmode...
       dsn: "postgresql://elementskin:password123@localhost:5432/elementskin?sslmode=disable"
     ```
+    > 💡 **自动初始化**: 后端在每次启动时会自动同步数据库结构（创建缺失的表及默认配置），无需手动执行 SQL 脚本。
 
 #### 2. 后端 (Python 3.14+)
 ```bash
