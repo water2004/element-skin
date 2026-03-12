@@ -21,6 +21,10 @@ services:
     restart: always
     environment:
       - DATABASE_DSN=postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable
+    args:
+        - VITE_BASE_PATH=${VITE_BASE_PATH:-/}
+        - VITE_API_BASE=${VITE_API_BASE:-/skinapi}
+        - BUILD_MODE=${BUILD_MODE:-standard}
     depends_on:
       db:
         condition: service_healthy

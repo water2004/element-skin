@@ -268,24 +268,53 @@ element-skin/
 ## 📋 TODO 
 
 ### 核心功能
-- [x] 完整的 Yggdrasil 协议支持
-- [x] Python 3.14 Free Threading + uvloop 优化
-- [x] PostgreSQL 18 数据库适配
-- [x] 基于 Docker InitDB 的自动化建表
+- [x] 完整的yggdrasil协议支持
+- [x] 用户注册与登录
+- [x] 用户材质上传
+- [x] 游戏角色管理
+- [x] 邮箱验证码与密码找回
 - [x] 邀请码注册机制
+- [x] Mojang服务fallback机制
+- [x] 用户封禁与解封
 - [x] 公共皮肤库
 - [ ] 更好的用户材质管理
-  - [x] 允许用户配置已有的材质信息
+  - [x] 允许用户删除自己上传到公共库的材质
+  - [x] 允许用户配置已有的材质信息, 如模型类型等
   - [x] 公共皮肤库添加材质名称
-  - [ ] 公共皮肤库按热度/时间排序
-- [ ] 导入第三方皮肤站数据
+  - [ ] 公共皮肤库按名称搜索
+  - [ ] 公共皮肤库按上传时间排序,热度排序
+- [x] 多个fallback服务支持
+- [ ] 导入第三方皮肤站的角色和材质数据
 
 ### 安全与性能
-- [x] JWT 认证 (HS256, 32字节以上密钥)
-- [x] API 速率限制
-- [x] 数据库连接池适配 (asyncpg)
-- [ ] Redis 缓存支持
-- [ ] 材质存储优化 (S3/OSS 支持)
+- [x] sqlite数据库模块
+- [x] JWT认证机制
+- [x] API速率限制
+- [x] 数据库内存缓存与连接池
+- [x] 管理员设置细粒度API
+- [ ] 数据库性能优化
+- [ ] 多数据库支持（PostgreSQL、MySQL等）
+- [ ] Redis缓存支持
+- [ ] 材质存储优化（如使用云存储或CDN）
+
+### 前端优化
+- [x] 响应式设计
+- [x] 深色模式支持
+- [x] 页脚信息（如站点名称、版权信息等）
+- [ ] 国际化 (i18n) 支持
+- [ ] 移动端适配优化
+- [ ] 前端性能优化（如图片懒加载、代码分割等）
+
+### 端点与集成
+- [ ] 移动端 App 认证接口
+- [ ] 第三方登录（GitHub、微博等）
+- [ ] 批量材质导入工具
+
+### 测试
+- [x] 分层自动化测试框架 (Pytest + Asyncio)
+- [x] 数据库层 (Database Layer) 全接口覆盖
+- [ ] 业务逻辑层 (Backend Logic Layer) 完整覆盖
+- [ ] API 接口层 (Integration Layer) 核心流程覆盖
 
 ---
 
@@ -293,9 +322,32 @@ element-skin/
 
 项目采用了分层测试架构，确保从底层数据库到顶层 API 的稳定性。
 
-1.  **数据库层 (tests/database/)**: 验证 PG 逻辑、Schema 自动重置及缓存一致性。
-2.  **业务逻辑层 (tests/backends/)**: 验证注册权限、材质级联更新。
-3.  **API 接口层 (tests/api/)**: 模拟真实 HTTP 请求，验证路由。
+### 测试架构
+1.  **数据库层 (tests/database/)**: 验证 SQL 逻辑、数据迁移及缓存一致性。
+2.  **业务逻辑层 (tests/backends/)**: 验证核心业务规则（如注册权限、材质级联更新）。
+3.  **API 接口层 (tests/api/)**: 模拟真实 HTTP 请求，验证路由、中间件及响应格式。
+
+### 运行测试
+测试会自动创建临时数据库和文件目录，不会影响本地开发数据。
+
+```bash
+cd skin-backend
+# 安装测试依赖
+pip install -r requirements.txt
+
+# 运行所有测试
+pytest tests/
+
+# 查看详细输出
+pytest -v
+```
+
+### 编写新测试
+利用 `tests/conftest.py` 中预定义的 Fixtures 可以极速编写测试：
+- `db_session`: 获取一个干净的临时数据库实例。
+- `user_factory`: 快速创建测试用户。
+- `auth_headers` / `admin_headers`: 自动生成带 JWT 的请求头。
+- `client`: 异步 API 客户端。
 
 ## 📄 许可证
 

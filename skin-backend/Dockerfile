@@ -8,6 +8,8 @@ COPY element-skin/ .
 # 默认编译参数
 ARG VITE_BASE_PATH=/
 ARG VITE_API_BASE=
+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
+ENV VITE_API_BASE=${VITE_API_BASE}
 RUN npm run build
 
 # --- 第二阶段：编译支持 Free Threading 的 Python ---
