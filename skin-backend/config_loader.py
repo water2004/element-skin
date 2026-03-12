@@ -98,24 +98,7 @@ class Config:
         """
         获取配置值，支持点号分隔的嵌套键
         例如: config.get('jwt.secret')
-        环境变量优先级更高，格式：KEY__SUBKEY（双下划线）
-        例如: JWT__SECRET 会覆盖 jwt.secret
         """
-        # 检查环境变量（转换为大写，点号改为双下划线）
-        env_key = key.upper().replace(".", "__")
-        env_value = os.getenv(env_key)
-        if env_value is not None:
-            # 尝试转换类型
-            if env_value.lower() in ("true", "false"):
-                return env_value.lower() == "true"
-            try:
-                return int(env_value)
-            except ValueError:
-                try:
-                    return float(env_value)
-                except ValueError:
-                    return env_value
-
         # 从配置文件读取
         keys = key.split(".")
         value = self._data

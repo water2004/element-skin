@@ -19,8 +19,7 @@ services:
       context: .
       dockerfile: skin-backend/Dockerfile
     restart: always
-    environment:
-      - DATABASE_DSN=postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable
+    environment: []
     args:
         - VITE_BASE_PATH=${VITE_BASE_PATH:-/}
         - VITE_API_BASE=${VITE_API_BASE:-/skinapi}
