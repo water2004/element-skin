@@ -91,10 +91,10 @@ database:
   max_connections: 20
 
 textures:
-  directory: "/app/textures"
+  directory: "/app/static/textures"
 
 carousel:
-  directory: "/app/carousel"
+  directory: "/app/static/carousel"
 
 server:
   host: "0.0.0.0"
