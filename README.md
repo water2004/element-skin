@@ -1,8 +1,26 @@
-# Element-Skin — Minecraft Yggdrasil 皮肤站
+<h1 align="center" style="margin-bottom: 8px;">
+  <img src="./logo.svg" width="92" alt="Element-Skin Logo" style="vertical-align: -33px;"> <span style="color: #3b91e6;">Element-Skin</span>
+</h1>
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/water2004/element-skin)
+<p align="center" style="margin-top: 0; margin-bottom: 14px; color: #374151;">
+  面向高并发场景的现代化外置登录与材质平台
+</p>
 
-基于 Vue 3 + FastAPI 的现代化 Minecraft 外置登录系统。采用 **Python 3.14 Free Threading** 构建，开启 GIL-free 时代，具备极致的并发处理潜能。
+<p align="center" style="margin-top: 0; margin-bottom: 16px; color: #4B5563;">
+  基于 Vue 3 + FastAPI，采用 <strong>Python 3.14 Free Threading</strong> 构建，释放多核并发潜能。
+</p>
+
+<p align="center">
+  <a href="https://deepwiki.com/water2004/element-skin">
+    <img src="https://deepwiki.com/badge.svg">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/github/license/water2004/element-skin">
+  </a>
+  <img src="https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white">
+  <img src="https://img.shields.io/badge/Python-3.14t-3776AB?logo=python&logoColor=white">
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?logo=postgresql&logoColor=white">
+</p>
 
 ![](./img/root.png)
 
@@ -25,6 +43,32 @@
 
 ### 1. 准备配置文件
 
+在宿主机创建`docker-compose.yml`文件，内容如下：
+
+**docker-compose.yml**
+```yaml
+version: '3.8'
+services:
+  db:
+    image: postgres:18-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: elementskin
+      POSTGRES_PASSWORD: password123 #⚠️ 生产环境请修改密码
+      POSTGRES_DB: elementskin
+    volumes:
+      - ./data/db:/var/lib/postgresql/data
+  backend:
+    image: ghcr.io/water2004/element-skin:latest
+    container_name: element-skin
+    restart: unless-stopped
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./frontend:/app/frontend           # 前端、皮肤、轮播图全部在这里
+    ports:
+      - "8000:8000"
+```
+
 在宿主机创建 `config.yaml` 文件。这是系统运行的核心配置。
 
 ```yaml
@@ -40,7 +84,7 @@ keys:
 
 database:
   # 格式: postgresql://用户名:密码@db:5432/数据库名?sslmode=disable
-  dsn: "postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable"
+  dsn: "postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable" #⚠️ 用户名和密码请确保与 PostgreSQL 环境变量一致
   max_connections: 20
 
 textures:
@@ -61,49 +105,9 @@ server:
 cors:
   allow_origins: ["*"]
   allow_credentials: true
-
-mojang:
-  session_url: "https://sessionserver.mojang.com"
-  account_url: "https://api.mojang.com"
-  services_url: "https://api.minecraftservices.com"
-  skin_domains: ["textures.minecraft.net"]
-  cache_ttl: 3600
 ```
 
-### 2. 选择部署方案
-
-#### 方案 A：根目录部署 (GHCR 镜像) —— ✅ 推荐
-*无需本地构建，开箱即用。*
-
-**docker-compose.yml**
-```yaml
-version: '3.8'
-services:
-  db:
-    image: postgres:18-alpine
-    restart: always
-    environment:
-      POSTGRES_USER: elementskin
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: elementskin
-    volumes:
-      - ./data/db:/var/lib/postgresql/data
-  backend:
-    image: ghcr.io/water2004/element-skin:latest
-    container_name: element-skin
-    restart: unless-stopped
-    environment:
-      - DATABASE_DSN=postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable
-    volumes:
-      - ./config.yaml:/app/config.yaml:ro
-      - ./frontend:/app/frontend           # 前端、皮肤、轮播图全部在这里
-    ports:
-      - "8000:8000"
-```
-
-在项目的根目录下，有一份完整的 `docker-compose.yml` 配置模板。
-
-**Nginx 主机配置 (推荐方案)**
+**Nginx 主机配置**
 只需将 Nginx 的 `root` 指向宿主机的 `./frontend` 目录。
 
 ```nginx
@@ -132,13 +136,18 @@ server {
     }
 }
 ```
+最后，启动 Docker：
 
+```bash
+docker compose up -d
+```
 ---
 
-#### 方案 B：子目录部署 (本地构建)
-*适用于将皮肤站部署在 `https://example.com/skin/` 这样的子路径下。*
+## Docker本地构建
+对于希望前端或后端地址部署在子目录的用户，可以通过构建参数灵活配置路径：
+- **前端路径**: 通过 `VITE_BASE_PATH` 定义前端资源的基础路径
+- **后端路径**: 通过 `VITE_API_BASE` 定义后端 API 的基础路径
 
-**启动与构建参数**
 根据你的路径需求，在启动时传入环境变量。前端会根据这些参数编译，并自动释放到宿主机的 `./frontend` 目录：
 
 | 场景 | 前端路径 | 后端路径 | 启动命令 |
@@ -198,13 +207,17 @@ location = /skin/api {
 
 ---
 
-### 3. 初始化设置 (重要)
+## 从1.3.1升级到2.0.0
+2.x版本最大的更新是数据库从 SQLite 切换到 PostgreSQL，因此需要进行数据迁移。在迁移之前，请**确保皮肤站版本已经升级到 v1.3.1**，并且已经备份了数据库文件。迁移步骤如下：
 
-容器启动成功后，PostgreSQL 会通过 `init.sql` 自动完成建表。
-
-1.  **注册管理员**: 访问站点，注册的**第一个账号**将自动获得管理员权限。
-2.  **配置站点设置**: 登录后进入 `管理面板` -> `站点设置` 修改名称和开关。
-3.  **配置邮件服务**: 进入 `管理面板` -> `邮件服务` 配置 SMTP，即可启用验证码和密码找回。
+1. 按照上面的 Docker 部署指南，启动皮肤站服务
+2. 按照你的数据库配置，编辑`sqlite_to_postgres.py`文件中的数据库连接字符串
+3. 按照你原先的数据库文件路径，编辑`sqlite_to_postgres.py`文件中的SQLite数据库路径
+4. 运行迁移脚本：
+```bash
+python sqlite_to_postgres.py
+```
+5. 迁移完成后，重启皮肤站服务，确保一切正常运行
 
 ---
 
@@ -238,7 +251,7 @@ python -m venv .venv
 pip install -r requirements.txt
 python gen_key.py                # 生成密钥
 # 运行测试 (需本地开启 PG)
-$env:PYTHONPATH='.'; ..\.venv\Scripts\python.exe -m pytest tests/
+uvicorn routes_reference:app --reload --host 0.0.0.0
 ```
 
 #### 3. 前端 (Node.js)
