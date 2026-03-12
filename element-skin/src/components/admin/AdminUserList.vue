@@ -57,7 +57,7 @@
     <!-- User Detail Dialog -->
     <el-dialog
       v-model="userDetailDialogVisible"
-      title="用户详情"
+      title=""
       width="800px"
       class="dialog-viewer"
       destroy-on-close
