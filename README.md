@@ -60,12 +60,17 @@ services:
     image: ghcr.io/water2004/element-skin:latest
     container_name: element-skin
     restart: unless-stopped
+    environment:
+      - VITE_BASE_PATH=${VITE_BASE_PATH:-/}    # 👈 前端部署路径 (如 /skin/)
+      - VITE_API_BASE=${VITE_API_BASE:-/skinapi} # 👈 后端 API 路径 (如 /skinapi)
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./frontend:/app/frontend           # 前端、皮肤、轮播图全部在这里
     ports:
       - "8000:8000"
 ```
+
+> 💡 **动态路径配置**: 镜像支持在启动时通过环境变量动态修改路径。修改后直接 `docker compose restart` 即可生效，无需重新构建。
 
 在宿主机创建 `config.yaml` 文件。这是系统运行的核心配置。
 
