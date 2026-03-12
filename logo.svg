@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- 渐变层：增加金属般的质感 -->
+    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34D399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+    <linearGradient id="g2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#60A5FA" />
+      <stop offset="100%" stop-color="#2563EB" />
+    </linearGradient>
+    <linearGradient id="g3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A78BFA" />
+      <stop offset="100%" stop-color="#7C3AED" />
+    </linearGradient>
+  </defs>
+
+  <!-- 环带组件组：使用 80px 的超宽笔触，创造厚重感 -->
+  <g fill="none" stroke-width="80" stroke-linecap="round" stroke-linejoin="round">
+    
+    <!-- 环带 1 (底层) -->
+    <path d="M 256 128 A 128 128 0 0 1 384 256" stroke="url(#g1)" opacity="0.9" />
+    
+    <!-- 环带 2 (中层) -->
+    <path d="M 384 256 A 128 128 0 0 1 256 384" stroke="url(#g2)" opacity="0.9" />
+    
+    <!-- 环带 3 (顶层) -->
+    <path d="M 256 384 A 128 128 0 0 1 128 256" stroke="url(#g3)" opacity="0.9" />
+    
+    <!-- 环带 4 (闭合带，通过重叠创造视觉交叉) -->
+    <path d="M 128 256 A 128 128 0 0 1 256 128" stroke="#E2E8F0" stroke-width="80" opacity="0.6" />
+  </g>
+</svg>
