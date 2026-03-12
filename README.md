@@ -153,7 +153,7 @@ docker compose up -d
 
 | 场景 | 前端路径 | 后端路径 | 启动命令 |
 |-----|---------|---------|---------|
-| **场景 1** | `/skin/` | `/skinapi` | `VITE_BASE_PATH=/skin/ docker compose up -d |
+| **场景 1** | `/skin/` | `/skinapi` | `VITE_BASE_PATH=/skin/ docker compose up -d` |
 | **场景 2** | `/skin/` | `/skin/api/` | `VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d` |
 
 **Nginx 主机配置 (对应场景 1)**
