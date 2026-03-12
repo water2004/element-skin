@@ -1,6 +1,5 @@
 fastapi>=0.95.0
 uvicorn[standard]>=0.22.0
-uvloop>=0.19.0; sys_platform != 'win32'
 asyncpg>=0.29.0
 Pillow>=10.0.0
 

@@ -55,4 +55,4 @@ RUN chmod +x entrypoint.sh
 
 EXPOSE 8000
 ENTRYPOINT ["./entrypoint.sh"]
-CMD ["python3", "-m", "uvicorn", "routes_reference:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "uvloop"]
+CMD ["python3", "-m", "uvicorn", "routes_reference:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "asyncio"]
