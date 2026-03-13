@@ -110,7 +110,7 @@ function getCarouselUrl(filename) {
 
 /* FIXED Background logic */
 .hero-bg-fixed {
-  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: -1;
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 0;
   transform: translateZ(0); /* Create stable layer for backdrop-filter sampling */
 }
 .hero-bg-fixed.is-gradient {
