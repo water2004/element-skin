@@ -5,18 +5,18 @@ jwt:
 
 # RSA 密钥配置
 keys:
-  private_key: "/app/private.pem"
-  public_key: "/app/public.pem"
+  private_key: "/app/data/private.pem"
+  public_key: "/app/data/public.pem"
 
 database:
   dsn: "postgresql://elementskin:password123@db:5432/elementskin?sslmode=disable"
   max_connections: 20
 
 textures:
-  directory: "/app/static/textures"
+  directory: "/app/frontend/static/textures"
 
 carousel:
-  directory: "/app/static：carousel"
+  directory: "/app/frontend/static/carousel"
 
 server:
   host: "0.0.0.0"

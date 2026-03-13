@@ -51,9 +51,11 @@ find /app/frontend -type f \( -name "*.js" -o -name "*.html" \) -exec sed -i "s|
 echo "前端文件释放及路径配置完成。"
 
 # --- 3. 密钥生成逻辑 ---
-if [ ! -f "private.pem" ] || [ ! -f "public.pem" ]; then
-    echo "密钥文件不存在，正在生成..."
-    python3 gen_key.py
+KEY_DIR="/app/data"
+mkdir -p "$KEY_DIR"
+if [ ! -f "$KEY_DIR/private.pem" ] || [ ! -f "$KEY_DIR/public.pem" ]; then
+    echo "密钥文件不存在，正在生成到 $KEY_DIR..."
+    python3 gen_key.py "$KEY_DIR"
     echo "密钥已生成。"
 else
     echo "密钥文件已存在，跳过生成。"

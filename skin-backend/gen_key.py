@@ -1,9 +1,12 @@
+import os
+import sys
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 
-def generate_keys():
-    print("正在生成 RSA 密钥对 (4096位)... 这可能需要几秒钟。")
+def generate_keys(output_dir="."):
+    print(f"正在生成 RSA 密钥对 (4096位) 到 {output_dir}... 这可能需要几秒钟。")
+    os.makedirs(output_dir, exist_ok=True)
 
     # 1. 生成私钥
     private_key = rsa.generate_private_key(
@@ -18,9 +21,10 @@ def generate_keys():
         encryption_algorithm=serialization.NoEncryption(),
     )
 
-    with open("private.pem", "wb") as f:
+    private_path = os.path.join(output_dir, "private.pem")
+    with open(private_path, "wb") as f:
         f.write(private_pem)
-    print("已生成 private.pem (服务端请妥善保管，不要泄露)")
+    print(f"已生成 {private_path} (服务端请妥善保管，不要泄露)")
 
     # 3. 生成公钥 (public.pem)
     public_key = private_key.public_key()
@@ -29,10 +33,12 @@ def generate_keys():
         format=serialization.PublicFormat.SubjectPublicKeyInfo,
     )
 
-    with open("public.pem", "wb") as f:
+    public_path = os.path.join(output_dir, "public.pem")
+    with open(public_path, "wb") as f:
         f.write(public_pem)
-    print("已生成 public.pem (用于 API 元数据响应)")
+    print(f"已生成 {public_path} (用于 API 元数据响应)")
 
 
 if __name__ == "__main__":
-    generate_keys()
+    out = sys.argv[1] if len(sys.argv) > 1 else "."
+    generate_keys(out)

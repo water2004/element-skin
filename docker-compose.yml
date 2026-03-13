@@ -29,5 +29,6 @@ services:
     volumes:
       - ./config.yaml:/app/config.yaml:ro
       - ./frontend:/app/frontend           # 👈 所有静态文件在此 (自动包含 static/ 皮肤数据)
+      - ./data:/app/data                   # 👈 RSA 密钥等持久化数据在此
     ports:
       - "8000:8000"

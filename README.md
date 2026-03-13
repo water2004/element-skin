@@ -56,6 +56,8 @@ services:
       POSTGRES_DB: elementskin
     volumes:
       - ./data/db:/var/lib/postgresql/data
+    ports:
+      - "5432:5432" # 在迁移完成后可以关闭这个端口暴露
   backend:
     image: ghcr.io/water2004/element-skin:latest
     container_name: element-skin
@@ -80,10 +82,10 @@ services:
 jwt:
   secret: "dev-secret-please-change-to-a-very-long-string-in-production"  # ⚠️ 生产环境必须修改为随机长字符串
 
-# RSA 密钥配置 (系统会自动生成)
+# RSA 密钥配置 (系统会自动生成并持久化)
 keys:
-  private_key: "/app/private.pem"
-  public_key: "/app/public.pem"
+  private_key: "/app/data/private.pem"
+  public_key: "/app/data/public.pem"
 
 database:
   # 格式: postgresql://用户名:密码@db:5432/数据库名?sslmode=disable
@@ -91,10 +93,10 @@ database:
   max_connections: 20
 
 textures:
-  directory: "/app/static/textures"
+  directory: "/app/frontend/static/textures"
 
 carousel:
-  directory: "/app/static/carousel"
+  directory: "/app/frontend/static/carousel"
 
 server:
   host: "0.0.0.0"
@@ -106,7 +108,7 @@ server:
 
 # CORS 跨域配置
 cors:
-  allow_origins: ["*"]
+  allow_origins: ["*"] # ⚠️ 生产环境请根据实际情况限制来源
   allow_credentials: true
 ```
 
@@ -155,6 +157,8 @@ docker compose up -d
 |-----|---------|---------|---------|
 | **场景 1** | `/skin/` | `/skinapi` | `VITE_BASE_PATH=/skin/ docker compose up -d` |
 | **场景 2** | `/skin/` | `/skin/api/` | `VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d` |
+
+需要注意的是，`config.yaml` 中的 `server.site_url` 和 `server.api_url` 也需要根据实际部署路径进行调整，以确保生成的链接正确。
 
 **Nginx 主机配置 (对应场景 1)**
 ```nginx
@@ -209,14 +213,21 @@ location = /skin/api {
 2.x版本最大的更新是数据库从 SQLite 切换到 PostgreSQL，因此需要进行数据迁移。在迁移之前，请**确保皮肤站版本已经升级到 v1.3.1**，并且已经备份了数据库文件。迁移步骤如下：
 
 1. 按照上面的 Docker 部署指南，启动皮肤站服务
-2. 按照你的数据库配置，编辑`sqlite_to_postgres.py`文件中的数据库连接字符串
+2. 按照你的数据库配置，编辑`sqlite_to_postgres.py`文件中的数据库连接字符串。如果使用了上面的 Docker 配置，连接字符串应该是：
+```python
+SQLALCHEMY_DATABASE_URL = "postgresql://elementskin:password123@localhost:5432/elementskin?sslmode=disable"
+```
 3. 按照你原先的数据库文件路径，编辑`sqlite_to_postgres.py`文件中的SQLite数据库路径
 4. 运行迁移脚本：
 ```bash
 python sqlite_to_postgres.py
 ```
-5. 迁移完成后，重启皮肤站服务，确保一切正常运行
-
+5. 将原先的`textures`和`carousel`目录中的文件迁移到`./frontend/static/textures`和`./frontend/static/carousel`目录中
+6. 将原先的`public.pem`和`private.pem`文件迁移到`./data/`目录中
+7. 重新启动 Docker 服务：
+```bash
+docker compose restart
+```
 ---
 
 ## 🛠️ 本地开发环境
