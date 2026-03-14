@@ -2,7 +2,7 @@ name: Docker Publish
 
 on:
   push:
-    branches: [ 'dev', 'main' ]
+    branches: [ 'dev' ]
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
@@ -24,12 +24,36 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check build trigger
+        id: trigger-check
+        shell: bash
+        run: |
+          should_build=false
+
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            should_build=true
+          elif [ "${GITHUB_REF}" = "refs/heads/dev" ]; then
+            should_build=true
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            git fetch origin main --depth=1
+            if git branch -r --contains "$GITHUB_SHA" | grep -q "origin/main"; then
+              should_build=true
+            else
+              echo "Tag is not on main. Skipping build."
+            fi
+          fi
+
+          echo "should_build=$should_build" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
+        if: steps.trigger-check.outputs.should_build == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log into registry ${{ env.REGISTRY }}
-        if: github.event_name != 'pull_request'
+        if: steps.trigger-check.outputs.should_build == 'true' && github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -38,6 +62,7 @@ jobs:
 
       - name: Extract Docker metadata
         id: meta
+        if: steps.trigger-check.outputs.should_build == 'true'
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
@@ -45,10 +70,12 @@ jobs:
             type=semver,pattern={{version}}
             type=ref,event=branch
             type=sha,format=short
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=main,enable=${{ github.ref_type == 'tag' && steps.trigger-check.outputs.should_build == 'true' }}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && steps.trigger-check.outputs.should_build == 'true' }}
 
       - name: Build and push Docker image
         id: build-and-push
+        if: steps.trigger-check.outputs.should_build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -60,5 +87,3 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             BUILD_MODE=standard
-            VITE_BASE_PATH=/
-            VITE_API_BASE=/skinapi
