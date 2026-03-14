@@ -73,6 +73,7 @@
       class="dialog-viewer"
       destroy-on-close
       align-center
+      append-to-body
     >
       <div v-if="currentUser" class="user-detail-container">
         <!-- User Identity Panel -->
@@ -182,7 +183,7 @@
     </el-dialog>
 
     <!-- Reset Password Dialog -->
-    <el-dialog v-model="resetPasswordDialogVisible" title="重置用户密码" width="400px" align-center>
+    <el-dialog v-model="resetPasswordDialogVisible" title="重置用户密码" width="400px" align-center append-to-body>
       <el-form label-position="top">
         <el-form-item label="新密码 (最少6位)">
           <el-input v-model="resetPasswordForm.new_password" type="password" show-password />
@@ -198,7 +199,7 @@
     </el-dialog>
 
     <!-- Ban User Dialog -->
-    <el-dialog v-model="banDialogVisible" title="设置封禁时长" width="450px" align-center>
+    <el-dialog v-model="banDialogVisible" title="设置封禁时长" width="450px" align-center append-to-body>
       <div class="ban-dialog-body">
         <el-radio-group v-model="banDurationType" class="mb-4 capsule-radio">
           <el-radio-button value="preset">快速选择</el-radio-button>

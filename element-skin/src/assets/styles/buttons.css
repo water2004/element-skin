@@ -86,9 +86,8 @@
   background: rgba(255, 255, 255, 0.15) !important;
   border: 1px solid rgba(255, 255, 255, 0.25) !important;
   color: #fff !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  transform: translateZ(0); /* Force GPU repaint */
+  backdrop-filter: blur(12px) saturate(180%);
+  -webkit-backdrop-filter: blur(12px) saturate(180%);
   will-change: backdrop-filter;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
