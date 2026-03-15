@@ -1,7 +1,20 @@
 <template>
-  <div ref="container" class="skin-viewer-container" :class="{ 'is-static': isStatic }">
-    <!-- 静态模式下显示图片，非静态模式下由 JS 挂载 Canvas -->
-    <img v-if="isStatic && snapshotUrl" :src="snapshotUrl" :style="{ width: width + 'px', height: height + 'px' }" class="skin-snapshot" />
+  <div class="skin-viewer-wrapper" :style="{ width: width + 'px', height: height + 'px' }">
+    <!-- Static Image Mode -->
+    <img 
+      v-if="isStatic && snapshotUrl" 
+      :src="snapshotUrl" 
+      class="skin-snapshot" 
+      :style="{ width: width + 'px', height: height + 'px' }" 
+    />
+    
+    <!-- Interactive Canvas Mode: Only render if not static or snapshot not ready -->
+    <div 
+      v-if="!isStatic"
+      ref="container" 
+      class="skin-viewer-container"
+      :style="{ width: width + 'px', height: height + 'px' }"
+    ></div>
   </div>
 </template>
 
@@ -23,68 +36,62 @@ const snapshotUrl = ref(null)
 let viewer = null
 
 async function initViewer() {
+  // Dispose existing viewer
   if (viewer) {
     viewer.dispose()
     viewer = null
   }
 
-  // 创建 Viewer 配置
   const config = {
     width: props.width,
     height: props.height,
     skin: props.skinUrl,
     cape: props.capeUrl,
     model: props.model === 'slim' ? 'slim' : 'steve',
-    // 关键：为了导出图片，必须开启此选项
-    preserveDrawingBuffer: true
+    preserveDrawingBuffer: props.isStatic
   }
 
   if (props.isStatic) {
-    // 1. 创建离屏或临时 Canvas 进行单次渲染
+    // 1. Create a temporary off-screen canvas for snapshot
     const tempCanvas = document.createElement('canvas')
-    viewer = new skinview3d.SkinViewer({
+    const staticViewer = new skinview3d.SkinViewer({
       canvas: tempCanvas,
       ...config
     })
 
-    // 设置静态视角：完全正面 A-Pose，配合长焦远摄消除畸变
-    viewer.autoRotate = false
-    viewer.animation = null
-    viewer.camera.position.set(0, 10, 500)
-    viewer.camera.lookAt(0, 15, 0)
-    viewer.zoom = 0.8
-
-    // 手动调整 Pose 为 A-Pose (手臂微张)
-    viewer.playerObject.skin.leftArm.rotation.z = 0.05
-    viewer.playerObject.skin.rightArm.rotation.z = -0.05
-    viewer.playerObject.skin.leftLeg.rotation.z = 0
-    viewer.playerObject.skin.rightLeg.rotation.z = 0
-
-    // 等待皮肤加载完成
     try {
-      await viewer.loadSkin(props.skinUrl, { model: props.model === 'slim' ? 'slim' : 'steve' })
-      if (props.capeUrl) await viewer.loadCape(props.capeUrl)
+      staticViewer.autoRotate = false
+      staticViewer.animation = null
+      staticViewer.camera.position.set(0, 10, 500)
+      staticViewer.camera.lookAt(0, 15, 0)
+      staticViewer.zoom = 0.8
+
+      staticViewer.playerObject.skin.leftArm.rotation.z = 0.05
+      staticViewer.playerObject.skin.rightArm.rotation.z = -0.05
+      staticViewer.playerObject.skin.leftLeg.rotation.z = 0
+      staticViewer.playerObject.skin.rightLeg.rotation.z = 0
+
+      await staticViewer.loadSkin(props.skinUrl, { model: props.model === 'slim' ? 'slim' : 'steve' })
+      if (props.capeUrl) await staticViewer.loadCape(props.capeUrl)
       
-      // 渲染一帧
-      viewer.render()
-      
-      // 2. 导出为 Data URL 并保存到响应式变量
-      snapshotUrl.ref = tempCanvas.toDataURL('image/png')
-      snapshotUrl.value = snapshotUrl.ref
-      
-      // 3. 彻底销毁 Viewer，释放 WebGL 上下文！！
-      viewer.dispose()
-      viewer = null
+      staticViewer.render()
+      snapshotUrl.value = tempCanvas.toDataURL('image/png')
     } catch (e) {
-      console.error('Failed to render static skin:', e)
+      console.error('SkinViewer static render error:', e)
+    } finally {
+      staticViewer.dispose()
     }
   } else {
-    // 默认 3D 交互模式：挂载到 DOM
+    // 2. Interactive mode
+    await nextTick() // Wait for container ref to be available via v-if
+    if (!container.value) return
+    
     const canvas = document.createElement('canvas')
     viewer = new skinview3d.SkinViewer({
       canvas: canvas,
       ...config
     })
+    
     container.value.appendChild(viewer.canvas)
     
     viewer.autoRotate = true
@@ -96,26 +103,36 @@ async function initViewer() {
 }
 
 onMounted(() => {
-  if (props.skinUrl) initViewer()
+  initViewer()
 })
 
 onUnmounted(() => {
-  if (viewer) viewer.dispose()
+  if (viewer) {
+    viewer.dispose()
+    viewer = null
+  }
 })
 
 watch(() => [props.skinUrl, props.model, props.isStatic, props.capeUrl], () => {
   initViewer()
 }, { deep: true })
-
 </script>
 
 <style scoped>
-.skin-viewer-container {
+.skin-viewer-wrapper {
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
+  position: relative;
 }
+
+.skin-viewer-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .skin-snapshot {
   display: block;
   image-rendering: pixelated;

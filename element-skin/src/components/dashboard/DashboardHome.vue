@@ -157,9 +157,14 @@ async function checkMojangStatus() {
     mojangHealth.value[key] = 'checking'
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000)
+      const timeoutId = setTimeout(() => controller.abort(), 3000)
 
-      await fetch(url, { mode: 'no-cors', signal: controller.signal })
+      // Use a standard fetch but be ready for it to fail due to CORS or 403
+      await fetch(url, { 
+        mode: 'no-cors', // Many Mojang APIs don't have CORS, so we can only check if they are reachable
+        cache: 'no-cache',
+        signal: controller.signal 
+      })
       clearTimeout(timeoutId)
       mojangHealth.value[key] = 'online'
     } catch (e) {

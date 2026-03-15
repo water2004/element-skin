@@ -1,11 +1,25 @@
 <template>
-  <div ref="container" class="cape-viewer-container" :class="{ 'is-static': isStatic }">
-    <img v-if="isStatic && snapshotUrl" :src="snapshotUrl" :style="{ width: width + 'px', height: height + 'px' }" class="cape-snapshot" />
+  <div class="cape-viewer-wrapper" :style="{ width: width + 'px', height: height + 'px' }">
+    <!-- Static Image Mode -->
+    <img 
+      v-if="isStatic && snapshotUrl" 
+      :src="snapshotUrl" 
+      class="cape-snapshot" 
+      :style="{ width: width + 'px', height: height + 'px' }" 
+    />
+    
+    <!-- Interactive Canvas Mode -->
+    <div 
+      v-if="!isStatic"
+      ref="container" 
+      class="cape-viewer-container"
+      :style="{ width: width + 'px', height: height + 'px' }"
+    ></div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as skinview3d from 'skinview3d'
 
 const props = defineProps({
@@ -30,40 +44,49 @@ async function initViewer() {
     height: props.height,
     skin: null,
     cape: props.capeUrl,
-    preserveDrawingBuffer: true
+    preserveDrawingBuffer: props.isStatic
   }
 
   if (props.isStatic) {
     const tempCanvas = document.createElement('canvas')
-    viewer = new skinview3d.SkinViewer({
+    const staticViewer = new skinview3d.SkinViewer({
       canvas: tempCanvas,
       ...config
     })
 
-    if (viewer.playerObject) viewer.playerObject.skin.visible = false
+    if (staticViewer.playerObject) {
+      staticViewer.playerObject.skin.visible = false
+    }
     
-    viewer.autoRotate = false
-    viewer.camera.position.set(0, 10, -50)
-    viewer.camera.lookAt(0, 15, 0)
-    viewer.zoom = 1.3
+    staticViewer.autoRotate = false
+    staticViewer.camera.position.set(0, 10, -50)
+    staticViewer.camera.lookAt(0, 15, 0)
+    staticViewer.zoom = 1.3
 
     try {
-      await viewer.loadCape(props.capeUrl)
-      viewer.render()
+      await staticViewer.loadCape(props.capeUrl)
+      staticViewer.render()
       snapshotUrl.value = tempCanvas.toDataURL('image/png')
-      viewer.dispose()
-      viewer = null
     } catch (e) {
-      console.error('Failed to render static cape:', e)
+      console.error('CapeViewer static render error:', e)
+    } finally {
+      staticViewer.dispose()
     }
   } else {
+    await nextTick()
+    if (!container.value) return
+    
     const canvas = document.createElement('canvas')
     viewer = new skinview3d.SkinViewer({
       canvas: canvas,
       ...config
     })
+    
     container.value.appendChild(viewer.canvas)
-    if (viewer.playerObject) viewer.playerObject.skin.visible = false
+    if (viewer.playerObject) {
+      viewer.playerObject.skin.visible = false
+    }
+    
     viewer.autoRotate = true
     viewer.autoRotateSpeed = 0.5
     viewer.zoom = 1.2
@@ -71,26 +94,36 @@ async function initViewer() {
 }
 
 onMounted(() => {
-  if (props.capeUrl) initViewer()
+  initViewer()
 })
 
 onUnmounted(() => {
-  if (viewer) viewer.dispose()
+  if (viewer) {
+    viewer.dispose()
+    viewer = null
+  }
 })
 
 watch(() => [props.capeUrl, props.isStatic], () => {
   initViewer()
 }, { deep: true })
-
 </script>
 
 <style scoped>
-.cape-viewer-container {
+.cape-viewer-wrapper {
   display: flex;
   justify-content: center;
   align-items: center;
   overflow: hidden;
+  position: relative;
 }
+
+.cape-viewer-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
 .cape-snapshot {
   display: block;
   image-rendering: pixelated;
