@@ -454,10 +454,6 @@ onMounted(() => {
   padding-top: 0;
 }
 
-.title-edit-btn {
-  color: var(--el-text-color-secondary);
-}
-
 .apply-row {
   display: flex;
   gap: 8px;

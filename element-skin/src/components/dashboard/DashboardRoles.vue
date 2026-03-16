@@ -105,7 +105,11 @@
         <div class="viewer-info-panel">
           <section class="viewer-section title-section">
             <div class="viewer-title-row">
+              <el-button text circle class="title-edit-btn" @click="focusNameInput">
+                <el-icon><Edit /></el-icon>
+              </el-button>
               <el-input
+                ref="nameInputRef"
                 v-model="selectedProfile.name"
                 class="viewer-title-input"
                 placeholder="角色名称"
@@ -295,7 +299,7 @@ import { ref, onMounted, inject, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Plus, Delete, Close, Check, Select, Warning, Download } from '@element-plus/icons-vue'
+import { Connection, Plus, Delete, Close, Check, Select, Warning, Download, Edit } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
 
 // Inject shared state from AppLayout
@@ -314,6 +318,11 @@ const importing = ref(false)
 
 const showPreviewDialog = ref(false)
 const selectedProfile = ref(null)
+const nameInputRef = ref(null)
+
+function focusNameInput() {
+  nameInputRef.value?.focus()
+}
 
 const showYggImportDialog = ref(false)
 const yggStep = ref('input')
