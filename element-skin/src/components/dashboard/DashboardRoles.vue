@@ -105,7 +105,12 @@
         <div class="viewer-info-panel">
           <section class="viewer-section title-section">
             <div class="viewer-title-row">
-              <h2 class="viewer-display-title">{{ selectedProfile.name }}</h2>
+              <el-input
+                v-model="selectedProfile.name"
+                class="viewer-title-input"
+                placeholder="角色名称"
+                @change="updateRoleName"
+              />
             </div>
           </section>
 
@@ -357,6 +362,25 @@ async function deleteRole(pid) {
     fetchMe()
   } catch (e) {
     ElMessage.error('删除失败')
+  }
+}
+
+async function updateRoleName() {
+  if (!selectedProfile.value) return
+  const pid = selectedProfile.value.id
+  const newName = (selectedProfile.value.name || '').trim()
+
+  if (!newName) {
+    ElMessage.error('角色名不能为空')
+    return
+  }
+
+  try {
+    await axios.patch(`/me/profiles/${pid}`, { name: newName }, { headers: authHeaders() })
+    ElMessage.success('名称已修改')
+    fetchMe()
+  } catch (e) {
+    ElMessage.error('修改失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 

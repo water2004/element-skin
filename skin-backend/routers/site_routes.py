@@ -131,6 +131,13 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
             payload.get("sub"), body.get("name"), body.get("model", "default")
         )
 
+    @router.patch("/me/profiles/{pid}")
+    async def update_profile(
+        pid: str, payload: dict = Depends(get_current_user), body: dict = Body(...)
+    ):
+        await site_backend.update_profile(payload.get("sub"), pid, body.get("name"))
+        return {"ok": True}
+
     @router.delete("/me/profiles/{pid}")
     async def delete_profile(pid: str, payload: dict = Depends(get_current_user)):
         await site_backend.delete_profile(payload.get("sub"), pid)

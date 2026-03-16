@@ -407,6 +407,30 @@ class SiteBackend:
         )
         return {"id": profile_id, "name": name, "model": model}
 
+    async def update_profile(self, user_id, pid, name):
+        profile_row = await self.db.user.get_profile_by_id(pid)
+        if not profile_row:
+            raise HTTPException(status_code=404, detail="profile not found")
+        if profile_row.user_id != user_id:
+            raise HTTPException(status_code=403, detail="not allowed")
+
+        if not name:
+            raise HTTPException(status_code=400, detail="name required")
+        
+        if not re.match(r"^[a-zA-Z0-9_]{1,16}$", name):
+            raise HTTPException(
+                status_code=400,
+                detail="角色名只能包含字母、数字、下划线，长度1-16字符",
+            )
+
+        if profile_row.name != name:
+            existing = await self.db.user.get_profile_by_name(name)
+            if existing:
+                raise HTTPException(status_code=400, detail="角色名已被占用")
+
+        await self.db.user.update_profile_name(pid, name)
+        return True
+
     async def delete_profile(self, user_id, pid):
         profile_row = await self.db.user.get_profile_by_id(pid)
         if not profile_row:
