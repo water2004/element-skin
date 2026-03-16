@@ -104,6 +104,25 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
         )
         return {"ok": True, "message": "密码修改成功"}
 
+    @router.post("/remote-ygg/get-profiles")
+    async def get_ygg_profiles(
+        payload: dict = Depends(get_current_user), body: dict = Body(...)
+    ):
+        return await site_backend.get_ygg_profiles(
+            body.get("api_url"), body.get("username"), body.get("password")
+        )
+
+    @router.post("/remote-ygg/import-profile")
+    async def import_ygg_profile(
+        payload: dict = Depends(get_current_user), body: dict = Body(...)
+    ):
+        return await site_backend.import_ygg_profile(
+            payload.get("sub"),
+            body.get("api_url"),
+            body.get("profile_id"),
+            body.get("profile_name"),
+        )
+
     @router.post("/me/profiles")
     async def create_profile(
         payload: dict = Depends(get_current_user), body: dict = Body(...)
@@ -111,6 +130,13 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
         return await site_backend.create_profile(
             payload.get("sub"), body.get("name"), body.get("model", "default")
         )
+
+    @router.patch("/me/profiles/{pid}")
+    async def update_profile(
+        pid: str, payload: dict = Depends(get_current_user), body: dict = Body(...)
+    ):
+        await site_backend.update_profile(payload.get("sub"), pid, body.get("name"))
+        return {"ok": True}
 
     @router.delete("/me/profiles/{pid}")
     async def delete_profile(pid: str, payload: dict = Depends(get_current_user)):

@@ -27,6 +27,9 @@
 .btn-gradient-success { background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%) !important; }
 .btn-gradient-success:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4); }
 
+.btn-gradient-warning { background: linear-gradient(135deg, #e6a23c 0%, #eebe77 100%) !important; }
+.btn-gradient-warning:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(230, 162, 60, 0.4); }
+
 .btn-gradient-danger { background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%) !important; }
 .btn-gradient-danger:hover:not(:disabled) { box-shadow: 0 6px 16px rgba(245, 108, 108, 0.25); }
 

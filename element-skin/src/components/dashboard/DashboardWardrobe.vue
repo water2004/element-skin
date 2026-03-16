@@ -26,12 +26,14 @@
             :model="tex.model || 'default'"
             :width="200"
             :height="280"
+            is-static
           />
           <CapeViewer
             v-else
             :capeUrl="texturesUrl(tex.hash)"
             :width="200"
             :height="280"
+            is-static
           />
           <div
             v-if="tex.type === 'skin' && textureResolutions.get(tex.hash)"
@@ -450,10 +452,6 @@ onMounted(() => {
 
 .title-section {
   padding-top: 0;
-}
-
-.title-edit-btn {
-  color: var(--el-text-color-secondary);
 }
 
 .apply-row {

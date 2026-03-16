@@ -206,11 +206,24 @@ def setup_routes(db: Database, config):
         if not profile_id or not profile_name:
             raise HTTPException(status_code=400, detail="Missing required fields")
 
-        existing = await db.user.get_profile_by_name(profile_name)
-        if existing:
-            raise HTTPException(
-                status_code=400, detail=f"Profile name '{profile_name}' already exists"
-            )
+        # 1. Check for conflicts
+        # Check UUID conflict (refuse import if UUID exists)
+        if await db.user.get_profile_by_id(profile_id):
+            raise HTTPException(status_code=400, detail="该角色 UUID 已在本地存在，无法导入")
+
+        # Check name conflict and auto-rename
+        target_name = profile_name
+        suffix = 1
+        while True:
+            existing = await db.user.get_profile_by_name(target_name)
+            if not existing:
+                break
+            target_name = f"{profile_name}_{suffix}"
+            suffix += 1
+            if suffix > 100:
+                 raise HTTPException(status_code=400, detail="无法生成唯一的角色名称")
+        
+        profile_name = target_name
 
         skin_hash, cape_hash = None, None
 

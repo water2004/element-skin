@@ -39,28 +39,29 @@ class YggdrasilBackend:
         await self.db.user.delete_expired_tokens(user_id, cutoff)
         await self.db.user.delete_surplus_tokens(user_id, keep=5)
 
-    async def _verify_credentials(self, username, password) -> Optional[User]:
+    async def _verify_credentials(self, username, password) -> Tuple[Optional[User], Optional[PlayerProfile]]:
         user = await self.db.user.get_by_email(username)
+        login_profile = None
         if not user:
-            player_profile = await self.db.user.get_profile_by_name(username)
-            if player_profile:
-                user = await self.db.user.get_by_id(player_profile.user_id)
+            login_profile = await self.db.user.get_profile_by_name(username)
+            if login_profile:
+                user = await self.db.user.get_by_id(login_profile.user_id)
 
         if not user:
-            return None
+            return None, None
 
         if verify_password(password, user.password):
             if not user.password.startswith("$2"):
                 new_hash = hash_password(password)
                 await self.db.user.update_password(user.id, new_hash)
-            return user
+            return user, login_profile
 
-        return None
+        return None, None
 
     async def authenticate(
         self, username, password, clientToken
     ) -> Tuple[str, list, Optional[PlayerProfile], str]:
-        user = await self._verify_credentials(username, password)
+        user, login_profile = await self._verify_credentials(username, password)
         if not user:
             raise ForbiddenOperationException(
                 "Invalid credentials. Invalid username or password."
@@ -69,15 +70,18 @@ class YggdrasilBackend:
         user_id = user.id
         access_token = generate_random_uuid()
         client_token = clientToken if clientToken else generate_random_uuid()
-        avail_players = await self.db.user.get_profiles_by_user(user_id)
 
         selected_profile = None
-        if len(avail_players) == 1:
-            selected_profile = avail_players[0]
+        if login_profile:
+            # 如果是通过角色名登录，availableProfiles 仅包含该角色，且必须被选中
+            avail_players = [login_profile]
+            selected_profile = login_profile
         else:
-            login_profile = await self.db.user.get_profile_by_name(username)
-            if login_profile and login_profile.user_id == user_id:
-                selected_profile = login_profile
+            # 如果是通过邮箱登录，返回该用户下的所有角色
+            avail_players = await self.db.user.get_profiles_by_user(user_id)
+            # 如果只有一个角色，则默认选中
+            if len(avail_players) == 1:
+                selected_profile = avail_players[0]
 
         pid_to_bind = selected_profile.id if selected_profile else None
         created_at = int(time.time() * 1000)
@@ -164,7 +168,7 @@ class YggdrasilBackend:
         await self.db.user.delete_token(access_token)
 
     async def signout(self, username, password):
-        user = await self._verify_credentials(username, password)
+        user, _ = await self._verify_credentials(username, password)
         if not user:
             raise ForbiddenOperationException(
                 "Invalid credentials. Invalid username or password."

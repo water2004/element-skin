@@ -37,6 +37,54 @@ async def test_api_yggdrasil_authenticate(client, user_factory, db_session):
     assert data["user"]["id"] == user.id
 
 @pytest.mark.asyncio
+async def test_api_yggdrasil_authenticate_by_profile_name(client, user_factory, db_session):
+    """测试通过角色名登录 (Yggdrasil 规范：仅返回该角色)"""
+    password = "YggPassword123"
+    user = await user_factory(password=password)
+    
+    from utils.typing import PlayerProfile
+    pid1 = "profile_1"
+    pid2 = "profile_2"
+    await db_session.user.create_profile(PlayerProfile(pid1, user.id, "PlayerOne"))
+    await db_session.user.create_profile(PlayerProfile(pid2, user.id, "PlayerTwo"))
+    
+    # 使用角色名 PlayerOne 登录
+    payload = {
+        "username": "PlayerOne",
+        "password": password
+    }
+    resp = await client.post("/authserver/authenticate", json=payload)
+    
+    assert resp.status_code == 200
+    data = resp.json()
+    # 应该只返回 PlayerOne
+    assert len(data["availableProfiles"]) == 1
+    assert data["availableProfiles"][0]["name"] == "PlayerOne"
+    assert data["selectedProfile"]["name"] == "PlayerOne"
+
+@pytest.mark.asyncio
+async def test_api_yggdrasil_authenticate_by_email_multiple_profiles(client, user_factory, db_session):
+    """测试通过邮箱登录返回所有角色"""
+    password = "YggPassword123"
+    user = await user_factory(password=password)
+    
+    from utils.typing import PlayerProfile
+    await db_session.user.create_profile(PlayerProfile("p1", user.id, "P1"))
+    await db_session.user.create_profile(PlayerProfile("p2", user.id, "P2"))
+    
+    payload = {
+        "username": user.email,
+        "password": password
+    }
+    resp = await client.post("/authserver/authenticate", json=payload)
+    
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["availableProfiles"]) == 2
+    # 多个角色时，默认不选中（除非实现逻辑有变，目前代码是只有1个才选中）
+    assert "selectedProfile" not in data
+
+@pytest.mark.asyncio
 async def test_api_yggdrasil_get_profile(client, user_factory, db_session):
     """测试获取角色信息及材质 JSON 接口"""
     user = await user_factory()

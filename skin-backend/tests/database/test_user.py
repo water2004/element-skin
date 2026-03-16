@@ -74,15 +74,17 @@ async def test_profile_management(db_session, user_factory):
     p2 = await db_session.user.get_profile_by_name("Player1")
     assert p2.id == pid
     
-    # Update Skin/Cape/Model
+    # Update Skin/Cape/Model/Name
     await db_session.user.update_profile_skin(pid, "skin_hash")
     await db_session.user.update_profile_cape(pid, "cape_hash")
     await db_session.user.update_profile_texture_model(pid, "slim")
+    await db_session.user.update_profile_name(pid, "NewName")
     
     updated = await db_session.user.get_profile_by_id(pid)
     assert updated.skin_hash == "skin_hash"
     assert updated.cape_hash == "cape_hash"
     assert updated.texture_model == "slim"
+    assert updated.name == "NewName"
     
     # Search & Bulk display name
     await db_session.user.create_profile(PlayerProfile(generate_random_uuid(), user.id, "Player2", "default", None, None))

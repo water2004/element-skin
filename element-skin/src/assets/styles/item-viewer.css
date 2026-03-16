@@ -50,6 +50,35 @@ html.dark .viewer-stage {
   padding-right: 48px; /* Safe distance for close button */
 }
 
+.title-edit-btn {
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50% !important;
+  background: transparent !important;
+  border: none !important;
+  transition: all 0.2s ease !important;
+  flex-shrink: 0;
+}
+
+.title-edit-btn:hover {
+  background: var(--color-background-soft) !important;
+  color: var(--el-color-primary) !important;
+  transform: scale(1.1);
+}
+
+.title-edit-btn .el-icon {
+  font-size: 18px;
+  color: var(--color-text-light);
+}
+
+.title-edit-btn:hover .el-icon {
+  color: var(--el-color-primary);
+}
+
 .viewer-title-input {
   flex: 1;
 }
@@ -75,6 +104,43 @@ html.dark .viewer-stage {
   font-weight: 700;
   color: var(--color-heading);
   line-height: 48px;
+}
+
+/* Static Display Title (Non-editable) */
+.viewer-display-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--color-heading) 0%, var(--el-text-color-secondary) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.uploader-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--color-heading);
+  font-weight: 500;
+}
+
+.login-hint {
+  text-align: center;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  margin-top: 12px;
+}
+
+.hash-label {
+  margin-top: 12px;
+  font-family: monospace;
+  font-size: 11px;
+  color: var(--el-text-color-secondary);
+  background: var(--color-background-soft);
+  padding: 4px 8px;
+  border-radius: 4px;
+  word-break: break-all;
 }
 
 /* Responsive adjustments */

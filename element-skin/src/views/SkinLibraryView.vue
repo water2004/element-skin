@@ -25,10 +25,11 @@
     <div class="library-grid-container" v-loading="loading" element-loading-background="transparent">
       <div class="auto-grid" v-if="items.length > 0">
         <div 
-          class="surface-card hoverable animate-card-slide" 
+          class="surface-card hoverable animate-card-slide clickable-card" 
           v-for="(item, index) in items" 
           :key="item.hash"
           :style="{ '--delay-index': index % 20 }"
+          @click="openPreviewDialog(item)"
         >
           <div class="texture-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
             <SkinViewer
@@ -37,13 +38,14 @@
               :model="item.model || 'default'"
               :width="200"
               :height="280"
-              @load="handleTextureLoad(item.hash)"
+              is-static
             />
             <CapeViewer
               v-else
               :capeUrl="texturesUrl(item.hash)"
               :width="200"
               :height="280"
+              is-static
             />
             <div
               v-if="item.type === 'skin' && textureResolutions.get(item.hash)"
@@ -66,7 +68,7 @@
               </span>
             </div>
           </div>
-          <div class="texture-actions">
+          <div class="texture-actions" @click.stop>
             <el-button 
               class="btn-gradient btn-gradient-primary" 
               @click="addToWardrobe(item.hash)"
@@ -80,6 +82,74 @@
       </div>
       
       <el-empty v-else-if="!loading" description="库中暂无公开材质" />
+
+      <!-- 预览对话框 -->
+      <el-dialog
+        v-model="showPreviewDialog"
+        width="800px"
+        destroy-on-close
+        class="dialog-viewer"
+        append-to-body
+      >
+        <div class="viewer-layout" v-if="selectedItem">
+          <div class="viewer-stage">
+            <SkinViewer
+              v-if="selectedItem.type === 'skin'"
+              :skinUrl="texturesUrl(selectedItem.hash)"
+              :model="selectedItem.model || 'default'"
+              :width="320"
+              :height="430"
+            />
+            <CapeViewer
+              v-else
+              :capeUrl="texturesUrl(selectedItem.hash)"
+              :width="320"
+              :height="430"
+            />
+          </div>
+
+          <div class="viewer-info-panel">
+            <section class="viewer-section title-section">
+              <div class="viewer-title-row">
+                <h2 class="viewer-display-title">{{ selectedItem.name || '未命名纹理' }}</h2>
+              </div>
+            </section>
+
+            <section class="viewer-section meta-section">
+              <div class="viewer-title-row">
+                <span class="meta-chip">{{ textureResolutions.get(selectedItem.hash) || '--' }}px</span>
+                <span class="meta-chip" :class="selectedItem.type">
+                  {{ selectedItem.type === 'skin' ? '皮肤' : '披风' }}
+                </span>
+              </div>
+              <div class="hash-label">HASH: {{ selectedItem.hash }}</div>
+            </section>
+
+            <section class="viewer-section" v-if="selectedItem.uploader_name">
+              <div class="viewer-section-label">上传者</div>
+              <div class="uploader-info">
+                <el-icon><User /></el-icon>
+                <span>{{ selectedItem.uploader_name }}</span>
+              </div>
+            </section>
+
+            <section class="viewer-section footer-section" style="margin-top: auto;">
+              <el-button 
+                type="primary" 
+                size="large" 
+                class="btn-gradient btn-gradient-primary" 
+                style="width: 100%; border-radius: 12px; height: 50px;"
+                @click="addToWardrobe(selectedItem.hash)"
+                :disabled="!isLogged"
+              >
+                <el-icon><Plus /></el-icon>
+                <span style="margin-left: 8px;">添加到我的衣柜</span>
+              </el-button>
+              <p v-if="!isLogged" class="login-hint">登录后即可收藏此纹理</p>
+            </section>
+          </div>
+        </div>
+      </el-dialog>
 
       <div class="pagination-container" v-if="total > limit">
         <el-pagination
@@ -116,6 +186,13 @@ const loading = ref(false)
 const isDisabled = ref(false)
 const filterType = ref('')
 const textureResolutions = ref(new Map())
+const showPreviewDialog = ref(false)
+const selectedItem = ref(null)
+
+function openPreviewDialog(item) {
+  selectedItem.value = item
+  showPreviewDialog.value = true
+}
 
 function texturesUrl(hash) {
   if (!hash) return ''
@@ -168,8 +245,6 @@ function loadTextureResolution(hash) {
   img.src = texturesUrl(hash)
 }
 
-function handleTextureLoad(hash) {}
-
 function getResolutionBadgeStyle(resolution) {
   let hue = 0
   if (resolution <= 64) hue = 120
@@ -213,6 +288,13 @@ onMounted(() => {
   fetchLibrary()
 })
 </script>
+
+<style>
+/* Global Styles for Teleported Elements */
+@import "@/assets/styles/dialogs.css";
+@import "@/assets/styles/item-viewer.css";
+@import "@/assets/styles/item-cards.css";
+</style>
 
 <style scoped>
 @import "@/assets/styles/animations.css";
@@ -299,6 +381,10 @@ onMounted(() => {
 
 .texture-actions .el-button {
   flex: 1;
+}
+
+.clickable-card {
+  cursor: pointer;
 }
 
 .pagination-container {

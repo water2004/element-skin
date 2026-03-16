@@ -7,7 +7,7 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 const isLowMemory = process.env.BUILD_MODE === 'low-memory'
-const appVersion = 'v2.0.0'
+const appVersion = 'v2.1.0'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -68,7 +68,7 @@ export default defineConfig({
       },
       // API routes that might conflict with frontend routes
       // When a browser refreshes on these paths, it should serve index.html instead of proxying to the backend
-      '^/(admin|register|reset-password|site-login|me|public|microsoft|send-verification-code)': {
+      '^/(admin|register|reset-password|site-login|me|public|microsoft|send-verification-code|remote-ygg)': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
         bypass: (req) => {

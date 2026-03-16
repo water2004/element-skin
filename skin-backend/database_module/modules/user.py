@@ -169,6 +169,12 @@ class UserModule:
             "UPDATE profiles SET texture_model=$1 WHERE id=$2",
             texture_model, profile_id,
         )
+
+    async def update_profile_name(self, profile_id: str, name: str):
+        await self.db.execute(
+            "UPDATE profiles SET name=$1 WHERE id=$2",
+            name, profile_id,
+        )
             
     async def search_profiles_by_names(self, names: list[str], limit: int = 20, offset: int = 0) -> list[PlayerProfile]:
         # asyncpg handle array nicely with ANY

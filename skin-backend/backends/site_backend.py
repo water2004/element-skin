@@ -11,6 +11,7 @@ from utils.password_utils import validate_strong_password
 from utils.jwt_utils import create_jwt_token
 from utils.email_utils import EmailSender
 from utils.uuid_utils import generate_random_uuid
+from backends.yggdrasil_client import YggdrasilClient, download_texture
 from utils.typing import User, PlayerProfile
 from database_module import Database
 from config_loader import Config
@@ -25,6 +26,84 @@ class SiteBackend:
         self.email_sender = EmailSender(db)
 
     # ========== Auth & User ==========
+
+    async def get_ygg_profiles(self, api_url: str, username: str, password: str):
+        client = YggdrasilClient(api_url)
+        try:
+            result = await client.authenticate(username, password)
+            # Standard Yggdrasil authenticate response
+            profiles = result.get("availableProfiles", [])
+            return {"profiles": profiles}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    async def import_ygg_profile(self, user_id: str, api_url: str, profile_id: str, profile_name: str):
+        client = YggdrasilClient(api_url)
+        try:
+            # 1. Fetch detailed profile with textures
+            profile_data = await client.get_profile_with_textures(profile_id)
+            
+            # 2. Check for conflicts
+            # Check UUID conflict (refuse import if UUID exists)
+            if await self.db.user.get_profile_by_id(profile_id):
+                 raise HTTPException(status_code=400, detail="该角色 UUID 已在本地存在，无法导入")
+
+            # Check if profile name is taken locally
+            # We try to use the original name, but if taken, append a suffix
+            target_name = profile_name
+            suffix = 1
+            while True:
+                existing = await self.db.user.get_profile_by_name(target_name)
+                if not existing:
+                    break
+                target_name = f"{profile_name}_{suffix}"
+                suffix += 1
+                if suffix > 100:
+                     raise HTTPException(status_code=400, detail="无法生成唯一的角色名称")
+            
+            # 3. Download and upload textures
+            skin_hash = None
+            skin_model = "default"
+            if profile_data.get("skins"):
+                skin_url = profile_data["skins"][0]["url"]
+                skin_variant = profile_data["skins"][0].get("variant", "classic")
+                skin_model = "slim" if skin_variant == "slim" else "default"
+                try:
+                    skin_bytes = await download_texture(skin_url)
+                    skin_hash, _ = await self.db.texture.upload(
+                        user_id, skin_bytes, "skin", f"Imported from {api_url}", is_public=False, model=skin_model
+                    )
+                except Exception as e:
+                    print(f"Failed to download/upload skin: {e}")
+
+            cape_hash = None
+            if profile_data.get("capes"):
+                cape_url = profile_data["capes"][0]["url"]
+                try:
+                    cape_bytes = await download_texture(cape_url)
+                    cape_hash, _ = await self.db.texture.upload(
+                        user_id, cape_bytes, "cape", f"Imported from {api_url}", is_public=False
+                    )
+                except Exception as e:
+                    print(f"Failed to download/upload cape: {e}")
+
+            # 4. Create local profile
+            # Use the remote profile_id as the local ID
+            await self.db.user.create_profile(
+                PlayerProfile(profile_id, user_id, target_name, skin_model)
+            )
+            
+            # 5. Apply textures
+            if skin_hash:
+                await self.db.user.update_profile_skin(profile_id, skin_hash)
+            if cape_hash:
+                await self.db.user.update_profile_cape(profile_id, cape_hash)
+
+            return {"id": profile_id, "name": target_name}
+        except Exception as e:
+            if isinstance(e, HTTPException):
+                raise e
+            raise HTTPException(status_code=400, detail=str(e))
 
     async def send_verification_code(self, email: str, type: str):
         # Check if email verification is enabled
@@ -332,6 +411,30 @@ class SiteBackend:
             PlayerProfile(profile_id, user_id, name, model)
         )
         return {"id": profile_id, "name": name, "model": model}
+
+    async def update_profile(self, user_id, pid, name):
+        profile_row = await self.db.user.get_profile_by_id(pid)
+        if not profile_row:
+            raise HTTPException(status_code=404, detail="profile not found")
+        if profile_row.user_id != user_id:
+            raise HTTPException(status_code=403, detail="not allowed")
+
+        if not name:
+            raise HTTPException(status_code=400, detail="name required")
+        
+        if not re.match(r"^[a-zA-Z0-9_]{1,16}$", name):
+            raise HTTPException(
+                status_code=400,
+                detail="角色名只能包含字母、数字、下划线，长度1-16字符",
+            )
+
+        if profile_row.name != name:
+            existing = await self.db.user.get_profile_by_name(name)
+            if existing:
+                raise HTTPException(status_code=400, detail="角色名已被占用")
+
+        await self.db.user.update_profile_name(pid, name)
+        return True
 
     async def delete_profile(self, user_id, pid):
         profile_row = await self.db.user.get_profile_by_id(pid)
