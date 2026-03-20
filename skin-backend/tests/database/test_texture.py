@@ -119,3 +119,45 @@ async def test_texture_edge_cases(db_session, user_factory):
     
     # 获取不存在的材质信息
     assert await db_session.texture.get_texture_info(user.id, "none", "skin") is None
+
+@pytest.mark.asyncio
+async def test_texture_uploader_deletion_and_readd(db_session, user_factory):
+    """测试上传者删除材质同步删除库记录，以及从库中恢复材质的逻辑"""
+    user = await user_factory()
+    image_bytes = create_test_image(64, 64)
+    
+    # 1. 上传材质
+    tex_hash, _ = await db_session.texture.upload(
+        user.id, image_bytes, "skin", note="PublicSkin", is_public=True
+    )
+    
+    # 验证库中存在
+    assert await db_session.texture.count_library(only_public=True) == 1
+    
+    # 2. 上传者删除材质
+    await db_session.texture.delete_from_library(user.id, tex_hash, "skin")
+    
+    # 验证库中已删除 (修复验证)
+    assert await db_session.texture.count_library(only_public=True) == 0
+    
+    # 3. 模拟遗留数据 (材质在库中，但不在用户衣柜中)
+    # 手动插入到 skin_library
+    created_at = 1234567890
+    async with db_session.get_conn() as conn:
+        await conn.execute(
+            "INSERT INTO skin_library (skin_hash, texture_type, is_public, uploader, model, name, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            tex_hash, "skin", 1, user.id, "default", "LegacySkin", created_at
+        )
+    
+    # 4. 上传者重新添加 (验证兼容性修复：is_public=1)
+    await db_session.texture.add_to_user_wardrobe(user.id, tex_hash)
+    
+    user_tex = await db_session.texture.get_texture_info(user.id, tex_hash, "skin")
+    assert user_tex["is_public"] == 1
+    
+    # 5. 其他用户添加 (验证正常逻辑：is_public=2)
+    user2 = await user_factory()
+    await db_session.texture.add_to_user_wardrobe(user2.id, tex_hash)
+    
+    user2_tex = await db_session.texture.get_texture_info(user2.id, tex_hash, "skin")
+    assert user2_tex["is_public"] == 2
