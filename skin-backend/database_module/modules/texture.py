@@ -75,9 +75,16 @@ class TextureModule:
                 if val is None:
                     return False
 
+                # Delete from user wardrobe
                 await conn.execute(
                     "DELETE FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
                     user_id, texture_hash, texture_type,
+                )
+                
+                # If this user was the uploader, also remove from global skin library
+                await conn.execute(
+                    "DELETE FROM skin_library WHERE uploader=$1 AND skin_hash=$2",
+                    user_id, texture_hash,
                 )
                 return True
 
@@ -239,17 +246,21 @@ class TextureModule:
             async with conn.transaction():
                 # 获取材质信息
                 row = await conn.fetchrow(
-                    "SELECT texture_type, model FROM skin_library WHERE skin_hash = $1", texture_hash
+                    "SELECT texture_type, model, uploader FROM skin_library WHERE skin_hash = $1", texture_hash
                 )
                 if not row:
                     return False
                 texture_type = row[0]
                 model = row[1]
+                uploader = row[2]
             
                 created_at = int(time.time() * 1000)
-                # 非上传者添加，状态设为 2
+                
+                # 如果用户是上传者，则恢复为公开状态(1)，否则为收藏状态(2)
+                is_public = 1 if uploader == user_id else 2
+                
                 await conn.execute(
                     "INSERT INTO user_textures (user_id, hash, texture_type, model, is_public, created_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
-                    user_id, texture_hash, texture_type, model, 2, created_at,
+                    user_id, texture_hash, texture_type, model, is_public, created_at,
                 )
                 return True
