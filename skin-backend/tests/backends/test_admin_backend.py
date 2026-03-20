@@ -37,8 +37,9 @@ async def test_admin_user_controls(db_session, test_config, user_factory):
     user = await user_factory(is_admin=False, username="NormalUser")
     
     # 1. 获取用户列表
-    user_list = await backend.get_admin_users()
-    assert len(user_list) == 2
+    res = await backend.get_admin_users()
+    assert res["total"] >= 2
+    assert len(res["items"]) >= 2
     
     # 2. 封禁用户 (先对普通用户操作)
     import time

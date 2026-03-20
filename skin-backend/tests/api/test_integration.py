@@ -25,7 +25,10 @@ async def test_admin_access_control(client, auth_headers, admin_headers):
     # 管理员尝试访问
     resp_admin = await client.get(endpoint, headers=admin_headers)
     assert resp_admin.status_code == 200
-    assert isinstance(resp_admin.json(), list)
+    data = resp_admin.json()
+    assert "total" in data
+    assert "items" in data
+    assert isinstance(data["items"], list)
 
 @pytest.mark.asyncio
 async def test_login_flow(client, user_factory, db_session):

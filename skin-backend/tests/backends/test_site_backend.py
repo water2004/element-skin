@@ -20,6 +20,8 @@ async def test_site_auth_flow(db_session, test_config):
     user_info = await backend.get_user_info(uid)
     assert user_info["is_admin"] is True
     assert user_info["display_name"] == username
+    assert "profile_count" in user_info
+    assert "profiles" not in user_info
     
     # 2. 登录
     login_res = await backend.login(email, password)

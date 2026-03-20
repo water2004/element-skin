@@ -30,9 +30,12 @@ async def test_texture_upload_and_library(db_session, user_factory):
     assert os.path.exists(os.path.join(db_session.texture.textures_dir, f"{tex_hash}.png"))
     
     # 2. Get for user
-    user_textures = await db_session.texture.get_for_user(user.id)
+    user_textures = await db_session.texture.get_for_user(user.id, limit=10, offset=0)
     assert len(user_textures) == 1
     assert user_textures[0][0] == tex_hash
+    
+    count = await db_session.texture.count_for_user(user.id)
+    assert count == 1
     
     # 3. Get texture info
     info = await db_session.texture.get_texture_info(user.id, tex_hash, "skin")
