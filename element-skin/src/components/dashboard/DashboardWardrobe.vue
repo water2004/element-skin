@@ -16,7 +16,7 @@
         class="surface-card hoverable animate-card-slide clickable-card"
         v-for="(tex, index) in textures"
         :key="tex.hash + tex.type"
-        :style="{ '--delay-index': index }"
+        :style="{ '--delay-index': index % limit }"
         @click="openDetailDialog(tex)"
       >
         <div class="item-card-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
@@ -53,6 +53,17 @@
     </div>
 
     <el-empty v-else description="还没有纹理，快去上传吧！" />
+
+    <div class="pagination-container" v-if="total > limit">
+      <el-pagination
+        background
+        layout="prev, pager, next"
+        :total="total"
+        :page-size="limit"
+        v-model:current-page="currentPage"
+        @current-change="handlePageChange"
+      />
+    </div>
 
     <el-dialog
       v-model="showDetailDialog"
@@ -222,10 +233,26 @@ import CapeViewer from '@/components/CapeViewer.vue'
 // Inject shared state from AppLayout
 const user = inject('user')
 const fetchMe = inject('fetchMe')
-const userProfiles = computed(() => user.value?.profiles || [])
 const isDark = inject('isDark')
 
+const userProfiles = ref([])
+const fetchUserProfiles = async () => {
+  try {
+    // Fetch all profiles for the dropdown (use a large limit if needed, or implement search)
+    const res = await axios.get('/me/profiles', { 
+      headers: authHeaders(),
+      params: { limit: 100 } 
+    })
+    userProfiles.value = res.data.items
+  } catch (e) {
+    console.error('Failed to fetch profiles for wardrobe:', e)
+  }
+}
+
 const textures = ref([])
+const total = ref(0)
+const currentPage = ref(1)
+const limit = 20
 const textureResolutions = ref(new Map())
 const showDetailDialog = ref(false)
 const selectedTexture = ref(null)
@@ -321,8 +348,13 @@ async function updateIsPublic(val) {
 
 async function fetchTextures() {
   try {
-    const res = await axios.get('/me/textures', { headers: authHeaders() })
-    textures.value = res.data
+    const params = {
+      page: currentPage.value,
+      limit: limit
+    }
+    const res = await axios.get('/me/textures', { headers: authHeaders(), params })
+    textures.value = res.data.items
+    total.value = res.data.total
     textures.value.forEach(tex => {
       if (tex.type === 'skin') {
         loadTextureResolution(tex.hash)
@@ -331,6 +363,12 @@ async function fetchTextures() {
   } catch (e) {
     console.error(e)
   }
+}
+
+function handlePageChange(page) {
+  currentPage.value = page
+  fetchTextures()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 function loadTextureResolution(hash) {
@@ -415,7 +453,8 @@ async function doApply() {
       texture_type: applyForm.value.texture_type
     }, { headers: authHeaders() })
     ElMessage.success('已应用')
-    fetchMe()
+    if (fetchMe) fetchMe()
+    fetchUserProfiles()
     fetchTextures()
   } catch (e) {
     ElMessage.error('应用失败: ' + (e.response?.data?.detail || e.message))
@@ -426,6 +465,7 @@ async function doApply() {
 
 onMounted(() => {
   fetchTextures()
+  fetchUserProfiles()
 })
 </script>
 
