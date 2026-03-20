@@ -10,8 +10,10 @@
     <template v-else>
       <div class="page-header">
         <div class="page-header-content">
-          <h1>皮肤库</h1>
-          <p>探索并收藏精美材质</p>
+          <div>
+            <h1>皮肤库</h1>
+            <p>探索并收藏精美材质</p>
+          </div>
         </div>
         <div class="page-header-actions">
           <el-radio-group v-model="filterType" @change="handleFilterChange" size="large" class="capsule-radio">

@@ -2,8 +2,10 @@
   <div class="roles-section animate-fade-in">
     <div class="page-header">
       <div class="page-header-content">
-        <h1>角色管理</h1>
-        <p>创建并管理您的 Minecraft 角色身份</p>
+        <div>
+          <h1>角色管理</h1>
+          <p>创建并管理您的 Minecraft 角色身份</p>
+        </div>
       </div>
       <div class="page-header-actions">
         <el-button size="large" @click="showYggImportDialog = true" class="btn-gradient btn-gradient-warning">
@@ -658,6 +660,7 @@ onMounted(async () => {
 <style scoped>
 @import "@/assets/styles/animations.css";
 @import "@/assets/styles/layout.css";
+@import "@/assets/styles/headers.css";
 @import "@/assets/styles/buttons.css";
 @import "@/assets/styles/cards.css";
 

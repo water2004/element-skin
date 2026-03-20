@@ -2,8 +2,10 @@
   <div class="wardrobe-section animate-fade-in">
     <div class="page-header">
       <div class="page-header-content">
-        <h1>我的衣柜</h1>
-        <p>管理并应用您的皮肤与披风纹理</p>
+        <div>
+          <h1>我的衣柜</h1>
+          <p>管理并应用您的皮肤与披风纹理</p>
+        </div>
       </div>
       <el-button @click="showUploadDialog = true" size="large" class="btn-gradient btn-gradient-primary">
         <el-icon><Upload /></el-icon>
