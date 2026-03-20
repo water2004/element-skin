@@ -151,7 +151,7 @@
         </div>
       </el-dialog>
 
-      <div class="pagination-container" v-if="total > limit">
+      <div class="pagination-container">
         <el-pagination
           background
           layout="prev, pager, next"

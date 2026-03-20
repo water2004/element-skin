@@ -54,7 +54,7 @@
 
     <el-empty v-else description="还没有纹理，快去上传吧！" />
 
-    <div class="pagination-container" v-if="total > limit">
+    <div class="pagination-container">
       <el-pagination
         background
         layout="prev, pager, next"

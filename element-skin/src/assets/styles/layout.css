@@ -98,9 +98,13 @@
 
 /* 4. Pagination */
 .pagination-container {
-  margin-top: 20px;
+  margin-top: 32px;
+  padding-bottom: 8px;
   display: flex;
   justify-content: center;
+  align-items: center;
+  width: 100%;
+  animation: fadeIn 0.6s ease;
 }
 
 /* 2. Standard Joined Radio Group (Filters) */

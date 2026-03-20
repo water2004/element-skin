@@ -53,7 +53,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-container" v-if="total > limit">
+      <div class="pagination-container">
         <el-pagination
           background
           layout="prev, pager, next"
@@ -114,7 +114,7 @@
               <el-table-column prop="id" label="角色 UUID" width="300" />
             </el-table>
             <el-empty v-if="!userProfiles?.length" description="该用户暂无角色" :image-size="60" />
-            <div class="pagination-container" v-if="profileTotal > profileLimit" style="margin-top: 10px;">
+            <div class="pagination-container" style="margin-top: 10px;">
               <el-pagination
                 small
                 background
