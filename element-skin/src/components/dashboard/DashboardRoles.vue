@@ -2,8 +2,10 @@
   <div class="roles-section animate-fade-in">
     <div class="page-header">
       <div class="page-header-content">
-        <h1>角色管理</h1>
-        <p>创建并管理您的 Minecraft 角色身份</p>
+        <div>
+          <h1>角色管理</h1>
+          <p>创建并管理您的 Minecraft 角色身份</p>
+        </div>
       </div>
       <div class="page-header-actions">
         <el-button size="large" @click="showYggImportDialog = true" class="btn-gradient btn-gradient-warning">
@@ -23,10 +25,10 @@
 
     <div class="auto-grid">
       <div 
-        v-for="(profile, index) in user?.profiles || []" 
+        v-for="(profile, index) in profiles" 
         :key="profile.id" 
         class="surface-card hoverable animate-card-slide clickable-card" 
-        :style="{ '--delay-index': index }"
+        :style="{ '--delay-index': index % limit }"
         @click="openPreviewDialog(profile)"
       >
         <div
@@ -79,6 +81,17 @@
           </el-button>
         </div>
       </div>
+    </div>
+
+    <div class="pagination-container">
+      <el-pagination
+        background
+        layout="prev, pager, next"
+        :total="total"
+        :page-size="limit"
+        v-model:current-page="currentPage"
+        @current-change="handlePageChange"
+      />
     </div>
 
     <!-- 预览对话框 -->
@@ -310,6 +323,11 @@ const isDark = inject('isDark')
 
 const router = useRouter()
 
+const profiles = ref([])
+const total = ref(0)
+const currentPage = ref(1)
+const limit = 12
+
 const showCreateRoleDialog = ref(false)
 const newRoleName = ref('')
 const showMicrosoftLoginDialog = ref(false)
@@ -350,6 +368,26 @@ function texturesUrl(hash) {
   return `${base}static/textures/${hash}.png`.replace(/\/+/g, '/')
 }
 
+async function fetchProfiles() {
+  try {
+    const params = {
+      page: currentPage.value,
+      limit: limit
+    }
+    const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
+    profiles.value = res.data.items
+    total.value = res.data.total
+  } catch (e) {
+    ElMessage.error('加载角色失败')
+  }
+}
+
+function handlePageChange(page) {
+  currentPage.value = page
+  fetchProfiles()
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 async function createRole() {
   const name = (newRoleName.value || '').trim()
   if (!name) return ElMessage.error('请输入角色名称')
@@ -358,7 +396,8 @@ async function createRole() {
     newRoleName.value = ''
     showCreateRoleDialog.value = false
     ElMessage.success('创建成功')
-    fetchMe()
+    fetchProfiles()
+    if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('创建失败: ' + (e.response?.data?.detail || e.message))
   }
@@ -369,7 +408,8 @@ async function deleteRole(pid) {
     await axios.delete(`/me/profiles/${pid}`, { headers: authHeaders() })
     ElMessage.success('已删除')
     showPreviewDialog.value = false
-    fetchMe()
+    fetchProfiles()
+    if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('删除失败')
   }
@@ -388,7 +428,8 @@ async function updateRoleName() {
   try {
     await axios.patch(`/me/profiles/${pid}`, { name: newName }, { headers: authHeaders() })
     ElMessage.success('名称已修改')
-    fetchMe()
+    fetchProfiles()
+    if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('修改失败: ' + (e.response?.data?.detail || e.message))
   }
@@ -404,7 +445,8 @@ async function clearRoleSkin(pid) {
     await axios.delete(`/me/profiles/${pid}/skin`, { headers: authHeaders() })
     ElMessage.success('皮肤已清除')
     showPreviewDialog.value = false
-    fetchMe()
+    fetchProfiles()
+    if (fetchMe) fetchMe()
   } catch (e) {
     if (e !== 'cancel') {
       ElMessage.error('清除失败: ' + (e.response?.data?.detail || e.message))
@@ -422,7 +464,8 @@ async function clearRoleCape(pid) {
     await axios.delete(`/me/profiles/${pid}/cape`, { headers: authHeaders() })
     ElMessage.success('披风已清除')
     showPreviewDialog.value = false
-    fetchMe()
+    fetchProfiles()
+    if (fetchMe) fetchMe()
   } catch (e) {
     if (e !== 'cancel') {
       ElMessage.error('清除失败: ' + (e.response?.data?.detail || e.message))
@@ -482,6 +525,7 @@ async function importMicrosoftProfile() {
 
     // Refresh data in background
     try {
+      fetchProfiles()
       if (fetchMe) await fetchMe()
     } catch (e) {
       console.warn('Failed to refresh user profile:', e)
@@ -551,7 +595,8 @@ async function importYggProfile() {
     
     ElMessage.success('导入成功')
     showYggImportDialog.value = false
-    if (fetchMe) await fetchMe()
+    fetchProfiles()
+    if (fetchMe) fetchMe()
     resetYggImport()
   } catch (e) {
     ElMessage.error('导入失败: ' + (e.response?.data?.detail || e.message))
@@ -577,6 +622,7 @@ function handleYggDialogClose(done) {
 }
 
 onMounted(async () => {
+  fetchProfiles()
   const urlParams = new URLSearchParams(window.location.search)
   const msToken = urlParams.get('ms_token')
   const error = urlParams.get('error')
@@ -614,6 +660,7 @@ onMounted(async () => {
 <style scoped>
 @import "@/assets/styles/animations.css";
 @import "@/assets/styles/layout.css";
+@import "@/assets/styles/headers.css";
 @import "@/assets/styles/buttons.css";
 @import "@/assets/styles/cards.css";
 

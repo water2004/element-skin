@@ -269,17 +269,8 @@ class SiteBackend:
         if not user_row:
             raise HTTPException(status_code=404, detail="user not found")
 
-        profiles = await self.db.user.get_profiles_by_user(user_id)
-        profiles_list = [
-            {
-                "id": p.id,
-                "name": p.name,
-                "model": p.texture_model,
-                "skin_hash": p.skin_hash,
-                "cape_hash": p.cape_hash,
-            }
-            for p in profiles
-        ]
+        profile_count = await self.db.user.count_profiles_by_user(user_id)
+        texture_count = await self.db.texture.count_for_user(user_id)
 
         return {
             "id": user_row.id,
@@ -288,7 +279,8 @@ class SiteBackend:
             "display_name": user_row.display_name,
             "is_admin": bool(user_row.is_admin),
             "banned_until": user_row.banned_until,
-            "profiles": profiles_list,
+            "profile_count": profile_count,
+            "texture_count": texture_count,
         }
 
     async def refresh_token(self, user_id: str) -> Dict[str, Any]:

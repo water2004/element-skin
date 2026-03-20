@@ -122,6 +122,30 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
     async def get_single_user_admin(user_id: str, payload: dict = Depends(admin_required)):
         return await admin_backend.get_user_info(user_id)
 
+    @router.get("/admin/users/{user_id}/profiles")
+    async def get_user_profiles_admin(
+        user_id: str,
+        page: int = 1,
+        limit: int = 20,
+        payload: dict = Depends(admin_required)
+    ):
+        offset = (page - 1) * limit
+        total = await db.user.count_profiles_by_user(user_id)
+        profiles = await db.user.get_profiles_by_user(user_id, limit, offset)
+        return {
+            "total": total,
+            "items": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "model": p.texture_model,
+                    "skin_hash": p.skin_hash,
+                    "cape_hash": p.cape_hash,
+                }
+                for p in profiles
+            ]
+        }
+
     @router.post("/admin/users/{user_id}/toggle-admin")
     async def toggle_user_admin(user_id: str, payload: dict = Depends(admin_required)):
         actor_id = payload.get("sub")

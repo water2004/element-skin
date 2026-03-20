@@ -131,10 +131,10 @@ class UserModule:
             return PlayerProfile(*row)
         return None
 
-    async def get_profiles_by_user(self, user_id: str) -> list[PlayerProfile]:
+    async def get_profiles_by_user(self, user_id: str, limit: int = 100, offset: int = 0) -> list[PlayerProfile]:
         rows = await self.db.fetch(
-            "SELECT id, user_id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE user_id=$1",
-            user_id,
+            "SELECT id, user_id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE user_id=$1 LIMIT $2 OFFSET $3",
+            user_id, limit, offset,
         )
         return [PlayerProfile(*r) for r in rows]
 

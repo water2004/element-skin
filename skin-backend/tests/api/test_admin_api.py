@@ -6,9 +6,29 @@ async def test_api_admin_get_users(client, admin_headers):
     resp = await client.get("/admin/users", headers={"Authorization": admin_headers["Authorization"]})
     
     assert resp.status_code == 200
-    assert isinstance(resp.json(), list)
+    data = resp.json()
+    assert "total" in data
+    assert "items" in data
+    assert isinstance(data["items"], list)
     # 至少应该有一个用户（即管理员自己）
-    assert len(resp.json()) >= 1
+    assert len(data["items"]) >= 1
+
+@pytest.mark.asyncio
+async def test_api_admin_get_user_profiles(client, admin_headers, user_factory, db_session):
+    """测试管理员获取特定用户角色列表接口"""
+    user = await user_factory(username="ProfileUser")
+    from utils.typing import PlayerProfile
+    await db_session.user.create_profile(PlayerProfile("p_admin_test", user.id, "AdminTestPlayer"))
+    
+    resp = await client.get(f"/admin/users/{user.id}/profiles", 
+        params={"page": 1, "limit": 10},
+        headers={"Authorization": admin_headers["Authorization"]}
+    )
+    
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] >= 1
+    assert data["items"][0]["name"] == "AdminTestPlayer"
 
 @pytest.mark.asyncio
 async def test_api_admin_settings_site(client, admin_headers):
@@ -63,7 +83,7 @@ async def test_api_admin_invite_codes(client, admin_headers):
     
     # 2. 获取邀请码列表
     resp_list = await client.get("/admin/invites", headers={"Authorization": admin_headers["Authorization"]})
-    assert any(item["code"] == code for item in resp_list.json())
+    assert any(item["code"] == code for item in resp_list.json()["items"])
     
     # 3. 删除邀请码
     resp_del = await client.delete(f"/admin/invites/{code}", headers={"Authorization": admin_headers["Authorization"]})

@@ -174,13 +174,49 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
             raise HTTPException(status_code=400, detail=str(e))
 
     @router.get("/me/textures")
-    async def list_my_textures(payload: dict = Depends(get_current_user)):
-        textures = await db.texture.get_for_user(payload.get("sub"))
-        # 返回基础信息用于网格展示
-        return [
-            {"hash": r[0], "type": r[1], "note": r[2], "model": r[4]}
-            for r in textures
-        ]
+    async def list_my_textures(
+        page: int = 1,
+        limit: int = 20,
+        texture_type: Optional[str] = None,
+        payload: dict = Depends(get_current_user)
+    ):
+        user_id = payload.get("sub")
+        offset = (page - 1) * limit
+        total = await db.texture.count_for_user(user_id, texture_type)
+        textures = await db.texture.get_for_user(user_id, texture_type, limit, offset)
+        
+        return {
+            "total": total,
+            "items": [
+                {"hash": r[0], "type": r[1], "note": r[2], "model": r[4]}
+                for r in textures
+            ]
+        }
+
+    @router.get("/me/profiles")
+    async def list_my_profiles(
+        page: int = 1,
+        limit: int = 20,
+        payload: dict = Depends(get_current_user)
+    ):
+        user_id = payload.get("sub")
+        offset = (page - 1) * limit
+        total = await db.user.count_profiles_by_user(user_id)
+        profiles = await db.user.get_profiles_by_user(user_id, limit, offset)
+        
+        return {
+            "total": total,
+            "items": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "model": p.texture_model,
+                    "skin_hash": p.skin_hash,
+                    "cape_hash": p.cape_hash,
+                }
+                for p in profiles
+            ]
+        }
 
     @router.get("/me/textures/{hash}/{texture_type}")
     async def get_my_texture_detail(

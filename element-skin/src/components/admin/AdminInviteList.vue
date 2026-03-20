@@ -56,7 +56,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-container" v-if="total > limit">
+      <div class="pagination-container">
         <el-pagination
           background
           layout="prev, pager, next"
@@ -262,12 +262,6 @@ onMounted(loadInvites)
 
 .code-preview-box { display: flex; align-items: center; justify-content: space-between; background: var(--color-background-soft); padding: 12px 16px; border-radius: 8px; border: 1px dashed var(--el-color-primary); }
 .code-preview-box span { font-family: monospace; font-size: 18px; font-weight: bold; color: var(--el-color-primary); }
-
-.pagination-container {
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
-}
 
 .mb-2 { margin-bottom: 8px; }
 </style>

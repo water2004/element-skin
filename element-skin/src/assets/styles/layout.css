@@ -94,6 +94,18 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, 240px);
   gap: 24px;
+  justify-content: center;
+}
+
+/* 4. Pagination */
+.pagination-container {
+  margin-top: 32px;
+  padding-bottom: 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  animation: fadeIn 0.6s ease;
 }
 
 /* 2. Standard Joined Radio Group (Filters) */

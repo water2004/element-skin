@@ -206,29 +206,18 @@ onMounted(async () => {
     apiUrl.value = getApiUrl()
   }
 
-  // Load User Stats (Textures)
+  // Load User Stats (from /me)
   const token = localStorage.getItem('jwt')
   if (token) {
       const headers = { Authorization: 'Bearer ' + token }
-      
-      // Get Textures
-      try {
-          const res = await axios.get('/me/textures', { headers })
-          if (Array.isArray(res.data)) {
-              textureCount.value = res.data.length
-          }
-      } catch (e) {
-          console.error('Failed to load textures count', e)
-      }
-
-      // Get Profiles (from /me)
       try {
           const res = await axios.get('/me', { headers })
-          if (res.data && res.data.profiles) {
-              profileCount.value = res.data.profiles.length
+          if (res.data) {
+              profileCount.value = res.data.profile_count || 0
+              textureCount.value = res.data.texture_count || 0
           }
       } catch (e) {
-          console.error('Failed to load profiles count', e)
+          console.error('Failed to load user stats', e)
       }
   }
 })

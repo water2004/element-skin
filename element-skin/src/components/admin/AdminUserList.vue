@@ -53,7 +53,7 @@
         </el-table-column>
       </el-table>
 
-      <div class="pagination-container" v-if="total > limit">
+      <div class="pagination-container">
         <el-pagination
           background
           layout="prev, pager, next"
@@ -104,7 +104,7 @@
 
         <el-tabs type="border-card" class="detail-tabs">
           <el-tab-pane label="角色列表">
-            <el-table :data="currentUser.profiles || []" size="small" max-height="300">
+            <el-table :data="userProfiles || []" size="small" max-height="300">
               <el-table-column prop="name" label="角色名称" />
               <el-table-column prop="model" label="模型" width="100">
                 <template #default="{ row }">
@@ -113,7 +113,18 @@
               </el-table-column>
               <el-table-column prop="id" label="角色 UUID" width="300" />
             </el-table>
-            <el-empty v-if="!currentUser.profiles?.length" description="该用户暂无角色" :image-size="60" />
+            <el-empty v-if="!userProfiles?.length" description="该用户暂无角色" :image-size="60" />
+            <div class="pagination-container" style="margin-top: 10px;">
+              <el-pagination
+                small
+                background
+                layout="prev, pager, next"
+                :total="profileTotal"
+                :page-size="profileLimit"
+                v-model:current-page="profilePage"
+                @current-change="handleProfilePageChange"
+              />
+            </div>
           </el-tab-pane>
           
           <el-tab-pane label="危险操作">
@@ -246,6 +257,10 @@ const currentPage = ref(1)
 const limit = 15
 const loading = ref(false)
 const currentUser = ref(null)
+const userProfiles = ref([])
+const profileTotal = ref(0)
+const profilePage = ref(1)
+const profileLimit = 10
 const userDetailDialogVisible = ref(false)
 const resetPasswordDialogVisible = ref(false)
 const resetPasswordForm = ref({ new_password: '', confirm_password: '' })
@@ -291,10 +306,31 @@ async function showUserDetailDialog(user) {
   try {
     const res = await axios.get(`/admin/users/${user.id}`, { headers: authHeaders() })
     currentUser.value = res.data
+    profilePage.value = 1
+    await fetchUserProfilesAdmin()
     userDetailDialogVisible.value = true
   } catch (e) {
     ElMessage.error('无法加载用户详情')
   }
+}
+
+async function fetchUserProfilesAdmin() {
+  if (!currentUser.value) return
+  try {
+    const res = await axios.get(`/admin/users/${currentUser.value.id}/profiles`, { 
+      headers: authHeaders(),
+      params: { page: profilePage.value, limit: profileLimit }
+    })
+    userProfiles.value = res.data.items
+    profileTotal.value = res.data.total
+  } catch (e) {
+    ElMessage.error('无法加载用户角色列表')
+  }
+}
+
+function handleProfilePageChange(page) {
+  profilePage.value = page
+  fetchUserProfilesAdmin()
 }
 
 async function toggleAdmin(user) {
@@ -433,12 +469,6 @@ onMounted(refreshUsers)
 
 .ban-preview { font-size: 13px; color: var(--color-text-light); padding: 10px; background: var(--color-background-mute); border-radius: 6px; }
 .ban-preview span { font-weight: bold; color: var(--el-color-primary); }
-
-.pagination-container {
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
-}
 
 .mr-2 { margin-right: 8px; }
 .mb-4 { margin-bottom: 16px; }

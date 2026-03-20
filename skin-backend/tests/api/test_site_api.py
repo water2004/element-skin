@@ -26,7 +26,45 @@ async def test_api_get_me_info(client, auth_headers):
     assert resp.status_code == 200
     data = resp.json()
     assert data["id"] == auth_headers["X-User-ID"]
-    assert "profiles" in data
+    assert "profile_count" in data
+    assert "texture_count" in data
+    assert "profiles" not in data
+
+@pytest.mark.asyncio
+async def test_api_get_me_profiles_paginated(client, auth_headers, db_session):
+    """测试分页获取个人角色列表接口"""
+    user_id = auth_headers["X-User-ID"]
+    from utils.typing import PlayerProfile
+    for i in range(5):
+        await db_session.user.create_profile(PlayerProfile(f"p_{i}", user_id, f"Player_{i}"))
+    
+    resp = await client.get("/me/profiles", 
+        params={"page": 1, "limit": 2},
+        headers={"Authorization": auth_headers["Authorization"]}
+    )
+    
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] >= 5
+    assert len(data["items"]) == 2
+
+@pytest.mark.asyncio
+async def test_api_get_me_textures_paginated(client, auth_headers, db_session):
+    """测试分页获取个人材质列表接口"""
+    user_id = auth_headers["X-User-ID"]
+    for i in range(3):
+        await db_session.texture.add_to_library(user_id, f"hash_{i}", "skin", note=f"Note {i}")
+    
+    resp = await client.get("/me/textures", 
+        params={"page": 1, "limit": 2},
+        headers={"Authorization": auth_headers["Authorization"]}
+    )
+    
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["total"] >= 3
+    assert len(data["items"]) == 2
+    assert "hash" in data["items"][0]
 
 @pytest.mark.asyncio
 async def test_api_update_me_info(client, auth_headers):
