@@ -386,10 +386,4 @@ onMounted(() => {
 .clickable-card {
   cursor: pointer;
 }
-
-.pagination-container {
-  margin-top: 40px;
-  display: flex;
-  justify-content: center;
-}
 </style>

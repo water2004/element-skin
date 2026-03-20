@@ -96,6 +96,13 @@
   gap: 24px;
 }
 
+/* 4. Pagination */
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
 /* 2. Standard Joined Radio Group (Filters) */
 .capsule-radio .el-radio-button__inner {
   background: var(--color-card-background);
