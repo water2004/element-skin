@@ -81,15 +81,31 @@ class TextureModule:
                 )
                 return True
 
-    async def get_for_user(self, user_id: str, texture_type: Optional[str] = None) -> list[tuple]:
-        if texture_type:
-            query = "SELECT hash, texture_type, note, created_at, model, is_public FROM user_textures WHERE user_id=$1 AND texture_type=$2 ORDER BY created_at DESC"
-            rows = await self.db.fetch(query, user_id, texture_type)
-        else:
-            query = "SELECT hash, texture_type, note, created_at, model, is_public FROM user_textures WHERE user_id=$1 ORDER BY created_at DESC"
-            rows = await self.db.fetch(query, user_id)
+    async def get_for_user(self, user_id: str, texture_type: Optional[str] = None, limit: int = 20, offset: int = 0) -> list[tuple]:
+        params = [user_id]
+        query = "SELECT hash, texture_type, note, created_at, model, is_public FROM user_textures WHERE user_id=$1"
+        p_idx = 2
         
+        if texture_type:
+            query += f" AND texture_type=${p_idx}"
+            params.append(texture_type)
+            p_idx += 1
+            
+        query += f" ORDER BY created_at DESC LIMIT ${p_idx} OFFSET ${p_idx+1}"
+        params.extend([limit, offset])
+        
+        rows = await self.db.fetch(query, *params)
         return [(r[0], r[1], r[2], r[3], r[4], r[5]) for r in rows]
+
+    async def count_for_user(self, user_id: str, texture_type: Optional[str] = None) -> int:
+        params = [user_id]
+        query = "SELECT COUNT(*) FROM user_textures WHERE user_id=$1"
+        if texture_type:
+            query += " AND texture_type=$2"
+            params.append(texture_type)
+        
+        val = await self.db.fetchval(query, *params)
+        return val or 0
 
     async def verify_ownership(self, user_id: str, texture_hash: str, texture_type: str) -> bool:
         val = await self.db.fetchval(
