@@ -134,6 +134,7 @@ import {
   Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link, Picture, Message, Moon, Sunny
 } from '@element-plus/icons-vue'
 
+import '@/assets/scripts/meow.js'
 const route = useRoute()
 const { push } = useRouter()
 const isHome = computed(() => route.path === '/')

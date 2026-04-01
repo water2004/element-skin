@@ -124,4 +124,17 @@ const router = createRouter({
   ],
 })
 
+// Clean up meow effect on route change
+router.beforeEach(() => {
+  if (typeof window !== 'undefined' && window.meowCleanup) {
+    window.meowCleanup()
+  }
+})
+
+router.afterEach(() => {
+  if (typeof window !== 'undefined' && window.meowReinit) {
+    window.meowReinit()
+  }
+})
+
 export default router

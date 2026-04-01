@@ -7,3 +7,8 @@ declare module '*.vue' {
 }
 
 declare const __APP_VERSION__: string
+
+interface Window {
+  meowCleanup?: () => void
+  meowReinit?: () => void
+}
