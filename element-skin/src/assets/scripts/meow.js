@@ -8,6 +8,10 @@ if (date.getMonth() === 3 && date.getDate() === 1) {
     let W = null; // Bounds bodies
     let overlayDiv = null; // Reference to overlay div
     let cleanupListeners = []; // Store cleanup handlers
+
+    function isEasterEggDisabled() {
+        return localStorage.getItem("disableMeowEasterEgg") === "1";
+    }
     
     function cleanup() {
         // Clear animation frame and reset engine
@@ -42,6 +46,7 @@ if (date.getMonth() === 3 && date.getDate() === 1) {
     window.meowCleanup = cleanup;
     window.meowReinit = function () {
         cleanup();
+        if (isEasterEggDisabled()) return;
         bootstrap();
     };
     
@@ -255,6 +260,10 @@ if (date.getMonth() === 3 && date.getDate() === 1) {
                 }
             }
         }
-    }), document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", bootstrap) : bootstrap();
+    });
+
+    if (!isEasterEggDisabled()) {
+        document.readyState === "loading" ? document.addEventListener("DOMContentLoaded", bootstrap) : bootstrap();
+    }
     });
 }

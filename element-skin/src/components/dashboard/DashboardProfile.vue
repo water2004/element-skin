@@ -74,6 +74,12 @@
             关闭页面进入动画
           </el-text>
         </el-form-item>
+        <el-form-item v-if="user" label="关闭彩蛋">
+          <el-switch v-model="disableMeowEasterEgg" />
+          <el-text size="small" type="info" style="margin-left: 12px">
+            效果你猜
+          </el-text>
+        </el-form-item>
 
         <div class="profile-actions">
           <el-button type="primary" @click="updateProfile" size="large">
@@ -141,6 +147,7 @@ const form = ref({ email: '', display_name: '', old_password: '', new_password: 
 const showDeleteDialog = ref(false)
 const deleteConfirmText = ref('')
 const motionDisabled = ref(localStorage.getItem('motionDisabled') === '1')
+const disableMeowEasterEgg = ref(localStorage.getItem('disableMeowEasterEgg') === '1')
 
 const emailInitial = computed(() => {
   const email = user.value?.email || user.value?.display_name || 'U'
@@ -161,6 +168,19 @@ function applyMotionSetting(disabled) {
 watch(motionDisabled, (disabled) => {
   localStorage.setItem('motionDisabled', disabled ? '1' : '0')
   applyMotionSetting(disabled)
+})
+
+watch(disableMeowEasterEgg, (disabled) => {
+  localStorage.setItem('disableMeowEasterEgg', disabled ? '1' : '0')
+  if (disabled) {
+    if (typeof window !== 'undefined' && window.meowCleanup) {
+      window.meowCleanup()
+    }
+    return
+  }
+  if (typeof window !== 'undefined' && window.meowReinit) {
+    window.meowReinit()
+  }
 })
 
 onMounted(() => {
