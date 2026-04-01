@@ -3,6 +3,48 @@
 let date = new Date();
 if (date.getMonth() === 3 && date.getDate() === 1) {
     import("matter-js").then(({ default: Matter }) => {
+    let engine = null;
+    let P = null; // Map to store body references
+    let W = null; // Bounds bodies
+    let overlayDiv = null; // Reference to overlay div
+    let cleanupListeners = []; // Store cleanup handlers
+    
+    function cleanup() {
+        // Clear animation frame and reset engine
+        if (engine) {
+            Matter.Engine.clear(engine);
+            engine = null;
+        }
+        
+        // Clear body map
+        if (P) P.clear();
+        
+        // Reset floating elements
+        document.querySelectorAll(".meow-floating").forEach(el => {
+            el.classList.remove("meow-floating");
+            el.style.transform = "";
+        });
+        
+        // Remove overlay div
+        if (overlayDiv && overlayDiv.parentNode) {
+            overlayDiv.parentNode.removeChild(overlayDiv);
+            overlayDiv = null;
+        }
+        
+        // Remove all event listeners
+        cleanupListeners.forEach(({ element, event, handler, options }) => {
+            element.removeEventListener(event, handler, options);
+        });
+        cleanupListeners = [];
+    }
+    
+    // Expose cleanup and reinit hooks globally for SPA route changes
+    window.meowCleanup = cleanup;
+    window.meowReinit = function () {
+        cleanup();
+        bootstrap();
+    };
+    
     function findNearestBlock(e) {
         for (var t = !0; t;) {
             var r = e;
@@ -25,10 +67,11 @@ if (date.getMonth() === 3 && date.getDate() === 1) {
                 Matter.Composite.add(engine.world, W)
         }
         function I(e) {
-            var t = Math.min(e - q, 100);
+            if (!engine) return;
+            var t = Math.min(e - q, 40);
             q = e;
             var r = window.scrollX, n = window.scrollY;
-            if (k + 100 < e) {
+            if (k + 100 < q) {
                 W && Matter.Composite.translate(W, { x: r - V, y: n - N }), V = r, N = n;
                 var i = window.screenX - R, o = window.screenY - T, a = !0, l = !1, d = undefined;
                 try {
@@ -83,22 +126,32 @@ if (date.getMonth() === 3 && date.getDate() === 1) {
             requestAnimationFrame(I)
         }
         engine = Matter.Engine.create({ gravity: { x: 0, y: -.1 } });
-        var P = new Map, W = null; e(), window.addEventListener("resize", e);
-        var t = document.createElement("div");
-        t.style.position = "fixed",
-            t.style.left = 0,
-            t.style.top = 0,
-            t.style.width = "100vw",
-            t.style.height = "100vh",
-            t.style["pointer-events"] = "none",
-            document.body.appendChild(t);
+        P = new Map;
+        W = null;
+        e();
+        
+        // Store resize listener for cleanup
+        var resizeListener = e;
+        window.addEventListener("resize", resizeListener);
+        cleanupListeners.push({ element: window, event: "resize", handler: resizeListener, options: undefined });
+
+        overlayDiv = document.createElement("div");
+        overlayDiv.style.position = "fixed",
+            overlayDiv.style.left = 0,
+            overlayDiv.style.top = 0,
+            overlayDiv.style.width = "100vw",
+            overlayDiv.style.height = "100vh",
+            overlayDiv.style["pointer-events"] = "none",
+            document.body.appendChild(overlayDiv);
         var q = performance.now(),
             V = window.scrollX,
             N = window.scrollY,
             R = window.screenX,
             T = window.screenY,
             k = q;
-        requestAnimationFrame(I), document.body.addEventListener("click", function (e) {
+        requestAnimationFrame(I);
+        
+        var clickListener = function (e) {
             var t = findNearestBlock(e.target);
             if (t.classList.contains("meow-floating")) return !0;
             if (t.querySelector(".meow-floating")) return !0;
@@ -108,8 +161,8 @@ if (date.getMonth() === 3 && date.getDate() === 1) {
             var l = window.scrollX + i,
                 d = window.scrollY + n,
                 s = Matter.Bodies.rectangle(l + o / 2, d + a / 2, o, a, { restitution: .8 }),
-                w = s.id, c = 2 * Math.random() - 1, u = 2 * Math.random() - 1,
-                f = .02 * Math.random() - .01;
+                w = s.id, c = .6 * (2 * Math.random() - 1), u = .6 * (2 * Math.random() - 1),
+                f = .008 * Math.random() - .004;
             Matter.Body.setVelocity(s, { x: c, y: u }),
                 Matter.Body.setAngularVelocity(s, f),
                 t.style.setProperty("--real-width", o + "px"),
@@ -149,7 +202,9 @@ if (date.getMonth() === 3 && date.getDate() === 1) {
                 finally { if (b) throw S }
             }
             return P.set(w, [t, o, a]), Matter.Composite.add(engine.world, s), !1
-        }, !0)
+        };
+        document.body.addEventListener("click", clickListener, !0);
+        cleanupListeners.push({ element: document.body, event: "click", handler: clickListener, options: !0 });
     }
     var _slicedToArray = function () {
         function r(e, t) {
@@ -170,7 +225,7 @@ if (date.getMonth() === 3 && date.getDate() === 1) {
             if (Symbol.iterator in Object(e)) return r(e, t);
             throw new TypeError("Invalid attempt to destructure non-iterable instance")
         }
-    }(), engine = null;
+    }();
     window.addEventListener("devicemotion", function (e) {
         if (engine) {
             if (e.accelerationIncludingGravity) {
