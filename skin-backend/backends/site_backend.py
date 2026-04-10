@@ -10,7 +10,7 @@ from utils.password_utils import hash_password, verify_password, needs_rehash
 from utils.password_utils import validate_strong_password
 from utils.jwt_utils import create_jwt_token
 from utils.email_utils import EmailSender
-from utils.uuid_utils import generate_random_uuid
+from utils.uuid_utils import generate_random_uuid, get_offline_uuid
 from backends.yggdrasil_client import YggdrasilClient, download_texture
 from utils.typing import User, PlayerProfile
 from database_module import Database
@@ -24,6 +24,18 @@ class SiteBackend:
         self.db = db
         self.config = config
         self.email_sender = EmailSender(db)
+
+    async def _generate_profile_uuid(self, profile_name: str) -> str:
+        mode = (await self.db.setting.get("profile_uuid_mode", "random") or "random").strip().lower()
+        if mode == "offline":
+            profile_id = get_offline_uuid(profile_name)
+        else:
+            profile_id = generate_random_uuid()
+
+        existing_profile = await self.db.user.get_profile_by_id(profile_id)
+        if existing_profile:
+            raise HTTPException(status_code=400, detail="角色 UUID 冲突，无法新建角色")
+        return profile_id
 
     # ========== Auth & User ==========
 
@@ -230,17 +242,6 @@ class SiteBackend:
                     status_code=400, detail="invite code has no remaining uses"
                 )
 
-        user_count = await self.db.user.count()
-        is_first_user = user_count == 0
-        password_hash = hash_password(password)
-        user_id = generate_random_uuid()
-        try:
-            new_user = User(user_id, email, password_hash, is_first_user)
-            new_user.display_name = username
-            await self.db.user.create(new_user)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Email already registered")
-
         base_name = email.split("@")[0]
         base_name = re.sub(r"[^a-zA-Z0-9_]", "_", base_name)[:12]
         profile_name = base_name
@@ -254,7 +255,19 @@ class SiteBackend:
             if suffix > 100:
                 raise HTTPException(status_code=500, detail="无法生成唯一角色名")
 
-        profile_id = generate_random_uuid()
+        profile_id = await self._generate_profile_uuid(profile_name)
+
+        user_count = await self.db.user.count()
+        is_first_user = user_count == 0
+        password_hash = hash_password(password)
+        user_id = generate_random_uuid()
+        try:
+            new_user = User(user_id, email, password_hash, is_first_user)
+            new_user.display_name = username
+            await self.db.user.create(new_user)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
         await self.db.user.create_profile(
             PlayerProfile(profile_id, user_id, profile_name, "default")
         )
@@ -398,7 +411,7 @@ class SiteBackend:
         if existing:
             raise HTTPException(status_code=400, detail="角色名已被占用，请换一个名称")
 
-        profile_id = generate_random_uuid()
+        profile_id = await self._generate_profile_uuid(name)
         await self.db.user.create_profile(
             PlayerProfile(profile_id, user_id, name, model)
         )
