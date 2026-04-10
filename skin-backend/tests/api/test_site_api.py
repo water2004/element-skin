@@ -40,13 +40,13 @@ async def test_api_get_me_profiles_paginated(client, auth_headers, db_session):
         await db_session.user.create_profile(PlayerProfile(f"p_{i}", user_id, f"Player_{i}"))
     
     resp = await client.get("/me/profiles", 
-        params={"page": 1, "limit": 2},
+        params={"limit": 2},
         headers={"Authorization": auth_headers["Authorization"]}
     )
     
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total"] >= 5
+    assert "has_next" in data
     assert len(data["items"]) == 2
 
 @pytest.mark.asyncio
@@ -57,13 +57,13 @@ async def test_api_get_me_textures_paginated(client, auth_headers, db_session):
         await db_session.texture.add_to_library(user_id, f"hash_{i}", "skin", note=f"Note {i}")
     
     resp = await client.get("/me/textures", 
-        params={"page": 1, "limit": 2},
+        params={"limit": 2},
         headers={"Authorization": auth_headers["Authorization"]}
     )
     
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total"] >= 3
+    assert "has_next" in data
     assert len(data["items"]) == 2
     assert "hash" in data["items"][0]
 

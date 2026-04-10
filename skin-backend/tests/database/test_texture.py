@@ -30,9 +30,9 @@ async def test_texture_upload_and_library(db_session, user_factory):
     assert os.path.exists(os.path.join(db_session.texture.textures_dir, f"{tex_hash}.png"))
     
     # 2. Get for user
-    user_textures = await db_session.texture.get_for_user(user.id, limit=10, offset=0)
-    assert len(user_textures) == 1
-    assert user_textures[0][0] == tex_hash
+    user_textures_page = await db_session.texture.get_for_user_cursor(user.id, limit=10)
+    assert len(user_textures_page["items"]) == 1
+    assert user_textures_page["items"][0]["hash"] == tex_hash
     
     count = await db_session.texture.count_for_user(user.id)
     assert count == 1
@@ -46,9 +46,9 @@ async def test_texture_upload_and_library(db_session, user_factory):
     assert await db_session.texture.verify_ownership(user.id, tex_hash, "skin") is True
     
     # 5. Library actions
-    lib_items = await db_session.texture.get_from_library(only_public=True)
-    assert len(lib_items) == 1
-    assert lib_items[0][0] == tex_hash
+    lib_page = await db_session.texture.get_from_library_cursor(only_public=True)
+    assert len(lib_page["items"]) == 1
+    assert lib_page["items"][0]["hash"] == tex_hash
     
     count = await db_session.texture.count_library(only_public=True)
     assert count == 1
@@ -67,13 +67,13 @@ async def test_texture_upload_and_library(db_session, user_factory):
     user2 = await user_factory()
     success = await db_session.texture.add_to_user_wardrobe(user2.id, tex_hash)
     assert success is True
-    user2_textures = await db_session.texture.get_for_user(user2.id)
-    assert len(user2_textures) == 1
-    assert user2_textures[0][5] == 2 # 状态 2 表示非上传者
+    user2_textures_page = await db_session.texture.get_for_user_cursor(user2.id)
+    assert len(user2_textures_page["items"]) == 1
+    assert user2_textures_page["items"][0]["is_public"] == 2 # 状态 2 表示非上传者
     
     # 8. Delete
     await db_session.texture.delete_from_library(user.id, tex_hash, "skin")
-    assert len(await db_session.texture.get_for_user(user.id)) == 0
+    assert len((await db_session.texture.get_for_user_cursor(user.id))["items"]) == 0
 
 @pytest.mark.asyncio
 async def test_texture_model_cascade_update(db_session, user_factory):
