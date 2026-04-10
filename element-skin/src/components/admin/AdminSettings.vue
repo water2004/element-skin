@@ -45,6 +45,13 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-form-item label="新建角色 UUID 生成方式">
+          <el-radio-group v-model="settings.site.profile_uuid_mode" class="uuid-mode-group">
+            <el-radio-button value="random">随机 UUID</el-radio-button>
+            <el-radio-button value="offline">离线 UUID</el-radio-button>
+          </el-radio-group>
+          <span class="hint-text ml-4">默认使用随机 UUID（uuid4）；启用后按角色名生成离线 UUID。</span>
+        </el-form-item>
         <el-form-item label="最大纹理大小 (KB)">
           <el-input-number v-model="settings.site.max_texture_size" :min="64" :step="128" />
         </el-form-item>
@@ -201,6 +208,7 @@ const settings = reactive({
     require_invite: false,
     allow_register: true,
     enable_skin_library: true,
+    profile_uuid_mode: 'random',
     max_texture_size: 1024,
     footer_text: '',
     filing_icp: '',
@@ -300,4 +308,5 @@ onMounted(loadAllSettings)
 .hint-text { font-size: 12px; color: var(--color-text-light); line-height: 1.5; margin-top: 4px; display: block; }
 .mb-6 { margin-bottom: 24px; }
 .ml-4 { margin-left: 16px; }
+.uuid-mode-group { display: inline-flex; flex-wrap: wrap; gap: 8px; }
 </style>
