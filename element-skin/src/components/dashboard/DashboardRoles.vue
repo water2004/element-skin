@@ -83,14 +83,14 @@
       </div>
     </div>
 
-    <div class="pagination-container">
-      <el-pagination
-        background
-        layout="prev, pager, next"
-        :total="total"
-        :page-size="limit"
-        v-model:current-page="currentPage"
-        @current-change="handlePageChange"
+    <div class="pagination-container" v-if="profiles.length > 0">
+      <CursorPager
+        :count="profiles.length"
+        :loading="pagination.isLoading.value"
+        :disabled-prev="!pagination.canGoPrev.value"
+        :disabled-next="!pagination.canGoNext.value"
+        @prev="handlePrevPage"
+        @next="handleNextPage"
       />
     </div>
 
@@ -309,24 +309,26 @@
 </template>
 
 <script setup>
-import { ref, onMounted, inject, computed } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Plus, Delete, Close, Check, Select, Warning, Download, Edit } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
+import CursorPager from '@/components/common/CursorPager.vue'
+import { useCursorPagination } from '@/composables/useCursorPagination'
 
 // Inject shared state from AppLayout
-const user = inject('user')
 const fetchMe = inject('fetchMe')
 const isDark = inject('isDark')
 
 const router = useRouter()
 
 const profiles = ref([])
-const total = ref(0)
-const currentPage = ref(1)
 const limit = 12
+
+// 游标分页 composable
+const pagination = useCursorPagination(limit)
 
 const showCreateRoleDialog = ref(false)
 const newRoleName = ref('')
@@ -371,21 +373,40 @@ function texturesUrl(hash) {
 async function fetchProfiles() {
   try {
     const params = {
-      page: currentPage.value,
+      cursor: pagination.currentCursor.value,
       limit: limit
     }
     const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
     profiles.value = res.data.items
-    total.value = res.data.total
+    pagination.setPageData(res.data)
   } catch (e) {
     ElMessage.error('加载角色失败')
   }
 }
 
-function handlePageChange(page) {
-  currentPage.value = page
-  fetchProfiles()
+async function handleNextPage() {
+  await pagination.goToNextPage(async (cursor, limit) => {
+    const params = { cursor, limit }
+    const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
+    profiles.value = res.data.items
+    return res.data
+  })
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function handlePrevPage() {
+  await pagination.goToPrevPage(async (cursor, limit) => {
+    const params = { cursor, limit }
+    const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
+    profiles.value = res.data.items
+    return res.data
+  })
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function refreshFirstPage() {
+  pagination.reset()
+  await fetchProfiles()
 }
 
 async function createRole() {
@@ -396,7 +417,7 @@ async function createRole() {
     newRoleName.value = ''
     showCreateRoleDialog.value = false
     ElMessage.success('创建成功')
-    fetchProfiles()
+    await refreshFirstPage()
     if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('创建失败: ' + (e.response?.data?.detail || e.message))
@@ -408,7 +429,7 @@ async function deleteRole(pid) {
     await axios.delete(`/me/profiles/${pid}`, { headers: authHeaders() })
     ElMessage.success('已删除')
     showPreviewDialog.value = false
-    fetchProfiles()
+    await refreshFirstPage()
     if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('删除失败')
@@ -428,7 +449,7 @@ async function updateRoleName() {
   try {
     await axios.patch(`/me/profiles/${pid}`, { name: newName }, { headers: authHeaders() })
     ElMessage.success('名称已修改')
-    fetchProfiles()
+    await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('修改失败: ' + (e.response?.data?.detail || e.message))
@@ -445,7 +466,7 @@ async function clearRoleSkin(pid) {
     await axios.delete(`/me/profiles/${pid}/skin`, { headers: authHeaders() })
     ElMessage.success('皮肤已清除')
     showPreviewDialog.value = false
-    fetchProfiles()
+    await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e) {
     if (e !== 'cancel') {
@@ -464,7 +485,7 @@ async function clearRoleCape(pid) {
     await axios.delete(`/me/profiles/${pid}/cape`, { headers: authHeaders() })
     ElMessage.success('披风已清除')
     showPreviewDialog.value = false
-    fetchProfiles()
+    await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e) {
     if (e !== 'cancel') {
@@ -595,7 +616,7 @@ async function importYggProfile() {
     
     ElMessage.success('导入成功')
     showYggImportDialog.value = false
-    fetchProfiles()
+    await refreshFirstPage()
     if (fetchMe) fetchMe()
     resetYggImport()
   } catch (e) {
@@ -622,7 +643,7 @@ function handleYggDialogClose(done) {
 }
 
 onMounted(async () => {
-  fetchProfiles()
+  await refreshFirstPage()
   const urlParams = new URLSearchParams(window.location.search)
   const msToken = urlParams.get('ms_token')
   const error = urlParams.get('error')

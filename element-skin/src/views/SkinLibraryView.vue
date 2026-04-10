@@ -154,13 +154,14 @@
       </el-dialog>
 
       <div class="pagination-container">
-        <el-pagination
-          background
-          layout="prev, pager, next"
-          :total="total"
-          :page-size="limit"
-          v-model:current-page="currentPage"
-          @current-change="handlePageChange"
+        <CursorPager
+          v-if="items.length > 0"
+          :count="items.length"
+          :loading="pagination.isLoading.value"
+          :disabled-prev="!pagination.canGoPrev.value"
+          :disabled-next="!pagination.canGoNext.value"
+          @prev="handlePrevPage"
+          @next="handleNextPage"
         />
       </div>
     </div>
@@ -175,15 +176,16 @@ import { ElMessage } from 'element-plus'
 import { Plus, User } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
+import CursorPager from '@/components/common/CursorPager.vue'
+import { useCursorPagination } from '@/composables/useCursorPagination'
 
 const isDark = inject('isDark')
 const user = inject('user')
 const isLogged = computed(() => !!user.value)
 
 const items = ref([])
-const total = ref(0)
-const currentPage = ref(1)
 const limit = 20
+const pagination = useCursorPagination(limit)
 const loading = ref(false)
 const isDisabled = ref(false)
 const filterType = ref('')
@@ -210,15 +212,16 @@ function formatDate(ts) {
 
 async function fetchLibrary() {
   loading.value = true
+  pagination.isLoading.value = true
   try {
     const params = {
-      page: currentPage.value,
+      cursor: pagination.currentCursor.value,
       limit: limit,
       texture_type: filterType.value || undefined
     }
     const res = await axios.get('/public/skin-library', { params })
     items.value = res.data.items
-    total.value = res.data.total
+    pagination.setPageData(res.data)
     
     items.value.forEach(item => {
       if (item.type === 'skin') {
@@ -234,6 +237,7 @@ async function fetchLibrary() {
     }
   } finally {
     loading.value = false
+    pagination.isLoading.value = false
   }
 }
 
@@ -261,15 +265,47 @@ function getResolutionBadgeStyle(resolution) {
   }
 }
 
-function handlePageChange(page) {
-  currentPage.value = page
-  fetchLibrary()
+async function handleNextPage() {
+  await pagination.goToNextPage(async (cursor, pageLimit) => {
+    const params = {
+      cursor,
+      limit: pageLimit,
+      texture_type: filterType.value || undefined
+    }
+    const res = await axios.get('/public/skin-library', { params })
+    items.value = res.data.items
+    return res.data
+  })
+  items.value.forEach(item => {
+    if (item.type === 'skin') {
+      loadTextureResolution(item.hash)
+    }
+  })
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-function handleFilterChange() {
-  currentPage.value = 1
-  fetchLibrary()
+async function handlePrevPage() {
+  await pagination.goToPrevPage(async (cursor, pageLimit) => {
+    const params = {
+      cursor,
+      limit: pageLimit,
+      texture_type: filterType.value || undefined
+    }
+    const res = await axios.get('/public/skin-library', { params })
+    items.value = res.data.items
+    return res.data
+  })
+  items.value.forEach(item => {
+    if (item.type === 'skin') {
+      loadTextureResolution(item.hash)
+    }
+  })
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function handleFilterChange() {
+  pagination.reset()
+  await fetchLibrary()
 }
 
 function authHeaders() {

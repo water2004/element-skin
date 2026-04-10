@@ -54,13 +54,14 @@
       </el-table>
 
       <div class="pagination-container">
-        <el-pagination
-          background
-          layout="prev, pager, next"
-          :total="total"
-          :page-size="limit"
-          v-model:current-page="currentPage"
-          @current-change="handlePageChange"
+        <CursorPager
+          v-if="users.length > 0"
+          :count="users.length"
+          :loading="usersPagination.isLoading.value"
+          :disabled-prev="!usersPagination.canGoPrev.value"
+          :disabled-next="!usersPagination.canGoNext.value"
+          @prev="handleUsersPrevPage"
+          @next="handleUsersNextPage"
         />
       </div>
     </el-card>
@@ -115,14 +116,14 @@
             </el-table>
             <el-empty v-if="!userProfiles?.length" description="该用户暂无角色" :image-size="60" />
             <div class="pagination-container" style="margin-top: 10px;">
-              <el-pagination
-                small
-                background
-                layout="prev, pager, next"
-                :total="profileTotal"
-                :page-size="profileLimit"
-                v-model:current-page="profilePage"
-                @current-change="handleProfilePageChange"
+              <CursorPager
+                v-if="userProfiles.length > 0"
+                :count="userProfiles.length"
+                :loading="profilesPagination.isLoading.value"
+                :disabled-prev="!profilesPagination.canGoPrev.value"
+                :disabled-next="!profilesPagination.canGoNext.value"
+                @prev="handleProfilesPrevPage"
+                @next="handleProfilesNextPage"
               />
             </div>
           </el-tab-pane>
@@ -250,17 +251,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Refresh, UserFilled, Warning, CircleCheck 
 } from '@element-plus/icons-vue'
+import CursorPager from '@/components/common/CursorPager.vue'
+import { useCursorPagination } from '@/composables/useCursorPagination'
 
 const users = ref([])
-const total = ref(0)
-const currentPage = ref(1)
 const limit = 15
+const usersPagination = useCursorPagination(limit)
 const loading = ref(false)
 const currentUser = ref(null)
 const userProfiles = ref([])
-const profileTotal = ref(0)
-const profilePage = ref(1)
 const profileLimit = 10
+const profilesPagination = useCursorPagination(profileLimit)
 const userDetailDialogVisible = ref(false)
 const resetPasswordDialogVisible = ref(false)
 const resetPasswordForm = ref({ new_password: '', confirm_password: '' })
@@ -280,33 +281,57 @@ const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jw
 
 async function refreshUsers() {
   loading.value = true
+  usersPagination.isLoading.value = true
   try {
     const res = await axios.get('/admin/users', { 
       headers: authHeaders(),
       params: {
-        page: currentPage.value,
+        cursor: usersPagination.currentCursor.value,
         limit: limit
       }
     })
     users.value = res.data.items
-    total.value = res.data.total
+    usersPagination.setPageData(res.data)
   } catch (e) {
     ElMessage.error('加载用户列表失败')
   } finally {
     loading.value = false
+    usersPagination.isLoading.value = false
   }
 }
 
-function handlePageChange(page) {
-  currentPage.value = page
-  refreshUsers()
+async function refreshUsersFromFirst() {
+  usersPagination.reset()
+  await refreshUsers()
+}
+
+async function handleUsersNextPage() {
+  await usersPagination.goToNextPage(async (cursor, pageLimit) => {
+    const res = await axios.get('/admin/users', {
+      headers: authHeaders(),
+      params: { cursor, limit: pageLimit }
+    })
+    users.value = res.data.items
+    return res.data
+  })
+}
+
+async function handleUsersPrevPage() {
+  await usersPagination.goToPrevPage(async (cursor, pageLimit) => {
+    const res = await axios.get('/admin/users', {
+      headers: authHeaders(),
+      params: { cursor, limit: pageLimit }
+    })
+    users.value = res.data.items
+    return res.data
+  })
 }
 
 async function showUserDetailDialog(user) {
   try {
     const res = await axios.get(`/admin/users/${user.id}`, { headers: authHeaders() })
     currentUser.value = res.data
-    profilePage.value = 1
+    profilesPagination.reset()
     await fetchUserProfilesAdmin()
     userDetailDialogVisible.value = true
   } catch (e) {
@@ -319,18 +344,37 @@ async function fetchUserProfilesAdmin() {
   try {
     const res = await axios.get(`/admin/users/${currentUser.value.id}/profiles`, { 
       headers: authHeaders(),
-      params: { page: profilePage.value, limit: profileLimit }
+      params: { cursor: profilesPagination.currentCursor.value, limit: profileLimit }
     })
     userProfiles.value = res.data.items
-    profileTotal.value = res.data.total
+    profilesPagination.setPageData(res.data)
   } catch (e) {
     ElMessage.error('无法加载用户角色列表')
   }
 }
 
-function handleProfilePageChange(page) {
-  profilePage.value = page
-  fetchUserProfilesAdmin()
+async function handleProfilesNextPage() {
+  if (!currentUser.value) return
+  await profilesPagination.goToNextPage(async (cursor, pageLimit) => {
+    const res = await axios.get(`/admin/users/${currentUser.value.id}/profiles`, {
+      headers: authHeaders(),
+      params: { cursor, limit: pageLimit }
+    })
+    userProfiles.value = res.data.items
+    return res.data
+  })
+}
+
+async function handleProfilesPrevPage() {
+  if (!currentUser.value) return
+  await profilesPagination.goToPrevPage(async (cursor, pageLimit) => {
+    const res = await axios.get(`/admin/users/${currentUser.value.id}/profiles`, {
+      headers: authHeaders(),
+      params: { cursor, limit: pageLimit }
+    })
+    userProfiles.value = res.data.items
+    return res.data
+  })
 }
 
 async function toggleAdmin(user) {
@@ -338,7 +382,7 @@ async function toggleAdmin(user) {
     await ElMessageBox.confirm(`确定要切换 ${user.email} 的管理员状态吗？`, '确认', { type: 'warning' })
     await axios.post(`/admin/users/${user.id}/toggle-admin`, {}, { headers: authHeaders() })
     ElMessage.success('操作成功')
-    refreshUsers()
+    await refreshUsers()
     if (currentUser.value) currentUser.value.is_admin = !currentUser.value.is_admin
   } catch (e) {}
 }
@@ -349,7 +393,7 @@ async function deleteUser(user) {
     await axios.delete(`/admin/users/${user.id}`, { headers: authHeaders() })
     ElMessage.success('用户已删除')
     userDetailDialogVisible.value = false
-    refreshUsers()
+    await refreshUsersFromFirst()
   } catch (e) {}
 }
 
@@ -391,7 +435,7 @@ async function confirmBanUser() {
     await axios.post(`/admin/users/${currentUser.value.id}/ban`, { banned_until: bannedUntil }, { headers: authHeaders() })
     ElMessage.success('封禁已执行')
     banDialogVisible.value = false
-    refreshUsers()
+    await refreshUsers()
     if (currentUser.value) currentUser.value.banned_until = bannedUntil
   } catch (e) {
     ElMessage.error('封禁失败')
@@ -404,7 +448,7 @@ async function unbanUser(user) {
   try {
     await axios.post(`/admin/users/${user.id}/unban`, {}, { headers: authHeaders() })
     ElMessage.success('封禁已解除')
-    refreshUsers()
+    await refreshUsers()
     if (currentUser.value) currentUser.value.banned_until = 0
   } catch (e) {}
 }
@@ -429,7 +473,7 @@ const formatBanUntilTime = () => {
   return new Date(Date.now() + h * 3600000).toLocaleString()
 }
 
-onMounted(refreshUsers)
+onMounted(refreshUsersFromFirst)
 </script>
 
 <style>

@@ -57,13 +57,14 @@
       </el-table>
 
       <div class="pagination-container">
-        <el-pagination
-          background
-          layout="prev, pager, next"
-          :total="total"
-          :page-size="limit"
-          v-model:current-page="currentPage"
-          @current-change="handlePageChange"
+        <CursorPager
+          v-if="invites.length > 0"
+          :count="invites.length"
+          :loading="pagination.isLoading.value"
+          :disabled-prev="!pagination.canGoPrev.value"
+          :disabled-next="!pagination.canGoNext.value"
+          @prev="handlePrevPage"
+          @next="handleNextPage"
         />
       </div>
     </el-card>
@@ -132,11 +133,12 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus, Check, Delete, Ticket } from '@element-plus/icons-vue'
+import CursorPager from '@/components/common/CursorPager.vue'
+import { useCursorPagination } from '@/composables/useCursorPagination'
 
 const invites = ref([])
-const total = ref(0)
-const currentPage = ref(1)
 const limit = 15
+const pagination = useCursorPagination(limit)
 const inviteDialogVisible = ref(false)
 const inviteMode = ref('auto')
 const customInviteCode = ref('')
@@ -157,20 +159,42 @@ async function loadInvites() {
     const res = await axios.get('/admin/invites', { 
       headers: authHeaders(),
       params: {
-        page: currentPage.value,
+        cursor: pagination.currentCursor.value,
         limit: limit
       }
     })
     invites.value = res.data.items
-    total.value = res.data.total
+    pagination.setPageData(res.data)
   } catch (e) {
     ElMessage.error('加载列表失败')
   }
 }
 
-function handlePageChange(page) {
-  currentPage.value = page
-  loadInvites()
+async function handleNextPage() {
+  await pagination.goToNextPage(async (cursor, pageLimit) => {
+    const res = await axios.get('/admin/invites', {
+      headers: authHeaders(),
+      params: { cursor, limit: pageLimit }
+    })
+    invites.value = res.data.items
+    return res.data
+  })
+}
+
+async function handlePrevPage() {
+  await pagination.goToPrevPage(async (cursor, pageLimit) => {
+    const res = await axios.get('/admin/invites', {
+      headers: authHeaders(),
+      params: { cursor, limit: pageLimit }
+    })
+    invites.value = res.data.items
+    return res.data
+  })
+}
+
+async function refreshFirstPage() {
+  pagination.reset()
+  await loadInvites()
 }
 
 function generateRandomCode() {
@@ -221,7 +245,7 @@ async function confirmCreateInvite() {
     await axios.post('/admin/invites', payload, { headers: authHeaders() })
     ElMessage.success('创建成功')
     inviteDialogVisible.value = false
-    loadInvites()
+    await refreshFirstPage()
   } catch (e) {
     ElMessage.error(e.response?.data?.detail || '创建失败')
   } finally {
@@ -234,11 +258,11 @@ async function deleteInvite(invite) {
     await ElMessageBox.confirm('确定删除该邀请码吗？', '确认', { type: 'warning' })
     await axios.delete(`/admin/invites/${invite.code}`, { headers: authHeaders() })
     ElMessage.success('已删除')
-    loadInvites()
+    await refreshFirstPage()
   } catch (e) {}
 }
 
-onMounted(loadInvites)
+onMounted(refreshFirstPage)
 </script>
 
 <style>

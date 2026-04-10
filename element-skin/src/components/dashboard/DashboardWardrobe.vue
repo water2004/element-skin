@@ -57,13 +57,14 @@
     <el-empty v-else description="还没有纹理，快去上传吧！" />
 
     <div class="pagination-container">
-      <el-pagination
-        background
-        layout="prev, pager, next"
-        :total="total"
-        :page-size="limit"
-        v-model:current-page="currentPage"
-        @current-change="handlePageChange"
+      <CursorPager
+        v-if="textures.length > 0"
+        :count="textures.length"
+        :loading="pagination.isLoading.value"
+        :disabled-prev="!pagination.canGoPrev.value"
+        :disabled-next="!pagination.canGoNext.value"
+        @prev="handlePrevPage"
+        @next="handleNextPage"
       />
     </div>
 
@@ -231,6 +232,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Upload, UploadFilled, Edit } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
+import CursorPager from '@/components/common/CursorPager.vue'
+import { useCursorPagination } from '@/composables/useCursorPagination'
 
 // Inject shared state from AppLayout
 const user = inject('user')
@@ -252,9 +255,8 @@ const fetchUserProfiles = async () => {
 }
 
 const textures = ref([])
-const total = ref(0)
-const currentPage = ref(1)
 const limit = 20
+const pagination = useCursorPagination(limit)
 const textureResolutions = ref(new Map())
 const showDetailDialog = ref(false)
 const selectedTexture = ref(null)
@@ -351,12 +353,12 @@ async function updateIsPublic(val) {
 async function fetchTextures() {
   try {
     const params = {
-      page: currentPage.value,
+      cursor: pagination.currentCursor.value,
       limit: limit
     }
     const res = await axios.get('/me/textures', { headers: authHeaders(), params })
     textures.value = res.data.items
-    total.value = res.data.total
+    pagination.setPageData(res.data)
     textures.value.forEach(tex => {
       if (tex.type === 'skin') {
         loadTextureResolution(tex.hash)
@@ -367,10 +369,39 @@ async function fetchTextures() {
   }
 }
 
-function handlePageChange(page) {
-  currentPage.value = page
-  fetchTextures()
+async function handleNextPage() {
+  await pagination.goToNextPage(async (cursor, pageLimit) => {
+    const params = { cursor, limit: pageLimit }
+    const res = await axios.get('/me/textures', { headers: authHeaders(), params })
+    textures.value = res.data.items
+    return res.data
+  })
+  textures.value.forEach(tex => {
+    if (tex.type === 'skin') {
+      loadTextureResolution(tex.hash)
+    }
+  })
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function handlePrevPage() {
+  await pagination.goToPrevPage(async (cursor, pageLimit) => {
+    const params = { cursor, limit: pageLimit }
+    const res = await axios.get('/me/textures', { headers: authHeaders(), params })
+    textures.value = res.data.items
+    return res.data
+  })
+  textures.value.forEach(tex => {
+    if (tex.type === 'skin') {
+      loadTextureResolution(tex.hash)
+    }
+  })
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function refreshFirstPage() {
+  pagination.reset()
+  await fetchTextures()
 }
 
 function loadTextureResolution(hash) {
@@ -421,7 +452,7 @@ async function doUpload() {
     if (uploadRef.value) {
       uploadRef.value.clearFiles()
     }
-    fetchTextures()
+    await refreshFirstPage()
   } catch (e) {
     ElMessage.error('上传失败: ' + (e.response?.data?.detail || e.message))
   }
@@ -440,7 +471,7 @@ async function confirmDelete() {
     await axios.delete(`/me/textures/${selectedTexture.value.hash}/${selectedTexture.value.type}`, { headers: authHeaders() })
     ElMessage.success('已删除')
     showDetailDialog.value = false
-    fetchTextures()
+    await refreshFirstPage()
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('删除失败')
   }
@@ -466,7 +497,7 @@ async function doApply() {
 }
 
 onMounted(() => {
-  fetchTextures()
+  refreshFirstPage()
   fetchUserProfiles()
 })
 </script>

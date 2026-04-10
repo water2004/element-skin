@@ -111,12 +111,21 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
 
     @router.get("/admin/users")
     async def get_admin_users(
-        page: int = 1,
+        cursor: str | None = None,
         limit: int = 15,
         payload: dict = Depends(admin_required)
     ):
-        offset = (page - 1) * limit
-        return await admin_backend.get_admin_users(limit=limit, offset=offset)
+        """获取用户列表（仅支持游标分页）"""
+        from utils.pagination import CursorEncoder
+
+        last_id = None
+        if cursor:
+            cursor_data = CursorEncoder.decode(cursor)
+            if not cursor_data or "last_id" not in cursor_data:
+                raise HTTPException(status_code=400, detail="Invalid cursor")
+            last_id = cursor_data["last_id"]
+
+        return await db.user.list_users_cursor(limit=limit, last_id=last_id)
 
     @router.get("/admin/users/{user_id}")
     async def get_single_user_admin(user_id: str, payload: dict = Depends(admin_required)):
@@ -125,15 +134,23 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
     @router.get("/admin/users/{user_id}/profiles")
     async def get_user_profiles_admin(
         user_id: str,
-        page: int = 1,
+        cursor: str | None = None,
         limit: int = 20,
         payload: dict = Depends(admin_required)
     ):
-        offset = (page - 1) * limit
-        total = await db.user.count_profiles_by_user(user_id)
-        profiles = await db.user.get_profiles_by_user(user_id, limit, offset)
+        """获取用户的角色列表（仅支持游标分页）"""
+        from utils.pagination import CursorEncoder
+
+        last_id = None
+        if cursor:
+            cursor_data = CursorEncoder.decode(cursor)
+            if not cursor_data or "last_id" not in cursor_data:
+                raise HTTPException(status_code=400, detail="Invalid cursor")
+            last_id = cursor_data["last_id"]
+
+        result = await db.user.get_profiles_by_user_cursor(user_id, limit=limit, last_id=last_id)
+        profiles_list = result["items"]
         return {
-            "total": total,
             "items": [
                 {
                     "id": p.id,
@@ -142,8 +159,11 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
                     "skin_hash": p.skin_hash,
                     "cape_hash": p.cape_hash,
                 }
-                for p in profiles
-            ]
+                for p in profiles_list
+            ],
+            "has_next": result["has_next"],
+            "next_cursor": result["next_cursor"],
+            "page_size": result["page_size"],
         }
 
     @router.post("/admin/users/{user_id}/toggle-admin")
@@ -184,15 +204,28 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
 
     @router.get("/admin/invites")
     async def get_admin_invites(
-        page: int = 1,
+        cursor: str | None = None,
         limit: int = 15,
         payload: dict = Depends(admin_required)
     ):
-        offset = (page - 1) * limit
-        total = await db.user.count_invites()
-        invites = await db.user.list_invites(limit=limit, offset=offset)
+        """获取邀请码列表（仅支持游标分页）"""
+        from utils.pagination import CursorEncoder
+
+        last_created_at = None
+        last_code = None
+        if cursor:
+            cursor_data = CursorEncoder.decode(cursor)
+            if not cursor_data or "last_created_at" not in cursor_data or "last_code" not in cursor_data:
+                raise HTTPException(status_code=400, detail="Invalid cursor")
+            last_created_at = cursor_data["last_created_at"]
+            last_code = cursor_data["last_code"]
+
+        result = await db.user.list_invites_cursor(
+            limit=limit,
+            last_created_at=last_created_at,
+            last_code=last_code,
+        )
         return {
-            "total": total,
             "items": [
                 {
                     "code": row.code,
@@ -202,8 +235,11 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
                     "used_count": row.used_count,
                     "note": row.note,
                 }
-                for row in invites
-            ]
+                for row in result["items"]
+            ],
+            "has_next": result["has_next"],
+            "next_cursor": result["next_cursor"],
+            "page_size": result["page_size"],
         }
 
     @router.post("/admin/invites")
