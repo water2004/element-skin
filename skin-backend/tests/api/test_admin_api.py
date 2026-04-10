@@ -35,7 +35,8 @@ async def test_api_admin_settings_site(client, admin_headers):
     """测试管理员修改站点设置接口"""
     payload = {
         "site_name": "API Test Site",
-        "allow_register": True
+        "allow_register": True,
+        "profile_uuid_mode": "offline",
     }
     resp = await client.post("/admin/settings/site", 
         json=payload,
@@ -47,6 +48,7 @@ async def test_api_admin_settings_site(client, admin_headers):
     # 验证是否生效
     get_resp = await client.get("/admin/settings/site", headers={"Authorization": admin_headers["Authorization"]})
     assert get_resp.json()["site_name"] == "API Test Site"
+    assert get_resp.json()["profile_uuid_mode"] == "offline"
 
 @pytest.mark.asyncio
 async def test_api_admin_forbidden_for_normal_user(client, auth_headers):

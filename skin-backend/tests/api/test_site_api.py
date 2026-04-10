@@ -1,5 +1,6 @@
 import pytest
 from httpx import AsyncClient
+from unittest.mock import patch
 
 @pytest.mark.asyncio
 async def test_api_site_login_success(client, user_factory):
@@ -120,6 +121,26 @@ async def test_api_create_profile(client, auth_headers):
     
     assert resp.status_code == 200
     assert resp.json()["name"] == "ApiPlayer"
+
+
+@pytest.mark.asyncio
+async def test_api_create_profile_uuid_conflict(client, auth_headers, db_session):
+    from utils.typing import PlayerProfile
+
+    conflict_id = "feedfeedfeedfeedfeedfeedfeedfeed"
+    await db_session.user.create_profile(
+        PlayerProfile(conflict_id, auth_headers["X-User-ID"], "TakenApiRole")
+    )
+
+    with patch("backends.site_backend.generate_random_uuid", return_value=conflict_id):
+        resp = await client.post(
+            "/me/profiles",
+            json={"name": "ApiRoleC1", "model": "default"},
+            headers={"Authorization": auth_headers["Authorization"]},
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "角色 UUID 冲突，无法新建角色"
 
 @pytest.mark.asyncio
 async def test_api_rename_profile(client, auth_headers, db_session):

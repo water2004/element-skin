@@ -11,7 +11,8 @@ async def test_admin_settings_management(db_session, test_config):
     site_settings = {
         "site_name": "New Test Site",
         "allow_register": False,
-        "max_texture_size": 2048
+        "max_texture_size": 2048,
+        "profile_uuid_mode": "offline",
     }
     await backend.save_settings_group("site", site_settings)
     
@@ -20,6 +21,7 @@ async def test_admin_settings_management(db_session, test_config):
     assert fetched["site_name"] == "New Test Site"
     assert fetched["allow_register"] is False
     assert fetched["max_texture_size"] == 2048
+    assert fetched["profile_uuid_mode"] == "offline"
     
     # 2. 保存安全设置
     security_settings = {
