@@ -1,6 +1,5 @@
 import hashlib
 import struct
-import uuid
 import base64
 from io import BytesIO
 from PIL import Image
@@ -28,15 +27,6 @@ class CryptoUtils:
             format=serialization.PublicFormat.SubjectPublicKeyInfo,
         )
         return pem.decode("utf-8")
-
-    @staticmethod
-    def get_offline_uuid(name: str) -> str:
-        data = f"OfflinePlayer:{name}".encode("utf-8")
-        md = hashlib.md5(data).digest()
-        md = bytearray(md)
-        md[6] = (md[6] & 0x0F) | 0x30
-        md[8] = (md[8] & 0x3F) | 0x80
-        return str(uuid.UUID(bytes=bytes(md))).replace("-", "")
 
     @staticmethod
     def compute_texture_hash_from_image(img: Image.Image) -> str:
