@@ -73,8 +73,7 @@
     <el-dialog
       v-model="inviteDialogVisible"
       title="创建新邀请码"
-      width="500px"
-      class="dialog-viewer"
+      class="dialog-form"
     >
       <div style="padding: 24px">
         <el-form label-position="top">

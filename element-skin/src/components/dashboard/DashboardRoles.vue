@@ -23,64 +23,68 @@
       </div>
     </div>
 
-    <div class="auto-grid">
-      <div 
-        v-for="(profile, index) in profiles" 
-        :key="profile.id" 
-        class="surface-card hoverable animate-card-slide clickable-card" 
-        :style="{ '--delay-index': index % limit }"
-        @click="openPreviewDialog(profile)"
-      >
-        <div
-          class="role-preview"
-          :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
+    <div class="roles-grid-container" v-loading="loading" element-loading-background="transparent">
+      <div class="auto-grid" v-if="profiles.length > 0">
+        <div 
+          v-for="(profile, index) in profiles" 
+          :key="profile.id" 
+          class="surface-card hoverable animate-card-slide clickable-card" 
+          :style="{ '--delay-index': index % limit }"
+          @click="openPreviewDialog(profile)"
         >
-          <SkinViewer
-            v-if="profile.skin_hash"
-            :skinUrl="texturesUrl(profile.skin_hash)"
-            :capeUrl="profile.cape_hash ? texturesUrl(profile.cape_hash) : null"
-            :model="profile.model || 'default'"
-            :width="200"
-            :height="280"
-            is-static
-          />
-          <el-empty v-else description="未设置皮肤" :image-size="120" />
-        </div>
-        <div class="role-info">
-          <div class="role-name">{{ profile.name }}</div>
-          <div class="role-model">模型: {{ profile.model || 'default' }}</div>
-        </div>
-        <div class="role-actions" @click.stop>
-          <el-button
-            class="btn-gradient btn-gradient-danger btn-icon-swap"
-            @click="deleteRole(profile.id)"
-            size="default"
+          <div
+            class="role-preview"
+            :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
           >
-            <span class="btn-label">删除</span>
-            <el-icon class="btn-icon"><Delete /></el-icon>
-          </el-button>
+            <SkinViewer
+              v-if="profile.skin_hash"
+              :skinUrl="texturesUrl(profile.skin_hash)"
+              :capeUrl="profile.cape_hash ? texturesUrl(profile.cape_hash) : null"
+              :model="profile.model || 'default'"
+              :width="200"
+              :height="280"
+              is-static
+            />
+            <el-empty v-else description="未设置皮肤" :image-size="120" />
+          </div>
+          <div class="role-info">
+            <div class="role-name">{{ profile.name }}</div>
+            <div class="role-model">模型: {{ profile.model || 'default' }}</div>
+          </div>
+          <div class="role-actions" @click.stop>
+            <el-button
+              class="btn-gradient btn-gradient-danger btn-icon-swap"
+              @click="deleteRole(profile.id)"
+              size="default"
+            >
+              <span class="btn-label">删除</span>
+              <el-icon class="btn-icon"><Delete /></el-icon>
+            </el-button>
 
-          <el-button
-            v-if="profile.skin_hash"
-            class="btn-soft-warning btn-icon-swap"
-            @click="clearRoleSkin(profile.id)"
-            size="default"
-          >
-            <span class="btn-label">皮肤</span>
-            <el-icon class="btn-icon"><Close /></el-icon>
-          </el-button>
+            <el-button
+              v-if="profile.skin_hash"
+              class="btn-soft-warning btn-icon-swap"
+              @click="clearRoleSkin(profile.id)"
+              size="default"
+            >
+              <span class="btn-label">皮肤</span>
+              <el-icon class="btn-icon"><Close /></el-icon>
+            </el-button>
 
-          <el-button
-            v-if="profile.cape_hash"
-            class="btn-soft-warning btn-icon-swap"
-            @click="clearRoleCape(profile.id)"
-            size="default"
-          >
-            <span class="btn-label">披风</span>
-            <el-icon class="btn-icon"><Close /></el-icon>
-          </el-button>
+            <el-button
+              v-if="profile.cape_hash"
+              class="btn-soft-warning btn-icon-swap"
+              @click="clearRoleCape(profile.id)"
+              size="default"
+            >
+              <span class="btn-label">披风</span>
+              <el-icon class="btn-icon"><Close /></el-icon>
+            </el-button>
+          </div>
         </div>
       </div>
+
+      <el-empty v-else-if="!loading" description="还没有角色，快去创建吧！" />
     </div>
 
     <div class="pagination-container" v-if="profiles.length > 0">
@@ -97,7 +101,6 @@
     <!-- 预览对话框 -->
     <el-dialog
       v-model="showPreviewDialog"
-      width="800px"
       destroy-on-close
       class="dialog-viewer"
       append-to-body
@@ -180,7 +183,7 @@
     </el-dialog>
 
     <!-- 新建角色对话框 -->
-    <el-dialog v-model="showCreateRoleDialog" title="新建角色" width="420px" append-to-body>
+    <el-dialog v-model="showCreateRoleDialog" title="新建角色" class="dialog-form dialog-create-role" append-to-body>
       <el-form label-width="100px">
         <el-form-item label="角色名称">
           <el-input v-model="newRoleName" placeholder="请输入角色名称" maxlength="32" show-word-limit />
@@ -199,7 +202,7 @@
     <el-dialog
       v-model="showMicrosoftLoginDialog"
       title="绑定正版角色"
-      width="400px"
+      class="dialog-form dialog-microsoft-login"
       :close-on-click-modal="false"
       :destroy-on-close="true"
       :before-close="handleMicrosoftDialogClose"
@@ -245,7 +248,7 @@
     <el-dialog 
       v-model="showYggImportDialog" 
       title="从外部皮肤站导入角色" 
-      width="450px" 
+      class="dialog-form dialog-ygg-import"
       append-to-body
       :before-close="handleYggDialogClose"
     >
@@ -326,6 +329,7 @@ const router = useRouter()
 
 const profiles = ref([])
 const limit = 12
+const loading = ref(false)
 
 // 游标分页 composable
 const pagination = useCursorPagination(limit)
@@ -371,6 +375,7 @@ function texturesUrl(hash) {
 }
 
 async function fetchProfiles() {
+  loading.value = true
   try {
     const params = {
       cursor: pagination.currentCursor.value,
@@ -381,6 +386,8 @@ async function fetchProfiles() {
     pagination.setPageData(res.data)
   } catch (e) {
     ElMessage.error('加载角色失败')
+  } finally {
+    loading.value = false
   }
 }
 

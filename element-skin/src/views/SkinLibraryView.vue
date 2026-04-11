@@ -88,7 +88,6 @@
       <!-- 预览对话框 -->
       <el-dialog
         v-model="showPreviewDialog"
-        width="800px"
         destroy-on-close
         class="dialog-viewer"
         append-to-body

@@ -13,48 +13,50 @@
       </el-button>
     </div>
 
-    <div class="auto-grid" v-if="textures.length > 0">
-      <div
-        class="surface-card hoverable animate-card-slide clickable-card"
-        v-for="(tex, index) in textures"
-        :key="tex.hash + tex.type"
-        :style="{ '--delay-index': index % limit }"
-        @click="openDetailDialog(tex)"
-      >
-        <div class="item-card-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
-          <SkinViewer
-            v-if="tex.type === 'skin'"
-            :skinUrl="texturesUrl(tex.hash)"
-            :model="tex.model || 'default'"
-            :width="200"
-            :height="280"
-            is-static
-          />
-          <CapeViewer
-            v-else
-            :capeUrl="texturesUrl(tex.hash)"
-            :width="200"
-            :height="280"
-            is-static
-          />
-          <div
-            v-if="tex.type === 'skin' && textureResolutions.get(tex.hash)"
-            class="floating-badge"
-            :style="getResolutionBadgeStyle(textureResolutions.get(tex.hash))"
-          >
-            {{ textureResolutions.get(tex.hash) }}x
+    <div class="wardrobe-grid-container" v-loading="loading" element-loading-background="transparent">
+      <div class="auto-grid" v-if="textures.length > 0">
+        <div
+          class="surface-card hoverable animate-card-slide clickable-card"
+          v-for="(tex, index) in textures"
+          :key="tex.hash + tex.type"
+          :style="{ '--delay-index': index % limit }"
+          @click="openDetailDialog(tex)"
+        >
+          <div class="item-card-preview" :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }">
+            <SkinViewer
+              v-if="tex.type === 'skin'"
+              :skinUrl="texturesUrl(tex.hash)"
+              :model="tex.model || 'default'"
+              :width="200"
+              :height="280"
+              is-static
+            />
+            <CapeViewer
+              v-else
+              :capeUrl="texturesUrl(tex.hash)"
+              :width="200"
+              :height="280"
+              is-static
+            />
+            <div
+              v-if="tex.type === 'skin' && textureResolutions.get(tex.hash)"
+              class="floating-badge"
+              :style="getResolutionBadgeStyle(textureResolutions.get(tex.hash))"
+            >
+              {{ textureResolutions.get(tex.hash) }}x
+            </div>
           </div>
-        </div>
-        <div class="item-card-info">
-          <div class="type-tag" :class="tex.type">
-            {{ tex.type === 'skin' ? '皮肤' : '披风' }}
+          <div class="item-card-info">
+            <div class="type-tag" :class="tex.type">
+              {{ tex.type === 'skin' ? '皮肤' : '披风' }}
+            </div>
+            <div class="item-card-title">{{ tex.note || '未命名纹理' }}</div>
           </div>
-          <div class="item-card-title">{{ tex.note || '未命名纹理' }}</div>
         </div>
       </div>
-    </div>
 
-    <el-empty v-else description="还没有纹理，快去上传吧！" />
+      <el-empty v-else-if="!loading" description="还没有纹理，快去上传吧！" />
+    </div>
 
     <div class="pagination-container">
       <CursorPager
@@ -70,7 +72,6 @@
 
     <el-dialog
       v-model="showDetailDialog"
-      width="800px"
       destroy-on-close
       class="dialog-viewer"
       append-to-body
@@ -168,7 +169,7 @@
     </el-dialog>
 
     <!-- 上传对话框 -->
-    <el-dialog v-model="showUploadDialog" title="上传纹理" width="500px" class="upload-dialog" append-to-body>
+    <el-dialog v-model="showUploadDialog" title="上传纹理" class="upload-dialog dialog-form" append-to-body>
       <el-form label-width="100px" :model="uploadForm" class="upload-form">
         <el-form-item label="选择文件" class="upload-form-item">
           <el-upload
@@ -257,6 +258,7 @@ const fetchUserProfiles = async () => {
 const textures = ref([])
 const limit = 20
 const pagination = useCursorPagination(limit)
+const loading = ref(false)
 const textureResolutions = ref(new Map())
 const showDetailDialog = ref(false)
 const selectedTexture = ref(null)
@@ -351,6 +353,7 @@ async function updateIsPublic(val) {
 }
 
 async function fetchTextures() {
+  loading.value = true
   try {
     const params = {
       cursor: pagination.currentCursor.value,
@@ -366,6 +369,8 @@ async function fetchTextures() {
     })
   } catch (e) {
     console.error(e)
+  } finally {
+    loading.value = false
   }
 }
 
