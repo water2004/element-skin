@@ -110,3 +110,47 @@ async def test_import_ygg_profile_name_conflict(db_session, test_config):
         
         profile = await db_session.user.get_profile_by_id(profile_id)
         assert profile.name == f"{profile_name}_1"
+
+
+@pytest.mark.asyncio
+async def test_import_ygg_profiles_batch_success_and_partial_failure(db_session, test_config):
+    backend = SiteBackend(db_session, test_config)
+    user_id = "batch_user_id"
+    api_url = "http://example.com/api/yggdrasil"
+
+    await db_session.execute(
+        "INSERT INTO users (id, email, password, is_admin, display_name) VALUES ($1, $2, $3, $4, $5)",
+        user_id, "batch@example.com", "hash", False, "BatchUser"
+    )
+
+    profiles = [
+        {"profile_id": "batch_profile_1", "profile_name": "BatchPlayer1"},
+        {"profile_id": "batch_profile_2", "profile_name": "BatchPlayer2"},
+        {"profile_id": "", "profile_name": "BrokenProfile"},
+    ]
+
+    with patch("backends.site_backend.YggdrasilClient") as MockClient, \
+         patch("backends.site_backend.download_texture", new_callable=AsyncMock) as mock_download:
+        mock_instance = MockClient.return_value
+
+        async def get_profile_with_textures(profile_id):
+            return {
+                "id": profile_id,
+                "name": profile_id.replace("batch_", ""),
+                "skins": [{"url": f"http://skin.url/{profile_id}", "variant": "classic"}],
+                "capes": [],
+            }
+
+        mock_instance.get_profile_with_textures = AsyncMock(side_effect=get_profile_with_textures)
+        mock_download.return_value = b"skin_bytes"
+
+        result = await backend.import_ygg_profiles(user_id, api_url, profiles)
+
+    assert result["success_count"] == 2
+    assert result["failure_count"] == 1
+    assert len(result["items"]) == 2
+    assert len(result["failed"]) == 1
+    assert result["failed"][0]["detail"] == "profile_id and profile_name are required"
+
+    assert await db_session.user.get_profile_by_id("batch_profile_1") is not None
+    assert await db_session.user.get_profile_by_id("batch_profile_2") is not None

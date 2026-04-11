@@ -166,7 +166,10 @@ async def test_api_remote_ygg_import_flow(client, auth_headers, db_session):
     from unittest.mock import patch, AsyncMock
     
     # 1. 测试获取列表
-    mock_profiles = [{"id": "remote_pid", "name": "RemotePlayer"}]
+    mock_profiles = [
+        {"id": "remote_pid_1", "name": "RemotePlayer1"},
+        {"id": "remote_pid_2", "name": "RemotePlayer2"},
+    ]
     with patch("backends.yggdrasil_client.YggdrasilClient.authenticate", new_callable=AsyncMock) as mock_auth:
         mock_auth.return_value = {"availableProfiles": mock_profiles}
         
@@ -195,20 +198,27 @@ async def test_api_remote_ygg_import_flow(client, auth_headers, db_session):
         with patch.object(db_session.texture, "upload", new_callable=AsyncMock) as mock_upload:
             mock_upload.return_value = ("fake_hash", "skin")
             
-            resp = await client.post("/remote-ygg/import-profile",
+            resp = await client.post("/remote-ygg/import-profiles",
                 json={
                     "api_url": "https://remote.com",
-                    "profile_id": "remote_pid",
-                    "profile_name": "RemotePlayer"
+                    "profiles": [
+                        {"profile_id": "remote_pid_1", "profile_name": "RemotePlayer1"},
+                        {"profile_id": "remote_pid_2", "profile_name": "RemotePlayer2"},
+                    ]
                 },
                 headers={"Authorization": auth_headers["Authorization"]}
             )
             
             assert resp.status_code == 200
-            assert "id" in resp.json()
-            
+            data = resp.json()
+            assert data["success_count"] == 2
+            assert data["failure_count"] == 0
+            assert len(data["items"]) == 2
+
             # 验证本地是否创建了角色
-            local_pid = resp.json()["id"]
-            p = await db_session.user.get_profile_by_id(local_pid)
-            assert p.name == "RemotePlayer"
-            assert p.skin_hash == "fake_hash"
+            p1 = await db_session.user.get_profile_by_id("remote_pid_1")
+            p2 = await db_session.user.get_profile_by_id("remote_pid_2")
+            assert p1.name == "RemotePlayer1"
+            assert p2.name == "RemotePlayer2"
+            assert p1.skin_hash == "fake_hash"
+            assert p2.skin_hash == "fake_hash"
