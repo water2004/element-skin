@@ -23,81 +23,84 @@
       </div>
     </div>
 
-    <div class="auto-grid">
-      <div 
-        v-for="(profile, index) in profiles" 
-        :key="profile.id" 
-        class="surface-card hoverable animate-card-slide clickable-card" 
-        :style="{ '--delay-index': index % limit }"
-        @click="openPreviewDialog(profile)"
-      >
-        <div
-          class="role-preview"
-          :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
+    <div class="roles-grid-container" v-loading="loading" element-loading-background="transparent">
+      <div class="auto-grid" v-if="profiles.length > 0">
+        <div 
+          v-for="(profile, index) in profiles" 
+          :key="profile.id" 
+          class="surface-card hoverable animate-card-slide clickable-card" 
+          :style="{ '--delay-index': index % limit }"
+          @click="openPreviewDialog(profile)"
         >
-          <SkinViewer
-            v-if="profile.skin_hash"
-            :skinUrl="texturesUrl(profile.skin_hash)"
-            :capeUrl="profile.cape_hash ? texturesUrl(profile.cape_hash) : null"
-            :model="profile.model || 'default'"
-            :width="200"
-            :height="280"
-            is-static
-          />
-          <el-empty v-else description="未设置皮肤" :image-size="120" />
-        </div>
-        <div class="role-info">
-          <div class="role-name">{{ profile.name }}</div>
-          <div class="role-model">模型: {{ profile.model || 'default' }}</div>
-        </div>
-        <div class="role-actions" @click.stop>
-          <el-button
-            class="btn-gradient btn-gradient-danger btn-icon-swap"
-            @click="deleteRole(profile.id)"
-            size="default"
+          <div
+            class="role-preview"
+            :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
           >
-            <span class="btn-label">删除</span>
-            <el-icon class="btn-icon"><Delete /></el-icon>
-          </el-button>
+            <SkinViewer
+              v-if="profile.skin_hash"
+              :skinUrl="texturesUrl(profile.skin_hash)"
+              :capeUrl="profile.cape_hash ? texturesUrl(profile.cape_hash) : null"
+              :model="profile.model || 'default'"
+              :width="200"
+              :height="280"
+              is-static
+            />
+            <el-empty v-else description="未设置皮肤" :image-size="120" />
+          </div>
+          <div class="role-info">
+            <div class="role-name">{{ profile.name }}</div>
+            <div class="role-model">模型: {{ profile.model || 'default' }}</div>
+          </div>
+          <div class="role-actions" @click.stop>
+            <el-button
+              class="btn-gradient btn-gradient-danger btn-icon-swap"
+              @click="deleteRole(profile.id)"
+              size="default"
+            >
+              <span class="btn-label">删除</span>
+              <el-icon class="btn-icon"><Delete /></el-icon>
+            </el-button>
 
-          <el-button
-            v-if="profile.skin_hash"
-            class="btn-soft-warning btn-icon-swap"
-            @click="clearRoleSkin(profile.id)"
-            size="default"
-          >
-            <span class="btn-label">皮肤</span>
-            <el-icon class="btn-icon"><Close /></el-icon>
-          </el-button>
+            <el-button
+              v-if="profile.skin_hash"
+              class="btn-soft-warning btn-icon-swap"
+              @click="clearRoleSkin(profile.id)"
+              size="default"
+            >
+              <span class="btn-label">皮肤</span>
+              <el-icon class="btn-icon"><Close /></el-icon>
+            </el-button>
 
-          <el-button
-            v-if="profile.cape_hash"
-            class="btn-soft-warning btn-icon-swap"
-            @click="clearRoleCape(profile.id)"
-            size="default"
-          >
-            <span class="btn-label">披风</span>
-            <el-icon class="btn-icon"><Close /></el-icon>
-          </el-button>
+            <el-button
+              v-if="profile.cape_hash"
+              class="btn-soft-warning btn-icon-swap"
+              @click="clearRoleCape(profile.id)"
+              size="default"
+            >
+              <span class="btn-label">披风</span>
+              <el-icon class="btn-icon"><Close /></el-icon>
+            </el-button>
+          </div>
         </div>
       </div>
+
+      <el-empty v-else-if="!loading" description="还没有角色，快去创建吧！" />
     </div>
 
-    <div class="pagination-container">
-      <el-pagination
-        background
-        layout="prev, pager, next"
-        :total="total"
-        :page-size="limit"
-        v-model:current-page="currentPage"
-        @current-change="handlePageChange"
+    <div class="pagination-container" v-if="profiles.length > 0">
+      <CursorPager
+        :count="profiles.length"
+        :loading="pagination.isLoading.value"
+        :disabled-prev="!pagination.canGoPrev.value"
+        :disabled-next="!pagination.canGoNext.value"
+        @prev="handlePrevPage"
+        @next="handleNextPage"
       />
     </div>
 
     <!-- 预览对话框 -->
     <el-dialog
       v-model="showPreviewDialog"
-      width="800px"
       destroy-on-close
       class="dialog-viewer"
       append-to-body
@@ -180,7 +183,7 @@
     </el-dialog>
 
     <!-- 新建角色对话框 -->
-    <el-dialog v-model="showCreateRoleDialog" title="新建角色" width="420px" append-to-body>
+    <el-dialog v-model="showCreateRoleDialog" title="新建角色" class="dialog-form dialog-create-role" append-to-body>
       <el-form label-width="100px">
         <el-form-item label="角色名称">
           <el-input v-model="newRoleName" placeholder="请输入角色名称" maxlength="32" show-word-limit />
@@ -199,7 +202,7 @@
     <el-dialog
       v-model="showMicrosoftLoginDialog"
       title="绑定正版角色"
-      width="400px"
+      class="dialog-form dialog-microsoft-login"
       :close-on-click-modal="false"
       :destroy-on-close="true"
       :before-close="handleMicrosoftDialogClose"
@@ -245,7 +248,7 @@
     <el-dialog 
       v-model="showYggImportDialog" 
       title="从外部皮肤站导入角色" 
-      width="450px" 
+      class="dialog-form dialog-ygg-import"
       append-to-body
       :before-close="handleYggDialogClose"
     >
@@ -266,11 +269,11 @@
 
       <div v-else-if="yggStep === 'select'">
         <p style="margin-bottom: 16px;">请选择要导入的角色：</p>
-        <el-radio-group v-model="selectedYggProfile" class="selection-list">
-          <el-radio 
+        <el-checkbox-group v-model="selectedYggProfiles" class="selection-list">
+          <el-checkbox 
             v-for="p in yggProfiles" 
             :key="p.id" 
-            :label="p.id" 
+            :value="p.id" 
             border 
             class="selection-item"
           >
@@ -278,8 +281,8 @@
               <span class="title">{{ p.name }}</span>
               <span class="subtitle">{{ formatUUID(p.id) }}</span>
             </div>
-          </el-radio>
-        </el-radio-group>
+          </el-checkbox>
+        </el-checkbox-group>
       </div>
 
       <template #footer>
@@ -298,7 +301,7 @@
             type="primary" 
             @click="importYggProfile" 
             :loading="yggLoading"
-            :disabled="!selectedYggProfile"
+            :disabled="selectedYggProfiles.length === 0"
           >
             确认导入
           </el-button>
@@ -309,24 +312,27 @@
 </template>
 
 <script setup>
-import { ref, onMounted, inject, computed } from 'vue'
+import { ref, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Plus, Delete, Close, Check, Select, Warning, Download, Edit } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
+import CursorPager from '@/components/common/CursorPager.vue'
+import { useCursorPagination } from '@/composables/useCursorPagination'
 
 // Inject shared state from AppLayout
-const user = inject('user')
 const fetchMe = inject('fetchMe')
 const isDark = inject('isDark')
 
 const router = useRouter()
 
 const profiles = ref([])
-const total = ref(0)
-const currentPage = ref(1)
 const limit = 12
+const loading = ref(false)
+
+// 游标分页 composable
+const pagination = useCursorPagination(limit)
 
 const showCreateRoleDialog = ref(false)
 const newRoleName = ref('')
@@ -349,7 +355,7 @@ const yggApiUrl = ref('')
 const yggUsername = ref('')
 const yggPassword = ref('')
 const yggProfiles = ref([])
-const selectedYggProfile = ref(null)
+const selectedYggProfiles = ref([])
 const yggLoading = ref(false)
 
 function openPreviewDialog(profile) {
@@ -369,23 +375,45 @@ function texturesUrl(hash) {
 }
 
 async function fetchProfiles() {
+  loading.value = true
   try {
     const params = {
-      page: currentPage.value,
+      cursor: pagination.currentCursor.value,
       limit: limit
     }
     const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
     profiles.value = res.data.items
-    total.value = res.data.total
+    pagination.setPageData(res.data)
   } catch (e) {
     ElMessage.error('加载角色失败')
+  } finally {
+    loading.value = false
   }
 }
 
-function handlePageChange(page) {
-  currentPage.value = page
-  fetchProfiles()
+async function handleNextPage() {
+  await pagination.goToNextPage(async (cursor, limit) => {
+    const params = { cursor, limit }
+    const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
+    profiles.value = res.data.items
+    return res.data
+  })
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function handlePrevPage() {
+  await pagination.goToPrevPage(async (cursor, limit) => {
+    const params = { cursor, limit }
+    const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
+    profiles.value = res.data.items
+    return res.data
+  })
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function refreshFirstPage() {
+  pagination.reset()
+  await fetchProfiles()
 }
 
 async function createRole() {
@@ -396,7 +424,7 @@ async function createRole() {
     newRoleName.value = ''
     showCreateRoleDialog.value = false
     ElMessage.success('创建成功')
-    fetchProfiles()
+    await refreshFirstPage()
     if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('创建失败: ' + (e.response?.data?.detail || e.message))
@@ -408,7 +436,7 @@ async function deleteRole(pid) {
     await axios.delete(`/me/profiles/${pid}`, { headers: authHeaders() })
     ElMessage.success('已删除')
     showPreviewDialog.value = false
-    fetchProfiles()
+    await refreshFirstPage()
     if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('删除失败')
@@ -428,7 +456,7 @@ async function updateRoleName() {
   try {
     await axios.patch(`/me/profiles/${pid}`, { name: newName }, { headers: authHeaders() })
     ElMessage.success('名称已修改')
-    fetchProfiles()
+    await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e) {
     ElMessage.error('修改失败: ' + (e.response?.data?.detail || e.message))
@@ -445,7 +473,7 @@ async function clearRoleSkin(pid) {
     await axios.delete(`/me/profiles/${pid}/skin`, { headers: authHeaders() })
     ElMessage.success('皮肤已清除')
     showPreviewDialog.value = false
-    fetchProfiles()
+    await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e) {
     if (e !== 'cancel') {
@@ -464,7 +492,7 @@ async function clearRoleCape(pid) {
     await axios.delete(`/me/profiles/${pid}/cape`, { headers: authHeaders() })
     ElMessage.success('披风已清除')
     showPreviewDialog.value = false
-    fetchProfiles()
+    await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e) {
     if (e !== 'cancel') {
@@ -571,7 +599,7 @@ async function getYggProfiles() {
       ElMessage.warning('该账户下没有角色')
     } else {
       yggStep.value = 'select'
-      selectedYggProfile.value = yggProfiles.value[0].id
+      selectedYggProfiles.value = yggProfiles.value.map(profile => profile.id)
     }
   } catch (e) {
     ElMessage.error('获取失败: ' + (e.response?.data?.detail || e.message))
@@ -581,21 +609,28 @@ async function getYggProfiles() {
 }
 
 async function importYggProfile() {
-  if (!selectedYggProfile.value) return
-  const profile = yggProfiles.value.find(p => p.id === selectedYggProfile.value)
-  if (!profile) return
+  const selectedProfiles = yggProfiles.value.filter(profile => selectedYggProfiles.value.includes(profile.id))
+  if (selectedProfiles.length === 0) return
 
   try {
     yggLoading.value = true
-    await axios.post('/remote-ygg/import-profile', {
+    const res = await axios.post('/remote-ygg/import-profiles', {
       api_url: yggApiUrl.value,
-      profile_id: profile.id,
-      profile_name: profile.name
+      profiles: selectedProfiles.map(profile => ({
+        profile_id: profile.id,
+        profile_name: profile.name,
+      }))
     }, { headers: authHeaders() })
     
-    ElMessage.success('导入成功')
+    const successCount = res.data?.success_count ?? 0
+    const failureCount = res.data?.failure_count ?? 0
+    if (failureCount > 0) {
+      ElMessage.warning(`已导入 ${successCount} 个角色，${failureCount} 个失败`)
+    } else {
+      ElMessage.success(`成功导入 ${successCount} 个角色`)
+    }
     showYggImportDialog.value = false
-    fetchProfiles()
+    await refreshFirstPage()
     if (fetchMe) fetchMe()
     resetYggImport()
   } catch (e) {
@@ -611,7 +646,7 @@ function resetYggImport() {
   yggUsername.value = ''
   yggPassword.value = ''
   yggProfiles.value = []
-  selectedYggProfile.value = null
+  selectedYggProfiles.value = []
 }
 
 function handleYggDialogClose(done) {
@@ -622,7 +657,7 @@ function handleYggDialogClose(done) {
 }
 
 onMounted(async () => {
-  fetchProfiles()
+  await refreshFirstPage()
   const urlParams = new URLSearchParams(window.location.search)
   const msToken = urlParams.get('ms_token')
   const error = urlParams.get('error')

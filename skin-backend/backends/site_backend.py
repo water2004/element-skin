@@ -10,7 +10,7 @@ from utils.password_utils import hash_password, verify_password, needs_rehash
 from utils.password_utils import validate_strong_password
 from utils.jwt_utils import create_jwt_token
 from utils.email_utils import EmailSender
-from utils.uuid_utils import generate_random_uuid
+from utils.uuid_utils import generate_random_uuid, get_offline_uuid
 from backends.yggdrasil_client import YggdrasilClient, download_texture
 from utils.typing import User, PlayerProfile
 from database_module import Database
@@ -25,6 +25,18 @@ class SiteBackend:
         self.config = config
         self.email_sender = EmailSender(db)
 
+    async def _generate_profile_uuid(self, profile_name: str) -> str:
+        mode = (await self.db.setting.get("profile_uuid_mode", "random") or "random").strip().lower()
+        if mode == "offline":
+            profile_id = get_offline_uuid(profile_name)
+        else:
+            profile_id = generate_random_uuid()
+
+        existing_profile = await self.db.user.get_profile_by_id(profile_id)
+        if existing_profile:
+            raise HTTPException(status_code=400, detail="角色 UUID 冲突，无法新建角色")
+        return profile_id
+
     # ========== Auth & User ==========
 
     async def get_ygg_profiles(self, api_url: str, username: str, password: str):
@@ -37,73 +49,118 @@ class SiteBackend:
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    async def _import_single_ygg_profile(
+        self,
+        user_id: str,
+        api_url: str,
+        profile_id: str,
+        profile_name: str,
+        client: YggdrasilClient,
+    ):
+        profile_data = await client.get_profile_with_textures(profile_id)
+
+        if await self.db.user.get_profile_by_id(profile_id):
+            raise HTTPException(status_code=400, detail="该角色 UUID 已在本地存在，无法导入")
+
+        target_name = profile_name
+        suffix = 1
+        while True:
+            existing = await self.db.user.get_profile_by_name(target_name)
+            if not existing:
+                break
+            target_name = f"{profile_name}_{suffix}"
+            suffix += 1
+            if suffix > 100:
+                raise HTTPException(status_code=400, detail="无法生成唯一的角色名称")
+
+        skin_hash = None
+        skin_model = "default"
+        if profile_data.get("skins"):
+            skin_url = profile_data["skins"][0]["url"]
+            skin_variant = profile_data["skins"][0].get("variant", "classic")
+            skin_model = "slim" if skin_variant == "slim" else "default"
+            try:
+                skin_bytes = await download_texture(skin_url)
+                skin_hash, _ = await self.db.texture.upload(
+                    user_id, skin_bytes, "skin", f"Imported from {api_url}", is_public=False, model=skin_model
+                )
+            except Exception as e:
+                print(f"Failed to download/upload skin: {e}")
+
+        cape_hash = None
+        if profile_data.get("capes"):
+            cape_url = profile_data["capes"][0]["url"]
+            try:
+                cape_bytes = await download_texture(cape_url)
+                cape_hash, _ = await self.db.texture.upload(
+                    user_id, cape_bytes, "cape", f"Imported from {api_url}", is_public=False
+                )
+            except Exception as e:
+                print(f"Failed to download/upload cape: {e}")
+
+        await self.db.user.create_profile(
+            PlayerProfile(profile_id, user_id, target_name, skin_model)
+        )
+
+        if skin_hash:
+            await self.db.user.update_profile_skin(profile_id, skin_hash)
+        if cape_hash:
+            await self.db.user.update_profile_cape(profile_id, cape_hash)
+
+        return {"id": profile_id, "name": target_name}
+
     async def import_ygg_profile(self, user_id: str, api_url: str, profile_id: str, profile_name: str):
         client = YggdrasilClient(api_url)
         try:
-            # 1. Fetch detailed profile with textures
-            profile_data = await client.get_profile_with_textures(profile_id)
-            
-            # 2. Check for conflicts
-            # Check UUID conflict (refuse import if UUID exists)
-            if await self.db.user.get_profile_by_id(profile_id):
-                 raise HTTPException(status_code=400, detail="该角色 UUID 已在本地存在，无法导入")
-
-            # Check if profile name is taken locally
-            # We try to use the original name, but if taken, append a suffix
-            target_name = profile_name
-            suffix = 1
-            while True:
-                existing = await self.db.user.get_profile_by_name(target_name)
-                if not existing:
-                    break
-                target_name = f"{profile_name}_{suffix}"
-                suffix += 1
-                if suffix > 100:
-                     raise HTTPException(status_code=400, detail="无法生成唯一的角色名称")
-            
-            # 3. Download and upload textures
-            skin_hash = None
-            skin_model = "default"
-            if profile_data.get("skins"):
-                skin_url = profile_data["skins"][0]["url"]
-                skin_variant = profile_data["skins"][0].get("variant", "classic")
-                skin_model = "slim" if skin_variant == "slim" else "default"
-                try:
-                    skin_bytes = await download_texture(skin_url)
-                    skin_hash, _ = await self.db.texture.upload(
-                        user_id, skin_bytes, "skin", f"Imported from {api_url}", is_public=False, model=skin_model
-                    )
-                except Exception as e:
-                    print(f"Failed to download/upload skin: {e}")
-
-            cape_hash = None
-            if profile_data.get("capes"):
-                cape_url = profile_data["capes"][0]["url"]
-                try:
-                    cape_bytes = await download_texture(cape_url)
-                    cape_hash, _ = await self.db.texture.upload(
-                        user_id, cape_bytes, "cape", f"Imported from {api_url}", is_public=False
-                    )
-                except Exception as e:
-                    print(f"Failed to download/upload cape: {e}")
-
-            # 4. Create local profile
-            # Use the remote profile_id as the local ID
-            await self.db.user.create_profile(
-                PlayerProfile(profile_id, user_id, target_name, skin_model)
-            )
-            
-            # 5. Apply textures
-            if skin_hash:
-                await self.db.user.update_profile_skin(profile_id, skin_hash)
-            if cape_hash:
-                await self.db.user.update_profile_cape(profile_id, cape_hash)
-
-            return {"id": profile_id, "name": target_name}
+            return await self._import_single_ygg_profile(user_id, api_url, profile_id, profile_name, client)
         except Exception as e:
             if isinstance(e, HTTPException):
                 raise e
             raise HTTPException(status_code=400, detail=str(e))
+
+    async def import_ygg_profiles(self, user_id: str, api_url: str, profiles: List[Dict[str, str]]):
+        if not isinstance(profiles, list):
+            raise HTTPException(status_code=400, detail="profiles must be a list")
+        if not profiles:
+            raise HTTPException(status_code=400, detail="profiles cannot be empty")
+
+        client = YggdrasilClient(api_url)
+        succeeded = []
+        failed = []
+
+        for profile in profiles:
+            profile_id = str(profile.get("profile_id", "")).strip()
+            profile_name = str(profile.get("profile_name", "")).strip()
+            if not profile_id or not profile_name:
+                failed.append({
+                    "profile_id": profile_id,
+                    "profile_name": profile_name,
+                    "detail": "profile_id and profile_name are required",
+                })
+                continue
+
+            try:
+                result = await self._import_single_ygg_profile(user_id, api_url, profile_id, profile_name, client)
+                succeeded.append(result)
+            except HTTPException as exc:
+                failed.append({
+                    "profile_id": profile_id,
+                    "profile_name": profile_name,
+                    "detail": exc.detail,
+                })
+            except Exception as exc:
+                failed.append({
+                    "profile_id": profile_id,
+                    "profile_name": profile_name,
+                    "detail": str(exc),
+                })
+
+        return {
+            "items": succeeded,
+            "success_count": len(succeeded),
+            "failure_count": len(failed),
+            "failed": failed,
+        }
 
     async def send_verification_code(self, email: str, type: str):
         # Check if email verification is enabled
@@ -230,17 +287,6 @@ class SiteBackend:
                     status_code=400, detail="invite code has no remaining uses"
                 )
 
-        user_count = await self.db.user.count()
-        is_first_user = user_count == 0
-        password_hash = hash_password(password)
-        user_id = generate_random_uuid()
-        try:
-            new_user = User(user_id, email, password_hash, is_first_user)
-            new_user.display_name = username
-            await self.db.user.create(new_user)
-        except Exception:
-            raise HTTPException(status_code=400, detail="Email already registered")
-
         base_name = email.split("@")[0]
         base_name = re.sub(r"[^a-zA-Z0-9_]", "_", base_name)[:12]
         profile_name = base_name
@@ -254,7 +300,19 @@ class SiteBackend:
             if suffix > 100:
                 raise HTTPException(status_code=500, detail="无法生成唯一角色名")
 
-        profile_id = generate_random_uuid()
+        profile_id = await self._generate_profile_uuid(profile_name)
+
+        user_count = await self.db.user.count()
+        is_first_user = user_count == 0
+        password_hash = hash_password(password)
+        user_id = generate_random_uuid()
+        try:
+            new_user = User(user_id, email, password_hash, is_first_user)
+            new_user.display_name = username
+            await self.db.user.create(new_user)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Email already registered")
+
         await self.db.user.create_profile(
             PlayerProfile(profile_id, user_id, profile_name, "default")
         )
@@ -398,7 +456,7 @@ class SiteBackend:
         if existing:
             raise HTTPException(status_code=400, detail="角色名已被占用，请换一个名称")
 
-        profile_id = generate_random_uuid()
+        profile_id = await self._generate_profile_uuid(name)
         await self.db.user.create_profile(
             PlayerProfile(profile_id, user_id, name, model)
         )

@@ -30,6 +30,7 @@ class AdminBackend:
             "filing_icp_link": s.get("filing_icp_link", ""),
             "filing_mps": s.get("filing_mps", ""),
             "filing_mps_link": s.get("filing_mps_link", ""),
+            "profile_uuid_mode": s.get("profile_uuid_mode", "random"),
         }
 
     async def get_security_settings(self):
@@ -88,6 +89,7 @@ class AdminBackend:
                 "filing_icp_link",
                 "filing_mps",
                 "filing_mps_link",
+                "profile_uuid_mode",
             ],
             "security": ["rate_limit_enabled", "rate_limit_auth_attempts", "rate_limit_auth_window", "enable_strong_password_check"],
             "auth": ["jwt_expire_days"],
@@ -108,6 +110,11 @@ class AdminBackend:
         for key in allowed_keys[group]:
             if key in body:
                 val = body[key]
+                if key == "profile_uuid_mode":
+                    mode = str(val).strip().lower()
+                    if mode not in ["random", "offline"]:
+                        raise HTTPException(status_code=400, detail="profile_uuid_mode must be random or offline")
+                    val = mode
                 # Special handling for password
                 if key == "smtp_password" and not val:
                     continue
@@ -191,22 +198,6 @@ class AdminBackend:
                 "note": str(entry.get("note", "")).strip(),
             })
         return normalized
-
-    async def get_admin_users(self, limit: int = 15, offset: int = 0):
-        total = await self.db.user.count()
-        users = await self.db.user.list_users(limit=limit, offset=offset)
-        result = []
-        for row in users:
-            profile_count = await self.db.user.count_profiles_by_user(row.id)
-            result.append({
-                "id": row.id,
-                "email": row.email,
-                "display_name": row.display_name or "",
-                "is_admin": bool(row.is_admin),
-                "banned_until": row.banned_until,
-                "profile_count": profile_count,
-            })
-        return {"total": total, "items": result}
 
     async def get_user_info(self, user_id: str) -> Dict[str, Any]:
         user_row = await self.db.user.get_by_id(user_id)

@@ -3,6 +3,8 @@ from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from backends.site_backend import SiteBackend
 from utils.password_utils import verify_password
+from utils.typing import PlayerProfile
+from utils.uuid_utils import get_offline_uuid
 
 @pytest.mark.asyncio
 async def test_site_auth_flow(db_session, test_config):
@@ -128,3 +130,29 @@ async def test_registration_restrictions(db_session, test_config, user_factory):
     with pytest.raises(HTTPException) as exc:
         await backend.register("t2@t.com", "p", "UniqueUser")
     assert "Username already exists" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_create_profile_uses_offline_uuid_when_enabled(db_session, test_config, user_factory):
+    backend = SiteBackend(db_session, test_config)
+    user = await user_factory()
+    await db_session.setting.set("profile_uuid_mode", "offline")
+
+    created = await backend.create_profile(user.id, "OfflinePlayerA", "default")
+    assert created["id"] == get_offline_uuid("OfflinePlayerA")
+
+
+@pytest.mark.asyncio
+async def test_create_profile_rejects_uuid_conflict(db_session, test_config, user_factory):
+    backend = SiteBackend(db_session, test_config)
+    user = await user_factory()
+
+    conflict_id = "abcdabcdabcdabcdabcdabcdabcdabcd"
+    await db_session.user.create_profile(PlayerProfile(conflict_id, user.id, "TakenRole", "default"))
+
+    with patch("backends.site_backend.generate_random_uuid", return_value=conflict_id):
+        with pytest.raises(HTTPException) as exc:
+            await backend.create_profile(user.id, "BrandNewRole", "default")
+
+    assert exc.value.status_code == 400
+    assert exc.value.detail == "角色 UUID 冲突，无法新建角色"

@@ -1,5 +1,6 @@
 import pytest
 from httpx import AsyncClient
+from unittest.mock import patch
 
 @pytest.mark.asyncio
 async def test_api_site_login_success(client, user_factory):
@@ -39,13 +40,13 @@ async def test_api_get_me_profiles_paginated(client, auth_headers, db_session):
         await db_session.user.create_profile(PlayerProfile(f"p_{i}", user_id, f"Player_{i}"))
     
     resp = await client.get("/me/profiles", 
-        params={"page": 1, "limit": 2},
+        params={"limit": 2},
         headers={"Authorization": auth_headers["Authorization"]}
     )
     
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total"] >= 5
+    assert "has_next" in data
     assert len(data["items"]) == 2
 
 @pytest.mark.asyncio
@@ -56,13 +57,13 @@ async def test_api_get_me_textures_paginated(client, auth_headers, db_session):
         await db_session.texture.add_to_library(user_id, f"hash_{i}", "skin", note=f"Note {i}")
     
     resp = await client.get("/me/textures", 
-        params={"page": 1, "limit": 2},
+        params={"limit": 2},
         headers={"Authorization": auth_headers["Authorization"]}
     )
     
     assert resp.status_code == 200
     data = resp.json()
-    assert data["total"] >= 3
+    assert "has_next" in data
     assert len(data["items"]) == 2
     assert "hash" in data["items"][0]
 
@@ -121,6 +122,26 @@ async def test_api_create_profile(client, auth_headers):
     assert resp.status_code == 200
     assert resp.json()["name"] == "ApiPlayer"
 
+
+@pytest.mark.asyncio
+async def test_api_create_profile_uuid_conflict(client, auth_headers, db_session):
+    from utils.typing import PlayerProfile
+
+    conflict_id = "feedfeedfeedfeedfeedfeedfeedfeed"
+    await db_session.user.create_profile(
+        PlayerProfile(conflict_id, auth_headers["X-User-ID"], "TakenApiRole")
+    )
+
+    with patch("backends.site_backend.generate_random_uuid", return_value=conflict_id):
+        resp = await client.post(
+            "/me/profiles",
+            json={"name": "ApiRoleC1", "model": "default"},
+            headers={"Authorization": auth_headers["Authorization"]},
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == "角色 UUID 冲突，无法新建角色"
+
 @pytest.mark.asyncio
 async def test_api_rename_profile(client, auth_headers, db_session):
     """测试重命名角色接口"""
@@ -145,7 +166,10 @@ async def test_api_remote_ygg_import_flow(client, auth_headers, db_session):
     from unittest.mock import patch, AsyncMock
     
     # 1. 测试获取列表
-    mock_profiles = [{"id": "remote_pid", "name": "RemotePlayer"}]
+    mock_profiles = [
+        {"id": "remote_pid_1", "name": "RemotePlayer1"},
+        {"id": "remote_pid_2", "name": "RemotePlayer2"},
+    ]
     with patch("backends.yggdrasil_client.YggdrasilClient.authenticate", new_callable=AsyncMock) as mock_auth:
         mock_auth.return_value = {"availableProfiles": mock_profiles}
         
@@ -174,20 +198,27 @@ async def test_api_remote_ygg_import_flow(client, auth_headers, db_session):
         with patch.object(db_session.texture, "upload", new_callable=AsyncMock) as mock_upload:
             mock_upload.return_value = ("fake_hash", "skin")
             
-            resp = await client.post("/remote-ygg/import-profile",
+            resp = await client.post("/remote-ygg/import-profiles",
                 json={
                     "api_url": "https://remote.com",
-                    "profile_id": "remote_pid",
-                    "profile_name": "RemotePlayer"
+                    "profiles": [
+                        {"profile_id": "remote_pid_1", "profile_name": "RemotePlayer1"},
+                        {"profile_id": "remote_pid_2", "profile_name": "RemotePlayer2"},
+                    ]
                 },
                 headers={"Authorization": auth_headers["Authorization"]}
             )
             
             assert resp.status_code == 200
-            assert "id" in resp.json()
-            
+            data = resp.json()
+            assert data["success_count"] == 2
+            assert data["failure_count"] == 0
+            assert len(data["items"]) == 2
+
             # 验证本地是否创建了角色
-            local_pid = resp.json()["id"]
-            p = await db_session.user.get_profile_by_id(local_pid)
-            assert p.name == "RemotePlayer"
-            assert p.skin_hash == "fake_hash"
+            p1 = await db_session.user.get_profile_by_id("remote_pid_1")
+            p2 = await db_session.user.get_profile_by_id("remote_pid_2")
+            assert p1.name == "RemotePlayer1"
+            assert p2.name == "RemotePlayer2"
+            assert p1.skin_hash == "fake_hash"
+            assert p2.skin_hash == "fake_hash"

@@ -5,6 +5,7 @@ from typing import Optional, Tuple
 import os
 from PIL import Image
 from io import BytesIO
+from utils.pagination import CursorEncoder
 
 # Import from utils, this assumes correct python path
 from utils.image_utils import (
@@ -88,21 +89,47 @@ class TextureModule:
                 )
                 return True
 
-    async def get_for_user(self, user_id: str, texture_type: Optional[str] = None, limit: int = 20, offset: int = 0) -> list[tuple]:
+    async def get_for_user_cursor(self, user_id: str, texture_type: Optional[str] = None, limit: int = 20, last_created_at: int | None = None, last_hash: str | None = None) -> dict:
+        """按created_at+hash游标分页获取用户材质列表"""
+        actual_limit = limit + 1
+        
+        conditions = ["user_id=$1"]
         params = [user_id]
-        query = "SELECT hash, texture_type, note, created_at, model, is_public FROM user_textures WHERE user_id=$1"
         p_idx = 2
         
         if texture_type:
-            query += f" AND texture_type=${p_idx}"
+            conditions.append(f"texture_type=${p_idx}")
             params.append(texture_type)
             p_idx += 1
-            
-        query += f" ORDER BY created_at DESC LIMIT ${p_idx} OFFSET ${p_idx+1}"
-        params.extend([limit, offset])
+        
+        if last_created_at is not None and last_hash:
+            conditions.append(f"(created_at < ${p_idx} OR (created_at = ${p_idx} AND hash < ${p_idx + 1}))")
+            params.extend([last_created_at, last_hash])
+            p_idx += 2
+        
+        query = "SELECT hash, texture_type, note, created_at, model, is_public FROM user_textures WHERE " + " AND ".join(conditions)
+        query += f" ORDER BY created_at DESC, hash DESC LIMIT ${p_idx}"
+        params.append(actual_limit)
         
         rows = await self.db.fetch(query, *params)
-        return [(r[0], r[1], r[2], r[3], r[4], r[5]) for r in rows]
+        
+        has_next = len(rows) > limit
+        items = [{"hash": r[0], "type": r[1], "note": r[2], "created_at": r[3], "model": r[4], "is_public": r[5]} for r in rows[:limit]]
+        
+        next_cursor = None
+        if has_next:
+            last_row = rows[limit]
+            next_cursor = CursorEncoder.encode({
+                "last_created_at": last_row[3],
+                "last_hash": last_row[0]
+            })
+        
+        return {
+            "items": items,
+            "has_next": has_next,
+            "next_cursor": next_cursor,
+            "page_size": len(items),
+        }
 
     async def count_for_user(self, user_id: str, texture_type: Optional[str] = None) -> int:
         params = [user_id]
@@ -185,40 +212,70 @@ class TextureModule:
                     is_public_val, texture_hash, user_id,
                 )
 
-    async def get_from_library(
+    async def get_from_library_cursor(
         self,
         limit: int = 20,
-        offset: int = 0,
         texture_type: Optional[str] = None,
         only_public: bool = True,
-    ) -> list[tuple]:
-        """
-        获取皮肤库中的材质
-        """
-        query = "SELECT skin_hash, texture_type, is_public, uploader, created_at, model, name FROM skin_library"
+        last_created_at: int | None = None,
+        last_skin_hash: str | None = None,
+    ) -> dict:
+        """按created_at+skin_hash游标分页获取公开皮肤库材质"""
+        actual_limit = limit + 1
         conditions = []
         params = []
-        
-        # asyncpg parameters are $1, $2...
         p_idx = 1
 
         if only_public:
-            conditions.append(f"is_public = 1")
+            conditions.append("is_public = 1")
 
         if texture_type:
             conditions.append(f"texture_type = ${p_idx}")
             params.append(texture_type)
             p_idx += 1
 
+        if last_created_at is not None and last_skin_hash:
+            conditions.append(f"(created_at < ${p_idx} OR (created_at = ${p_idx} AND skin_hash < ${p_idx + 1}))")
+            params.extend([last_created_at, last_skin_hash])
+            p_idx += 2
+
+        query = "SELECT skin_hash, texture_type, is_public, uploader, created_at, model, name FROM skin_library"
         if conditions:
             query += " WHERE " + " AND ".join(conditions)
-
-        query += f" ORDER BY created_at DESC LIMIT ${p_idx} OFFSET ${p_idx+1}"
-        params.extend([limit, offset])
+        
+        query += f" ORDER BY created_at DESC, skin_hash DESC LIMIT ${p_idx}"
+        params.append(actual_limit)
 
         rows = await self.db.fetch(query, *params)
-        # skin_hash, texture_type, is_public, uploader, created_at, model, name
-        return [(r[0], r[1], bool(r[2]), r[3], r[4], r[5], r[6]) for r in rows]
+        
+        has_next = len(rows) > limit
+        items = [
+            {
+                "hash": r[0],
+                "type": r[1],
+                "is_public": bool(r[2]),
+                "uploader": r[3],
+                "created_at": r[4],
+                "model": r[5],
+                "name": r[6]
+            }
+            for r in rows[:limit]
+        ]
+        
+        next_cursor = None
+        if has_next:
+            last_row = rows[limit]
+            next_cursor = CursorEncoder.encode({
+                "last_created_at": last_row[4],
+                "last_skin_hash": last_row[0]
+            })
+        
+        return {
+            "items": items,
+            "has_next": has_next,
+            "next_cursor": next_cursor,
+            "page_size": len(items),
+        }
 
     async def count_library(self, texture_type: Optional[str] = None, only_public: bool = True) -> int:
         query = "SELECT COUNT(*) FROM skin_library"

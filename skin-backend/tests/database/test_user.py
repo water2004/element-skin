@@ -50,8 +50,8 @@ async def test_user_management(db_session, user_factory):
     
     # List & Delete
     await user_factory(email="second@test.com")
-    users = await db_session.user.list_users(limit=10, offset=0)
-    assert len(users) == 2
+    users_page = await db_session.user.list_users_cursor(limit=10)
+    assert len(users_page["items"]) == 2
     
     await db_session.user.delete(user.id)
     assert await db_session.user.count() == 1
@@ -68,7 +68,7 @@ async def test_profile_management(db_session, user_factory):
     assert await db_session.user.count_profiles_by_user(user.id) == 1
     
     # Get (paginated)
-    profiles = await db_session.user.get_profiles_by_user(user.id, limit=10, offset=0)
+    profiles = await db_session.user.get_profiles_by_user(user.id, limit=10)
     assert len(profiles) == 1
     assert profiles[0].name == "Player1"
     
@@ -184,8 +184,8 @@ async def test_invite_management(db_session):
     assert updated.used_count == 1
     assert updated.used_by == "used@test.com"
     
-    invites = await db_session.user.list_invites()
-    assert len(invites) == 1
+    invites_page = await db_session.user.list_invites_cursor()
+    assert len(invites_page["items"]) == 1
     
     await db_session.user.delete_invite(code_str)
     assert (await db_session.user.get_invite(code_str)) is None

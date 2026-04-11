@@ -11,7 +11,8 @@ async def test_admin_settings_management(db_session, test_config):
     site_settings = {
         "site_name": "New Test Site",
         "allow_register": False,
-        "max_texture_size": 2048
+        "max_texture_size": 2048,
+        "profile_uuid_mode": "offline",
     }
     await backend.save_settings_group("site", site_settings)
     
@@ -20,6 +21,7 @@ async def test_admin_settings_management(db_session, test_config):
     assert fetched["site_name"] == "New Test Site"
     assert fetched["allow_register"] is False
     assert fetched["max_texture_size"] == 2048
+    assert fetched["profile_uuid_mode"] == "offline"
     
     # 2. 保存安全设置
     security_settings = {
@@ -36,10 +38,10 @@ async def test_admin_user_controls(db_session, test_config, user_factory):
     admin = await user_factory(is_admin=True, username="AdminUser")
     user = await user_factory(is_admin=False, username="NormalUser")
     
-    # 1. 获取用户列表
-    res = await backend.get_admin_users()
-    assert res["total"] >= 2
-    assert len(res["items"]) >= 2
+    # 1. 获取用户列表（cursor）
+    users_page = await db_session.user.list_users_cursor(limit=15)
+    assert users_page["page_size"] >= 2
+    assert len(users_page["items"]) >= 2
     
     # 2. 封禁用户 (先对普通用户操作)
     import time

@@ -98,7 +98,7 @@
     <el-dialog
       v-model="showDeleteDialog"
       title="确认注销账号"
-      width="500px"
+      class="dialog-form"
       :close-on-click-modal="false"
     >
       <el-alert

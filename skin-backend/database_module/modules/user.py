@@ -3,6 +3,7 @@ from utils.typing import User, PlayerProfile, InviteCode, Token, Session, Textur
 import time
 import uuid
 import re
+from utils.pagination import CursorEncoder
 
 class UserModule:
     def __init__(self, db: BaseDB):
@@ -77,12 +78,33 @@ class UserModule:
     async def count(self) -> int:
         return await self.db.fetchval("SELECT COUNT(*) FROM users") or 0
 
-    async def list_users(self, limit: int = 20, offset: int = 0) -> list[User]:
-        rows = await self.db.fetch(
-            "SELECT id, email, display_name, is_admin, banned_until, preferred_language FROM users ORDER BY email LIMIT $1 OFFSET $2",
-            limit, offset,
-        )
-        return [User(r[0], r[1], "", r[3], r[5], r[2], r[4]) for r in rows]
+    async def list_users_cursor(self, limit: int = 20, last_id: str | None = None) -> dict:
+        """按ID游标分页获取用户列表"""
+        actual_limit = limit + 1
+        if last_id:
+            rows = await self.db.fetch(
+                "SELECT id, email, display_name, is_admin, banned_until, preferred_language FROM users WHERE id > $1 ORDER BY id LIMIT $2",
+                last_id, actual_limit
+            )
+        else:
+            rows = await self.db.fetch(
+                "SELECT id, email, display_name, is_admin, banned_until, preferred_language FROM users ORDER BY id LIMIT $1",
+                actual_limit
+            )
+        
+        has_next = len(rows) > limit
+        items = [User(r[0], r[1], "", r[3], r[5], r[2], r[4]) for r in rows[:limit]]
+        
+        next_cursor = None
+        if has_next:
+            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
+        
+        return {
+            "items": items,
+            "has_next": has_next,
+            "next_cursor": next_cursor,
+            "page_size": len(items),
+        }
 
     async def toggle_admin(self, user_id: str) -> int:
         async with self.db.get_conn() as conn:
@@ -131,12 +153,40 @@ class UserModule:
             return PlayerProfile(*row)
         return None
 
-    async def get_profiles_by_user(self, user_id: str, limit: int = 100, offset: int = 0) -> list[PlayerProfile]:
+    async def get_profiles_by_user(self, user_id: str, limit: int = 100) -> list[PlayerProfile]:
         rows = await self.db.fetch(
-            "SELECT id, user_id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE user_id=$1 LIMIT $2 OFFSET $3",
-            user_id, limit, offset,
+            "SELECT id, user_id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE user_id=$1 ORDER BY id LIMIT $2",
+            user_id, limit,
         )
         return [PlayerProfile(*r) for r in rows]
+
+    async def get_profiles_by_user_cursor(self, user_id: str, limit: int = 20, last_id: str | None = None) -> dict:
+        """按ID游标分页获取用户角色列表"""
+        actual_limit = limit + 1
+        if last_id:
+            rows = await self.db.fetch(
+                "SELECT id, user_id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE user_id=$1 AND id > $2 ORDER BY id LIMIT $3",
+                user_id, last_id, actual_limit
+            )
+        else:
+            rows = await self.db.fetch(
+                "SELECT id, user_id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE user_id=$1 ORDER BY id LIMIT $2",
+                user_id, actual_limit
+            )
+        
+        has_next = len(rows) > limit
+        items = [PlayerProfile(*r) for r in rows[:limit]]
+        
+        next_cursor = None
+        if has_next:
+            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
+        
+        return {
+            "items": items,
+            "has_next": has_next,
+            "next_cursor": next_cursor,
+            "page_size": len(items),
+        }
 
     async def create_profile(self, profile: PlayerProfile):
         await self.db.execute(
@@ -176,11 +226,11 @@ class UserModule:
             name, profile_id,
         )
             
-    async def search_profiles_by_names(self, names: list[str], limit: int = 20, offset: int = 0) -> list[PlayerProfile]:
+    async def search_profiles_by_names(self, names: list[str], limit: int = 20) -> list[PlayerProfile]:
         # asyncpg handle array nicely with ANY
         rows = await self.db.fetch(
-            "SELECT id, user_id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE name = ANY($1) LIMIT $2 OFFSET $3",
-            names, limit, offset,
+            "SELECT id, user_id, name, texture_model, skin_hash, cape_hash FROM profiles WHERE name = ANY($1) LIMIT $2",
+            names, limit,
         )
         return [PlayerProfile(*r) for r in rows]
                 
@@ -294,12 +344,40 @@ class UserModule:
     async def count_invites(self) -> int:
         return await self.db.fetchval("SELECT COUNT(*) FROM invites") or 0
 
-    async def list_invites(self, limit: int = 15, offset: int = 0) -> list[InviteCode]:
-        rows = await self.db.fetch(
-            "SELECT code, created_at, used_by, total_uses, used_count, note FROM invites ORDER BY created_at DESC LIMIT $1 OFFSET $2",
-            limit, offset
-        )
-        return [InviteCode(*r) for r in rows]
+    async def list_invites_cursor(self, limit: int = 15, last_created_at: int | None = None, last_code: str | None = None) -> dict:
+        """按created_at+code游标分页获取邀请码列表（时序复合游标）"""
+        actual_limit = limit + 1
+        
+        if last_created_at is not None and last_code:
+            rows = await self.db.fetch(
+                """SELECT code, created_at, used_by, total_uses, used_count, note FROM invites
+                   WHERE (created_at < $1) OR (created_at = $1 AND code < $2)
+                   ORDER BY created_at DESC, code DESC LIMIT $3""",
+                last_created_at, last_code, actual_limit
+            )
+        else:
+            rows = await self.db.fetch(
+                "SELECT code, created_at, used_by, total_uses, used_count, note FROM invites ORDER BY created_at DESC, code DESC LIMIT $1",
+                actual_limit
+            )
+        
+        has_next = len(rows) > limit
+        items = [InviteCode(*r) for r in rows[:limit]]
+        
+        next_cursor = None
+        if has_next:
+            last_row = rows[limit]
+            next_cursor = CursorEncoder.encode({
+                "last_created_at": last_row[1],
+                "last_code": last_row[0]
+            })
+        
+        return {
+            "items": items,
+            "has_next": has_next,
+            "next_cursor": next_cursor,
+            "page_size": len(items),
+        }
 
     async def delete_invite(self, code: str):
         await self.db.execute("DELETE FROM invites WHERE code=$1", code)

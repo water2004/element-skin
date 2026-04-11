@@ -26,8 +26,8 @@ async def test_admin_access_control(client, auth_headers, admin_headers):
     resp_admin = await client.get(endpoint, headers=admin_headers)
     assert resp_admin.status_code == 200
     data = resp_admin.json()
-    assert "total" in data
     assert "items" in data
+    assert "has_next" in data
     assert isinstance(data["items"], list)
 
 @pytest.mark.asyncio

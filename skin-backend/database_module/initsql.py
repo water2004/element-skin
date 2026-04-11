@@ -124,6 +124,7 @@ INSERT INTO settings (key, value) VALUES
 ('microsoft_client_secret', ''),
 ('microsoft_redirect_uri', 'http://localhost:8000/microsoft/callback'),
 ('fallback_strategy', 'serial'),
+('profile_uuid_mode', 'random'),
 ('enable_skin_library', 'true'),
 ('email_verify_enabled', 'false'),
 ('enable_strong_password_check', 'false'),
