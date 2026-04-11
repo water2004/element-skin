@@ -123,6 +123,16 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
             body.get("profile_name"),
         )
 
+    @router.post("/remote-ygg/import-profiles")
+    async def import_ygg_profiles(
+        payload: dict = Depends(get_current_user), body: dict = Body(...)
+    ):
+        return await site_backend.import_ygg_profiles(
+            payload.get("sub"),
+            body.get("api_url"),
+            body.get("profiles", []),
+        )
+
     @router.post("/me/profiles")
     async def create_profile(
         payload: dict = Depends(get_current_user), body: dict = Body(...)

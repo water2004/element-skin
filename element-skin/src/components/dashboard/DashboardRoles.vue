@@ -266,11 +266,11 @@
 
       <div v-else-if="yggStep === 'select'">
         <p style="margin-bottom: 16px;">请选择要导入的角色：</p>
-        <el-radio-group v-model="selectedYggProfile" class="selection-list">
-          <el-radio 
+        <el-checkbox-group v-model="selectedYggProfiles" class="selection-list">
+          <el-checkbox 
             v-for="p in yggProfiles" 
             :key="p.id" 
-            :label="p.id" 
+            :value="p.id" 
             border 
             class="selection-item"
           >
@@ -278,8 +278,8 @@
               <span class="title">{{ p.name }}</span>
               <span class="subtitle">{{ formatUUID(p.id) }}</span>
             </div>
-          </el-radio>
-        </el-radio-group>
+          </el-checkbox>
+        </el-checkbox-group>
       </div>
 
       <template #footer>
@@ -298,7 +298,7 @@
             type="primary" 
             @click="importYggProfile" 
             :loading="yggLoading"
-            :disabled="!selectedYggProfile"
+            :disabled="selectedYggProfiles.length === 0"
           >
             确认导入
           </el-button>
@@ -351,7 +351,7 @@ const yggApiUrl = ref('')
 const yggUsername = ref('')
 const yggPassword = ref('')
 const yggProfiles = ref([])
-const selectedYggProfile = ref(null)
+const selectedYggProfiles = ref([])
 const yggLoading = ref(false)
 
 function openPreviewDialog(profile) {
@@ -592,7 +592,7 @@ async function getYggProfiles() {
       ElMessage.warning('该账户下没有角色')
     } else {
       yggStep.value = 'select'
-      selectedYggProfile.value = yggProfiles.value[0].id
+      selectedYggProfiles.value = yggProfiles.value.map(profile => profile.id)
     }
   } catch (e) {
     ElMessage.error('获取失败: ' + (e.response?.data?.detail || e.message))
@@ -602,19 +602,26 @@ async function getYggProfiles() {
 }
 
 async function importYggProfile() {
-  if (!selectedYggProfile.value) return
-  const profile = yggProfiles.value.find(p => p.id === selectedYggProfile.value)
-  if (!profile) return
+  const selectedProfiles = yggProfiles.value.filter(profile => selectedYggProfiles.value.includes(profile.id))
+  if (selectedProfiles.length === 0) return
 
   try {
     yggLoading.value = true
-    await axios.post('/remote-ygg/import-profile', {
+    const res = await axios.post('/remote-ygg/import-profiles', {
       api_url: yggApiUrl.value,
-      profile_id: profile.id,
-      profile_name: profile.name
+      profiles: selectedProfiles.map(profile => ({
+        profile_id: profile.id,
+        profile_name: profile.name,
+      }))
     }, { headers: authHeaders() })
     
-    ElMessage.success('导入成功')
+    const successCount = res.data?.success_count ?? 0
+    const failureCount = res.data?.failure_count ?? 0
+    if (failureCount > 0) {
+      ElMessage.warning(`已导入 ${successCount} 个角色，${failureCount} 个失败`)
+    } else {
+      ElMessage.success(`成功导入 ${successCount} 个角色`)
+    }
     showYggImportDialog.value = false
     await refreshFirstPage()
     if (fetchMe) fetchMe()
@@ -632,7 +639,7 @@ function resetYggImport() {
   yggUsername.value = ''
   yggPassword.value = ''
   yggProfiles.value = []
-  selectedYggProfile.value = null
+  selectedYggProfiles.value = []
 }
 
 function handleYggDialogClose(done) {
