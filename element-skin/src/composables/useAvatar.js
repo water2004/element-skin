@@ -40,7 +40,8 @@ function _doGenerateAvatar(hash, model = 'default') {
     viewer.zoom = 4.0;
     viewer.autoRotate = false;
 
-    const textureUrl = `/static/textures/${hash}.png`;
+    const base = import.meta.env.BASE_URL;
+    const textureUrl = `${base}static/textures/${hash}.png`.replace(/\/+/g, '/');
     viewer.loadSkin(textureUrl).then(() => {
       viewer.render();
       const base64 = canvas.toDataURL();
@@ -77,7 +78,11 @@ export function getAvatarForHash(hash, model = 'default') {
 }
 
 export function useAvatar() {
-  const texturesUrl = (hash) => `/static/textures/${hash}.png`;
+  const texturesUrl = (hash) => {
+    if (!hash) return '';
+    const base = import.meta.env.BASE_URL;
+    return `${base}static/textures/${hash}.png`.replace(/\/+/g, '/');
+  };
 
   /**
    * Generate 3D headshot and cache it (delegates to shared queue)
