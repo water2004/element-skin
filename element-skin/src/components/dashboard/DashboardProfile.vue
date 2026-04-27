@@ -9,7 +9,9 @@
 
     <el-card class="profile-form-card surface-card animate-card-slide">
       <div class="profile-header">
-        <el-avatar :size="72" class="profile-avatar">{{ emailInitial }}</el-avatar>
+        <el-avatar :shape="customAvatar ? 'square' : 'circle'" :size="72" class="profile-avatar" :src="customAvatar || ''" :class="{ 'has-custom': !!customAvatar }">
+          {{ !customAvatar ? emailInitial : '' }}
+        </el-avatar>
         <div class="profile-meta">
           <h3>{{ user?.display_name || '未设置用户名' }}</h3>
           <p>{{ user?.email }}</p>
@@ -148,6 +150,11 @@ const showDeleteDialog = ref(false)
 const deleteConfirmText = ref('')
 const motionDisabled = ref(localStorage.getItem('motionDisabled') === '1')
 const disableMeowEasterEgg = ref(localStorage.getItem('disableMeowEasterEgg') === '1')
+const customAvatar = ref(localStorage.getItem('user_avatar') || '')
+
+window.addEventListener('avatar-changed', () => {
+  customAvatar.value = localStorage.getItem('user_avatar') || ''
+})
 
 const emailInitial = computed(() => {
   const email = user.value?.email || user.value?.display_name || 'U'
@@ -306,6 +313,15 @@ async function confirmDeleteAccount() {
 .profile-avatar:hover {
   transform: scale(1.1) rotate(5deg);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+.profile-avatar.has-custom {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.profile-avatar.has-custom :deep(img) {
+  object-fit: contain;
 }
 
 .profile-meta h3 {

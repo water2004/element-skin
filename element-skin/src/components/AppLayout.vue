@@ -40,13 +40,17 @@
           <el-popover v-if="isLogged" placement="bottom-end" :width="240" trigger="hover" popper-class="account-popover" :show-arrow="false" :offset="4">
             <template #reference>
               <div class="account-trigger">
-                <el-avatar size="small" class="account-avatar bg-gradient-purple">{{ avatarInitial }}</el-avatar>
+                <el-avatar :shape="customAvatar ? 'square' : 'circle'" size="small" :class="['account-avatar', { 'bg-gradient-purple': !customAvatar, 'has-custom': !!customAvatar }]" :src="customAvatar || ''">
+                  {{ !customAvatar ? avatarInitial : '' }}
+                </el-avatar>
                 <span class="account-name">{{ accountName }}</span>
               </div>
             </template>
             <div class="account-panel surface-card">
               <div class="account-header">
-                <el-avatar :size="48" class="account-avatar bg-gradient-purple">{{ avatarInitial }}</el-avatar>
+                <el-avatar :shape="customAvatar ? 'square' : 'circle'" :size="48" :class="['account-avatar', { 'bg-gradient-purple': !customAvatar, 'has-custom': !!customAvatar }]" :src="customAvatar || ''">
+                  {{ !customAvatar ? avatarInitial : '' }}
+                </el-avatar>
                 <div class="account-meta">
                   <h4>{{ accountName }}</h4>
                   <p>{{ isAdmin ? '管理员' : '普通用户' }}</p>
@@ -247,6 +251,12 @@ const isAdmin = computed(() => user.value?.is_admin || false)
 const accountName = computed(() => user.value?.display_name || user.value?.email || '用户')
 const avatarInitial = computed(() => (accountName.value || 'U').slice(0, 1).toUpperCase())
 
+const customAvatar = ref(localStorage.getItem('user_avatar') || '')
+
+window.addEventListener('avatar-changed', () => {
+  customAvatar.value = localStorage.getItem('user_avatar') || ''
+})
+
 let authTimer = null
 let resizeObserver = null
 
@@ -399,6 +409,11 @@ onUnmounted(() => {
 .account-meta h4 { margin:0; font-size:14px; font-weight:600; color: var(--color-heading); }
 .account-meta p { margin:4px 0 0; font-size:12px; color: var(--color-text-light); }
 .account-actions { display:flex; flex-direction:column; gap:8px; width: 100%; }
+
+.account-avatar.has-custom { background: transparent !important; }
+.account-avatar.has-custom :deep(img) { 
+  object-fit: contain; 
+}
 
 @media (max-width: 1200px) { .nav-priority-6 { display: none !important; } .mobile-nav { display: block; } }
 @media (max-width: 768px) { .desktop-nav { display: none; } }

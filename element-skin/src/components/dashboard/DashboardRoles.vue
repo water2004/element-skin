@@ -147,6 +147,15 @@
           <section class="viewer-section" v-if="selectedProfile.skin_hash || selectedProfile.cape_hash">
             <div class="viewer-section-label">快捷操作</div>
             <div class="apply-row" style="display: flex; gap: 8px;">
+              <el-button
+                v-if="selectedProfile.skin_hash"
+                type="primary"
+                plain
+                style="flex: 1; border-radius: 8px;"
+                @click="setAsAvatar(selectedProfile)"
+              >
+                用作头像
+              </el-button>
               <el-button 
                 v-if="selectedProfile.skin_hash"
                 type="warning" 
@@ -320,6 +329,7 @@ import { Connection, Plus, Delete, Close, Check, Select, Warning, Download, Edit
 import SkinViewer from '@/components/SkinViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import * as skinview3d from 'skinview3d'
 
 // Inject shared state from AppLayout
 const fetchMe = inject('fetchMe')
@@ -498,6 +508,60 @@ async function clearRoleCape(pid) {
     if (e !== 'cancel') {
       ElMessage.error('清除失败: ' + (e.response?.data?.detail || e.message))
     }
+  }
+}
+
+async function setAsAvatar(profile) {
+  if (!profile.skin_hash) return;
+  
+  const loading = ElMessage({
+    message: '正在生成头像...',
+    type: 'info',
+    duration: 0
+  });
+
+  try {
+    const canvas = document.createElement('canvas');
+    const viewer = new skinview3d.SkinViewer({
+      canvas,
+      width: 256,
+      height: 256,
+      model: profile.model || 'default',
+      preserveDrawingBuffer: true
+    });
+    
+    // Hide body parts
+    if (viewer.playerObject.skin.body) viewer.playerObject.skin.body.visible = false;
+    if (viewer.playerObject.skin.leftArm) viewer.playerObject.skin.leftArm.visible = false;
+    if (viewer.playerObject.skin.rightArm) viewer.playerObject.skin.rightArm.visible = false;
+    if (viewer.playerObject.skin.leftLeg) viewer.playerObject.skin.leftLeg.visible = false;
+    if (viewer.playerObject.skin.rightLeg) viewer.playerObject.skin.rightLeg.visible = false;
+    if (viewer.playerObject.cape) viewer.playerObject.cape.visible = false;
+    if (viewer.playerObject.elytra) viewer.playerObject.elytra.visible = false;
+    
+    // Adjust camera to perfectly frame the head
+    viewer.playerWrapper.position.y = -12; // Head center is properly aligned at -12
+    viewer.playerWrapper.rotation.y = 0; // Front view
+    viewer.playerWrapper.rotation.x = 0;
+    viewer.zoom = 4.0; // Zoom in 4x to make the head fill the canvas perfectly without clipping
+    viewer.autoRotate = false;
+    
+    // Await the skin to load fully
+    await viewer.loadSkin(texturesUrl(profile.skin_hash));
+    
+    // Render and save
+    viewer.render();
+    const dataUrl = canvas.toDataURL('image/png');
+    localStorage.setItem('user_avatar', dataUrl);
+    window.dispatchEvent(new Event('avatar-changed'));
+    
+    loading.close();
+    ElMessage.success('已设为头像');
+    viewer.dispose();
+  } catch (error) {
+    loading.close();
+    ElMessage.error('生成头像失败');
+    console.error('Failed to generate avatar:', error);
   }
 }
 
