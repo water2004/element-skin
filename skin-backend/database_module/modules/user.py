@@ -112,6 +112,51 @@ class UserModule:
             "page_size": len(items),
         }
 
+    async def search_users_cursor(self, query: str, limit: int = 20, last_id: str | None = None) -> dict:
+        """按用户名/邮箱/角色名模糊搜索用户（游标分页）
+        
+        使用 EXISTS 子查询而非 LEFT JOIN，在找到第一个匹配 profile 后即短路，
+        避免 JOIN 膨胀和 DISTINCT 去重的性能开销。
+        """
+        actual_limit = limit + 1
+        like_pattern = f"%{query}%"
+        
+        search_condition = """
+            (display_name ILIKE $1 OR email ILIKE $1
+             OR EXISTS (SELECT 1 FROM profiles WHERE profiles.user_id = users.id AND profiles.name ILIKE $1))
+        """
+        
+        if last_id:
+            sql = f"""
+                SELECT id, email, display_name, is_admin, banned_until, preferred_language, avatar_hash
+                FROM users
+                WHERE {search_condition} AND id > $2
+                ORDER BY id LIMIT $3
+            """
+            rows = await self.db.fetch(sql, like_pattern, last_id, actual_limit)
+        else:
+            sql = f"""
+                SELECT id, email, display_name, is_admin, banned_until, preferred_language, avatar_hash
+                FROM users
+                WHERE {search_condition}
+                ORDER BY id LIMIT $2
+            """
+            rows = await self.db.fetch(sql, like_pattern, actual_limit)
+        
+        has_next = len(rows) > limit
+        items = [User(r[0], r[1], "", r[3], r[5], r[2], r[4], r[6]) for r in rows[:limit]]
+        
+        next_cursor = None
+        if has_next:
+            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
+        
+        return {
+            "items": items,
+            "has_next": has_next,
+            "next_cursor": next_cursor,
+            "page_size": len(items),
+        }
+
     async def toggle_admin(self, user_id: str) -> int:
         async with self.db.get_conn() as conn:
             async with conn.transaction():

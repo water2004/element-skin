@@ -9,7 +9,24 @@
         </div>
       </div>
       <div class="page-header-actions">
-        <el-button type="primary" :icon="Refresh" @click="refreshUsers" plain class="hover-lift">
+        <div class="search-bar">
+          <el-input
+            v-model="searchQuery"
+            placeholder="搜索用户名 / 邮箱 / 角色名"
+            clearable
+            @clear="handleClearSearch"
+            @keyup.enter="handleSearch"
+            style="width: 280px;"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <el-button type="primary" @click="handleSearch" class="hover-lift">
+            搜索
+          </el-button>
+        </div>
+        <el-button type="primary" :icon="Refresh" @click="refreshUsersFromFirst" plain class="hover-lift">
           刷新列表
         </el-button>
       </div>
@@ -248,7 +265,7 @@ import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Refresh, UserFilled, Warning, CircleCheck 
+  Refresh, UserFilled, Warning, CircleCheck, Search 
 } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
@@ -257,6 +274,8 @@ const users = ref([])
 const limit = 15
 const usersPagination = useCursorPagination(limit)
 const loading = ref(false)
+const searchQuery = ref('')
+const activeSearchQuery = ref('')  // 当前生效的搜索词（点击搜索按钮后才同步）
 const currentUser = ref(null)
 const userProfiles = ref([])
 const profileLimit = 10
@@ -278,16 +297,19 @@ const presetDurations = [
 
 const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
 
+function buildSearchParams(extraParams = {}) {
+  const params = { limit, ...extraParams }
+  if (activeSearchQuery.value) params.q = activeSearchQuery.value
+  return params
+}
+
 async function refreshUsers() {
   loading.value = true
   usersPagination.isLoading.value = true
   try {
     const res = await axios.get('/admin/users', { 
       headers: authHeaders(),
-      params: {
-        cursor: usersPagination.currentCursor.value,
-        limit: limit
-      }
+      params: buildSearchParams({ cursor: usersPagination.currentCursor.value })
     })
     users.value = res.data.items
     usersPagination.setPageData(res.data)
@@ -308,7 +330,7 @@ async function handleUsersNextPage() {
   await usersPagination.goToNextPage(async (cursor, pageLimit) => {
     const res = await axios.get('/admin/users', {
       headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
+      params: buildSearchParams({ cursor, limit: pageLimit })
     })
     users.value = res.data.items
     return res.data
@@ -319,11 +341,24 @@ async function handleUsersPrevPage() {
   await usersPagination.goToPrevPage(async (cursor, pageLimit) => {
     const res = await axios.get('/admin/users', {
       headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
+      params: buildSearchParams({ cursor, limit: pageLimit })
     })
     users.value = res.data.items
     return res.data
   })
+}
+
+function handleSearch() {
+  activeSearchQuery.value = searchQuery.value.trim()
+  usersPagination.reset()
+  refreshUsers()
+}
+
+function handleClearSearch() {
+  searchQuery.value = ''
+  activeSearchQuery.value = ''
+  usersPagination.reset()
+  refreshUsers()
 }
 
 async function showUserDetailDialog(user) {
@@ -488,6 +523,8 @@ onMounted(refreshUsersFromFirst)
 @import "@/assets/styles/headers.css";
 
 .users-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
+
+.search-bar { display: flex; gap: 8px; align-items: center; }
 
 .user-cell { display: flex; align-items: center; }
 
