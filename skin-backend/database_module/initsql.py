@@ -11,15 +11,18 @@ CREATE TABLE IF NOT EXISTS users (
     preferred_language TEXT DEFAULT 'zh_CN',
     display_name TEXT DEFAULT '',
     is_admin BOOLEAN DEFAULT FALSE,
-    avatar_hash TEXT DEFAULT NULL
+    avatar_hash TEXT DEFAULT NULL,
+    banned_until BIGINT DEFAULT NULL
 );
 
--- 数据库自动迁移：为旧版本 users 表添加 avatar_hash 列
--- PostgreSQL 语法：使用 DO 块检查并添加列
+-- 数据库自动迁移：为旧版本 users 表添加列
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='avatar_hash') THEN
         ALTER TABLE users ADD COLUMN avatar_hash TEXT DEFAULT NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='banned_until') THEN
+        ALTER TABLE users ADD COLUMN banned_until BIGINT DEFAULT NULL;
     END IF;
 END $$;
 
