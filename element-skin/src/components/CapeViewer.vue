@@ -20,6 +20,14 @@
       class="cape-viewer-container"
       :style="{ width: width + 'px', height: height + 'px' }"
     ></div>
+
+    <!-- Toggle Button for Cape/Elytra -->
+    <div v-if="!isStatic" class="equipment-toggle">
+      <el-radio-group v-model="backEquipment" size="small" @change="handleEquipmentChange">
+        <el-radio-button value="cape">披风</el-radio-button>
+        <el-radio-button value="elytra">鞘翅</el-radio-button>
+      </el-radio-group>
+    </div>
   </div>
 </template>
 
@@ -44,6 +52,14 @@ const container = ref(null)
 const snapshotUrl = ref(null)
 let viewer = null
 
+const backEquipment = ref('cape')
+
+function handleEquipmentChange() {
+  if (viewer && !props.isStatic) {
+    viewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
+  }
+}
+
 async function initViewer() {
   if (viewer) {
     viewer.dispose()
@@ -54,7 +70,6 @@ async function initViewer() {
     width: props.width,
     height: props.height,
     skin: null,
-    cape: props.capeUrl,
     preserveDrawingBuffer: props.isStatic
   }
 
@@ -80,7 +95,7 @@ async function initViewer() {
         staticViewer.camera.lookAt(0, 15, 0)
         staticViewer.zoom = 1.3
 
-        await staticViewer.loadCape(props.capeUrl)
+        await staticViewer.loadCape(props.capeUrl, { backEquipment: 'cape' })
         staticViewer.render()
         snapshotUrl.value = tempCanvas.toDataURL('image/png')
       } catch (e) {
@@ -112,6 +127,8 @@ async function initViewer() {
     viewer.autoRotate = true
     viewer.autoRotateSpeed = 0.5
     viewer.zoom = 1.2
+
+    viewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
   }
 }
 
@@ -157,5 +174,14 @@ watch(() => [props.capeUrl, props.isStatic], () => {
   display: block;
   image-rendering: pixelated;
   object-fit: contain;
+}
+
+.equipment-toggle {
+  position: absolute;
+  bottom: 10px;
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  width: 100%;
 }
 </style>
