@@ -23,7 +23,7 @@
 
     <!-- Toggle Button for Cape/Elytra -->
     <div v-if="!isStatic" class="equipment-toggle">
-      <el-radio-group v-model="backEquipment" size="small" @change="handleEquipmentChange">
+      <el-radio-group v-model="backEquipment" size="large" @change="handleEquipmentChange">
         <el-radio-button value="cape">披风</el-radio-button>
         <el-radio-button value="elytra">鞘翅</el-radio-button>
       </el-radio-group>
