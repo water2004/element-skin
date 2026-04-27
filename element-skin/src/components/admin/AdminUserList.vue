@@ -41,7 +41,7 @@
               <el-avatar 
                 :size="32" 
                 :shape="row.avatar_hash ? 'square' : 'circle'" 
-                :class="[row.avatar_hash ? 'has-custom' : 'bg-gradient-purple', 'mr-2']"
+                :class="[row.avatar_hash ? 'has-custom' : 'avatar-fallback', 'mr-2']"
                 :src="userAvatars[row.avatar_hash] || ''"
               >
                 {{ !row.avatar_hash ? (row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase()) : '' }}
@@ -106,7 +106,7 @@
           <el-avatar 
             :size="80" 
             :shape="currentUser.avatar_hash ? 'square' : 'circle'" 
-            :class="currentUser.avatar_hash ? 'has-custom' : 'panel-avatar'"
+            :class="currentUser.avatar_hash ? 'has-custom' : 'avatar-fallback panel-avatar-base'"
             :src="userAvatars[currentUser.avatar_hash] || ''"
           >
             {{ !currentUser.avatar_hash ? currentUser.email.charAt(0).toUpperCase() : '' }}
@@ -610,9 +610,15 @@ watch(currentUser, async (u) => {
   object-fit: contain;
 }
 
-.bg-gradient-purple {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  color: #fff !important;
+.avatar-fallback {
+  background-color: var(--color-background-mute) !important;
+  color: var(--color-text-light) !important;
+}
+
+.panel-avatar-base {
+  font-weight: bold;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 }
 
 .user-cell { display: flex; align-items: center; }
@@ -620,7 +626,6 @@ watch(currentUser, async (u) => {
 /* Dialog Styles */
 .user-detail-container { padding: 24px; }
 .identity-panel { display: flex; align-items: center; gap: 24px; padding: 20px; background: var(--color-background-soft); border-radius: 12px; }
-.panel-avatar { background: var(--el-color-primary-light-3); color: white; font-weight: bold; border: 2px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .panel-info { flex: 1; }
 .panel-name { display: flex; align-items: center; gap: 8px; }
 .panel-name h3 { margin: 0; font-size: 20px; color: var(--color-heading); }
