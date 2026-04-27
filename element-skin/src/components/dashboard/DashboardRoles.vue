@@ -732,7 +732,8 @@ onMounted(async () => {
 @import "@/assets/styles/buttons.css";
 @import "@/assets/styles/cards.css";
 
-.roles-section {
+.roles-grid-container {
+  min-height: 400px;
 }
 
 .role-preview {
