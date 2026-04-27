@@ -71,8 +71,9 @@ async def test_api_get_me_textures_paginated(client, auth_headers, db_session):
 async def test_api_update_me_info(client, auth_headers):
     """测试更新个人信息接口"""
     new_name = "UpdatedDisplayName"
+    new_avatar = "fake_avatar_hash_123"
     resp = await client.patch("/me", 
-        json={"display_name": new_name},
+        json={"display_name": new_name, "avatar_hash": new_avatar},
         headers={"Authorization": auth_headers["Authorization"]}
     )
     
@@ -81,6 +82,7 @@ async def test_api_update_me_info(client, auth_headers):
     # 验证是否生效
     me_resp = await client.get("/me", headers={"Authorization": auth_headers["Authorization"]})
     assert me_resp.json()["display_name"] == new_name
+    assert me_resp.json()["avatar_hash"] == new_avatar
 
 @pytest.mark.asyncio
 async def test_api_texture_upload_multipart(client, auth_headers):
@@ -222,3 +224,26 @@ async def test_api_remote_ygg_import_flow(client, auth_headers, db_session):
             assert p2.name == "RemotePlayer2"
             assert p1.skin_hash == "fake_hash"
             assert p2.skin_hash == "fake_hash"
+
+@pytest.mark.asyncio
+async def test_api_add_texture_from_library_preserves_name(client, auth_headers, db_session):
+    """测试从皮肤库添加材质到衣柜时保留名称"""
+    user_id = auth_headers["X-User-ID"]
+    tex_hash = "lib_tex_hash_123"
+    tex_name = "Epic Skin Name"
+    
+    # 1. 先在皮肤库中创建一个有名称的材质 (通过 db_session 直接操作，模拟库中已有数据)
+    # add_to_library(self, user_id, texture_hash, texture_type, note="", is_public=False, model="default")
+    await db_session.texture.add_to_library(user_id, tex_hash, "skin", note=tex_name, is_public=True, model="default")
+    
+    # 2. 调用添加接口 (POST /me/textures/{hash}/add)
+    resp = await client.post(f"/me/textures/{tex_hash}/add", 
+        headers={"Authorization": auth_headers["Authorization"]}
+    )
+    assert resp.status_code == 200
+    
+    # 3. 验证个人材质列表中是否有该材质，且 note 正确 (user_textures.note 应该等于 skin_library.name)
+    me_tex_resp = await client.get("/me/textures", headers={"Authorization": auth_headers["Authorization"]})
+    items = me_tex_resp.json()["items"]
+    assert any(item["hash"] == tex_hash and item["note"] == tex_name for item in items)
+

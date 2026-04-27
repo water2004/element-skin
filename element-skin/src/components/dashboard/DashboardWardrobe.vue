@@ -521,7 +521,8 @@ onMounted(() => {
 @import "@/assets/styles/cards.css";
 @import "@/assets/styles/tags.css";
 
-.wardrobe-section {
+.wardrobe-grid-container {
+  min-height: 400px;
 }
 
 .clickable-card {

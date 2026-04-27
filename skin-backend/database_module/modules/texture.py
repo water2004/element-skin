@@ -303,13 +303,14 @@ class TextureModule:
             async with conn.transaction():
                 # 获取材质信息
                 row = await conn.fetchrow(
-                    "SELECT texture_type, model, uploader FROM skin_library WHERE skin_hash = $1", texture_hash
+                    "SELECT texture_type, model, uploader, name FROM skin_library WHERE skin_hash = $1", texture_hash
                 )
                 if not row:
                     return False
                 texture_type = row[0]
                 model = row[1]
                 uploader = row[2]
+                name = row[3] or ""
             
                 created_at = int(time.time() * 1000)
                 
@@ -317,7 +318,7 @@ class TextureModule:
                 is_public = 1 if uploader == user_id else 2
                 
                 await conn.execute(
-                    "INSERT INTO user_textures (user_id, hash, texture_type, model, is_public, created_at) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT DO NOTHING",
-                    user_id, texture_hash, texture_type, model, is_public, created_at,
+                    "INSERT INTO user_textures (user_id, hash, texture_type, note, model, is_public, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
+                    user_id, texture_hash, texture_type, name, model, is_public, created_at,
                 )
                 return True

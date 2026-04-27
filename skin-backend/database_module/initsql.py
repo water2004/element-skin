@@ -11,8 +11,21 @@ CREATE TABLE IF NOT EXISTS users (
     preferred_language TEXT DEFAULT 'zh_CN',
     display_name TEXT DEFAULT '',
     is_admin BOOLEAN DEFAULT FALSE,
+    avatar_hash TEXT DEFAULT NULL,
     banned_until BIGINT DEFAULT NULL
 );
+
+-- 数据库自动迁移：为旧版本 users 表添加列
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='avatar_hash') THEN
+        ALTER TABLE users ADD COLUMN avatar_hash TEXT DEFAULT NULL;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='banned_until') THEN
+        ALTER TABLE users ADD COLUMN banned_until BIGINT DEFAULT NULL;
+    END IF;
+END $$;
+
 
 -- 创建角色表
 CREATE TABLE IF NOT EXISTS profiles (

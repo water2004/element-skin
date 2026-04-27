@@ -9,7 +9,9 @@
 
     <el-card class="profile-form-card surface-card animate-card-slide">
       <div class="profile-header">
-        <el-avatar :size="72" class="profile-avatar">{{ emailInitial }}</el-avatar>
+        <el-avatar :shape="customAvatar ? 'square' : 'circle'" :size="72" class="profile-avatar" :src="customAvatar || ''" :class="{ 'has-custom': !!customAvatar }">
+          {{ !customAvatar ? emailInitial : '' }}
+        </el-avatar>
         <div class="profile-meta">
           <h3>{{ user?.display_name || '未设置用户名' }}</h3>
           <p>{{ user?.email }}</p>
@@ -137,6 +139,9 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Clock, Check, Delete } from '@element-plus/icons-vue'
+import { useAvatar } from '@/composables/useAvatar'
+
+const { currentAvatarImg: customAvatar } = useAvatar()
 
 // Inject shared state from AppLayout
 const user = inject('user')
@@ -306,6 +311,15 @@ async function confirmDeleteAccount() {
 .profile-avatar:hover {
   transform: scale(1.1) rotate(5deg);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+}
+
+.profile-avatar.has-custom {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.profile-avatar.has-custom :deep(img) {
+  object-fit: contain;
 }
 
 .profile-meta h3 {

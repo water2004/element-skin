@@ -7,7 +7,7 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 const isLowMemory = process.env.BUILD_MODE === 'low-memory'
-const appVersion = 'v2.1.3'
+const appVersion = 'v2.2.0'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -26,15 +26,15 @@ export default defineConfig({
           const base = process.env.VITE_BASE_PATH || '/'
           const url = req.url || ''
           if (!url.startsWith(base)) return next()
-          
+
           const relativeUrl = url.slice(base.length - 1) // 保持以 / 开头
           const staticMatch = relativeUrl.match(/^\/static\/(textures|carousel)\/(.+)$/)
-          
+
           if (staticMatch) {
             const [, type, filename] = staticMatch
             // 映射到后端目录
             const filePath = path.resolve(__dirname, `../skin-backend/${type}/${filename.split('?')[0]}`)
-            
+
             if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
               res.setHeader('Content-Type', type === 'textures' ? 'image/png' : 'image/jpeg')
               res.end(fs.readFileSync(filePath))

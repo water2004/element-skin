@@ -92,3 +92,43 @@ async def test_api_admin_invite_codes(client, admin_headers):
     # 3. 删除邀请码
     resp_del = await client.delete(f"/admin/invites/{code}", headers={"Authorization": admin_headers["Authorization"]})
     assert resp_del.status_code == 200
+
+@pytest.mark.asyncio
+async def test_api_admin_search_users(client, admin_headers, user_factory, db_session):
+    """测试管理员搜索用户接口"""
+    # 准备测试数据
+    u1 = await user_factory(username="SearchUser1", email="SearchUser1@example.com")
+    u2 = await user_factory(username="SearchUser2", email="SearchUser2@example.com")
+    
+    # 给 u2 创建一个角色
+    from utils.typing import PlayerProfile
+    await db_session.user.create_profile(PlayerProfile("p_search_test", u2.id, "KnightRole"))
+    
+    # 1. 按用户名搜索
+    resp = await client.get("/admin/users", 
+        params={"q": "SearchUser1"},
+        headers={"Authorization": admin_headers["Authorization"]}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["email"] == "SearchUser1@example.com"
+    
+    # 2. 按角色名搜索
+    resp = await client.get("/admin/users", 
+        params={"q": "Knight"},
+        headers={"Authorization": admin_headers["Authorization"]}
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["items"]) >= 1
+    assert any(item["id"] == u2.id for item in data["items"])
+    
+    # 3. 搜索不存在的内容
+    resp = await client.get("/admin/users", 
+        params={"q": "NonExistentUserXYZ"},
+        headers={"Authorization": admin_headers["Authorization"]}
+    )
+    assert resp.status_code == 200
+    assert len(resp.json()["items"]) == 0
+

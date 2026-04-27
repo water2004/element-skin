@@ -214,6 +214,7 @@ class AdminBackend:
             "display_name": user_row.display_name,
             "is_admin": bool(user_row.is_admin),
             "banned_until": user_row.banned_until,
+            "avatar_hash": user_row.avatar_hash,
             "profile_count": profile_count,
             "texture_count": texture_count,
         }

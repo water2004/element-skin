@@ -337,6 +337,7 @@ class SiteBackend:
             "display_name": user_row.display_name,
             "is_admin": bool(user_row.is_admin),
             "banned_until": user_row.banned_until,
+            "avatar_hash": user_row.avatar_hash,
             "profile_count": profile_count,
             "texture_count": texture_count,
         }
@@ -376,6 +377,10 @@ class SiteBackend:
             await self.db.user.update_preferred_language(
                 user_id, data["preferred_language"]
             )
+
+        if "avatar_hash" in data:
+            # allow None/null to clear avatar
+            await self.db.user.update_avatar_hash(user_id, data["avatar_hash"])
 
         return True
 

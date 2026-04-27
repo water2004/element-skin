@@ -147,6 +147,15 @@
           <section class="viewer-section" v-if="selectedProfile.skin_hash || selectedProfile.cape_hash">
             <div class="viewer-section-label">快捷操作</div>
             <div class="apply-row" style="display: flex; gap: 8px;">
+              <el-button
+                v-if="selectedProfile.skin_hash"
+                type="primary"
+                plain
+                style="flex: 1; border-radius: 8px;"
+                @click="setAsAvatar(selectedProfile)"
+              >
+                用作头像
+              </el-button>
               <el-button 
                 v-if="selectedProfile.skin_hash"
                 type="warning" 
@@ -320,6 +329,10 @@ import { Connection, Plus, Delete, Close, Check, Select, Warning, Download, Edit
 import SkinViewer from '@/components/SkinViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import * as skinview3d from 'skinview3d'
+import { useAvatar } from '@/composables/useAvatar'
+
+const { setAvatar } = useAvatar()
 
 // Inject shared state from AppLayout
 const fetchMe = inject('fetchMe')
@@ -498,6 +511,26 @@ async function clearRoleCape(pid) {
     if (e !== 'cancel') {
       ElMessage.error('清除失败: ' + (e.response?.data?.detail || e.message))
     }
+  }
+}
+
+async function setAsAvatar(profile) {
+  if (!profile.skin_hash) return;
+  
+  const loadingMsg = ElMessage({
+    message: '正在设置头像...',
+    type: 'info',
+    duration: 0
+  });
+
+  try {
+    await setAvatar(profile.skin_hash, profile.model || 'default');
+    loadingMsg.close();
+    ElMessage.success('已设为头像');
+  } catch (error) {
+    loadingMsg.close();
+    ElMessage.error('设置头像失败');
+    console.error('Failed to set avatar:', error);
   }
 }
 
@@ -699,7 +732,8 @@ onMounted(async () => {
 @import "@/assets/styles/buttons.css";
 @import "@/assets/styles/cards.css";
 
-.roles-section {
+.roles-grid-container {
+  min-height: 400px;
 }
 
 .role-preview {

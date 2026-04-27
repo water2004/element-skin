@@ -9,10 +9,28 @@
         </div>
       </div>
       <div class="page-header-actions">
-        <el-button type="primary" :icon="Refresh" @click="refreshUsers" plain class="hover-lift">
+        <el-button type="primary" :icon="Refresh" @click="refreshUsersFromFirst" plain class="hover-lift">
           刷新列表
         </el-button>
       </div>
+    </div>
+
+    <div class="search-bar-container">
+      <el-input
+        v-model="searchQuery"
+        placeholder="搜索用户名 / 邮箱 / 角色名"
+        clearable
+        @clear="handleClearSearch"
+        @keyup.enter="handleSearch"
+        size="large"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+        <template #append>
+          <el-button :icon="Search" @click="handleSearch">搜索</el-button>
+        </template>
+      </el-input>
     </div>
 
     <el-card class="surface-card" shadow="never">
@@ -20,7 +38,14 @@
         <el-table-column prop="display_name" label="用户名" min-width="150">
           <template #default="{ row }">
             <div class="user-cell">
-              <el-avatar :size="32" class="mr-2">{{ row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase() }}</el-avatar>
+              <el-avatar 
+                :size="32" 
+                :shape="row.avatar_hash ? 'square' : 'circle'" 
+                :class="[row.avatar_hash ? 'has-custom' : 'avatar-fallback', 'mr-2']"
+                :src="userAvatars[row.avatar_hash] || ''"
+              >
+                {{ !row.avatar_hash ? (row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase()) : '' }}
+              </el-avatar>
               <span>{{ row.display_name || '未设置' }}</span>
             </div>
           </template>
@@ -35,17 +60,16 @@
         </el-table-column>
         <el-table-column label="角色数" width="100" align="center">
           <template #default="{ row }">
-            <el-badge :value="row.profile_count || 0" :type="row.profile_count > 0 ? 'primary' : 'info'" class="profile-badge" />
+            <span class="count-text">{{ row.profile_count || 0 }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="管理操作" width="120" fixed="right" align="center">
+        <el-table-column label="管理操作" width="120" align="center">
           <template #default="{ row }">
             <el-button
               size="small"
               type="primary"
               @click="showUserDetailDialog(row)"
-              plain
-              class="hover-lift"
+              class=""
             >
               管理
             </el-button>
@@ -78,8 +102,13 @@
       <div v-if="currentUser" class="user-detail-container">
         <!-- User Identity Panel -->
         <div class="identity-panel mb-6">
-          <el-avatar :size="80" class="panel-avatar">
-            {{ currentUser.email.charAt(0).toUpperCase() }}
+          <el-avatar 
+            :size="80" 
+            :shape="currentUser.avatar_hash ? 'square' : 'circle'" 
+            :class="currentUser.avatar_hash ? 'has-custom' : 'avatar-fallback panel-avatar-base'"
+            :src="userAvatars[currentUser.avatar_hash] || ''"
+          >
+            {{ !currentUser.avatar_hash ? currentUser.email.charAt(0).toUpperCase() : '' }}
           </el-avatar>
           <div class="panel-info">
             <div class="panel-name">
@@ -244,19 +273,23 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
-  Refresh, UserFilled, Warning, CircleCheck 
+  Refresh, UserFilled, Warning, CircleCheck, Search 
 } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
+import { getAvatarForHash } from '@/composables/useAvatar'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 
 const users = ref([])
 const limit = 15
 const usersPagination = useCursorPagination(limit)
 const loading = ref(false)
+const searchQuery = ref('')
+const activeSearchQuery = ref('')  // 当前生效的搜索词（点击搜索按钮后才同步）
+const userAvatars = reactive({})   // hash -> base64 avatar image cache
 const currentUser = ref(null)
 const userProfiles = ref([])
 const profileLimit = 10
@@ -278,16 +311,19 @@ const presetDurations = [
 
 const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
 
+function buildSearchParams(extraParams = {}) {
+  const params = { limit, ...extraParams }
+  if (activeSearchQuery.value) params.q = activeSearchQuery.value
+  return params
+}
+
 async function refreshUsers() {
   loading.value = true
   usersPagination.isLoading.value = true
   try {
     const res = await axios.get('/admin/users', { 
       headers: authHeaders(),
-      params: {
-        cursor: usersPagination.currentCursor.value,
-        limit: limit
-      }
+      params: buildSearchParams({ cursor: usersPagination.currentCursor.value })
     })
     users.value = res.data.items
     usersPagination.setPageData(res.data)
@@ -304,11 +340,21 @@ async function refreshUsersFromFirst() {
   await refreshUsers()
 }
 
+/** Load avatars for all users on the current page (sequentially, one WebGL at a time) */
+async function loadAvatarsForUsers(userList) {
+  for (const u of userList) {
+    if (u.avatar_hash && !userAvatars[u.avatar_hash]) {
+      const img = await getAvatarForHash(u.avatar_hash)
+      if (img) userAvatars[u.avatar_hash] = img
+    }
+  }
+}
+
 async function handleUsersNextPage() {
   await usersPagination.goToNextPage(async (cursor, pageLimit) => {
     const res = await axios.get('/admin/users', {
       headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
+      params: buildSearchParams({ cursor, limit: pageLimit })
     })
     users.value = res.data.items
     return res.data
@@ -319,11 +365,24 @@ async function handleUsersPrevPage() {
   await usersPagination.goToPrevPage(async (cursor, pageLimit) => {
     const res = await axios.get('/admin/users', {
       headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
+      params: buildSearchParams({ cursor, limit: pageLimit })
     })
     users.value = res.data.items
     return res.data
   })
+}
+
+function handleSearch() {
+  activeSearchQuery.value = searchQuery.value.trim()
+  usersPagination.reset()
+  refreshUsers()
+}
+
+function handleClearSearch() {
+  searchQuery.value = ''
+  activeSearchQuery.value = ''
+  usersPagination.reset()
+  refreshUsers()
 }
 
 async function showUserDetailDialog(user) {
@@ -473,6 +532,19 @@ const formatBanUntilTime = () => {
 }
 
 onMounted(refreshUsersFromFirst)
+
+// Watch users list changes to load avatars
+watch(users, (newUsers) => {
+  if (newUsers?.length) loadAvatarsForUsers(newUsers)
+})
+
+// When dialog opens and user has avatar_hash, ensure it's loaded
+watch(currentUser, async (u) => {
+  if (u?.avatar_hash && !userAvatars[u.avatar_hash]) {
+    const img = await getAvatarForHash(u.avatar_hash)
+    if (img) userAvatars[u.avatar_hash] = img
+  }
+})
 </script>
 
 <style>
@@ -489,12 +561,88 @@ onMounted(refreshUsersFromFirst)
 
 .users-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
 
+.search-bar-container {
+  margin-bottom: 16px;
+  display: flex;
+}
+
+.search-bar-container :deep(.el-input-group) {
+  display: flex;
+  align-items: stretch;
+}
+
+.search-bar-container :deep(.el-input-group__append) {
+  background: var(--el-color-primary);
+  color: #fff;
+  border-color: var(--el-color-primary);
+  cursor: pointer;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s ease;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.search-bar-container :deep(.el-input-group__append:hover) {
+  background: var(--el-color-primary-light-3);
+  border-color: var(--el-color-primary-light-3);
+  opacity: 0.9;
+}
+
+.search-bar-container :deep(.el-input-group__append .el-button) {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  height: 100%;
+}
+
+.has-custom, .el-avatar.has-custom {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.count-text {
+  font-weight: 600;
+  color: var(--color-text);
+  font-family: var(--el-font-family-mono);
+  background: var(--color-background-soft);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.modern-table :deep(.el-table__inner-wrapper::before) {
+  display: none;
+}
+
+.modern-table :deep(.el-table__row) {
+  transition: background-color 0.3s ease;
+}
+
+.has-custom :deep(img) {
+  object-fit: contain;
+}
+
+.avatar-fallback {
+  background-color: var(--color-background-mute) !important;
+  color: var(--color-text-light) !important;
+}
+
+.panel-avatar-base {
+  font-weight: bold;
+  border: 2px solid #fff;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
 .user-cell { display: flex; align-items: center; }
 
 /* Dialog Styles */
 .user-detail-container { padding: 24px; }
 .identity-panel { display: flex; align-items: center; gap: 24px; padding: 20px; background: var(--color-background-soft); border-radius: 12px; }
-.panel-avatar { background: var(--el-color-primary-light-3); color: white; font-weight: bold; border: 2px solid #fff; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
 .panel-info { flex: 1; }
 .panel-name { display: flex; align-items: center; gap: 8px; }
 .panel-name h3 { margin: 0; font-size: 20px; color: var(--color-heading); }

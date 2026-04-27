@@ -113,9 +113,10 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
     async def get_admin_users(
         cursor: str | None = None,
         limit: int = 15,
+        q: str | None = None,
         payload: dict = Depends(admin_required)
     ):
-        """获取用户列表（仅支持游标分页）"""
+        """获取用户列表（支持搜索和游标分页）"""
         from utils.pagination import CursorEncoder
 
         last_id = None
@@ -125,6 +126,8 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
                 raise HTTPException(status_code=400, detail="Invalid cursor")
             last_id = cursor_data["last_id"]
 
+        if q and q.strip():
+            return await db.user.search_users_cursor(query=q.strip(), limit=limit, last_id=last_id)
         return await db.user.list_users_cursor(limit=limit, last_id=last_id)
 
     @router.get("/admin/users/{user_id}")
