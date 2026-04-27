@@ -6,17 +6,15 @@ import axios from 'axios';
 const currentAvatarImg = ref(null);
 const avatarHash = ref(null);
 
-export function useAvatar() {
-  const texturesUrl = (hash) => `/static/textures/${hash}.png`;
+// Sequential generation queue — ensures only ONE WebGL context exists at a time
+let _generationQueue = Promise.resolve();
 
-  /**
-   * Generate 3D headshot and cache it
-   * @param {string} hash - Skin texture hash
-   * @param {string} model - 'default' or 'slim'
-   */
-  async function generateAndCacheAvatar(hash, model = 'default') {
-    if (!hash) return null;
-
+/**
+ * Generate a 3D headshot from a skin hash, using a single WebGL instance.
+ * This is the low-level generator; callers should use getAvatarForHash() instead.
+ */
+function _doGenerateAvatar(hash, model = 'default') {
+  return new Promise((resolve) => {
     const canvas = document.createElement('canvas');
     const viewer = new skinview3d.SkinViewer({
       canvas,
@@ -42,21 +40,50 @@ export function useAvatar() {
     viewer.zoom = 4.0;
     viewer.autoRotate = false;
 
-    try {
-      await viewer.loadSkin(texturesUrl(hash));
-      // Ensure one frame is rendered
+    const textureUrl = `/static/textures/${hash}.png`;
+    viewer.loadSkin(textureUrl).then(() => {
       viewer.render();
       const base64 = canvas.toDataURL();
-      
-      // Save to localStorage
       localStorage.setItem(`avatar_cache_${hash}`, base64);
-      return base64;
-    } catch (e) {
-      console.error('Failed to generate avatar:', e);
-      return null;
-    } finally {
       viewer.dispose();
-    }
+      resolve(base64);
+    }).catch((e) => {
+      console.error('Failed to generate avatar for hash', hash, e);
+      viewer.dispose();
+      resolve(null);
+    });
+  });
+}
+
+/**
+ * Get avatar image for any texture hash.
+ * Returns cached base64 from localStorage instantly, or generates sequentially.
+ * Safe to call many times — WebGL instances are serialized via a promise queue.
+ *
+ * @param {string} hash - Skin texture hash
+ * @param {string} [model='default'] - 'default' or 'slim'
+ * @returns {Promise<string|null>} base64 image or null
+ */
+export function getAvatarForHash(hash, model = 'default') {
+  if (!hash) return Promise.resolve(null);
+
+  const cached = localStorage.getItem(`avatar_cache_${hash}`);
+  if (cached) return Promise.resolve(cached);
+
+  // Enqueue generation to avoid concurrent WebGL contexts
+  const task = _generationQueue.then(() => _doGenerateAvatar(hash, model));
+  _generationQueue = task.catch(() => {});  // swallow errors to keep queue alive
+  return task;
+}
+
+export function useAvatar() {
+  const texturesUrl = (hash) => `/static/textures/${hash}.png`;
+
+  /**
+   * Generate 3D headshot and cache it (delegates to shared queue)
+   */
+  async function generateAndCacheAvatar(hash, model = 'default') {
+    return getAvatarForHash(hash, model);
   }
 
   /**
@@ -108,3 +135,4 @@ export function useAvatar() {
     setAvatar
   };
 }
+

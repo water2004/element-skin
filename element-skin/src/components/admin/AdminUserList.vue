@@ -9,27 +9,28 @@
         </div>
       </div>
       <div class="page-header-actions">
-        <div class="search-bar">
-          <el-input
-            v-model="searchQuery"
-            placeholder="搜索用户名 / 邮箱 / 角色名"
-            clearable
-            @clear="handleClearSearch"
-            @keyup.enter="handleSearch"
-            style="width: 280px;"
-          >
-            <template #prefix>
-              <el-icon><Search /></el-icon>
-            </template>
-          </el-input>
-          <el-button type="primary" @click="handleSearch" class="hover-lift">
-            搜索
-          </el-button>
-        </div>
         <el-button type="primary" :icon="Refresh" @click="refreshUsersFromFirst" plain class="hover-lift">
           刷新列表
         </el-button>
       </div>
+    </div>
+
+    <div class="search-bar-container">
+      <el-input
+        v-model="searchQuery"
+        placeholder="搜索用户名 / 邮箱 / 角色名"
+        clearable
+        @clear="handleClearSearch"
+        @keyup.enter="handleSearch"
+        size="large"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+        <template #append>
+          <el-button :icon="Search" @click="handleSearch">搜索</el-button>
+        </template>
+      </el-input>
     </div>
 
     <el-card class="surface-card" shadow="never">
@@ -37,7 +38,9 @@
         <el-table-column prop="display_name" label="用户名" min-width="150">
           <template #default="{ row }">
             <div class="user-cell">
-              <el-avatar :size="32" class="mr-2">{{ row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase() }}</el-avatar>
+              <el-avatar :size="32" :shape="userAvatars[row.avatar_hash] ? 'square' : 'circle'" :src="userAvatars[row.avatar_hash] || ''" class="mr-2">
+                {{ row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase() }}
+              </el-avatar>
               <span>{{ row.display_name || '未设置' }}</span>
             </div>
           </template>
@@ -95,7 +98,7 @@
       <div v-if="currentUser" class="user-detail-container">
         <!-- User Identity Panel -->
         <div class="identity-panel mb-6">
-          <el-avatar :size="80" class="panel-avatar">
+          <el-avatar :size="80" :shape="userAvatars[currentUser.avatar_hash] ? 'square' : 'circle'" :src="userAvatars[currentUser.avatar_hash] || ''" class="panel-avatar">
             {{ currentUser.email.charAt(0).toUpperCase() }}
           </el-avatar>
           <div class="panel-info">
@@ -261,13 +264,14 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { 
   Refresh, UserFilled, Warning, CircleCheck, Search 
 } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
+import { getAvatarForHash } from '@/composables/useAvatar'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 
 const users = ref([])
@@ -276,6 +280,7 @@ const usersPagination = useCursorPagination(limit)
 const loading = ref(false)
 const searchQuery = ref('')
 const activeSearchQuery = ref('')  // 当前生效的搜索词（点击搜索按钮后才同步）
+const userAvatars = reactive({})   // hash -> base64 avatar image cache
 const currentUser = ref(null)
 const userProfiles = ref([])
 const profileLimit = 10
@@ -324,6 +329,16 @@ async function refreshUsers() {
 async function refreshUsersFromFirst() {
   usersPagination.reset()
   await refreshUsers()
+}
+
+/** Load avatars for all users on the current page (sequentially, one WebGL at a time) */
+async function loadAvatarsForUsers(userList) {
+  for (const u of userList) {
+    if (u.avatar_hash && !userAvatars[u.avatar_hash]) {
+      const img = await getAvatarForHash(u.avatar_hash)
+      if (img) userAvatars[u.avatar_hash] = img
+    }
+  }
 }
 
 async function handleUsersNextPage() {
@@ -508,6 +523,19 @@ const formatBanUntilTime = () => {
 }
 
 onMounted(refreshUsersFromFirst)
+
+// Watch users list changes to load avatars
+watch(users, (newUsers) => {
+  if (newUsers?.length) loadAvatarsForUsers(newUsers)
+})
+
+// When dialog opens and user has avatar_hash, ensure it's loaded
+watch(currentUser, async (u) => {
+  if (u?.avatar_hash && !userAvatars[u.avatar_hash]) {
+    const img = await getAvatarForHash(u.avatar_hash)
+    if (img) userAvatars[u.avatar_hash] = img
+  }
+})
 </script>
 
 <style>
@@ -524,7 +552,21 @@ onMounted(refreshUsersFromFirst)
 
 .users-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
 
-.search-bar { display: flex; gap: 8px; align-items: center; }
+.search-bar-container {
+  margin-bottom: 16px;
+}
+
+.search-bar-container :deep(.el-input-group__append) {
+  background: var(--el-color-primary);
+  color: #fff;
+  border-color: var(--el-color-primary);
+  cursor: pointer;
+}
+
+.search-bar-container :deep(.el-input-group__append:hover) {
+  background: var(--el-color-primary-light-3);
+  border-color: var(--el-color-primary-light-3);
+}
 
 .user-cell { display: flex; align-items: center; }
 
