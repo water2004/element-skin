@@ -330,6 +330,9 @@ import SkinViewer from '@/components/SkinViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import * as skinview3d from 'skinview3d'
+import { useAvatar } from '@/composables/useAvatar'
+
+const { setAvatar } = useAvatar()
 
 // Inject shared state from AppLayout
 const fetchMe = inject('fetchMe')
@@ -514,54 +517,20 @@ async function clearRoleCape(pid) {
 async function setAsAvatar(profile) {
   if (!profile.skin_hash) return;
   
-  const loading = ElMessage({
-    message: '正在生成头像...',
+  const loadingMsg = ElMessage({
+    message: '正在设置头像...',
     type: 'info',
     duration: 0
   });
 
   try {
-    const canvas = document.createElement('canvas');
-    const viewer = new skinview3d.SkinViewer({
-      canvas,
-      width: 256,
-      height: 256,
-      model: profile.model || 'default',
-      preserveDrawingBuffer: true
-    });
-    
-    // Hide body parts
-    if (viewer.playerObject.skin.body) viewer.playerObject.skin.body.visible = false;
-    if (viewer.playerObject.skin.leftArm) viewer.playerObject.skin.leftArm.visible = false;
-    if (viewer.playerObject.skin.rightArm) viewer.playerObject.skin.rightArm.visible = false;
-    if (viewer.playerObject.skin.leftLeg) viewer.playerObject.skin.leftLeg.visible = false;
-    if (viewer.playerObject.skin.rightLeg) viewer.playerObject.skin.rightLeg.visible = false;
-    if (viewer.playerObject.cape) viewer.playerObject.cape.visible = false;
-    if (viewer.playerObject.elytra) viewer.playerObject.elytra.visible = false;
-    
-    // Adjust camera to perfectly frame the head
-    viewer.playerWrapper.position.y = -12; // Head center is properly aligned at -12
-    viewer.playerWrapper.rotation.y = 0; // Front view
-    viewer.playerWrapper.rotation.x = 0;
-    viewer.zoom = 4.0; // Zoom in 4x to make the head fill the canvas perfectly without clipping
-    viewer.autoRotate = false;
-    
-    // Await the skin to load fully
-    await viewer.loadSkin(texturesUrl(profile.skin_hash));
-    
-    // Render and save
-    viewer.render();
-    const dataUrl = canvas.toDataURL('image/png');
-    localStorage.setItem('user_avatar', dataUrl);
-    window.dispatchEvent(new Event('avatar-changed'));
-    
-    loading.close();
+    await setAvatar(profile.skin_hash, profile.model || 'default');
+    loadingMsg.close();
     ElMessage.success('已设为头像');
-    viewer.dispose();
   } catch (error) {
-    loading.close();
-    ElMessage.error('生成头像失败');
-    console.error('Failed to generate avatar:', error);
+    loadingMsg.close();
+    ElMessage.error('设置头像失败');
+    console.error('Failed to set avatar:', error);
   }
 }
 

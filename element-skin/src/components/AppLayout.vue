@@ -139,6 +139,9 @@ import {
 } from '@element-plus/icons-vue'
 
 import '@/assets/scripts/meow.js'
+import { useAvatar } from '@/composables/useAvatar'
+
+const { currentAvatarImg: customAvatar, initializeAvatar } = useAvatar()
 const route = useRoute()
 const { push } = useRouter()
 const isHome = computed(() => route.path === '/')
@@ -251,11 +254,6 @@ const isAdmin = computed(() => user.value?.is_admin || false)
 const accountName = computed(() => user.value?.display_name || user.value?.email || '用户')
 const avatarInitial = computed(() => (accountName.value || 'U').slice(0, 1).toUpperCase())
 
-const customAvatar = ref(localStorage.getItem('user_avatar') || '')
-
-window.addEventListener('avatar-changed', () => {
-  customAvatar.value = localStorage.getItem('user_avatar') || ''
-})
 
 let authTimer = null
 let resizeObserver = null
@@ -277,6 +275,10 @@ async function fetchMe() {
   try {
     const res = await axios.get('/me', { headers: authHeaders() })
     user.value = res.data
+    // Initialize avatar from backend hash
+    if (res.data.avatar_hash) {
+      initializeAvatar(res.data.avatar_hash)
+    }
   } catch (e) {
     user.value = null
     console.error('Failed to fetch user data in AppLayout:', e)

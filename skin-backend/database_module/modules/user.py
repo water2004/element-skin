@@ -12,7 +12,7 @@ class UserModule:
     # ========== User ==========
     async def get_by_email(self, email: str) -> User | None:
         row = await self.db.fetchrow(
-            "SELECT id, email, password, is_admin, preferred_language, display_name, banned_until FROM users WHERE email=$1",
+            "SELECT id, email, password, is_admin, preferred_language, display_name, banned_until, avatar_hash FROM users WHERE email=$1",
             email,
         )
         if row:
@@ -21,7 +21,7 @@ class UserModule:
 
     async def get_by_id(self, user_id: str) -> User | None:
         row = await self.db.fetchrow(
-            "SELECT id, email, password, is_admin, preferred_language, display_name, banned_until FROM users WHERE id=$1",
+            "SELECT id, email, password, is_admin, preferred_language, display_name, banned_until, avatar_hash FROM users WHERE id=$1",
             user_id,
         )
         if row:
@@ -30,8 +30,8 @@ class UserModule:
 
     async def create(self, user: User):
         await self.db.execute(
-            "INSERT INTO users (id, email, password, is_admin, display_name) VALUES ($1, $2, $3, $4, $5)",
-            user.id, user.email, user.password, user.is_admin, user.display_name,
+            "INSERT INTO users (id, email, password, is_admin, display_name, avatar_hash) VALUES ($1, $2, $3, $4, $5, $6)",
+            user.id, user.email, user.password, user.is_admin, user.display_name, user.avatar_hash,
         )
 
     async def update_password(self, user_id: str, new_password_hash: str):
@@ -54,6 +54,12 @@ class UserModule:
         await self.db.execute(
             "UPDATE users SET preferred_language=$1 WHERE id=$2",
             preferred_language, user_id,
+        )
+            
+    async def update_avatar_hash(self, user_id: str, avatar_hash: str | None):
+        await self.db.execute(
+            "UPDATE users SET avatar_hash=$1 WHERE id=$2",
+            avatar_hash, user_id,
         )
 
     async def is_display_name_taken(
@@ -83,17 +89,17 @@ class UserModule:
         actual_limit = limit + 1
         if last_id:
             rows = await self.db.fetch(
-                "SELECT id, email, display_name, is_admin, banned_until, preferred_language FROM users WHERE id > $1 ORDER BY id LIMIT $2",
+                "SELECT id, email, display_name, is_admin, banned_until, preferred_language, avatar_hash FROM users WHERE id > $1 ORDER BY id LIMIT $2",
                 last_id, actual_limit
             )
         else:
             rows = await self.db.fetch(
-                "SELECT id, email, display_name, is_admin, banned_until, preferred_language FROM users ORDER BY id LIMIT $1",
+                "SELECT id, email, display_name, is_admin, banned_until, preferred_language, avatar_hash FROM users ORDER BY id LIMIT $1",
                 actual_limit
             )
         
         has_next = len(rows) > limit
-        items = [User(r[0], r[1], "", r[3], r[5], r[2], r[4]) for r in rows[:limit]]
+        items = [User(r[0], r[1], "", r[3], r[5], r[2], r[4], r[6]) for r in rows[:limit]]
         
         next_cursor = None
         if has_next:

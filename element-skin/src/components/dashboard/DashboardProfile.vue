@@ -139,6 +139,9 @@ import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Clock, Check, Delete } from '@element-plus/icons-vue'
+import { useAvatar } from '@/composables/useAvatar'
+
+const { currentAvatarImg: customAvatar } = useAvatar()
 
 // Inject shared state from AppLayout
 const user = inject('user')
@@ -150,11 +153,6 @@ const showDeleteDialog = ref(false)
 const deleteConfirmText = ref('')
 const motionDisabled = ref(localStorage.getItem('motionDisabled') === '1')
 const disableMeowEasterEgg = ref(localStorage.getItem('disableMeowEasterEgg') === '1')
-const customAvatar = ref(localStorage.getItem('user_avatar') || '')
-
-window.addEventListener('avatar-changed', () => {
-  customAvatar.value = localStorage.getItem('user_avatar') || ''
-})
 
 const emailInitial = computed(() => {
   const email = user.value?.email || user.value?.display_name || 'U'

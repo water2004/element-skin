@@ -59,6 +59,7 @@ class User:
         preferred_language: str = "zh_CN",
         display_name: str = "",
         banned_until: int = None,
+        avatar_hash: str = None,
     ):
         self.id = id
         self.email = email
@@ -67,6 +68,7 @@ class User:
         self.preferredLanguage = preferred_language
         self.display_name = display_name
         self.banned_until = banned_until
+        self.avatar_hash = avatar_hash
 
     def to_json(self) -> dict:
         return {
