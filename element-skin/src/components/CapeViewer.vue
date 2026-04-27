@@ -126,7 +126,8 @@ async function initViewer() {
     
     viewer.autoRotate = true
     viewer.autoRotateSpeed = 0.5
-    viewer.zoom = 1.2
+    viewer.zoom = 1
+    viewer.playerWrapper.position.y = 4
 
     viewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
   }
