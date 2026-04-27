@@ -60,17 +60,16 @@
         </el-table-column>
         <el-table-column label="角色数" width="100" align="center">
           <template #default="{ row }">
-            <el-badge :value="row.profile_count || 0" :type="row.profile_count > 0 ? 'primary' : 'info'" class="profile-badge" />
+            <span class="count-text">{{ row.profile_count || 0 }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="管理操作" width="120" fixed="right" align="center">
+        <el-table-column label="管理操作" width="120" align="center">
           <template #default="{ row }">
             <el-button
               size="small"
               type="primary"
               @click="showUserDetailDialog(row)"
-              plain
-              class="hover-lift"
+              class=""
             >
               管理
             </el-button>
@@ -604,6 +603,24 @@ watch(currentUser, async (u) => {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+}
+
+.count-text {
+  font-weight: 600;
+  color: var(--color-text);
+  font-family: var(--el-font-family-mono);
+  background: var(--color-background-soft);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.modern-table :deep(.el-table__inner-wrapper::before) {
+  display: none;
+}
+
+.modern-table :deep(.el-table__row) {
+  transition: background-color 0.3s ease;
 }
 
 .has-custom :deep(img) {
