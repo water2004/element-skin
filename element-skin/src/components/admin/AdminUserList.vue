@@ -38,8 +38,13 @@
         <el-table-column prop="display_name" label="用户名" min-width="150">
           <template #default="{ row }">
             <div class="user-cell">
-              <el-avatar :size="32" :shape="userAvatars[row.avatar_hash] ? 'square' : 'circle'" :src="userAvatars[row.avatar_hash] || ''" class="mr-2">
-                {{ row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase() }}
+              <el-avatar 
+                :size="32" 
+                :shape="row.avatar_hash ? 'square' : 'circle'" 
+                :class="[row.avatar_hash ? 'has-custom' : 'bg-gradient-purple', 'mr-2']"
+                :src="userAvatars[row.avatar_hash] || ''"
+              >
+                {{ !row.avatar_hash ? (row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase()) : '' }}
               </el-avatar>
               <span>{{ row.display_name || '未设置' }}</span>
             </div>
@@ -98,8 +103,13 @@
       <div v-if="currentUser" class="user-detail-container">
         <!-- User Identity Panel -->
         <div class="identity-panel mb-6">
-          <el-avatar :size="80" :shape="userAvatars[currentUser.avatar_hash] ? 'square' : 'circle'" :src="userAvatars[currentUser.avatar_hash] || ''" class="panel-avatar">
-            {{ currentUser.email.charAt(0).toUpperCase() }}
+          <el-avatar 
+            :size="80" 
+            :shape="currentUser.avatar_hash ? 'square' : 'circle'" 
+            :class="currentUser.avatar_hash ? 'has-custom' : 'panel-avatar'"
+            :src="userAvatars[currentUser.avatar_hash] || ''"
+          >
+            {{ !currentUser.avatar_hash ? currentUser.email.charAt(0).toUpperCase() : '' }}
           </el-avatar>
           <div class="panel-info">
             <div class="panel-name">
@@ -554,6 +564,12 @@ watch(currentUser, async (u) => {
 
 .search-bar-container {
   margin-bottom: 16px;
+  display: flex;
+}
+
+.search-bar-container :deep(.el-input-group) {
+  display: flex;
+  align-items: stretch;
 }
 
 .search-bar-container :deep(.el-input-group__append) {
@@ -561,11 +577,42 @@ watch(currentUser, async (u) => {
   color: #fff;
   border-color: var(--el-color-primary);
   cursor: pointer;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  transition: all 0.3s ease;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 .search-bar-container :deep(.el-input-group__append:hover) {
   background: var(--el-color-primary-light-3);
   border-color: var(--el-color-primary-light-3);
+  opacity: 0.9;
+}
+
+.search-bar-container :deep(.el-input-group__append .el-button) {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  height: 100%;
+}
+
+.has-custom, .el-avatar.has-custom {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.has-custom :deep(img) {
+  object-fit: contain;
+}
+
+.bg-gradient-purple {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: #fff !important;
 }
 
 .user-cell { display: flex; align-items: center; }
