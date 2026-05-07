@@ -71,17 +71,11 @@
             <span>{{ row.uploader_display_name || row.uploader_email || '未知' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="模型" width="120" align="center">
+        <el-table-column label="模型" width="80" align="center">
           <template #default="{ row }">
-            <el-select
-              :model-value="row.model"
-              size="small"
-              style="width: 100px"
-              @change="(val: string) => updateModel(row, val)"
-            >
-              <el-option label="default" value="default" />
-              <el-option label="slim" value="slim" />
-            </el-select>
+            <el-tag :type="row.model === 'slim' ? 'success' : ''" effect="light" size="small">
+              {{ row.model || 'default' }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="公开" width="80" align="center">
@@ -99,16 +93,11 @@
             <span class="timestamp-text">{{ formatDate(row.created_at) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" align="center">
+        <el-table-column label="操作" width="220" align="center">
           <template #default="{ row }">
             <div class="action-btns">
-              <el-button
-                size="small"
-                type="danger"
-                @click="forceDeleteTexture(row)"
-              >
-                强制下架
-              </el-button>
+              <el-button size="small" @click="showModelDialog(row)">编辑模型</el-button>
+              <el-button size="small" type="danger" @click="forceDeleteTexture(row)">强制下架</el-button>
             </div>
           </template>
         </el-table-column>
@@ -128,6 +117,24 @@
         />
       </div>
     </el-card>
+
+    <el-dialog v-model="modelDialogVisible" title="编辑模型" width="300px" destroy-on-close>
+      <el-form v-if="modelTarget">
+        <el-form-item label="当前模型">
+          <el-tag :type="modelTarget.model === 'slim' ? 'success' : ''">{{ modelTarget.model || 'default' }}</el-tag>
+        </el-form-item>
+        <el-form-item label="新模型">
+          <el-select v-model="selectedModel" style="width: 100%">
+            <el-option label="default (Steve)" value="default" />
+            <el-option label="slim (Alex)" value="slim" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="modelDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmModelChange" :loading="savingModel">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -147,6 +154,10 @@ const searchQuery = ref('')
 const activeSearchQuery = ref('')
 const typeFilter = ref(null)
 const togglingHash = ref(null)
+const modelDialogVisible = ref(false)
+const modelTarget = ref(null)
+const selectedModel = ref('default')
+const savingModel = ref(false)
 
 const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
 
@@ -254,16 +265,6 @@ async function togglePublic(item) {
   }
 }
 
-async function updateModel(item, newModel) {
-  try {
-    await axios.patch(`/admin/textures/${item.hash}`, { model: newModel }, { headers: authHeaders() })
-    item.model = newModel
-    ElMessage.success('模型已更新')
-  } catch (e) {
-    ElMessage.error('更新失败')
-  }
-}
-
 async function forceDeleteTexture(item) {
   try {
     await ElMessageBox.confirm(
@@ -282,6 +283,27 @@ async function forceDeleteTexture(item) {
     await fetchTextures()
   } catch (e) {
     // User cancelled or error
+  }
+}
+
+function showModelDialog(row) {
+  modelTarget.value = row
+  selectedModel.value = row.model || 'default'
+  modelDialogVisible.value = true
+}
+
+async function confirmModelChange() {
+  if (!modelTarget.value) return
+  savingModel.value = true
+  try {
+    await axios.patch(`/admin/textures/${modelTarget.value.hash}`, { model: selectedModel.value }, { headers: authHeaders() })
+    modelTarget.value.model = selectedModel.value
+    ElMessage.success('模型已更新')
+    modelDialogVisible.value = false
+  } catch (e) {
+    ElMessage.error('更新失败')
+  } finally {
+    savingModel.value = false
   }
 }
 
