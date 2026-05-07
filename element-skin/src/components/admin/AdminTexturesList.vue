@@ -420,7 +420,7 @@ async function updateModel() {
   }
 }
 
-async function updateIsPublic(newValue: number) {
+async function updateIsPublic(newValue) {
   if (!selectedItem.value) return
   const item = selectedItem.value
 
