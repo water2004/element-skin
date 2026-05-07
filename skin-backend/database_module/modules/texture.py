@@ -335,7 +335,7 @@ class TextureModule:
 
         # 搜索 (ILIKE on skin_hash and name)
         if query:
-            conditions.append(f"(sl.skin_hash ILIKE ${p_idx} OR sl.name ILIKE ${p_idx})")
+            conditions.append(f"(sl.skin_hash ILIKE ${p_idx} OR sl.name ILIKE ${p_idx} OR u.display_name ILIKE ${p_idx})")
             params.append(f"%{query}%")
             p_idx += 1
 

@@ -71,12 +71,17 @@
             <span>{{ row.uploader_display_name || row.uploader_email || '未知' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="模型" width="80" align="center">
+        <el-table-column label="模型" width="120" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.model" size="small" :type="row.model === 'slim' ? 'success' : 'info'">
-              {{ row.model }}
-            </el-tag>
-            <span v-else class="text-muted">-</span>
+            <el-select
+              :model-value="row.model"
+              size="small"
+              style="width: 100px"
+              @change="(val: string) => updateModel(row, val)"
+            >
+              <el-option label="default" value="default" />
+              <el-option label="slim" value="slim" />
+            </el-select>
           </template>
         </el-table-column>
         <el-table-column label="公开" width="80" align="center">
@@ -84,7 +89,7 @@
             <el-switch
               :model-value="row.is_public"
               :loading="togglingHash === row.hash"
-              @change="togglePublic(row, $event)"
+              @change="togglePublic(row)"
               size="small"
             />
           </template>
@@ -97,14 +102,6 @@
         <el-table-column label="操作" width="180" align="center">
           <template #default="{ row }">
             <div class="action-btns">
-              <el-button
-                size="small"
-                type="danger"
-                plain
-                @click="removeTexture(row)"
-              >
-                移除
-              </el-button>
               <el-button
                 size="small"
                 type="danger"
@@ -227,51 +224,52 @@ function handleTypeFilterChange() {
   fetchTextures()
 }
 
-async function togglePublic(item, newValue) {
+async function togglePublic(item) {
+  // Only confirm when turning FROM public TO private
+  if (item.is_public === true || item.is_public === 1) {
+    try {
+      await ElMessageBox.confirm(
+        '取消公开后，该材质将不会出现在公共皮肤库中，已绑定此材质的角色不受影响。确定取消公开？',
+        '确认操作',
+        { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+      )
+    } catch {
+      return // User cancelled
+    }
+  }
+
+  const newValue = item.is_public ? 0 : 1
   togglingHash.value = item.hash
-  const previousValue = item.is_public
   try {
     await axios.patch(`/admin/textures/${item.hash}`,
-      { is_public: newValue ? 1 : 0 },
+      { is_public: newValue },
       { headers: authHeaders() }
     )
-    item.is_public = newValue
-    ElMessage.success(newValue ? '已设为公开' : '已设为私有')
+    item.is_public = !item.is_public
+    ElMessage.success(newValue === 0 ? '已取消公开' : '已设为公开')
   } catch (e) {
-    item.is_public = previousValue
-    ElMessage.error('切换公开状态失败')
+    ElMessage.error('操作失败')
   } finally {
     togglingHash.value = null
   }
 }
 
-async function removeTexture(item) {
+async function updateModel(item, newModel) {
   try {
-    await ElMessageBox.confirm(
-      '确定从该用户移除此材质？',
-      '确认移除',
-      { type: 'warning' }
-    )
-    await axios.delete(`/admin/textures/${item.hash}`, {
-      headers: authHeaders(),
-      params: {
-        user_id: item.uploader_user_id,
-        type: item.type
-      }
-    })
-    ElMessage.success('材质已移除')
-    await fetchTextures()
+    await axios.patch(`/admin/textures/${item.hash}`, { model: newModel }, { headers: authHeaders() })
+    item.model = newModel
+    ElMessage.success('模型已更新')
   } catch (e) {
-    // User cancelled or error
+    ElMessage.error('更新失败')
   }
 }
 
 async function forceDeleteTexture(item) {
   try {
     await ElMessageBox.confirm(
-      '危险操作：将从所有用户移除该材质并下架！',
-      '极端警告',
-      { type: 'error', confirmButtonText: '确认强制下架', cancelButtonText: '取消' }
+      '⚠️ 强制下架将从所有用户的衣柜中移除该材质，并从皮肤库中彻底删除（数据库层面）。此操作不可撤销！确定继续？',
+      '危险操作',
+      { confirmButtonText: '确认强制删除', cancelButtonText: '取消', type: 'error' }
     )
     await axios.delete(`/admin/textures/${item.hash}`, {
       headers: authHeaders(),

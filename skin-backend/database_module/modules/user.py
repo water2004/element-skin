@@ -251,7 +251,7 @@ class UserModule:
                     """SELECT p.id, p.user_id, p.name, p.texture_model, p.skin_hash, p.cape_hash,
                               u.email AS owner_email, u.display_name AS owner_display_name
                        FROM profiles p JOIN users u ON p.user_id = u.id
-                       WHERE (p.name ILIKE $1 OR u.email ILIKE $1) AND p.id > $2
+                       WHERE (p.name ILIKE $1 OR u.email ILIKE $1 OR u.display_name ILIKE $1) AND p.id > $2
                        ORDER BY p.id LIMIT $3""",
                     like_pattern, after_id, actual_limit
                 )
@@ -260,7 +260,7 @@ class UserModule:
                     """SELECT p.id, p.user_id, p.name, p.texture_model, p.skin_hash, p.cape_hash,
                               u.email AS owner_email, u.display_name AS owner_display_name
                        FROM profiles p JOIN users u ON p.user_id = u.id
-                       WHERE (p.name ILIKE $1 OR u.email ILIKE $1)
+                       WHERE (p.name ILIKE $1 OR u.email ILIKE $1 OR u.display_name ILIKE $1)
                        ORDER BY p.id LIMIT $2""",
                     like_pattern, actual_limit
                 )

@@ -113,11 +113,31 @@
             placeholder="输入角色名"
           />
         </el-form-item>
-        <el-form-item label="模型类型">
-          <el-select v-model="editForm.texture_model" style="width: 100%">
-            <el-option label="default (Steve)" value="default" />
-            <el-option label="slim (Alex)" value="slim" />
-          </el-select>
+        <el-form-item label="皮肤绑定">
+          <div class="binding-row">
+            <el-input :model-value="editForm.skin_hash || '未绑定'" disabled class="binding-input" />
+            <el-button
+              size="small"
+              :disabled="!editForm.skin_hash"
+              :loading="clearingSkin"
+              @click="clearBinding('skin')"
+            >
+              清除
+            </el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="披风绑定">
+          <div class="binding-row">
+            <el-input :model-value="editForm.cape_hash || '未绑定'" disabled class="binding-input" />
+            <el-button
+              size="small"
+              :disabled="!editForm.cape_hash"
+              :loading="clearingCape"
+              @click="clearBinding('cape')"
+            >
+              清除
+            </el-button>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -148,7 +168,8 @@ interface Profile {
 
 interface EditForm {
   name: string
-  texture_model: string
+  skin_hash: string | null
+  cape_hash: string | null
 }
 
 const profiles = ref<Profile[]>([])
@@ -160,8 +181,31 @@ const activeSearchQuery = ref('')
 
 const editDialogVisible = ref(false)
 const editingProfile = ref<Profile | null>(null)
-const editForm = ref<EditForm>({ name: '', texture_model: 'default' })
+const editForm = ref<EditForm>({ name: '', skin_hash: null, cape_hash: null })
 const saving = ref(false)
+
+const clearingSkin = ref(false)
+const clearingCape = ref(false)
+
+async function clearBinding(type: 'skin' | 'cape') {
+  const id = editingProfile.value?.id
+  if (!id) return
+  const endpoint = type === 'skin' ? `/admin/profiles/${id}/skin` : `/admin/profiles/${id}/cape`
+
+  try {
+    if (type === 'skin') clearingSkin.value = true
+    else clearingCape.value = true
+
+    await axios.patch(endpoint, { hash: null }, { headers: authHeaders() })
+    ElMessage.success(`${type === 'skin' ? '皮肤' : '披风'}绑定已清除`)
+    await refreshFromFirst()
+  } catch (e) {
+    ElMessage.error('清除失败')
+  } finally {
+    clearingSkin.value = false
+    clearingCape.value = false
+  }
+}
 
 const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
 
@@ -235,7 +279,8 @@ function openEditDialog(profile: Profile) {
   editingProfile.value = profile
   editForm.value = {
     name: profile.name || '',
-    texture_model: profile.texture_model || 'default',
+    skin_hash: profile.skin_hash ?? null,
+    cape_hash: profile.cape_hash ?? null,
   }
   editDialogVisible.value = true
 }
@@ -252,7 +297,6 @@ async function saveProfile() {
       `/admin/profiles/${editingProfile.value.id}`,
       {
         name: editForm.value.name.trim(),
-        texture_model: editForm.value.texture_model,
       },
       { headers: authHeaders() },
     )
@@ -374,5 +418,14 @@ onMounted(refreshFromFirst)
   .roles-section {
     padding: 10px 0;
   }
+}
+
+.binding-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.binding-input {
+  flex: 1;
 }
 </style>
