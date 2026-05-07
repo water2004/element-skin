@@ -244,6 +244,30 @@ class AdminBackend:
         await self.db.user.ban(user_id, banned_until)
         return banned_until
 
+    # ========== Profile Management (Admin) ==========
+
+    async def get_all_profiles(self, limit: int = 20, after_id: str | None = None, query: str | None = None) -> dict:
+        return await self.db.user.list_all_profiles_cursor(limit, after_id, query)
+
+    async def update_profile(self, profile_id: str, name: str | None = None, texture_model: str | None = None) -> dict:
+        if name is not None:
+            if not (1 <= len(name) <= 16) or not re.match(r"^[a-zA-Z0-9_]+$", name):
+                raise HTTPException(status_code=400, detail="角色名只能包含字母、数字、下划线，长度1-16字符")
+        if texture_model is not None:
+            if texture_model not in ("default", "slim"):
+                raise HTTPException(status_code=400, detail="texture_model must be 'default' or 'slim'")
+
+        ok = await self.db.user.update_profile_admin(profile_id, name, texture_model)
+        if ok is False:
+            raise HTTPException(status_code=409, detail="角色名已被占用")
+        return {"ok": True}
+
+    async def delete_profile(self, profile_id: str) -> dict:
+        ok = await self.db.user.delete_profile_admin(profile_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail="角色不存在")
+        return {"ok": True}
+
     async def reset_user_password(self, user_id: str, new_password: str):
         from utils.password_utils import hash_password
         user_row = await self.db.user.get_by_id(user_id)
@@ -298,3 +322,24 @@ class AdminBackend:
             raise HTTPException(status_code=400, detail="username required")
         await self.db.fallback.remove_whitelist_user(username, endpoint_id)
         return {"ok": True}
+
+    # ========== Admin Texture Management ==========
+
+    async def get_all_textures(self, limit=20, after_cursor=None, query=None, type_filter=None) -> dict:
+        return await self.db.texture.list_all_textures_cursor(limit, after_cursor, query, type_filter)
+
+    async def update_texture_public(self, texture_hash, is_public):
+        if is_public not in (0, 1):
+            raise HTTPException(status_code=400, detail="is_public must be 0 or 1")
+        result = await self.db.texture.update_texture_public_admin(texture_hash, is_public)
+        if not result:
+            raise HTTPException(status_code=404, detail="材质不存在")
+        return {"success": True}
+
+    async def delete_texture(self, texture_hash, texture_type, user_id=None, force=False):
+        if not force and not user_id:
+            raise HTTPException(status_code=400, detail="per-user deletion requires user_id")
+        result = await self.db.texture.delete_texture_admin(texture_hash, texture_type, user_id, force)
+        if not result:
+            raise HTTPException(status_code=404, detail="材质不存在")
+        return {"success": True}
