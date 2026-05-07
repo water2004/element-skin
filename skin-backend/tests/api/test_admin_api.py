@@ -132,3 +132,122 @@ async def test_api_admin_search_users(client, admin_headers, user_factory, db_se
     assert resp.status_code == 200
     assert len(resp.json()["items"]) == 0
 
+
+@pytest.mark.asyncio
+async def test_admin_profiles_list(client, admin_headers, auth_headers, db_session, user_factory):
+    """Test GET /admin/profiles — list + search + 403"""
+    user = await user_factory()
+    from utils.uuid_utils import generate_random_uuid
+    from utils.typing import PlayerProfile
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "SearchTest", "default", None, None))
+
+    # Non-admin → 403
+    resp = await client.get("/admin/profiles", headers=auth_headers)
+    assert resp.status_code == 403
+
+    # Admin → 200
+    resp = await client.get("/admin/profiles", headers=admin_headers)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "items" in data
+    assert len(data["items"]) >= 1
+
+    # Search
+    resp = await client.get("/admin/profiles?q=SearchTest", headers=admin_headers)
+    assert resp.status_code == 200
+    assert len(resp.json()["items"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_admin_profile_update(client, admin_headers, auth_headers, db_session, user_factory):
+    """Test PATCH /admin/profiles/{id} — update + 403 + 409"""
+    from utils.uuid_utils import generate_random_uuid
+    from utils.typing import PlayerProfile
+    user = await user_factory()
+    pid = generate_random_uuid()
+    pid2 = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "UpdateTest", "default", None, None))
+    await db_session.user.create_profile(PlayerProfile(pid2, user.id, "OtherName", "default", None, None))
+
+    # Non-admin → 403
+    resp = await client.patch(f"/admin/profiles/{pid}", json={"name": "NewName"}, headers=auth_headers)
+    assert resp.status_code == 403
+
+    # Admin success
+    resp = await client.patch(f"/admin/profiles/{pid}", json={"name": "Renamed"}, headers=admin_headers)
+    assert resp.status_code == 200
+
+    # Duplicate name → 409
+    resp = await client.patch(f"/admin/profiles/{pid}", json={"name": "OtherName"}, headers=admin_headers)
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_admin_profile_delete(client, admin_headers, auth_headers, db_session, user_factory):
+    """Test DELETE /admin/profiles/{id} — delete + cascade + 403 + 404"""
+    import time
+    from utils.uuid_utils import generate_random_uuid
+    from utils.typing import PlayerProfile, Token
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "DeleteTest", "default", None, None))
+    # Add a token for cascade test
+    await db_session.user.add_token(Token("test-del-token", "client", user.id, pid, int(time.time() * 1000)))
+
+    # Non-admin → 403
+    resp = await client.delete(f"/admin/profiles/{pid}", headers=auth_headers)
+    assert resp.status_code == 403
+
+    # Admin success
+    resp = await client.delete(f"/admin/profiles/{pid}", headers=admin_headers)
+    assert resp.status_code == 200
+
+    # Verify cascade: token gone
+    assert await db_session.user.get_token("test-del-token") is None
+
+    # Non-existent → 404
+    resp = await client.delete(f"/admin/profiles/{pid}", headers=admin_headers)
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_admin_textures_endpoints(client, admin_headers, auth_headers, db_session, user_factory):
+    """Test all /admin/textures endpoints — list + toggle + delete + 403"""
+    from io import BytesIO
+    from PIL import Image
+
+    def make_img(color):
+        f = BytesIO()
+        Image.new('RGBA', (64, 64), color).save(f, 'png')
+        f.seek(0)
+        return f.read()
+
+    user = await user_factory()
+    tex_hash, tex_type = await db_session.texture.upload(user.id, make_img((255, 0, 0)), "skin", note="APITest", is_public=True)
+
+    # GET — 403 for non-admin
+    resp = await client.get("/admin/textures", headers=auth_headers)
+    assert resp.status_code == 403
+
+    # GET — 200 for admin
+    resp = await client.get("/admin/textures", headers=admin_headers)
+    assert resp.status_code == 200
+    assert len(resp.json()["items"]) >= 1
+
+    # PATCH — 403
+    resp = await client.patch(f"/admin/textures/{tex_hash}", json={"is_public": 0}, headers=auth_headers)
+    assert resp.status_code == 403
+
+    # PATCH — 200 (toggle to private)
+    resp = await client.patch(f"/admin/textures/{tex_hash}", json={"is_public": 0}, headers=admin_headers)
+    assert resp.status_code == 200
+
+    # DELETE — 403
+    resp = await client.delete(f"/admin/textures/{tex_hash}?user_id={user.id}&type=skin", headers=auth_headers)
+    assert resp.status_code == 403
+
+    # DELETE — 200
+    resp = await client.delete(f"/admin/textures/{tex_hash}?user_id={user.id}&type=skin", headers=admin_headers)
+    assert resp.status_code == 200
+
