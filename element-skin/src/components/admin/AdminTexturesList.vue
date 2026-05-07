@@ -73,9 +73,10 @@
         </el-table-column>
         <el-table-column label="模型" width="80" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.model === 'slim' ? 'success' : ''" effect="light" size="small">
+            <el-tag v-if="row.type === 'skin'" :type="row.model === 'slim' ? 'success' : ''" effect="light" size="small">
               {{ row.model || 'default' }}
             </el-tag>
+            <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
         <el-table-column label="公开" width="80" align="center">
@@ -96,7 +97,7 @@
         <el-table-column label="操作" width="220" align="center">
           <template #default="{ row }">
             <div class="action-btns">
-              <el-button size="small" @click="showModelDialog(row)">编辑模型</el-button>
+              <el-button v-if="row.type === 'skin'" size="small" @click="showModelDialog(row)">编辑模型</el-button>
               <el-button size="small" type="danger" @click="forceDeleteTexture(row)">强制下架</el-button>
             </div>
           </template>
@@ -413,7 +414,7 @@ onMounted(refreshTexturesFromFirst)
 }
 
 .text-muted {
-  color: var(--color-text-light);
+  color: var(--el-text-color-placeholder);
 }
 
 .action-btns {
