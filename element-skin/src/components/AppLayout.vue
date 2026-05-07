@@ -8,7 +8,7 @@
         <!-- Desktop Navigation -->
         <div class="desktop-nav">
           <el-menu mode="horizontal" :default-active="activeRoute" router :ellipsis="false"
-            :default-openeds="['admin-content-group', 'admin-config-group']">
+            :default-openeds="defaultOpeneds">
             <template v-for="(item, index) in navLinks" :key="item.path || item.index">
               <el-sub-menu v-if="item.type === 'group'" :index="item.index" :trigger="item.trigger">
                 <template #title>
@@ -236,6 +236,18 @@ const adminNavItems = computed(() => [
     { path: '/admin/carousel', title: '首页图片', icon: Picture },
   ]},
 ])
+
+const defaultOpeneds = computed(() => {
+  const path = route.path
+  const opened = []
+  if (['/admin/users', '/admin/roles', '/admin/textures'].some(p => path.startsWith(p))) {
+    opened.push('admin-content-group')
+  }
+  if (['/admin/email', '/admin/mojang', '/admin/carousel'].some(p => path.startsWith(p))) {
+    opened.push('admin-config-group')
+  }
+  return opened
+})
 
 const navLinks = computed(() => {
   if (route.path.startsWith('/admin')) return adminNavItems.value
