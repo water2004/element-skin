@@ -7,13 +7,20 @@
 
         <!-- Desktop Navigation -->
         <div class="desktop-nav">
-          <el-menu mode="horizontal" :default-active="activeRoute" router :ellipsis="false">
-            <template v-for="(item, index) in navLinks" :key="item.path">
-              <el-menu-item 
-                :index="item.path" 
-                v-if="!item.adminOnly || isAdmin"
-                :class="'nav-priority-' + (index + 1)"
-              >
+          <el-menu mode="horizontal" :default-active="activeRoute" router :ellipsis="false"
+            :default-openeds="['admin-content-group', 'admin-config-group']">
+            <template v-for="(item, index) in navLinks" :key="item.path || item.index">
+              <el-sub-menu v-if="item.type === 'group'" :index="item.index" :trigger="item.trigger">
+                <template #title>
+                  <span>{{ item.title }}</span>
+                </template>
+                <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
+                  <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
+                  <span>{{ child.title }}</span>
+                </el-menu-item>
+              </el-sub-menu>
+              <el-menu-item v-else :index="item.path" v-if="!item.adminOnly || isAdmin"
+                :class="'nav-priority-' + (index + 1)">
                 <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
                 <span>{{ item.title }}</span>
               </el-menu-item>
@@ -214,8 +221,24 @@ const adminNavLinks = [
   { path: '/admin/carousel', title: '首页图片', icon: Picture },
 ]
 
+const adminNavItems = computed(() => [
+  { type: 'item', path: '/dashboard', title: '返回面板', icon: Back },
+  { type: 'group', index: 'admin-content-group', title: '用户与内容', trigger: 'click', children: [
+    { path: '/admin/users', title: '用户管理', icon: User },
+    { path: '/admin/roles', title: '角色管理', icon: User },
+    { path: '/admin/textures', title: '材质管理', icon: Box },
+  ]},
+  { type: 'item', path: '/admin/invites', title: '邀请码管理', icon: Tools },
+  { type: 'item', path: '/admin/settings', title: '站点设置', icon: Setting },
+  { type: 'group', index: 'admin-config-group', title: '更多设置', trigger: 'click', children: [
+    { path: '/admin/email', title: '邮件服务', icon: Message },
+    { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
+    { path: '/admin/carousel', title: '首页图片', icon: Picture },
+  ]},
+])
+
 const navLinks = computed(() => {
-  if (route.path.startsWith('/admin')) return adminNavLinks
+  if (route.path.startsWith('/admin')) return adminNavItems.value
   const links = []
   if (isLogged.value) {
     if (enableSkinLibrary.value) links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
@@ -358,7 +381,8 @@ onUnmounted(() => {
 .is-home-layout .layout-header .account-name,
 .is-home-layout .layout-header .theme-toggle,
 .is-home-layout .layout-header .mobile-menu-btn,
-.is-home-layout .layout-header :deep(.el-menu-item) {
+.is-home-layout .layout-header :deep(.el-menu-item),
+.is-home-layout .layout-header :deep(.el-sub-menu__title) {
   color: #fff !important;
 }
 
@@ -367,7 +391,9 @@ onUnmounted(() => {
 .is-home-layout .layout-header .theme-toggle:hover,
 .is-home-layout .layout-header .mobile-menu-btn:hover,
 .is-home-layout .layout-header :deep(.el-menu-item:hover),
-.is-home-layout .layout-header :deep(.el-menu-item.is-active) {
+.is-home-layout .layout-header :deep(.el-menu-item.is-active),
+.is-home-layout .layout-header :deep(.el-sub-menu__title:hover),
+.is-home-layout .layout-header :deep(.el-sub-menu__title.is-active) {
   background-color: rgba(255, 255, 255, 0.15) !important;
   color: #fff !important;
 }
@@ -395,6 +421,14 @@ onUnmounted(() => {
 .desktop-nav { flex-grow: 1; display: flex; justify-content: center; height: 100%; }
 .desktop-nav .el-menu { border-bottom: none; height: 100%; background: transparent; }
 
+.desktop-nav :deep(.el-sub-menu__title) {
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.desktop-nav :deep(.el-sub-menu__title:hover) {
+  color: var(--el-color-primary);
+}
+
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .theme-toggle { font-size: 20px; border-radius: 8px; }
 
@@ -419,6 +453,6 @@ onUnmounted(() => {
   object-fit: contain; 
 }
 
-@media (max-width: 1200px) { .nav-priority-6 { display: none !important; } .mobile-nav { display: block; } }
+@media (max-width: 1200px) { .mobile-nav { display: block; } }
 @media (max-width: 768px) { .desktop-nav { display: none; } }
 </style>
