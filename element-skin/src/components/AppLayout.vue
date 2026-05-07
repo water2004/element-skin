@@ -210,6 +210,7 @@ const adminNavLinks = [
   { path: '/admin/email', title: '邮件服务', icon: Message },
   { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
   { path: '/admin/carousel', title: '首页图片', icon: Picture },
+  { path: '/admin/textures', title: '材质管理', icon: Box },
 ]
 
 const navLinks = computed(() => {

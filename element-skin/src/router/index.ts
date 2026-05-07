@@ -20,6 +20,7 @@ import AdminInviteList from '@/components/admin/AdminInviteList.vue'
 import AdminMojang from '@/components/admin/AdminMojang.vue'
 import AdminCarousel from '@/components/admin/AdminCarousel.vue'
 import AdminEmail from '@/components/admin/AdminEmail.vue'
+import AdminTexturesList from '@/components/admin/AdminTexturesList.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -78,6 +79,11 @@ const router = createRouter({
           path: 'carousel',
           name: 'admin-carousel',
           component: AdminCarousel,
+        },
+        {
+          path: 'textures',
+          name: 'admin-textures',
+          component: AdminTexturesList,
         },
       ],
     },
