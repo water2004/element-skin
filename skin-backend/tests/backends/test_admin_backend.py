@@ -1,6 +1,10 @@
 import pytest
+from io import BytesIO
 from fastapi import HTTPException
+from PIL import Image
 from backends.admin_backend import AdminBackend
+from utils.typing import PlayerProfile
+from utils.uuid_utils import generate_random_uuid
 
 @pytest.mark.asyncio
 async def test_admin_settings_management(db_session, test_config):
@@ -83,3 +87,100 @@ async def test_admin_invite_code_creation(db_session, test_config):
     with pytest.raises(HTTPException) as exc:
         await backend.create_invite(code="123", total_uses=1)
     assert exc.value.status_code == 400
+
+
+# ========== Admin Profile & Texture Management Tests ==========
+
+def create_test_image_admin(width=64, height=64, color=(255, 0, 0, 255)):
+    """创建一个测试用的 PNG 字节流"""
+    file = BytesIO()
+    image = Image.new('RGBA', size=(width, height), color=color)
+    image.save(file, 'png')
+    file.name = 'test.png'
+    file.seek(0)
+    return file.read()
+
+
+@pytest.mark.asyncio
+async def test_admin_get_all_profiles(admin_backend_fixture, db_session, user_factory):
+    """测试管理端获取所有角色列表及搜索"""
+    user1 = await user_factory()
+    user2 = await user_factory()
+
+    pid1 = generate_random_uuid()
+    pid2 = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid1, user1.id, "AdminList1", "default", None, None))
+    await db_session.user.create_profile(PlayerProfile(pid2, user2.id, "AdminList2", "slim", None, None))
+
+    # 1. List all
+    page = await admin_backend_fixture.get_all_profiles(limit=10)
+    assert len(page["items"]) >= 2
+
+    # 2. Search by profile name
+    search_page = await admin_backend_fixture.get_all_profiles(limit=10, query="AdminList1")
+    assert len(search_page["items"]) == 1
+    assert search_page["items"][0]["name"] == "AdminList1"
+
+
+@pytest.mark.asyncio
+async def test_admin_update_profile(admin_backend_fixture, db_session, user_factory):
+    """测试管理端更新角色名称"""
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "OldName", "default", None, None))
+
+    # 1. Update name
+    result = await admin_backend_fixture.update_profile(pid, name="NewName")
+    assert result["ok"] is True
+    profile = await db_session.user.get_profile_by_id(pid)
+    assert profile.name == "NewName"
+
+    # 2. Duplicate name → 409
+    pid2 = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid2, user.id, "TakenName", "default", None, None))
+    with pytest.raises(HTTPException) as exc:
+        await admin_backend_fixture.update_profile(pid, name="TakenName")
+    assert exc.value.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_admin_delete_profile(admin_backend_fixture, db_session, user_factory):
+    """测试管理端删除角色"""
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "ToDelete", "default", None, None))
+
+    # 1. Delete
+    result = await admin_backend_fixture.delete_profile(pid)
+    assert result["ok"] is True
+    assert await db_session.user.get_profile_by_id(pid) is None
+
+    # 2. Non-existent → 404
+    with pytest.raises(HTTPException) as exc:
+        await admin_backend_fixture.delete_profile("non-existent-id")
+    assert exc.value.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_admin_texture_methods(admin_backend_fixture, db_session, user_factory):
+    """测试管理端材质管理：列表、公开状态、删除"""
+    user = await user_factory()
+    image_bytes = create_test_image_admin(64, 64)
+
+    # 1. Upload a texture
+    tex_hash, tex_type = await db_session.texture.upload(
+        user.id, image_bytes, "skin", note="AdminTexture", is_public=True, model="default"
+    )
+
+    # 2. get_all_textures → texture appears
+    page = await admin_backend_fixture.get_all_textures(limit=10)
+    hashes = [item["hash"] for item in page["items"]]
+    assert tex_hash in hashes
+
+    # 3. update_texture_public → set to 0
+    result = await admin_backend_fixture.update_texture_public(tex_hash, 0)
+    assert result["success"] is True
+
+    # 4. delete_texture (per-user)
+    result = await admin_backend_fixture.delete_texture(tex_hash, "skin", user_id=user.id)
+    assert result["success"] is True
