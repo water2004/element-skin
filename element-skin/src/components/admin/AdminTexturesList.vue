@@ -119,7 +119,7 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="modelDialogVisible" title="编辑模型" width="300px" destroy-on-close>
+    <el-dialog v-model="modelDialogVisible" title="编辑模型" width="300px" destroy-on-close align-center append-to-body>
       <el-form v-if="modelTarget">
         <el-form-item label="当前模型">
           <el-tag :type="modelTarget.model === 'slim' ? 'success' : ''">{{ modelTarget.model || 'default' }}</el-tag>
@@ -269,7 +269,7 @@ async function togglePublic(item) {
 async function forceDeleteTexture(item) {
   try {
     await ElMessageBox.confirm(
-      '⚠️ 强制下架将从所有用户的衣柜中移除该材质，并从皮肤库中彻底删除（数据库层面）。此操作不可撤销！确定继续？',
+      '强制下架将从所有用户的衣柜中移除该材质，并从皮肤库中彻底删除。此操作不可撤销！确定继续？',
       '危险操作',
       { confirmButtonText: '确认强制删除', cancelButtonText: '取消', type: 'error' }
     )
