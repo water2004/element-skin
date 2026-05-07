@@ -184,3 +184,45 @@ async def test_admin_texture_methods(admin_backend_fixture, db_session, user_fac
     # 4. delete_texture (per-user)
     result = await admin_backend_fixture.delete_texture(tex_hash, "skin", user_id=user.id)
     assert result["success"] is True
+
+@pytest.mark.asyncio
+async def test_admin_clear_profile_skin(admin_backend_fixture, db_session, user_factory):
+    """Clearing skin sets skin_hash to NULL without affecting cape_hash"""
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "SkinClear", "default", "skinhash", "capehash"))
+
+    result = await admin_backend_fixture.update_profile_skin(pid, None)
+    assert result["ok"] is True
+    profile = await db_session.user.get_profile_by_id(pid)
+    assert profile.skin_hash is None
+    assert profile.cape_hash == "capehash"
+
+@pytest.mark.asyncio
+async def test_admin_clear_profile_skin_idempotent(admin_backend_fixture, db_session, user_factory):
+    """Clearing already-null skin returns 200"""
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "Idempotent", "default", None, None))
+    result = await admin_backend_fixture.update_profile_skin(pid, None)
+    assert result["ok"] is True
+
+@pytest.mark.asyncio
+async def test_admin_clear_profile_skin_404(admin_backend_fixture):
+    """Non-existent profile → 404"""
+    with pytest.raises(HTTPException) as exc:
+        await admin_backend_fixture.update_profile_skin("non-existent", None)
+    assert exc.value.status_code == 404
+
+@pytest.mark.asyncio
+async def test_admin_clear_profile_cape(admin_backend_fixture, db_session, user_factory):
+    """Clearing cape sets cape_hash to NULL without affecting skin_hash"""
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "CapeClear", "default", "skinhash", "capehash"))
+
+    result = await admin_backend_fixture.update_profile_cape(pid, None)
+    assert result["ok"] is True
+    profile = await db_session.user.get_profile_by_id(pid)
+    assert profile.skin_hash == "skinhash"
+    assert profile.cape_hash is None

@@ -311,8 +311,8 @@ class UserModule:
 
     async def create_profile(self, profile: PlayerProfile):
         await self.db.execute(
-            "INSERT INTO profiles (id, user_id, name, texture_model) VALUES ($1, $2, $3, $4)",
-            profile.id, profile.user_id, profile.name, profile.texture_model,
+            "INSERT INTO profiles (id, user_id, name, texture_model, skin_hash, cape_hash) VALUES ($1, $2, $3, $4, $5, $6)",
+            profile.id, profile.user_id, profile.name, profile.texture_model, profile.skin_hash, profile.cape_hash,
         )
             
     async def delete_profile(self, profile_id: str):

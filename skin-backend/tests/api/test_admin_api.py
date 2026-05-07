@@ -251,3 +251,71 @@ async def test_admin_textures_endpoints(client, admin_headers, auth_headers, db_
     resp = await client.delete(f"/admin/textures/{tex_hash}?user_id={user.id}&type=skin", headers=admin_headers)
     assert resp.status_code == 200
 
+@pytest.mark.asyncio
+async def test_admin_profile_clear_skin_endpoint(client, admin_headers, auth_headers, db_session, user_factory):
+    """PATCH /admin/profiles/{id}/skin — 403 for non-admin, 200 for admin, 404 for missing"""
+    from utils.uuid_utils import generate_random_uuid
+    from utils.typing import PlayerProfile
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "APISkinClear", "default", "hashxyz", None))
+
+    # 403
+    resp = await client.patch(f"/admin/profiles/{pid}/skin", json={"hash": None}, headers=auth_headers)
+    assert resp.status_code == 403
+
+    # 200
+    resp = await client.patch(f"/admin/profiles/{pid}/skin", json={"hash": None}, headers=admin_headers)
+    assert resp.status_code == 200
+    profile = await db_session.user.get_profile_by_id(pid)
+    assert profile.skin_hash is None
+
+    # 404
+    resp = await client.patch(f"/admin/profiles/non-existent/skin", json={"hash": None}, headers=admin_headers)
+    assert resp.status_code == 404
+
+@pytest.mark.asyncio
+async def test_admin_profile_clear_cape_endpoint(client, admin_headers, auth_headers, db_session, user_factory):
+    """PATCH /admin/profiles/{id}/cape — 403 for non-admin, 200 for admin, 404 for missing"""
+    from utils.uuid_utils import generate_random_uuid
+    from utils.typing import PlayerProfile
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "APICapeClear", "default", None, "capehash"))
+
+    # 403
+    resp = await client.patch(f"/admin/profiles/{pid}/cape", json={"hash": None}, headers=auth_headers)
+    assert resp.status_code == 403
+
+    # 200
+    resp = await client.patch(f"/admin/profiles/{pid}/cape", json={"hash": None}, headers=admin_headers)
+    assert resp.status_code == 200
+    profile = await db_session.user.get_profile_by_id(pid)
+    assert profile.cape_hash is None
+
+    # 404
+    resp = await client.patch(f"/admin/profiles/non-existent/cape", json={"hash": None}, headers=admin_headers)
+    assert resp.status_code == 404
+
+@pytest.mark.asyncio
+async def test_admin_skin_cape_independence(client, admin_headers, db_session, user_factory):
+    """Clearing skin does not affect cape and vice versa"""
+    from utils.uuid_utils import generate_random_uuid
+    from utils.typing import PlayerProfile
+    user = await user_factory()
+    pid = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid, user.id, "Indep", "default", "skinhash", "capehash"))
+
+    # Clear skin
+    resp = await client.patch(f"/admin/profiles/{pid}/skin", json={"hash": None}, headers=admin_headers)
+    assert resp.status_code == 200
+    profile = await db_session.user.get_profile_by_id(pid)
+    assert profile.cape_hash == "capehash"
+
+    # Clear cape
+    resp = await client.patch(f"/admin/profiles/{pid}/cape", json={"hash": None}, headers=admin_headers)
+    assert resp.status_code == 200
+    profile = await db_session.user.get_profile_by_id(pid)
+    assert profile.skin_hash is None
+    assert profile.cape_hash is None
+

@@ -247,6 +247,28 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
     ):
         return await admin_backend.delete_profile(profile_id)
 
+    @router.patch("/admin/profiles/{profile_id}/skin")
+    async def update_admin_profile_skin(
+        profile_id: str,
+        payload: dict = Depends(admin_required),
+        body: dict = Body(...)
+    ):
+        return await admin_backend.update_profile_skin(
+            profile_id,
+            skin_hash=body.get("hash"),
+        )
+
+    @router.patch("/admin/profiles/{profile_id}/cape")
+    async def update_admin_profile_cape(
+        profile_id: str,
+        payload: dict = Depends(admin_required),
+        body: dict = Body(...)
+    ):
+        return await admin_backend.update_profile_cape(
+            profile_id,
+            cape_hash=body.get("hash"),
+        )
+
     # ========== Admin Texture Management ==========
 
     @router.get("/admin/textures")
