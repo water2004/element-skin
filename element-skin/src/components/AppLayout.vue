@@ -206,12 +206,12 @@ const adminNavLinks = [
   { path: '/dashboard', title: '返回面板', icon: Back },
   { path: '/admin/users', title: '用户管理', icon: User },
   { path: '/admin/roles', title: '角色管理', icon: User },
+  { path: '/admin/textures', title: '材质管理', icon: Box },
   { path: '/admin/invites', title: '邀请码管理', icon: Tools },
   { path: '/admin/settings', title: '站点设置', icon: Setting },
   { path: '/admin/email', title: '邮件服务', icon: Message },
   { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
   { path: '/admin/carousel', title: '首页图片', icon: Picture },
-  { path: '/admin/textures', title: '材质管理', icon: Box },
 ]
 
 const navLinks = computed(() => {
