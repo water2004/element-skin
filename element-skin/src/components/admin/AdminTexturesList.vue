@@ -19,7 +19,7 @@
       <div class="search-bar-container">
         <el-input
           v-model="searchQuery"
-          placeholder="搜索哈希或上传者邮箱"
+          placeholder="搜索哈希、材质名或上传者"
           clearable
           @clear="handleClearSearch"
           @keyup.enter="handleSearch"
@@ -490,7 +490,12 @@ onMounted(refreshTexturesFromFirst)
 @import "@/assets/styles/buttons.css";
 @import "@/assets/styles/headers.css";
 
-.textures-section { width: 100%; margin: 0 auto; padding: 20px 0; }
+.textures-section {
+  /* max-width: 1500px; */
+  width: 100%;
+  margin: 0 auto;
+  padding: 20px 0;
+}
 
 .filter-bar {
   display: flex;

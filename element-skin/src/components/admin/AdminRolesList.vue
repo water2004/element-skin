@@ -18,7 +18,7 @@
     <div class="search-bar-container">
       <el-input
         v-model="searchQuery"
-        placeholder="搜索角色名或邮箱"
+        placeholder="搜索角色名、邮箱或用户名"
         clearable
         @clear="handleClearSearch"
         @keyup.enter="handleSearch"
@@ -480,6 +480,7 @@ onMounted(refreshFromFirst)
 @import "@/assets/styles/headers.css";
 
 .roles-section {
+  /* max-width: 1500px; */
   width: 100%;
   margin: 0 auto;
   padding: 20px 0;
