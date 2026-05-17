@@ -421,19 +421,40 @@ class TextureModule:
         )
         return dict(row) if row else None
 
-    async def update_skin_library_public(self, texture_hash: str, is_public: int) -> bool:
-        """更新 skin_library 的 is_public（单表操作）"""
-        await self.db.execute(
-            "UPDATE skin_library SET is_public=$1 WHERE skin_hash=$2", is_public, texture_hash
-        )
-        return True
+    async def admin_delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False) -> bool:
+        """管理员删除材质（事务安全）
 
-    async def update_user_textures_public(self, uploader_id: str, texture_hash: str, is_public: int) -> bool:
-        """级联更新 uploader 的 user_textures（guard is_public!=2）"""
-        await self.db.execute(
-            "UPDATE user_textures SET is_public=$1 WHERE hash=$2 AND user_id=$3 AND is_public != 2",
-            is_public, texture_hash, uploader_id
-        )
+        force=True: 删除所有用户引用 + 皮肤库记录
+        force=False: 删除单个用户引用，若剩余为0则物理删除皮肤库记录
+        """
+        if not force and not user_id:
+            raise ValueError("per-user deletion requires user_id")
+
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                if force:
+                    await conn.execute(
+                        "DELETE FROM user_textures WHERE hash=$1 AND texture_type=$2",
+                        texture_hash, texture_type
+                    )
+                    await conn.execute(
+                        "DELETE FROM skin_library WHERE skin_hash=$1",
+                        texture_hash
+                    )
+                else:
+                    await conn.execute(
+                        "DELETE FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
+                        user_id, texture_hash, texture_type
+                    )
+                    remaining = await conn.fetchval(
+                        "SELECT COUNT(*) FROM user_textures WHERE hash=$1 AND texture_type=$2",
+                        texture_hash, texture_type
+                    )
+                    if remaining == 0:
+                        await conn.execute(
+                            "DELETE FROM skin_library WHERE skin_hash=$1",
+                            texture_hash
+                        )
         return True
 
     async def count_texture_references(self, texture_hash: str, texture_type: str) -> int:

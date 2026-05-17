@@ -95,27 +95,27 @@ async def test_delete_texture_force_mode(admin_backend_fixture, db_session, user
 
 
 @pytest.mark.asyncio
-async def test_delete_texture_per_user_soft_delete(admin_backend_fixture, db_session, user_factory):
-    """验证 per-user mode 最后一个引用时触发软删除（is_public=0）"""
+async def test_delete_texture_per_user_last_ref_removes_library(admin_backend_fixture, db_session, user_factory):
+    """验证 per-user mode 最后一个引用时物理删除 skin_library（无残留）"""
     user = await user_factory()
     image_bytes = _create_test_image(64, 64)
     tex_hash, tex_type = await db_session.texture.upload(
-        user.id, image_bytes, "skin", note="SoftDelete", is_public=True, model="default"
+        user.id, image_bytes, "skin", note="LastRef", is_public=True, model="default"
     )
 
-    # Only 1 user has this texture, so deleting it should trigger soft-delete
+    # Only 1 user has this texture, so deleting it should also remove skin_library
     result = await admin_backend_fixture.delete_texture(tex_hash, tex_type, user_id=user.id, force=False)
     assert result["success"] is True
 
     # Verify user texture removed
     assert await db_session.texture.verify_ownership(user.id, tex_hash, tex_type) is False
 
-    # Verify skin_library still exists but is_public=0 (soft delete)
+    # Verify skin_library is also removed (no orphan residue)
     async with db_session.get_conn() as conn:
-        lib_is_public = await conn.fetchval(
-            "SELECT is_public FROM skin_library WHERE skin_hash = $1", tex_hash
+        lib_val = await conn.fetchval(
+            "SELECT 1 FROM skin_library WHERE skin_hash = $1", tex_hash
         )
-        assert lib_is_public == 0
+        assert lib_val is None
 
 
 @pytest.mark.asyncio

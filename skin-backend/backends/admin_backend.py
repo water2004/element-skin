@@ -366,29 +366,19 @@ class AdminBackend:
         
         uploader = texture["uploader"]
         
-        # 编排两阶段更新
-        await self.db.texture.update_skin_library_public(texture_hash, is_public)
-        await self.db.texture.update_user_textures_public(uploader, texture_hash, is_public)
+        # 统一调用 update_is_public
+        await self.db.texture.update_is_public(uploader, texture_hash, "skin", bool(is_public))
         
         return {"success": True}
 
     async def delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False) -> dict:
-        # 业务验证
         if not force and not user_id:
             raise HTTPException(status_code=400, detail="per-user deletion requires user_id")
         
-        if force:
-            # Force mode: 删除所有引用 + 皮肤库
-            await self.db.texture.delete_user_textures_all(texture_hash, texture_type)
-            await self.db.texture.delete_from_skin_library(texture_hash)
-        else:
-            # Per-user mode: 删除单个用户引用
-            await self.db.texture.delete_user_texture_by_user(user_id, texture_hash, texture_type)
-            
-            # 检查是否为最后一个引用
-            remaining = await self.db.texture.count_texture_references(texture_hash, texture_type)
-            if remaining == 0:
-                # 软删除：只取消公开
-                await self.db.texture.update_skin_library_public(texture_hash, 0)
-        
+        await self.db.texture.admin_delete_texture(
+            texture_hash=texture_hash,
+            texture_type=texture_type,
+            user_id=user_id,
+            force=force
+        )
         return {"success": True}
