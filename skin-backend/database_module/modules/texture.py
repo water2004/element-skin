@@ -421,3 +421,38 @@ class TextureModule:
         )
         return dict(row) if row else None
 
+    async def delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False):
+        """删除材质记录（事务安全）。
+        
+        force=True: 删除所有用户引用 + 皮肤库记录
+        force=False + user_id: 删除单个用户引用，若剩余为0则物理删除皮肤库记录
+        """
+        if not force and not user_id:
+            raise ValueError("per-user deletion requires user_id")
+        
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                if force:
+                    await conn.execute(
+                        "DELETE FROM user_textures WHERE hash=$1 AND texture_type=$2",
+                        texture_hash, texture_type,
+                    )
+                    await conn.execute(
+                        "DELETE FROM skin_library WHERE skin_hash=$1",
+                        texture_hash,
+                    )
+                else:
+                    await conn.execute(
+                        "DELETE FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
+                        user_id, texture_hash, texture_type,
+                    )
+                    remaining = await conn.fetchval(
+                        "SELECT COUNT(*) FROM user_textures WHERE hash=$1 AND texture_type=$2",
+                        texture_hash, texture_type,
+                    )
+                    if remaining == 0:
+                        await conn.execute(
+                            "DELETE FROM skin_library WHERE skin_hash=$1",
+                            texture_hash,
+                        )
+

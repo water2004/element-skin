@@ -374,30 +374,11 @@ class AdminBackend:
     async def delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False) -> dict:
         if not force and not user_id:
             raise HTTPException(status_code=400, detail="per-user deletion requires user_id")
-
-        async with self.db.get_conn() as conn:
-            async with conn.transaction():
-                if force:
-                    await conn.execute(
-                        "DELETE FROM user_textures WHERE hash=$1 AND texture_type=$2",
-                        texture_hash, texture_type,
-                    )
-                    await conn.execute(
-                        "DELETE FROM skin_library WHERE skin_hash=$1",
-                        texture_hash,
-                    )
-                else:
-                    await conn.execute(
-                        "DELETE FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
-                        user_id, texture_hash, texture_type,
-                    )
-                    remaining = await conn.fetchval(
-                        "SELECT COUNT(*) FROM user_textures WHERE hash=$1 AND texture_type=$2",
-                        texture_hash, texture_type,
-                    )
-                    if remaining == 0:
-                        await conn.execute(
-                            "DELETE FROM skin_library WHERE skin_hash=$1",
-                            texture_hash,
-                        )
+        
+        await self.db.texture.delete_texture(
+            texture_hash=texture_hash,
+            texture_type=texture_type,
+            user_id=user_id,
+            force=force,
+        )
         return {"success": True}
