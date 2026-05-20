@@ -249,22 +249,16 @@ class AdminBackend:
     async def get_all_profiles(self, limit: int = 20, after_id: str | None = None, query: str | None = None) -> dict:
         return await self.db.user.list_all_profiles_cursor(limit, after_id, query)
 
-    async def update_profile(self, profile_id: str, name: str | None = None, texture_model: str | None = None) -> dict:
+    async def update_profile(self, profile_id: str, name: str | None = None) -> dict:
         # 业务验证
         if name is not None:
             if not (1 <= len(name) <= 16) or not re.match(r"^[a-zA-Z0-9_]+$", name):
                 raise HTTPException(status_code=400, detail="角色名只能包含字母、数字、下划线，长度 1-16 字符")
-        if texture_model is not None:
-            if texture_model not in ("default", "slim"):
-                raise HTTPException(status_code=400, detail="texture_model must be 'default' or 'slim'")
-
         # 编排 DB 操作
         if name is not None:
             ok = await self.db.user.update_profile_name(profile_id, name)
             if not ok:
                 raise HTTPException(status_code=409, detail="角色名已被占用")
-        if texture_model is not None:
-            await self.db.user.update_profile_model(profile_id, texture_model)
         
         return {"ok": True}
 

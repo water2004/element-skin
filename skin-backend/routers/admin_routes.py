@@ -237,7 +237,6 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
         return await admin_backend.update_profile(
             profile_id,
             name=body.get("name"),
-            texture_model=body.get("texture_model"),
         )
 
     @router.delete("/admin/profiles/{profile_id}")

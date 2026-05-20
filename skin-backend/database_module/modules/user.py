@@ -355,11 +355,6 @@ class UserModule:
         except asyncpg.exceptions.UniqueViolationError:
             return False
 
-    async def update_profile_model(self, profile_id: str, model: str) -> bool:
-        """更新模型类型，返回是否成功（不处理验证）"""
-        await self.db.execute("UPDATE profiles SET texture_model=$1 WHERE id=$2", model, profile_id)
-        return True
-
     async def search_profiles_by_names(self, names: list[str], limit: int = 20) -> list[PlayerProfile]:
         # asyncpg handle array nicely with ANY
         rows = await self.db.fetch(

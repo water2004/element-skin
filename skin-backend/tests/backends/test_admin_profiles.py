@@ -17,18 +17,6 @@ async def test_update_profile_invalid_name(admin_backend_fixture, db_session, us
 
 
 @pytest.mark.asyncio
-async def test_update_profile_invalid_model(admin_backend_fixture, db_session, user_factory):
-    """验证 model 枚举校验：无效值应返回 400"""
-    user = await user_factory()
-    pid = generate_random_uuid()
-    await db_session.user.create_profile(PlayerProfile(pid, user.id, "ValidName", "default", None, None))
-
-    with pytest.raises(HTTPException) as exc:
-        await admin_backend_fixture.update_profile(pid, texture_model="invalid")
-    assert exc.value.status_code == 400
-
-
-@pytest.mark.asyncio
 async def test_update_profile_duplicate_name(admin_backend_fixture, db_session, user_factory):
     """验证重复名处理：重复名称应返回 409"""
     user = await user_factory()
@@ -44,17 +32,16 @@ async def test_update_profile_duplicate_name(admin_backend_fixture, db_session, 
 
 @pytest.mark.asyncio
 async def test_update_profile_success(admin_backend_fixture, db_session, user_factory):
-    """验证成功更新 name 和 texture_model"""
+    """验证成功更新 name"""
     user = await user_factory()
     pid = generate_random_uuid()
     await db_session.user.create_profile(PlayerProfile(pid, user.id, "OldName", "default", None, None))
 
-    result = await admin_backend_fixture.update_profile(pid, name="NewName", texture_model="slim")
+    result = await admin_backend_fixture.update_profile(pid, name="NewName")
     assert result["ok"] is True
 
     profile = await db_session.user.get_profile_by_id(pid)
     assert profile.name == "NewName"
-    assert profile.texture_model == "slim"
 
 
 @pytest.mark.asyncio
