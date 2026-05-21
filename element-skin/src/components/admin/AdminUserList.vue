@@ -58,11 +58,6 @@
             <el-tag v-else type="success" effect="light" size="small">正常</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="角色数" width="100" align="center">
-          <template #default="{ row }">
-            <span class="count-text">{{ row.profile_count || 0 }}</span>
-          </template>
-        </el-table-column>
         <el-table-column label="管理操作" width="120" align="center">
           <template #default="{ row }">
             <el-button

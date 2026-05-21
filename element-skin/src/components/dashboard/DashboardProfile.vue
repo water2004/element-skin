@@ -70,12 +70,6 @@
         >
           个性化
         </el-divider>
-        <el-form-item v-if="user" label="关闭页面动效">
-          <el-switch v-model="motionDisabled" />
-          <el-text size="small" type="info" style="margin-left: 12px">
-            关闭页面进入动画
-          </el-text>
-        </el-form-item>
         <el-form-item v-if="user" label="关闭彩蛋">
           <el-switch v-model="disableMeowEasterEgg" />
           <el-text size="small" type="info" style="margin-left: 12px">
@@ -134,7 +128,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, inject, onMounted } from 'vue'
+import { ref, computed, watch, inject } from 'vue'
 import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -151,7 +145,6 @@ const router = useRouter()
 const form = ref({ email: '', display_name: '', old_password: '', new_password: '', confirm_password: '' })
 const showDeleteDialog = ref(false)
 const deleteConfirmText = ref('')
-const motionDisabled = ref(localStorage.getItem('motionDisabled') === '1')
 const disableMeowEasterEgg = ref(localStorage.getItem('disableMeowEasterEgg') === '1')
 
 const emailInitial = computed(() => {
@@ -166,15 +159,6 @@ watch(() => user.value, (newUser) => {
   }
 }, { immediate: true, deep: true })
 
-function applyMotionSetting(disabled) {
-  document.documentElement.classList.toggle('motion-off', disabled)
-}
-
-watch(motionDisabled, (disabled) => {
-  localStorage.setItem('motionDisabled', disabled ? '1' : '0')
-  applyMotionSetting(disabled)
-})
-
 watch(disableMeowEasterEgg, (disabled) => {
   localStorage.setItem('disableMeowEasterEgg', disabled ? '1' : '0')
   if (disabled) {
@@ -186,10 +170,6 @@ watch(disableMeowEasterEgg, (disabled) => {
   if (typeof window !== 'undefined' && window.meowReinit) {
     window.meowReinit()
   }
-})
-
-onMounted(() => {
-  applyMotionSetting(motionDisabled.value)
 })
 
 function authHeaders() {
@@ -284,9 +264,6 @@ async function confirmDeleteAccount() {
 @import "@/assets/styles/animations.css";
 @import "@/assets/styles/layout.css";
 @import "@/assets/styles/cards.css";
-
-.profile-section {
-}
 
 .profile-form-card {
   max-width: 600px;

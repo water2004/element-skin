@@ -62,3 +62,6 @@ node_modules/
 .history/
 
 .gemini/
+.sisyphus/
+skills/
+.playwright-mcp/

@@ -244,6 +244,50 @@ class AdminBackend:
         await self.db.user.ban(user_id, banned_until)
         return banned_until
 
+    # ========== Profile Management (Admin) ==========
+
+    async def get_all_profiles(self, limit: int = 20, after_id: str | None = None, query: str | None = None) -> dict:
+        return await self.db.user.list_all_profiles_cursor(limit, after_id, query)
+
+    async def update_profile(self, profile_id: str, name: str | None = None) -> dict:
+        # 业务验证
+        if name is not None:
+            if not (1 <= len(name) <= 16) or not re.match(r"^[a-zA-Z0-9_]+$", name):
+                raise HTTPException(status_code=400, detail="角色名只能包含字母、数字、下划线，长度 1-16 字符")
+        # 编排 DB 操作
+        if name is not None:
+            ok = await self.db.user.update_profile_name(profile_id, name)
+            if not ok:
+                raise HTTPException(status_code=409, detail="角色名已被占用")
+        
+        return {"ok": True}
+
+    async def delete_profile(self, profile_id: str) -> dict:
+        # 检查存在性
+        profile = await self.db.user.get_profile_by_id(profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="角色不存在")
+        
+        # 编排级联删除
+        await self.db.user.delete_tokens_by_profile(profile_id)
+        await self.db.user.delete_profile(profile_id)
+        
+        return {"ok": True}
+
+    async def update_profile_skin(self, profile_id: str, skin_hash: str | None = None) -> dict:
+        profile = await self.db.user.get_profile_by_id(profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="角色不存在")
+        await self.db.user.update_profile_skin(profile_id, skin_hash)
+        return {"ok": True}
+
+    async def update_profile_cape(self, profile_id: str, cape_hash: str | None = None) -> dict:
+        profile = await self.db.user.get_profile_by_id(profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="角色不存在")
+        await self.db.user.update_profile_cape(profile_id, cape_hash)
+        return {"ok": True}
+
     async def reset_user_password(self, user_id: str, new_password: str):
         from utils.password_utils import hash_password
         user_row = await self.db.user.get_by_id(user_id)
@@ -298,3 +342,67 @@ class AdminBackend:
             raise HTTPException(status_code=400, detail="username required")
         await self.db.fallback.remove_whitelist_user(username, endpoint_id)
         return {"ok": True}
+
+    # ========== Admin Texture Management ==========
+
+    async def get_all_textures(self, limit=20, after_cursor=None, query=None, type_filter=None) -> dict:
+        return await self.db.texture.list_all_textures_cursor(limit, after_cursor, query, type_filter)
+
+    async def update_texture_public(self, texture_hash: str, is_public: int) -> dict:
+        # 业务验证
+        if is_public not in (0, 1):
+            raise HTTPException(status_code=400, detail="is_public must be 0 or 1")
+        
+        # 获取 uploader 信息
+        texture = await self.db.texture.get_texture_from_library(texture_hash)
+        if not texture:
+            raise HTTPException(status_code=404, detail="材质不存在")
+        
+        uploader = texture["uploader"]
+        
+        # 统一调用 update_is_public
+        await self.db.texture.update_is_public(uploader, texture_hash, "skin", bool(is_public))
+        
+        return {"success": True}
+
+    async def update_texture_model(self, texture_hash: str, model: str) -> dict:
+        # 业务验证
+        if model not in ("default", "slim"):
+            raise HTTPException(status_code=400, detail="model must be 'default' or 'slim'")
+
+        # 获取 uploader 信息
+        texture = await self.db.texture.get_texture_from_library(texture_hash)
+        if not texture:
+            raise HTTPException(status_code=404, detail="材质不存在")
+
+        uploader = texture["uploader"]
+
+        # 复用现有 DB 方法
+        await self.db.texture.update_model(uploader, texture_hash, "skin", model)
+
+        return {"success": True}
+
+    async def update_texture_note(self, texture_hash: str, note: str) -> dict:
+        # 获取 uploader 信息
+        texture = await self.db.texture.get_texture_from_library(texture_hash)
+        if not texture:
+            raise HTTPException(status_code=404, detail="材质不存在")
+
+        uploader = texture["uploader"]
+
+        # 复用现有 DB 方法
+        await self.db.texture.update_note(uploader, texture_hash, "skin", note)
+
+        return {"success": True}
+
+    async def delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False) -> dict:
+        if not force and not user_id:
+            raise HTTPException(status_code=400, detail="per-user deletion requires user_id")
+        
+        await self.db.texture.delete_texture(
+            texture_hash=texture_hash,
+            texture_type=texture_type,
+            user_id=user_id,
+            force=force,
+        )
+        return {"success": True}

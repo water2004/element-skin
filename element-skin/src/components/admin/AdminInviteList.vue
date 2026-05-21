@@ -74,6 +74,7 @@
       v-model="inviteDialogVisible"
       title="创建新邀请码"
       class="dialog-form"
+      append-to-body
     >
       <div style="padding: 24px">
         <el-form label-position="top">

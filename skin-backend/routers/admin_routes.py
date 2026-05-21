@@ -203,6 +203,121 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
             raise HTTPException(status_code=400, detail="user_id and new_password required")
         return await admin_backend.reset_user_password(user_id, new_password)
 
+    # ========== Admin Profile Management ==========
+
+    @router.get("/admin/profiles")
+    async def get_admin_profiles(
+        cursor: str | None = None,
+        limit: int = 20,
+        q: str | None = None,
+        payload: dict = Depends(admin_required)
+    ):
+        """获取所有角色列表（支持搜索和游标分页）"""
+        from utils.pagination import CursorEncoder
+
+        last_id = None
+        if cursor:
+            cursor_data = CursorEncoder.decode(cursor)
+            if not cursor_data or "last_id" not in cursor_data:
+                raise HTTPException(status_code=400, detail="Invalid cursor")
+            last_id = cursor_data["last_id"]
+
+        return await admin_backend.get_all_profiles(
+            limit=limit,
+            after_id=last_id,
+            query=q.strip() if q and q.strip() else None,
+        )
+
+    @router.patch("/admin/profiles/{profile_id}")
+    async def update_admin_profile(
+        profile_id: str,
+        payload: dict = Depends(admin_required),
+        body: dict = Body(...)
+    ):
+        return await admin_backend.update_profile(
+            profile_id,
+            name=body.get("name"),
+        )
+
+    @router.delete("/admin/profiles/{profile_id}")
+    async def delete_admin_profile(
+        profile_id: str,
+        payload: dict = Depends(admin_required)
+    ):
+        return await admin_backend.delete_profile(profile_id)
+
+    @router.patch("/admin/profiles/{profile_id}/skin")
+    async def update_admin_profile_skin(
+        profile_id: str,
+        payload: dict = Depends(admin_required),
+        body: dict = Body(...)
+    ):
+        return await admin_backend.update_profile_skin(
+            profile_id,
+            skin_hash=body.get("hash"),
+        )
+
+    @router.patch("/admin/profiles/{profile_id}/cape")
+    async def update_admin_profile_cape(
+        profile_id: str,
+        payload: dict = Depends(admin_required),
+        body: dict = Body(...)
+    ):
+        return await admin_backend.update_profile_cape(
+            profile_id,
+            cape_hash=body.get("hash"),
+        )
+
+    # ========== Admin Texture Management ==========
+
+    @router.get("/admin/textures")
+    async def get_admin_textures(
+        cursor: str | None = None,
+        limit: int = 20,
+        q: str | None = None,
+        type: str | None = None,
+        payload: dict = Depends(admin_required)
+    ):
+        """获取所有材质列表（支持搜索、类型过滤和游标分页）"""
+        return await admin_backend.get_all_textures(
+            limit=limit,
+            after_cursor=cursor,
+            query=q.strip() if q and q.strip() else None,
+            type_filter=type,
+        )
+
+    @router.patch("/admin/textures/{hash}")
+    async def update_admin_texture(
+        hash: str,
+        payload: dict = Depends(admin_required),
+        body: dict = Body(...)
+    ):
+        updated = False
+        if "model" in body:
+            await admin_backend.update_texture_model(hash, body["model"])
+            updated = True
+        if "note" in body:
+            await admin_backend.update_texture_note(hash, body["note"])
+            updated = True
+        if "is_public" in body:
+            await admin_backend.update_texture_public(hash, body["is_public"])
+            updated = True
+
+        if not updated:
+            raise HTTPException(status_code=400, detail="至少需要一个更新字段: model, note, is_public")
+
+        return {"ok": True}
+
+    @router.delete("/admin/textures/{hash}")
+    async def delete_admin_texture(
+        hash: str,
+        type: str = "skin",
+        user_id: str | None = None,
+        force: bool = False,
+        payload: dict = Depends(admin_required)
+    ):
+        return await admin_backend.delete_texture(hash, type, user_id, force)
+
     # ========== Invites ==========
 
     @router.get("/admin/invites")

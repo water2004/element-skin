@@ -3,6 +3,7 @@ import os
 from io import BytesIO
 from PIL import Image
 from utils.uuid_utils import generate_random_uuid
+from utils.pagination import CursorEncoder
 
 def create_test_image(width=64, height=64):
     """创建一个测试用的 PNG 字节流"""
@@ -161,3 +162,55 @@ async def test_texture_uploader_deletion_and_readd(db_session, user_factory):
     
     user2_tex = await db_session.texture.get_texture_info(user2.id, tex_hash, "skin")
     assert user2_tex["is_public"] == 2
+
+
+@pytest.mark.asyncio
+async def test_list_all_textures_cursor(db_session, user_factory):
+    """测试全局管理员分页查询所有材质（list_all_textures_cursor）"""
+
+    user = await user_factory()
+    image_bytes_skin = create_test_image(64, 64)
+    image_bytes_cape = create_test_image(64, 32)
+
+    # 1. Upload two skins (one public, one private) and one cape (public)
+    hash_skin_pub, _ = await db_session.texture.upload(
+        user.id, image_bytes_skin, "skin", note="PublicSkin", is_public=True
+    )
+    hash_skin_priv, _ = await db_session.texture.upload(
+        user.id, image_bytes_skin, "skin", note="PrivateSkin", is_public=False
+    )
+    hash_cape, _ = await db_session.texture.upload(
+        user.id, image_bytes_cape, "cape", note="MyCape", is_public=True
+    )
+
+    # 2. list_all_textures_cursor returns all textures (public + private)
+    result = await db_session.texture.list_all_textures_cursor(limit=20)
+    assert result["page_size"] >= 2  # at least the public ones
+
+    # 3. Test type filter
+    only_skins = await db_session.texture.list_all_textures_cursor(limit=20, type_filter="skin")
+    assert only_skins["page_size"] >= 1
+    for item in only_skins["items"]:
+        assert item["type"] == "skin"
+
+    only_capes = await db_session.texture.list_all_textures_cursor(limit=20, type_filter="cape")
+    assert only_capes["page_size"] >= 1
+    for item in only_capes["items"]:
+        assert item["type"] == "cape"
+
+    # 4. Test search (query filter)
+    search_result = await db_session.texture.list_all_textures_cursor(limit=20, query="PublicSkin")
+    assert search_result["page_size"] >= 1
+
+    # 5. Test cursor pagination
+    first_page = await db_session.texture.list_all_textures_cursor(limit=2)
+    if first_page["has_next"]:
+        second_page = await db_session.texture.list_all_textures_cursor(
+            limit=2, after_cursor=first_page["next_cursor"]
+        )
+        assert second_page["page_size"] >= 1
+
+    # 6. Verify uploader info is returned
+    for item in only_skins["items"]:
+        if item["hash"] == hash_skin_pub:
+            assert item["uploader_user_id"] == user.id
