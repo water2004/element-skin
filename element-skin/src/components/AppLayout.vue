@@ -140,7 +140,8 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, provide, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
+import { getPublicSettings } from '@/api/public'
+import { getMe } from '@/api/me'
 import {
   Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link, Picture, Message, Moon, Sunny
 } from '@element-plus/icons-vue'
@@ -302,15 +303,10 @@ function logout() {
   setTimeout(() => window.location.reload(), 100)
 }
 
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: 'Bearer ' + token } : {}
-}
-
 async function fetchMe() {
   if (!isLogged.value) { user.value = null; return; }
   try {
-    const res = await axios.get('/me', { headers: authHeaders() })
+    const res = await getMe()
     user.value = res.data
     // Initialize avatar from backend hash
     if (res.data.avatar_hash) {
@@ -330,7 +326,7 @@ function checkAuth() {
 onMounted(async () => {
   initTheme()
   try {
-    const res = await axios.get('/public/settings')
+    const res = await getPublicSettings()
     if (res.data.site_name) {
       siteName.value = res.data.site_name
       localStorage.setItem('site_name_cache', res.data.site_name); document.title = res.data.site_name;

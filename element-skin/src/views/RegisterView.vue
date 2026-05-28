@@ -102,10 +102,11 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Message, Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
+import { getPublicSettings } from '@/api/public'
+import { sendVerificationCode, register as apiRegister } from '@/api/auth'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -162,7 +163,7 @@ import { onMounted } from 'vue'
 
 onMounted(async () => {
   try {
-    const res = await axios.get('/public/settings')
+    const res = await getPublicSettings()
     emailVerifyEnabled.value = res.data.email_verify_enabled
   } catch (e) {
     console.error('Failed to fetch settings', e)
@@ -179,7 +180,7 @@ async function sendCode() {
 
   try {
     codeLoading.value = true
-    await axios.post('/send-verification-code', {
+    await sendVerificationCode({
       email: form.email,
       type: 'register'
     })
@@ -217,7 +218,7 @@ async function register() {
       code: form.code
     }
 
-    const res = await axios.post('/register', payload)
+    const res = await apiRegister(payload)
     ElMessage.success('注册成功！即将跳转到登录页面...')
 
     // 延迟跳转，让用户看到成功消息

@@ -130,11 +130,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus, Check, Delete, Ticket } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { getAdminInvites, createAdminInvite, deleteAdminInvite } from '@/api/admin/invites'
 
 const invites = ref([])
 const limit = 15
@@ -148,20 +148,15 @@ const inviteUsesMode = ref('limited')
 const inviteUses = ref(1)
 const inviteNote = ref('')
 
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
-
 function formatDate(ts) {
   return ts ? new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'
 }
 
 async function loadInvites() {
   try {
-    const res = await axios.get('/admin/invites', { 
-      headers: authHeaders(),
-      params: {
-        cursor: pagination.currentCursor.value,
-        limit: limit
-      }
+    const res = await getAdminInvites({
+      cursor: pagination.currentCursor.value,
+      limit: limit
     })
     invites.value = res.data.items
     pagination.setPageData(res.data)
@@ -172,10 +167,7 @@ async function loadInvites() {
 
 async function handleNextPage() {
   await pagination.goToNextPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/invites', {
-      headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
-    })
+    const res = await getAdminInvites({ cursor, limit: pageLimit })
     invites.value = res.data.items
     return res.data
   })
@@ -183,10 +175,7 @@ async function handleNextPage() {
 
 async function handlePrevPage() {
   await pagination.goToPrevPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/invites', {
-      headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
-    })
+    const res = await getAdminInvites({ cursor, limit: pageLimit })
     invites.value = res.data.items
     return res.data
   })
@@ -242,7 +231,7 @@ async function confirmCreateInvite() {
       note: inviteNote.value,
       total_uses: inviteUsesMode.value === 'unlimited' ? null : inviteUses.value
     }
-    await axios.post('/admin/invites', payload, { headers: authHeaders() })
+    await createAdminInvite(payload)
     ElMessage.success('创建成功')
     inviteDialogVisible.value = false
     await refreshFirstPage()
@@ -256,7 +245,7 @@ async function confirmCreateInvite() {
 async function deleteInvite(invite) {
   try {
     await ElMessageBox.confirm('确定删除该邀请码吗？', '确认', { type: 'warning' })
-    await axios.delete(`/admin/invites/${invite.code}`, { headers: authHeaders() })
+    await deleteAdminInvite(invite.code)
     ElMessage.success('已删除')
     await refreshFirstPage()
   } catch (e) {}

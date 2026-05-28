@@ -187,12 +187,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted, inject } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, UserFilled, Search, Edit } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { getAdminProfiles, patchAdminProfile, deleteAdminProfile, patchProfileSkin, patchProfileCape } from '@/api/admin/profiles'
 
 interface Profile {
   id: string
@@ -233,10 +233,10 @@ const saving = ref(false)
 const clearingSkin = ref(false)
 const clearingCape = ref(false)
 
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
-
 function texturesUrl(hash: string | null | undefined) {
-  return hash ? `/static/textures/${hash}.png` : ''
+  if (!hash) return ''
+  const base = import.meta.env.BASE_URL
+  return `${base}static/textures/${hash}.png`.replace(/\/+/g, '/')
 }
 
 function buildSearchParams(extraParams: Record<string, unknown> = {}) {
@@ -249,10 +249,7 @@ async function refreshProfiles() {
   loading.value = true
   profilesPagination.isLoading.value = true
   try {
-    const res = await axios.get('/admin/profiles', {
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor: profilesPagination.currentCursor.value }),
-    })
+    const res = await getAdminProfiles(buildSearchParams({ cursor: profilesPagination.currentCursor.value }))
     profiles.value = res.data.items
     profilesPagination.setPageData(res.data)
   } catch (e) {
@@ -270,10 +267,7 @@ async function refreshFromFirst() {
 
 async function handleNextPage() {
   await profilesPagination.goToNextPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/profiles', {
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor, limit: pageLimit }),
-    })
+    const res = await getAdminProfiles(buildSearchParams({ cursor, limit: pageLimit }))
     profiles.value = res.data.items
     return res.data
   })
@@ -281,10 +275,7 @@ async function handleNextPage() {
 
 async function handlePrevPage() {
   await profilesPagination.goToPrevPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/profiles', {
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor, limit: pageLimit }),
-    })
+    const res = await getAdminProfiles(buildSearchParams({ cursor, limit: pageLimit }))
     profiles.value = res.data.items
     return res.data
   })
@@ -322,11 +313,7 @@ async function updateProfileName() {
   if (newName === selectedProfile.value.name) return
 
   try {
-    await axios.patch(
-      `/admin/profiles/${selectedProfile.value.id}`,
-      { name: newName },
-      { headers: authHeaders() },
-    )
+    await patchAdminProfile(selectedProfile.value.id, { name: newName })
     selectedProfile.value.name = newName
     ElMessage.success('角色名称已更新')
     await refreshFromFirst()
@@ -344,7 +331,7 @@ async function clearProfileSkin() {
   const id = selectedProfile.value?.id
   if (!id) return
   try {
-    await axios.patch(`/admin/profiles/${id}/skin`, { hash: null }, { headers: authHeaders() })
+    await patchProfileSkin(id, { hash: null })
     ElMessage.success('皮肤绑定已清除')
     await refreshFromFirst()
   } catch (e) {
@@ -356,7 +343,7 @@ async function clearProfileCape() {
   const id = selectedProfile.value?.id
   if (!id) return
   try {
-    await axios.patch(`/admin/profiles/${id}/cape`, { hash: null }, { headers: authHeaders() })
+    await patchProfileCape(id, { hash: null })
     ElMessage.success('披风绑定已清除')
     await refreshFromFirst()
   } catch (e) {
@@ -372,7 +359,7 @@ async function confirmDeleteRole() {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
     })
-    await axios.delete(`/admin/profiles/${selectedProfile.value.id}`, { headers: authHeaders() })
+    await deleteAdminProfile(selectedProfile.value.id)
     ElMessage.success('角色已删除')
     showPreview.value = false
     await refreshFromFirst()
@@ -398,7 +385,8 @@ async function clearBinding(type: 'skin' | 'cape') {
     if (type === 'skin') clearingSkin.value = true
     else clearingCape.value = true
 
-    await axios.patch(endpoint, { hash: null }, { headers: authHeaders() })
+    if (type === 'skin') await patchProfileSkin(id, { hash: null })
+    else await patchProfileCape(id, { hash: null })
     ElMessage.success(`${type === 'skin' ? '皮肤' : '披风'}绑定已清除`)
     await refreshFromFirst()
   } catch (e) {
@@ -427,13 +415,7 @@ async function saveProfile() {
   }
   saving.value = true
   try {
-    await axios.patch(
-      `/admin/profiles/${editingProfile.value.id}`,
-      {
-        name: editForm.value.name.trim(),
-      },
-      { headers: authHeaders() },
-    )
+    await patchAdminProfile(editingProfile.value.id, { name: editForm.value.name.trim() })
     ElMessage.success('角色已更新')
     editDialogVisible.value = false
     await refreshFromFirst()
@@ -455,7 +437,7 @@ async function deleteProfile(profile: Profile) {
       confirmButtonText: '删除',
       cancelButtonText: '取消',
     })
-    await axios.delete(`/admin/profiles/${profile.id}`, { headers: authHeaders() })
+    await deleteAdminProfile(profile.id)
     ElMessage.success('角色已删除')
     await refreshFromFirst()
   } catch (e) {

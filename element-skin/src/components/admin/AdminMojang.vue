@@ -218,12 +218,13 @@
 
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
-import { 
-  Plus, Delete, ArrowUp, ArrowDown, Connection, Check, Setting, 
-  Sort, Operation, List, User, Lock, Ticket as ShieldCheck 
+import {
+  Plus, Delete, ArrowUp, ArrowDown, Connection, Check, Setting,
+  Sort, Operation, List, User, Lock, Ticket as ShieldCheck
 } from '@element-plus/icons-vue'
+import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
+import { getWhitelist, addWhitelistUser, removeWhitelistUser } from '@/api/admin/whitelist'
 
 const settings = ref({
   fallback_strategy: 'serial'
@@ -231,12 +232,9 @@ const settings = ref({
 const fallbacks = ref([])
 const saving = ref(false)
 
-const jwt = localStorage.getItem('jwt')
-const headers = { Authorization: 'Bearer ' + jwt }
-
 async function fetchSettings() {
   try {
-    const res = await axios.get('/admin/settings/fallback', { headers })
+    const res = await getAdminSettingsGroup('fallback')
     settings.value.fallback_strategy = res.data.fallback_strategy || 'serial'
     
     const raw = Array.isArray(res.data.fallbacks) ? res.data.fallbacks : []
@@ -284,9 +282,9 @@ async function saveSettings() {
         skin_domains: item.skin_domains_text.split(',').map(s => s.trim()).filter(s => s)
       }))
     }
-    await axios.post('/admin/settings/fallback', payload, { headers })
+    await saveAdminSettingsGroup('fallback', payload)
 
-    const res = await axios.get('/admin/settings/fallback', { headers })
+    const res = await getAdminSettingsGroup('fallback')
     const updatedFallbacksFromDB = res.data.fallbacks || []
     
     for (const localRow of fallbacks.value) {
@@ -304,8 +302,8 @@ async function saveSettings() {
         const toRemove = localRow._initialWhitelist.filter(u => !currentNames.includes(u.username.toLowerCase()))
 
         const promises = [
-           ...toAdd.map(u => axios.post('/admin/official-whitelist', { username: u.username, endpoint_id: endpointId }, { headers })),
-           ...toRemove.map(u => axios.delete(`/admin/official-whitelist/${u.username}`, { headers, params: { endpoint_id: endpointId } }))
+           ...toAdd.map(u => addWhitelistUser({ username: u.username, endpoint_id: endpointId })),
+           ...toRemove.map(u => removeWhitelistUser(u.username, endpointId))
         ]
         await Promise.all(promises)
         localRow._initialWhitelist = JSON.parse(JSON.stringify(localRow._whitelist))
@@ -398,10 +396,7 @@ function onWhitelistToggle(row, val) {
 async function fetchWhitelist(row) {
   if (!row.id) return
   try {
-    const res = await axios.get('/admin/official-whitelist', {
-      headers,
-      params: { endpoint_id: row.id }
-    })
+    const res = await getWhitelist(row.id)
     row._whitelist = JSON.parse(JSON.stringify(res.data))
     row._initialWhitelist = JSON.parse(JSON.stringify(res.data))
     row._loaded = true

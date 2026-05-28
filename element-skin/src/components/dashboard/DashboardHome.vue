@@ -103,8 +103,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
-import { 
+import { getPublicSettings } from '@/api/public'
+import { getMe } from '@/api/me'
+import {
   Box, User, CopyDocument, Pointer, 
   Check, Loading, Warning, Refresh 
 } from '@element-plus/icons-vue'
@@ -188,7 +189,7 @@ function formatStatusText(status) {
 onMounted(async () => {
   // Load Settings for Mojang Status and API URL
   try {
-    const res = await axios.get('/public/settings')
+    const res = await getPublicSettings()
     
     // Set API URL from backend settings, fallback to calculated one if empty
     if (res.data.site_url) {
@@ -209,9 +210,8 @@ onMounted(async () => {
   // Load User Stats (from /me)
   const token = localStorage.getItem('jwt')
   if (token) {
-      const headers = { Authorization: 'Bearer ' + token }
       try {
-          const res = await axios.get('/me', { headers })
+          const res = await getMe()
           if (res.data) {
               profileCount.value = res.data.profile_count || 0
               textureCount.value = res.data.texture_count || 0

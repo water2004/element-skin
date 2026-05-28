@@ -187,13 +187,13 @@
 
 <script setup>
 import { ref, inject, onMounted } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Picture, Search, Edit } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { getAdminTextures, patchAdminTexture, deleteAdminTexture } from '@/api/admin/textures'
 
 const isDark = inject('isDark', ref(false))
 
@@ -216,8 +216,6 @@ const showPreview = ref(false)
 const selectedItem = ref(null)
 const previewNote = ref('')
 
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
-
 function texturesUrl(hash) {
   if (!hash) return ''
   const base = import.meta.env.BASE_URL
@@ -235,10 +233,7 @@ async function fetchTextures() {
   loading.value = true
   pagination.isLoading.value = true
   try {
-    const res = await axios.get('/admin/textures', {
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor: pagination.currentCursor.value })
-    })
+    const res = await getAdminTextures(buildSearchParams({ cursor: pagination.currentCursor.value }))
     textures.value = res.data.items
     pagination.setPageData(res.data)
   } catch (e) {
@@ -257,10 +252,7 @@ async function refreshTexturesFromFirst() {
 
 async function handleNextPage() {
   await pagination.goToNextPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/textures', {
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor, limit: pageLimit })
-    })
+    const res = await getAdminTextures(buildSearchParams({ cursor, limit: pageLimit }))
     textures.value = res.data.items
     return res.data
   })
@@ -268,10 +260,7 @@ async function handleNextPage() {
 
 async function handlePrevPage() {
   await pagination.goToPrevPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/textures', {
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor, limit: pageLimit })
-    })
+    const res = await getAdminTextures(buildSearchParams({ cursor, limit: pageLimit }))
     textures.value = res.data.items
     return res.data
   })
@@ -311,10 +300,7 @@ async function togglePublic(item) {
   const newValue = item.is_public ? 0 : 1
   togglingHash.value = item.hash
   try {
-    await axios.patch(`/admin/textures/${item.hash}`,
-      { is_public: newValue },
-      { headers: authHeaders() }
-    )
+    await patchAdminTexture(item.hash, { is_public: newValue })
     item.is_public = !item.is_public
     ElMessage.success(newValue === 0 ? '已取消公开' : '已设为公开')
   } catch (e) {
@@ -331,13 +317,7 @@ async function forceDeleteTexture(item) {
       '危险操作',
       { confirmButtonText: '确认强制删除', cancelButtonText: '取消', type: 'error' }
     )
-    await axios.delete(`/admin/textures/${item.hash}`, {
-      headers: authHeaders(),
-      params: {
-        force: 'true',
-        type: item.type
-      }
-    })
+    await deleteAdminTexture(item.hash, { force: true, type: item.type })
     ElMessage.success('材质已强制下架')
     await fetchTextures()
   } catch (e) {
@@ -355,7 +335,7 @@ async function confirmModelChange() {
   if (!modelTarget.value) return
   savingModel.value = true
   try {
-    await axios.patch(`/admin/textures/${modelTarget.value.hash}`, { model: selectedModel.value }, { headers: authHeaders() })
+    await patchAdminTexture(modelTarget.value.hash, { model: selectedModel.value })
     modelTarget.value.model = selectedModel.value
     ElMessage.success('模型已更新')
     modelDialogVisible.value = false
@@ -394,10 +374,7 @@ async function updatePreviewNote() {
   const newName = previewNote.value.trim()
   if (newName === selectedItem.value.name) return
   try {
-    await axios.patch(`/admin/textures/${selectedItem.value.hash}`,
-      { note: newName },
-      { headers: authHeaders() }
-    )
+    await patchAdminTexture(selectedItem.value.hash, { note: newName })
     selectedItem.value.name = newName
     ElMessage.success('名称已更新')
   } catch (e) {
@@ -408,10 +385,7 @@ async function updatePreviewNote() {
 async function updateModel(newModel) {
   if (!selectedItem.value) return
   try {
-    await axios.patch(`/admin/textures/${selectedItem.value.hash}`,
-      { model: newModel },
-      { headers: authHeaders() }
-    )
+    await patchAdminTexture(selectedItem.value.hash, { model: newModel })
     selectedItem.value.model = newModel
     ElMessage.success('模型已更新')
   } catch (e) {
@@ -440,10 +414,7 @@ async function updateIsPublic(newValue) {
   }
 
   try {
-    await axios.patch(`/admin/textures/${item.hash}`,
-      { is_public: newValue },
-      { headers: authHeaders() }
-    )
+    await patchAdminTexture(item.hash, { is_public: newValue })
     item.is_public = newValue
     ElMessage.success(newValue ? '材质已公开' : '已取消公开')
   } catch (e) {
@@ -460,13 +431,7 @@ async function confirmForceDelete() {
       '危险操作',
       { confirmButtonText: '确认强制删除', cancelButtonText: '取消', type: 'error' }
     )
-    await axios.delete(`/admin/textures/${item.hash}`, {
-      headers: authHeaders(),
-      params: {
-        force: 'true',
-        type: item.type
-      }
-    })
+    await deleteAdminTexture(item.hash, { force: true, type: item.type })
     ElMessage.success('材质已强制下架')
     showPreview.value = false
     await fetchTextures()

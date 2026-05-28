@@ -2,7 +2,8 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { User } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { getPublicSettings, getPublicCarousel } from '@/api/public'
+import { getMe } from '@/api/me'
 
 const router = useRouter()
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
@@ -13,7 +14,7 @@ const carouselImages = ref([])
 onMounted(async () => {
   // 加载站点配置
   try {
-    const res = await axios.get('/public/settings')
+    const res = await getPublicSettings()
     if (res.data.site_name) {
       siteName.value = res.data.site_name
       localStorage.setItem('site_name_cache', res.data.site_name)
@@ -28,7 +29,7 @@ onMounted(async () => {
 
   // 加载轮播图
   try {
-    const res = await axios.get('/public/carousel')
+    const res = await getPublicCarousel()
     carouselImages.value = res.data
   } catch (e) {
     console.warn('Failed to load carousel images:', e)
@@ -38,7 +39,7 @@ onMounted(async () => {
   const jwt = localStorage.getItem('jwt')
   if (jwt) {
     try {
-      await axios.get('/me', { headers: { Authorization: 'Bearer ' + jwt } })
+      await getMe()
       isLogged.value = true
     } catch (e) {
       localStorage.removeItem('jwt')

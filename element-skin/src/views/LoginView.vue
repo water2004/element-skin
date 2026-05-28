@@ -58,10 +58,11 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Message, Lock, Right } from '@element-plus/icons-vue'
+import { getPublicSettings } from '@/api/public'
+import { siteLogin } from '@/api/auth'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -77,7 +78,7 @@ import { onMounted } from 'vue'
 
 onMounted(async () => {
   try {
-    const res = await axios.get('/public/settings')
+    const res = await getPublicSettings()
     emailVerifyEnabled.value = res.data.email_verify_enabled
   } catch (e) {
     console.error('Failed to fetch settings', e)
@@ -100,7 +101,7 @@ async function login() {
     loading.value = true
 
     // 使用站点登录接口（不受封禁影响）
-    const res = await axios.post('/site-login', {
+    const res = await siteLogin({
       email: form.email,
       password: form.password,
     })

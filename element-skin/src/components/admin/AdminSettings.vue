@@ -195,11 +195,11 @@
 
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { 
-  Refresh, Setting, Monitor, Lock, Key, Link 
+import {
+  Refresh, Setting, Monitor, Lock, Key, Link
 } from '@element-plus/icons-vue'
+import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 
 const settings = reactive({
   site: {
@@ -241,11 +241,9 @@ const saving = reactive({
 
 const regulatoryCollapse = ref([])
 
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
-
 async function loadGroup(group) {
   try {
-    const res = await axios.get(`/admin/settings/${group}`, { headers: authHeaders() })
+    const res = await getAdminSettingsGroup(group)
     Object.assign(settings[group], res.data)
   } catch (e) {
     ElMessage.error(`加载 ${group} 设置失败`)
@@ -264,7 +262,7 @@ async function loadAllSettings() {
 async function saveGroup(group) {
   saving[group] = true
   try {
-    await axios.post(`/admin/settings/${group}`, settings[group], { headers: authHeaders() })
+    await saveAdminSettingsGroup(group, settings[group])
     ElMessage.success('设置已更新')
     if (group === 'microsoft') {
        settings.microsoft.microsoft_client_secret = '' // Clear local secret field

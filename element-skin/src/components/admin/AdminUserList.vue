@@ -269,14 +269,14 @@
 
 <script setup>
 import { ref, reactive, onMounted, watch } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Refresh, UserFilled, Warning, CircleCheck, Search 
+import {
+  Refresh, UserFilled, Warning, CircleCheck, Search
 } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { getAvatarForHash } from '@/composables/useAvatar'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { getUsers, getUser, getUserProfiles, toggleAdmin as apiToggleAdmin, deleteUser as apiDeleteUser, banUser as apiBanUser, unbanUser as apiUnbanUser, resetUserPassword } from '@/api/admin/users'
 
 const users = ref([])
 const limit = 15
@@ -304,8 +304,6 @@ const presetDurations = [
   { label: '3天', value: 72 }, { label: '7天', value: 168 }, { label: '30天', value: 720 }
 ]
 
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
-
 function buildSearchParams(extraParams = {}) {
   const params = { limit, ...extraParams }
   if (activeSearchQuery.value) params.q = activeSearchQuery.value
@@ -316,10 +314,7 @@ async function refreshUsers() {
   loading.value = true
   usersPagination.isLoading.value = true
   try {
-    const res = await axios.get('/admin/users', { 
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor: usersPagination.currentCursor.value })
-    })
+    const res = await getUsers(buildSearchParams({ cursor: usersPagination.currentCursor.value }))
     users.value = res.data.items
     usersPagination.setPageData(res.data)
   } catch (e) {
@@ -347,10 +342,7 @@ async function loadAvatarsForUsers(userList) {
 
 async function handleUsersNextPage() {
   await usersPagination.goToNextPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/users', {
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor, limit: pageLimit })
-    })
+    const res = await getUsers(buildSearchParams({ cursor, limit: pageLimit }))
     users.value = res.data.items
     return res.data
   })
@@ -358,10 +350,7 @@ async function handleUsersNextPage() {
 
 async function handleUsersPrevPage() {
   await usersPagination.goToPrevPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/users', {
-      headers: authHeaders(),
-      params: buildSearchParams({ cursor, limit: pageLimit })
-    })
+    const res = await getUsers(buildSearchParams({ cursor, limit: pageLimit }))
     users.value = res.data.items
     return res.data
   })
@@ -382,7 +371,7 @@ function handleClearSearch() {
 
 async function showUserDetailDialog(user) {
   try {
-    const res = await axios.get(`/admin/users/${user.id}`, { headers: authHeaders() })
+    const res = await getUser(user.id)
     currentUser.value = res.data
     profilesPagination.reset()
     await fetchUserProfilesAdmin()
@@ -395,10 +384,7 @@ async function showUserDetailDialog(user) {
 async function fetchUserProfilesAdmin() {
   if (!currentUser.value) return
   try {
-    const res = await axios.get(`/admin/users/${currentUser.value.id}/profiles`, { 
-      headers: authHeaders(),
-      params: { cursor: profilesPagination.currentCursor.value, limit: profileLimit }
-    })
+    const res = await getUserProfiles(currentUser.value.id, { cursor: profilesPagination.currentCursor.value, limit: profileLimit })
     userProfiles.value = res.data.items
     profilesPagination.setPageData(res.data)
   } catch (e) {
@@ -409,10 +395,7 @@ async function fetchUserProfilesAdmin() {
 async function handleProfilesNextPage() {
   if (!currentUser.value) return
   await profilesPagination.goToNextPage(async (cursor, pageLimit) => {
-    const res = await axios.get(`/admin/users/${currentUser.value.id}/profiles`, {
-      headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
-    })
+    const res = await getUserProfiles(currentUser.value.id, { cursor, limit: pageLimit })
     userProfiles.value = res.data.items
     return res.data
   })
@@ -421,10 +404,7 @@ async function handleProfilesNextPage() {
 async function handleProfilesPrevPage() {
   if (!currentUser.value) return
   await profilesPagination.goToPrevPage(async (cursor, pageLimit) => {
-    const res = await axios.get(`/admin/users/${currentUser.value.id}/profiles`, {
-      headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
-    })
+    const res = await getUserProfiles(currentUser.value.id, { cursor, limit: pageLimit })
     userProfiles.value = res.data.items
     return res.data
   })
@@ -433,7 +413,7 @@ async function handleProfilesPrevPage() {
 async function toggleAdmin(user) {
   try {
     await ElMessageBox.confirm(`确定要切换 ${user.email} 的管理员状态吗？`, '确认', { type: 'warning' })
-    await axios.post(`/admin/users/${user.id}/toggle-admin`, {}, { headers: authHeaders() })
+    await apiToggleAdmin(user.id)
     ElMessage.success('操作成功')
     await refreshUsers()
     if (currentUser.value) currentUser.value.is_admin = !currentUser.value.is_admin
@@ -443,7 +423,7 @@ async function toggleAdmin(user) {
 async function deleteUser(user) {
   try {
     await ElMessageBox.confirm('永久删除该用户？此操作不可逆！', '极端警告', { type: 'error' })
-    await axios.delete(`/admin/users/${user.id}`, { headers: authHeaders() })
+    await apiDeleteUser(user.id)
     ElMessage.success('用户已删除')
     userDetailDialogVisible.value = false
     await refreshUsersFromFirst()
@@ -462,10 +442,10 @@ async function confirmResetPassword() {
   
   resetting.value = true
   try {
-    await axios.post('/admin/users/reset-password', {
+    await resetUserPassword({
       user_id: currentUser.value.id,
       new_password: f.new_password
-    }, { headers: authHeaders() })
+    })
     ElMessage.success('密码已重置')
     resetPasswordDialogVisible.value = false
   } catch (e) {
@@ -485,7 +465,7 @@ async function confirmBanUser() {
   
   banning.value = true
   try {
-    await axios.post(`/admin/users/${currentUser.value.id}/ban`, { banned_until: bannedUntil }, { headers: authHeaders() })
+    await apiBanUser(currentUser.value.id, { banned_until: bannedUntil })
     ElMessage.success('封禁已执行')
     banDialogVisible.value = false
     await refreshUsers()
@@ -499,7 +479,7 @@ async function confirmBanUser() {
 
 async function unbanUser(user) {
   try {
-    await axios.post(`/admin/users/${user.id}/unban`, {}, { headers: authHeaders() })
+    await apiUnbanUser(user.id)
     ElMessage.success('封禁已解除')
     await refreshUsers()
     if (currentUser.value) currentUser.value.banned_until = 0

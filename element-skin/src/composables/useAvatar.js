@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue';
 import * as skinview3d from 'skinview3d';
-import axios from 'axios';
+import { patchMe } from '@/api/me';
 
 // Global reactive state to ensure sync across components
 const currentAvatarImg = ref(null);
@@ -117,9 +117,7 @@ export function useAvatar() {
   async function setAvatar(hash, model = 'default') {
     try {
       // Sync to backend first
-      await axios.patch('/me', { avatar_hash: hash }, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('jwt')}` }
-      });
+      await patchMe({ avatar_hash: hash });
       
       // Update local state and cache
       await initializeAvatar(hash, model);

@@ -95,9 +95,9 @@
 
 <script setup>
 import { ref, onMounted, reactive } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Refresh, Message, Postcard } from '@element-plus/icons-vue'
+import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 
 const emailSettings = reactive({
   email_verify_enabled: false,
@@ -111,11 +111,10 @@ const emailSettings = reactive({
 })
 
 const saving = ref(false)
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
 
 async function loadSettings() {
   try {
-    const res = await axios.get('/admin/settings/email', { headers: authHeaders() })
+    const res = await getAdminSettingsGroup('email')
     if (res.data) {
       Object.assign(emailSettings, res.data)
       emailSettings.smtp_password = '' // Don't show password
@@ -128,7 +127,7 @@ async function loadSettings() {
 async function saveSettings() {
   saving.value = true
   try {
-    await axios.post('/admin/settings/email', emailSettings, { headers: authHeaders() })
+    await saveAdminSettingsGroup('email', emailSettings)
     ElMessage.success('设置已保存')
     emailSettings.smtp_password = '' // Clear password field after save
   } catch (e) {

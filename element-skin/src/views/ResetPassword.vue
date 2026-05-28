@@ -78,10 +78,11 @@
 
 <script setup>
 import { reactive, ref } from 'vue'
-import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Message, Lock, Ticket } from '@element-plus/icons-vue'
+import { getPublicSettings } from '@/api/public'
+import { sendVerificationCode, resetPassword as apiResetPassword } from '@/api/auth'
 
 const router = useRouter()
 const formRef = ref(null)
@@ -128,7 +129,7 @@ import { onMounted } from 'vue'
 
 onMounted(async () => {
   try {
-    const res = await axios.get('/public/settings')
+    const res = await getPublicSettings()
     if (!res.data.email_verify_enabled) {
       ElMessage.warning('密码重置功能未开启')
       router.push('/login')
@@ -148,7 +149,7 @@ async function sendCode() {
 
   try {
     codeLoading.value = true
-    await axios.post('/send-verification-code', {
+    await sendVerificationCode({
       email: form.email,
       type: 'reset'
     })
@@ -177,7 +178,7 @@ async function resetPassword() {
     await formRef.value.validate()
     loading.value = true
 
-    await axios.post('/reset-password', {
+    await apiResetPassword({
       email: form.email,
       password: form.password,
       code: form.code

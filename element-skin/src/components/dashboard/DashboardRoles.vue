@@ -323,7 +323,6 @@
 <script setup>
 import { ref, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Plus, Delete, Close, Check, Select, Warning, Download, Edit } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
@@ -331,6 +330,9 @@ import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import * as skinview3d from 'skinview3d'
 import { useAvatar } from '@/composables/useAvatar'
+import { getProfiles, createProfile, patchProfile, deleteProfile, clearProfileSkin, clearProfileCape } from '@/api/profiles'
+import { getMicrosoftAuthUrl, getMicrosoftProfile, importMicrosoftProfile as apiImportMicrosoftProfile } from '@/api/microsoft'
+import { getRemoteYggProfiles, importRemoteYggProfiles } from '@/api/remote-ygg'
 
 const { setAvatar } = useAvatar()
 
@@ -376,11 +378,6 @@ function openPreviewDialog(profile) {
   showPreviewDialog.value = true
 }
 
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: 'Bearer ' + token } : {}
-}
-
 function texturesUrl(hash) {
   if (!hash) return ''
   const base = import.meta.env.BASE_URL
@@ -394,7 +391,7 @@ async function fetchProfiles() {
       cursor: pagination.currentCursor.value,
       limit: limit
     }
-    const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
+    const res = await getProfiles(params)
     profiles.value = res.data.items
     pagination.setPageData(res.data)
   } catch (e) {
@@ -407,7 +404,7 @@ async function fetchProfiles() {
 async function handleNextPage() {
   await pagination.goToNextPage(async (cursor, limit) => {
     const params = { cursor, limit }
-    const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
+    const res = await getProfiles(params)
     profiles.value = res.data.items
     return res.data
   })
@@ -417,7 +414,7 @@ async function handleNextPage() {
 async function handlePrevPage() {
   await pagination.goToPrevPage(async (cursor, limit) => {
     const params = { cursor, limit }
-    const res = await axios.get('/me/profiles', { headers: authHeaders(), params })
+    const res = await getProfiles(params)
     profiles.value = res.data.items
     return res.data
   })
@@ -433,7 +430,7 @@ async function createRole() {
   const name = (newRoleName.value || '').trim()
   if (!name) return ElMessage.error('请输入角色名称')
   try {
-    await axios.post('/me/profiles', { name }, { headers: authHeaders() })
+    await createProfile({ name })
     newRoleName.value = ''
     showCreateRoleDialog.value = false
     ElMessage.success('创建成功')
@@ -446,7 +443,7 @@ async function createRole() {
 
 async function deleteRole(pid) {
   try {
-    await axios.delete(`/me/profiles/${pid}`, { headers: authHeaders() })
+    await deleteProfile(pid)
     ElMessage.success('已删除')
     showPreviewDialog.value = false
     await refreshFirstPage()
@@ -467,7 +464,7 @@ async function updateRoleName() {
   }
 
   try {
-    await axios.patch(`/me/profiles/${pid}`, { name: newName }, { headers: authHeaders() })
+    await patchProfile(pid, { name: newName })
     ElMessage.success('名称已修改')
     await fetchProfiles()
     if (fetchMe) fetchMe()
@@ -483,7 +480,7 @@ async function clearRoleSkin(pid) {
       '确认清除',
       { type: 'warning', confirmButtonText: '确定清除', cancelButtonText: '取消' }
     )
-    await axios.delete(`/me/profiles/${pid}/skin`, { headers: authHeaders() })
+    await clearProfileSkin(pid)
     ElMessage.success('皮肤已清除')
     showPreviewDialog.value = false
     await fetchProfiles()
@@ -502,7 +499,7 @@ async function clearRoleCape(pid) {
       '确认清除',
       { type: 'warning', confirmButtonText: '确定清除', cancelButtonText: '取消' }
     )
-    await axios.delete(`/me/profiles/${pid}/cape`, { headers: authHeaders() })
+    await clearProfileCape(pid)
     ElMessage.success('披风已清除')
     showPreviewDialog.value = false
     await fetchProfiles()
@@ -545,7 +542,7 @@ function formatUUID(uuid) {
 
 async function startMicrosoftAuth() {
   try {
-    const response = await axios.get('/microsoft/auth-url', { headers: authHeaders() })
+    const response = await getMicrosoftAuthUrl()
     const authUrl = response.data.auth_url
     sessionStorage.setItem('ms_auth_state', response.data.state)
     window.location.href = authUrl
@@ -572,7 +569,7 @@ async function importMicrosoftProfile() {
       cape_url: capeData?.url || null
     }
 
-    await axios.post('/microsoft/import-profile', importData, { headers: authHeaders() })
+    await apiImportMicrosoftProfile(importData)
 
     ElMessage.success('正版角色导入成功！')
 
@@ -621,11 +618,11 @@ async function getYggProfiles() {
   }
   try {
     yggLoading.value = true
-    const res = await axios.post('/remote-ygg/get-profiles', {
+    const res = await getRemoteYggProfiles({
       api_url: yggApiUrl.value,
       username: yggUsername.value,
       password: yggPassword.value
-    }, { headers: authHeaders() })
+    })
     
     yggProfiles.value = res.data.profiles
     if (yggProfiles.value.length === 0) {
@@ -647,13 +644,13 @@ async function importYggProfile() {
 
   try {
     yggLoading.value = true
-    const res = await axios.post('/remote-ygg/import-profiles', {
+    const res = await importRemoteYggProfiles({
       api_url: yggApiUrl.value,
       profiles: selectedProfiles.map(profile => ({
         profile_id: profile.id,
         profile_name: profile.name,
       }))
-    }, { headers: authHeaders() })
+    })
     
     const successCount = res.data?.success_count ?? 0
     const failureCount = res.data?.failure_count ?? 0
@@ -700,10 +697,7 @@ onMounted(async () => {
     router.replace({ query: {} })
   } else if (msToken) {
     try {
-      const response = await axios.post('/microsoft/get-profile',
-        { ms_token: msToken },
-        { headers: authHeaders() }
-      )
+      const response = await getMicrosoftProfile({ ms_token: msToken })
 
       microsoftProfile.value = response.data.profile
       microsoftProfile.value.has_game = response.data.has_game

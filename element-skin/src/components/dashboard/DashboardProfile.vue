@@ -129,11 +129,11 @@
 
 <script setup>
 import { ref, computed, watch, inject } from 'vue'
-import axios from 'axios'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Clock, Check, Delete } from '@element-plus/icons-vue'
 import { useAvatar } from '@/composables/useAvatar'
+import { changePassword, patchMe, deleteMe } from '@/api/me'
 
 const { currentAvatarImg: customAvatar } = useAvatar()
 
@@ -171,11 +171,6 @@ watch(disableMeowEasterEgg, (disabled) => {
     window.meowReinit()
   }
 })
-
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: 'Bearer ' + token } : {}
-}
 
 function getUserBanStatus() {
   if (!user.value?.banned_until) return false
@@ -222,10 +217,10 @@ async function updateProfile() {
         return
       }
 
-      await axios.post('/me/password', {
+      await changePassword({
         old_password: form.value.old_password,
         new_password: form.value.new_password
-      }, { headers: authHeaders() })
+      })
 
       ElMessage.success('密码修改成功')
       form.value.old_password = ''
@@ -237,7 +232,7 @@ async function updateProfile() {
       email: form.value.email,
       display_name: form.value.display_name
     }
-    await axios.patch('/me', payload, { headers: authHeaders() })
+    await patchMe(payload)
     ElMessage.success('信息修改成功')
     fetchMe()
   } catch (e) {
@@ -247,7 +242,7 @@ async function updateProfile() {
 
 async function confirmDeleteAccount() {
   try {
-    await axios.delete('/me', { headers: authHeaders() })
+    await deleteMe()
     ElMessage.success('账号已注销')
     localStorage.removeItem('jwt')
     localStorage.removeItem('accessToken')

@@ -1,0 +1,121 @@
+// Generic cursor pagination response (shared across all paginated endpoints)
+export interface CursorPageResponse<T> {
+  items: T[]
+  has_next: boolean
+  next_cursor: string | null
+  page_size: number
+  total?: number
+}
+
+// User (returned by GET /me, GET /admin/users)
+export interface User {
+  id: string
+  email: string
+  display_name?: string
+  is_admin: boolean
+  avatar_hash?: string | null
+  banned_until?: number | null
+  profile_count?: number
+  texture_count?: number
+  lang?: string
+  preferred_language?: string
+}
+
+// Player profile / game role
+export interface Profile {
+  id: string
+  name: string
+  model?: string
+  texture_model?: string
+  skin_hash?: string | null
+  cape_hash?: string | null
+  user_id?: string
+  owner_email?: string
+  owner_display_name?: string
+}
+
+// Texture item (wardrobe / skin-library)
+export interface Texture {
+  hash: string
+  type: 'skin' | 'cape'
+  model?: string
+  note?: string | null
+  name?: string | null
+  is_public?: number | boolean
+  uploader?: string
+  uploader_name?: string
+  uploader_display_name?: string
+  uploader_email?: string
+  created_at?: number
+}
+
+// Public site settings
+export interface SiteSettings {
+  site_name?: string
+  site_subtitle?: string
+  allow_register?: boolean
+  enable_skin_library?: boolean
+  email_verify_enabled?: boolean
+  footer_text?: string
+  filing_icp?: string
+  filing_icp_link?: string
+  filing_mps?: string
+  filing_mps_link?: string
+  mojang_status_urls?: Record<string, string>
+}
+
+// Auth responses
+export interface LoginResponse {
+  token: string
+  user_id: string
+}
+
+// Invite code
+export interface Invite {
+  code: string
+  used_count?: number
+  total_uses?: number | null
+  used_by?: string | null
+  note?: string
+  created_at?: number
+}
+
+// Fallback / external Yggdrasil endpoint
+export interface FallbackEndpoint {
+  id?: number
+  priority?: number
+  session_url?: string
+  account_url?: string
+  services_url?: string
+  cache_ttl?: number
+  enable_profile?: boolean
+  enable_hasjoined?: boolean
+  enable_whitelist?: boolean
+  note?: string
+  skin_domains?: string
+}
+
+// Whitelist entry
+export interface WhitelistEntry {
+  username: string
+  created_at?: number
+}
+
+// Microsoft auth
+export interface MicrosoftAuthUrlResponse {
+  auth_url: string
+  state: string
+}
+
+// Yggdrasil profile (remote)
+export interface YggdrasilProfile {
+  id: string
+  name: string
+}
+
+export interface YggdrasilImportResult {
+  items: Array<{ id: string; name: string }>
+  success_count: number
+  failure_count: number
+  failed: Array<{ profile_id: string; profile_name: string; detail: string }>
+}

@@ -170,13 +170,14 @@
 
 <script setup>
 import { ref, onMounted, inject, computed } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Plus, User } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { getPublicSkinLibrary } from '@/api/public'
+import { addToWardrobe as apiAddToWardrobe } from '@/api/textures'
 
 const isDark = inject('isDark')
 const user = inject('user')
@@ -218,7 +219,7 @@ async function fetchLibrary() {
       limit: limit,
       texture_type: filterType.value || undefined
     }
-    const res = await axios.get('/public/skin-library', { params })
+    const res = await getPublicSkinLibrary(params)
     items.value = res.data.items
     pagination.setPageData(res.data)
     
@@ -271,7 +272,7 @@ async function handleNextPage() {
       limit: pageLimit,
       texture_type: filterType.value || undefined
     }
-    const res = await axios.get('/public/skin-library', { params })
+    const res = await getPublicSkinLibrary(params)
     items.value = res.data.items
     return res.data
   })
@@ -290,7 +291,7 @@ async function handlePrevPage() {
       limit: pageLimit,
       texture_type: filterType.value || undefined
     }
-    const res = await axios.get('/public/skin-library', { params })
+    const res = await getPublicSkinLibrary(params)
     items.value = res.data.items
     return res.data
   })
@@ -307,14 +308,9 @@ async function handleFilterChange() {
   await fetchLibrary()
 }
 
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: 'Bearer ' + token } : {}
-}
-
 async function addToWardrobe(hash) {
   try {
-    await axios.post(`/me/textures/${hash}/add`, {}, { headers: authHeaders() })
+    await apiAddToWardrobe(hash)
     ElMessage.success('已成功添加到我的衣柜')
   } catch (e) {
     ElMessage.error('添加失败: ' + (e.response?.data?.detail || e.message))

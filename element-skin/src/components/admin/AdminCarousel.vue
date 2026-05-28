@@ -53,14 +53,13 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, PictureFilled, Upload } from '@element-plus/icons-vue'
+import { getPublicCarousel } from '@/api/public'
+import { uploadCarousel as apiUploadCarousel, deleteCarousel as apiDeleteCarousel } from '@/api/admin/carousel'
 
 const carouselImages = ref([])
 const loading = ref(false)
-
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
 
 function getCarouselUrl(filename) {
   const base = import.meta.env.BASE_URL
@@ -70,7 +69,7 @@ function getCarouselUrl(filename) {
 async function fetchCarousel() {
   loading.value = true
   try {
-    const res = await axios.get('/public/carousel')
+    const res = await getPublicCarousel()
     carouselImages.value = res.data.map(f => ({ filename: f }))
   } catch (e) {
     ElMessage.error('获取图片列表失败')
@@ -83,9 +82,7 @@ async function uploadCarousel({ file }) {
   const formData = new FormData()
   formData.append('file', file)
   try {
-    await axios.post('/admin/carousel', formData, {
-      headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' }
-    })
+    await apiUploadCarousel(formData)
     ElMessage.success('上传成功')
     fetchCarousel()
   } catch (e) {
@@ -100,7 +97,7 @@ async function deleteCarousel(row) {
       confirmButtonText: '确定删除',
       cancelButtonText: '取消'
     })
-    await axios.delete(`/admin/carousel/${row.filename}`, { headers: authHeaders() })
+    await apiDeleteCarousel(row.filename)
     ElMessage.success('图片已删除')
     fetchCarousel()
   } catch (e) {}
