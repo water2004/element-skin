@@ -30,7 +30,7 @@ private_key_path = config.get("keys.private_key", "private.pem")
 crypto = CryptoUtils(private_key_path)
 rate_limiter = RateLimiter(db)  # New dependency-injected rate limiter
 texture_storage = TextureStorage(config.get("textures.directory", "textures"))
-ygg_backend = YggdrasilBackend(db, crypto, texture_storage)
+ygg_backend = YggdrasilBackend(db, crypto, texture_storage, config)
 site_backend = SiteBackend(db, config, texture_storage)
 profile_import_backend = ProfileImportBackend(db, texture_storage)
 admin_backend = AdminBackend(db, config)
@@ -99,7 +99,7 @@ async def ygg_exception_handler(request: Request, exc: YggdrasilError):
 
 # ========== 注册路由模块 ==========
 
-yggdrasil_router = yggdrasil_routes.setup_routes(ygg_backend, db, crypto, rate_limiter)
+yggdrasil_router = yggdrasil_routes.setup_routes(ygg_backend, db, rate_limiter)
 app.include_router(yggdrasil_router)
 
 site_router = site_routes.setup_routes(site_backend, profile_import_backend, settings_backend, rate_limiter, config)

@@ -1,5 +1,7 @@
 import pytest
 import time
+import json
+import base64
 from backends.yggdrasil_backend import YggdrasilBackend, ForbiddenOperationException, IllegalArgumentException
 from utils.typing import PlayerProfile
 
@@ -104,7 +106,88 @@ async def test_yggdrasil_texture_management(ygg_backend_fixture, user_factory, d
     
     # 2. 删除材质 (DELETE)
     await ygg_backend_fixture.delete_texture(access_token, pid, "skin")
-    
+
     # 验证
     updated_p = await db_session.user.get_profile_by_id(pid)
     assert updated_p.skin_hash is None
+
+
+# ========== Phase 4: presentation logic moved from yggdrasil router ==========
+
+
+def test_build_profile_json_skin_slim_and_cape(ygg_backend_fixture):
+    """slim 皮肤带 model metadata，cape 出现在 textures，且 SKIN url 含 hash"""
+    profile = PlayerProfile("uuid1", "owner", "SlimGuy", "slim", "skinhash", "capehash")
+    data = ygg_backend_fixture.build_profile_json(profile, sign=False)
+
+    assert data["id"] == "uuid1"
+    assert data["name"] == "SlimGuy"
+    textures_prop = next(p for p in data["properties"] if p["name"] == "textures")
+    # 未签名时不应有 signature 字段
+    assert "signature" not in textures_prop
+
+    decoded = json.loads(base64.b64decode(textures_prop["value"]).decode("utf-8"))
+    assert "skinhash.png" in decoded["textures"]["SKIN"]["url"]
+    assert decoded["textures"]["SKIN"]["metadata"] == {"model": "slim"}
+    assert "capehash.png" in decoded["textures"]["CAPE"]["url"]
+    # uploadableTextures 扩展属性保留
+    assert any(p["name"] == "uploadableTextures" for p in data["properties"])
+
+
+def test_build_profile_json_default_model_no_metadata(ygg_backend_fixture):
+    """default 模型不带 metadata，无 cape 时不出现 CAPE"""
+    profile = PlayerProfile("uuid2", "owner", "Plain", "default", "sh", None)
+    data = ygg_backend_fixture.build_profile_json(profile, sign=False)
+    textures_prop = next(p for p in data["properties"] if p["name"] == "textures")
+    decoded = json.loads(base64.b64decode(textures_prop["value"]).decode("utf-8"))
+    assert "metadata" not in decoded["textures"]["SKIN"]
+    assert "CAPE" not in decoded["textures"]
+
+
+def test_build_profile_json_sign_adds_signature(ygg_backend_fixture):
+    """sign=True 时 textures 属性附带 signature"""
+    profile = PlayerProfile("uuid3", "owner", "Signed", "default", "sh", None)
+    data = ygg_backend_fixture.build_profile_json(profile, sign=True)
+    textures_prop = next(p for p in data["properties"] if p["name"] == "textures")
+    assert textures_prop.get("signature")
+
+
+@pytest.mark.asyncio
+async def test_build_authenticate_response_request_user(ygg_backend_fixture, user_factory, db_session):
+    """build_authenticate_response：requestUser=True 带 user.preferredLanguage 属性"""
+    password = "RespPass123"
+    user = await user_factory(password=password, username="RespUser")
+    await db_session.user.create_profile(PlayerProfile("resp_pid", user.id, "RespUser"))
+
+    resp = await ygg_backend_fixture.build_authenticate_response(
+        user.email, password, "client-tok", request_user=True
+    )
+    assert resp["clientToken"] == "client-tok"
+    assert resp["selectedProfile"]["id"] == "resp_pid"
+    assert resp["user"]["id"] == user.id
+    lang_prop = next(p for p in resp["user"]["properties"] if p["name"] == "preferredLanguage")
+    assert lang_prop["value"] == user.preferred_language
+
+
+@pytest.mark.asyncio
+async def test_build_authenticate_response_no_request_user(ygg_backend_fixture, user_factory, db_session):
+    """requestUser 缺省时不带 user 对象；clientToken 缺省时回退为 accessToken"""
+    password = "RespPass123"
+    user = await user_factory(password=password, username="NoUserResp")
+    await db_session.user.create_profile(PlayerProfile("nu_pid", user.id, "NoUserResp"))
+
+    resp = await ygg_backend_fixture.build_authenticate_response(
+        user.email, password, None, request_user=False
+    )
+    assert "user" not in resp
+    assert resp["clientToken"] == resp["accessToken"]
+
+
+@pytest.mark.asyncio
+async def test_build_metadata_shape(ygg_backend_fixture, db_session):
+    """build_metadata：含 meta/skinDomains/signaturePublickey，skinDomains 为 list"""
+    await db_session.setting.set("site_name", "My Ygg Station")
+    meta = await ygg_backend_fixture.build_metadata("http://fallback.example")
+    assert meta["meta"]["serverName"] == "My Ygg Station"
+    assert isinstance(meta["skinDomains"], list)
+    assert meta["signaturePublickey"]

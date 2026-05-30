@@ -1,5 +1,7 @@
 import time
 import uuid
+import json
+import base64
 from typing import Dict, Any, Optional, Tuple
 
 from utils.crypto import CryptoUtils
@@ -29,12 +31,111 @@ class IllegalArgumentException(YggdrasilError):
 
 
 class YggdrasilBackend:
-    def __init__(self, db: Database, crypto: CryptoUtils, texture_storage: TextureStorage):
+    def __init__(self, db: Database, crypto: CryptoUtils, texture_storage: TextureStorage, config=None):
         self.db = db
         self.crypto = crypto
         self.texture_storage = texture_storage
+        self.config = config
         self.TOKEN_TTL = 15 * 24 * 3600 * 1000  # 15天 (毫秒)
         self.SESSION_TTL = 30 * 1000  # 30秒 (用于join验证)
+
+    def _site_url(self) -> str:
+        return self.config.get("server.site_url", "").rstrip("/") if self.config else ""
+
+    def build_profile_json(self, profile: PlayerProfile, sign: bool = False) -> Dict:
+        """构建角色 JSON，包含 textures 和签名。"""
+        textures_payload = {
+            "timestamp": int(time.time() * 1000),
+            "profileId": profile.id,
+            "profileName": profile.name,
+            "textures": {},
+        }
+        base_texture_url = f"{self._site_url()}/static/textures/"
+
+        if profile.skin_hash:
+            textures_payload["textures"]["SKIN"] = {
+                "url": base_texture_url + profile.skin_hash + ".png"
+            }
+            if profile.texture_model == "slim":
+                textures_payload["textures"]["SKIN"]["metadata"] = {"model": "slim"}
+
+        if profile.cape_hash:
+            textures_payload["textures"]["CAPE"] = {
+                "url": base_texture_url + profile.cape_hash + ".png"
+            }
+
+        textures_base64 = base64.b64encode(
+            json.dumps(textures_payload).encode("utf-8")
+        ).decode("utf-8")
+
+        prop = {"name": "textures", "value": textures_base64}
+        if sign:
+            prop["signature"] = self.crypto.sign_data(textures_base64)
+
+        return {
+            "id": profile.id,
+            "name": profile.name,
+            "properties": [
+                prop,
+                {"name": "uploadableTextures", "value": "skin,cape"},
+            ],
+        }
+
+    async def build_authenticate_response(
+        self, username, password, client_token, request_user: bool
+    ) -> Dict:
+        access_token, avail_players, selected_profile, user_id = await self.authenticate(
+            username, password, client_token
+        )
+        resp = {
+            "accessToken": access_token,
+            "clientToken": client_token or access_token,
+            "availableProfiles": [{"id": p.id, "name": p.name} for p in avail_players],
+        }
+        if selected_profile:
+            resp["selectedProfile"] = {
+                "id": selected_profile.id,
+                "name": selected_profile.name,
+            }
+        if request_user:
+            user_obj = await self.db.user.get_by_id(user_id)
+            if user_obj:
+                resp["user"] = {
+                    "id": user_id,
+                    "properties": [
+                        {"name": "preferredLanguage", "value": user_obj.preferred_language}
+                    ],
+                }
+        return resp
+
+    async def lookup_profile_by_name(self, player_name: str) -> Optional[Dict]:
+        p = await self.db.user.get_profile_by_name(player_name)
+        if p:
+            return {"id": p.id, "name": p.name}
+        return None
+
+    async def build_metadata(self, default_site_url: str) -> Dict:
+        site_name = await self.db.setting.get("site_name", "Yggdrasil 皮肤站")
+        site_url = (self.config.get("server.site_url", default_site_url) if self.config else default_site_url).rstrip("/")
+        host = (
+            site_url.replace("https://", "").replace("http://", "").split("/")[0]
+            if site_url
+            else "localhost"
+        )
+        return {
+            "meta": {
+                "serverName": site_name,
+                "implementationName": "element-skin",
+                "implementationVersion": "1.0.0",
+                "links": {
+                    "homepage": f"{site_url}/" if site_url else None,
+                    "register": f"{site_url}/register/" if site_url else None,
+                },
+                "feature.non_email_login": True,
+            },
+            "skinDomains": await self.db.fallback.collect_skin_domains() + [host],
+            "signaturePublickey": self.crypto.get_public_key_pem(),
+        }
 
     async def _cleanup_tokens(self, user_id: str):
         cutoff = int(time.time() * 1000) - self.TOKEN_TTL
@@ -219,9 +320,7 @@ class YggdrasilBackend:
             return None
         return profile
 
-    async def get_profiles_by_names(
-        self, names: list, base_url: str = None
-    ) -> list[Dict]:
+    async def get_profiles_by_names(self, names: list) -> list[Dict]:
         if not names:
             return []
         profiles = await self.db.user.search_profiles_by_names(names[:100], limit=100)
