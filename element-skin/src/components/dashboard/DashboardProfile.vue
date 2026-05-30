@@ -254,10 +254,6 @@ async function confirmDeleteAccount() {
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-
 .profile-form-card {
   max-width: 600px;
   margin: 0 auto;

@@ -443,19 +443,7 @@ async function deleteProfile(profile: Profile) {
 onMounted(refreshFromFirst)
 </script>
 
-<style>
-@import "@/assets/styles/dialogs.css";
-@import "@/assets/styles/item-viewer.css";
-</style>
-
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/tags.css";
-@import "@/assets/styles/buttons.css";
-@import "@/assets/styles/headers.css";
-
 .roles-section {
   /* max-width: 1500px; */
   width: 100%;

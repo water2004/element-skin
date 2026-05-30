@@ -341,12 +341,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/buttons.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/footers.css";
-
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
 
 /* Home Mode Shell - Allow natural scrolling for global overlays */

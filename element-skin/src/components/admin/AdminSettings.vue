@@ -273,12 +273,6 @@ onMounted(loadAllSettings)
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/buttons.css";
-
 .settings-section {
   max-width: 900px;
   margin: 0 auto;
@@ -299,7 +293,5 @@ onMounted(loadAllSettings)
 }
 
 .hint-text { font-size: 12px; color: var(--color-text-light); line-height: 1.5; margin-top: 4px; display: block; }
-.mb-6 { margin-bottom: 24px; }
-.ml-4 { margin-left: 16px; }
 .uuid-mode-group { display: inline-flex; flex-wrap: wrap; gap: 8px; }
 </style>

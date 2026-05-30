@@ -512,18 +512,7 @@ watch(currentUser, async (u) => {
 })
 </script>
 
-<style>
-@import "@/assets/styles/dialogs.css";
-</style>
-
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/tags.css";
-@import "@/assets/styles/buttons.css";
-@import "@/assets/styles/headers.css";
-
 .users-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
 
 .search-bar-container {
@@ -625,10 +614,6 @@ watch(currentUser, async (u) => {
 
 .ban-preview { font-size: 13px; color: var(--color-text-light); padding: 10px; background: var(--color-background-mute); border-radius: 6px; }
 .ban-preview span { font-weight: bold; color: var(--el-color-primary); }
-
-.mr-2 { margin-right: 8px; }
-.mb-4 { margin-bottom: 16px; }
-.mb-6 { margin-bottom: 24px; }
 
 @media (max-width: 768px) {
   .actions-grid { grid-template-columns: 1fr; }

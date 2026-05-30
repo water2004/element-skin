@@ -221,10 +221,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/tags.css";
-
 .dashboard-home {
   display: flex;
   flex-direction: column;

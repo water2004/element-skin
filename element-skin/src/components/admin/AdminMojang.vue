@@ -422,13 +422,6 @@ onMounted(fetchSettings)
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/tags.css";
-@import "@/assets/styles/buttons.css";
-
 .admin-fallback {
   max-width: 1100px;
   margin: 0 auto;
@@ -503,9 +496,6 @@ onMounted(fetchSettings)
 .section-header-small { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .add-user-form-box { width: 300px; }
 
-.mb-6 { margin-bottom: 24px; }
-.mt-6 { margin-top: 24px; }
-.ml-2 { margin-left: 8px; }
 .action-btns-box { display: flex; gap: 8px; justify-content: flex-end; }
 
 @media (max-width: 768px) {

@@ -500,20 +500,7 @@ onMounted(() => {
 })
 </script>
 
-<style>
-/* Global Styles for Teleported Elements */
-@import "@/assets/styles/dialogs.css";
-@import "@/assets/styles/item-viewer.css";
-@import "@/assets/styles/item-cards.css";
-</style>
-
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/buttons.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/tags.css";
-
 .wardrobe-grid-container {
   min-height: 400px;
 }

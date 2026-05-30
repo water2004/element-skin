@@ -1,0 +1,15 @@
+/* Global shared style layer.
+   Imported ONCE in main.css so these rules are emitted a single time and
+   apply app-wide. Do NOT @import these files inside component <style scoped>
+   blocks — that re-emits and re-scopes them per component, bloating the bundle. */
+
+@import './animations.css';
+@import './layout.css';
+@import './cards.css';
+@import './buttons.css';
+@import './tags.css';
+@import './dialogs.css';
+@import './item-cards.css';
+@import './item-viewer.css';
+@import './footers.css';
+@import './utilities.css';

@@ -713,19 +713,7 @@ onMounted(async () => {
 })
 </script>
 
-<style>
-/* Global Styles for Teleported Elements */
-@import "@/assets/styles/dialogs.css";
-@import "@/assets/styles/item-viewer.css";
-</style>
-
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/buttons.css";
-@import "@/assets/styles/cards.css";
-
 .roles-grid-container {
   min-height: 400px;
 }

@@ -249,18 +249,7 @@ async function deleteInvite(invite) {
 onMounted(refreshFirstPage)
 </script>
 
-<style>
-@import "@/assets/styles/dialogs.css";
-</style>
-
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/tags.css";
-@import "@/assets/styles/buttons.css";
-
 .invites-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
 
 .code-text { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 600; color: var(--color-heading); }
@@ -270,6 +259,4 @@ onMounted(refreshFirstPage)
 
 .code-preview-box { display: flex; align-items: center; justify-content: space-between; background: var(--color-background-soft); padding: 12px 16px; border-radius: 8px; border: 1px dashed var(--el-color-primary); }
 .code-preview-box span { font-family: monospace; font-size: 18px; font-weight: bold; color: var(--el-color-primary); }
-
-.mb-2 { margin-bottom: 8px; }
 </style>

@@ -1,4 +1,5 @@
 @import './base.css';
+@import './styles/index.css';
 
 #app {
   margin: 0;
@@ -8,119 +9,14 @@
   min-height: 100vh;
 }
 
-body {
-  min-height: 100vh;
-  color: var(--color-text);
-  background: var(--color-background);
-  transition:
-    color 0.5s,
-    background-color 0.5s;
-  line-height: 1.6;
-  font-family:
-    Inter,
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    Roboto,
-    Oxygen,
-    Ubuntu,
-    Cantarell,
-    'Fira Sans',
-    'Droid Sans',
-    'Helvetica Neue',
-    sans-serif;
-  font-size: 15px;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Global Dark Mode Backgrounds for Auth & Home Hero */
+/* Dark mode backgrounds for auth pages */
 html.dark .login-container,
 html.dark .register-container,
-html.dark .reset-container,
-html.dark .hero-gradient-bg {
+html.dark .reset-container {
   background: var(--color-background-hero-dark);
 }
 
-/* Shared Utilities */
-
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes cardSlideIn {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes badgeFadeIn {
-  from { opacity: 0; transform: translateY(-10px) scale(0.8); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
-}
-
-/* Common Layouts */
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  width: 100%;
-}
-
-.section-header h2 {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-heading);
-  margin: 0;
-}
-
-/* Grids and Cards */
-.common-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 240px);
-  gap: 24px;
-}
-
-.common-card {
-  width: 240px;
-  background: var(--color-card-background);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  animation: fadeInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
-  animation-delay: calc(var(--delay-index, 0) * 0.05s);
-  border: 1px solid var(--color-border);
-}
-
-.common-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-}
-
-/* 统一应用容器，配合 AppLayout.app-container 使用 */
-.app-container{
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-@media (min-width: 1024px) {
-  /* 大屏仍然使用居中容器，而不是两列布局，避免内容被强制分栏导致空白 */
-  body {
-    display: block;
-  }
-}
-
+/* Element Plus overrides */
 .el-tag__content {
   display: flex;
   align-items: center;
@@ -131,17 +27,6 @@ html.dark .hero-gradient-bg {
   transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, color 0.3s ease;
 }
 
-.el-button+.el-button {
-    margin-left: 0
-}
-
-.hero-btn.secondary {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #fff;
-}
-
-.hero-btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: #fff;
+.el-button + .el-button {
+  margin-left: 0;
 }

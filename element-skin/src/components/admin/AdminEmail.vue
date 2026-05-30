@@ -136,12 +136,6 @@ onMounted(loadSettings)
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/buttons.css";
-
 .settings-section {
   max-width: 900px;
   margin: 0 auto;

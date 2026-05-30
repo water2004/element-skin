@@ -92,10 +92,7 @@ function getCarouselUrl(filename) {
 </template>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/buttons.css";
-
-.home-container { 
+.home-container {
   width: 100%; 
   height: calc(100vh - var(--footer-height, 0px));
   display: flex; 

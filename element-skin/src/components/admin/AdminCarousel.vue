@@ -102,12 +102,6 @@ onMounted(fetchCarousel)
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/buttons.css";
-
 .admin-carousel { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
 
 .carousel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
@@ -118,7 +112,6 @@ onMounted(fetchCarousel)
 .filename { font-size: 12px; color: var(--color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; font-family: monospace; }
 
 .empty-placeholder { grid-column: 1 / -1; padding: 40px 0; }
-.mb-6 { margin-bottom: 24px; }
 
 @media (max-width: 768px) {
   .carousel-grid { grid-template-columns: 1fr; }
