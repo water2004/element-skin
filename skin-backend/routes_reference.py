@@ -105,7 +105,7 @@ app.include_router(yggdrasil_router)
 site_router = site_routes.setup_routes(site_backend, profile_import_backend, settings_backend, rate_limiter, config)
 app.include_router(site_router)
 
-admin_router = admin_routes.setup_routes(db, admin_backend, settings_backend, rate_limiter, config)
+admin_router = admin_routes.setup_routes(admin_backend, settings_backend)
 app.include_router(admin_router)
 
 microsoft_router = microsoft_routes.setup_routes(db, config, texture_storage)

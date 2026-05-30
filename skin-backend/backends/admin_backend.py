@@ -63,6 +63,46 @@ class AdminBackend:
         await self.db.user.ban(user_id, banned_until)
         return banned_until
 
+    async def unban_user(self, user_id: str):
+        await self.db.user.unban(user_id)
+
+    async def list_users(self, cursor: str | None, limit: int, query: str | None) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        last_id = (key or {}).get("last_id")
+        if query and query.strip():
+            result = await self.db.user.search_users_cursor(query=query.strip(), limit=limit, last_id=last_id)
+        else:
+            result = await self.db.user.list_users_cursor(limit=limit, last_id=last_id)
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
+
+    async def get_user_profiles(self, user_id: str, cursor: str | None, limit: int) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.user.get_profiles_by_user_cursor(
+            user_id, limit=limit, last_id=(key or {}).get("last_id")
+        )
+        return {
+            "items": [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "model": p.texture_model,
+                    "skin_hash": p.skin_hash,
+                    "cape_hash": p.cape_hash,
+                }
+                for p in result["items"]
+            ],
+            "has_next": result["has_next"],
+            "next_cursor": encode_next(result["next_key"]),
+            "page_size": result["page_size"],
+        }
+
     # ========== Profile Management (Admin) ==========
 
     async def get_all_profiles(self, limit: int = 20, cursor: str | None = None, query: str | None = None) -> dict:
@@ -123,6 +163,37 @@ class AdminBackend:
         
         password_hash = hash_password(new_password)
         await self.db.user.update_password(user_id, password_hash)
+        return {"ok": True}
+
+    async def list_invites(self, cursor: str | None, limit: int) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_code"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.user.list_invites_cursor(
+            limit=limit,
+            last_created_at=(key or {}).get("last_created_at"),
+            last_code=(key or {}).get("last_code"),
+        )
+        return {
+            "items": [
+                {
+                    "code": row.code,
+                    "created_at": row.created_at,
+                    "used_by": row.used_by,
+                    "total_uses": row.total_uses,
+                    "used_count": row.used_count,
+                    "note": row.note,
+                }
+                for row in result["items"]
+            ],
+            "has_next": result["has_next"],
+            "next_cursor": encode_next(result["next_key"]),
+            "page_size": result["page_size"],
+        }
+
+    async def delete_invite(self, code: str):
+        await self.db.user.delete_invite(code)
         return {"ok": True}
 
     async def create_invite(self, code, total_uses, note: str = ""):

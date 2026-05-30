@@ -13,14 +13,11 @@ import os
 import uuid
 
 from utils.jwt_utils import decode_jwt_token
-from utils.pagination import decode_cursor, encode_next
-from database_module import Database
-from config_loader import Config
 
 router = APIRouter()
 
 
-def setup_routes(db: Database, admin_backend, settings_backend, rate_limiter, config: Config):
+def setup_routes(admin_backend, settings_backend):
     """设置路由（注入依赖）"""
 
     async def get_current_user(request: Request):
@@ -106,18 +103,7 @@ def setup_routes(db: Database, admin_backend, settings_backend, rate_limiter, co
         payload: dict = Depends(admin_required)
     ):
         """获取用户列表（支持搜索和游标分页）"""
-        try:
-            key = decode_cursor(cursor, ("last_id",))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid cursor")
-        last_id = (key or {}).get("last_id")
-
-        if q and q.strip():
-            result = await db.user.search_users_cursor(query=q.strip(), limit=limit, last_id=last_id)
-        else:
-            result = await db.user.list_users_cursor(limit=limit, last_id=last_id)
-        result["next_cursor"] = encode_next(result.pop("next_key"))
-        return result
+        return await admin_backend.list_users(cursor, limit, q)
 
     @router.get("/admin/users/{user_id}")
     async def get_single_user_admin(user_id: str, payload: dict = Depends(admin_required)):
@@ -131,29 +117,7 @@ def setup_routes(db: Database, admin_backend, settings_backend, rate_limiter, co
         payload: dict = Depends(admin_required)
     ):
         """获取用户的角色列表（仅支持游标分页）"""
-        try:
-            key = decode_cursor(cursor, ("last_id",))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid cursor")
-        last_id = (key or {}).get("last_id")
-
-        result = await db.user.get_profiles_by_user_cursor(user_id, limit=limit, last_id=last_id)
-        profiles_list = result["items"]
-        return {
-            "items": [
-                {
-                    "id": p.id,
-                    "name": p.name,
-                    "model": p.texture_model,
-                    "skin_hash": p.skin_hash,
-                    "cape_hash": p.cape_hash,
-                }
-                for p in profiles_list
-            ],
-            "has_next": result["has_next"],
-            "next_cursor": encode_next(result["next_key"]),
-            "page_size": result["page_size"],
-        }
+        return await admin_backend.get_user_profiles(user_id, cursor, limit)
 
     @router.post("/admin/users/{user_id}/toggle-admin")
     async def toggle_user_admin(user_id: str, payload: dict = Depends(admin_required)):
@@ -178,7 +142,7 @@ def setup_routes(db: Database, admin_backend, settings_backend, rate_limiter, co
 
     @router.post("/admin/users/{user_id}/unban")
     async def unban_user(user_id: str, payload: dict = Depends(admin_required)):
-        await db.user.unban(user_id)
+        await admin_backend.unban_user(user_id)
         return {"ok": True}
 
     @router.post("/admin/users/reset-password")
@@ -304,34 +268,7 @@ def setup_routes(db: Database, admin_backend, settings_backend, rate_limiter, co
         payload: dict = Depends(admin_required)
     ):
         """获取邀请码列表（仅支持游标分页）"""
-        try:
-            key = decode_cursor(cursor, ("last_created_at", "last_code"))
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid cursor")
-        last_created_at = (key or {}).get("last_created_at")
-        last_code = (key or {}).get("last_code")
-
-        result = await db.user.list_invites_cursor(
-            limit=limit,
-            last_created_at=last_created_at,
-            last_code=last_code,
-        )
-        return {
-            "items": [
-                {
-                    "code": row.code,
-                    "created_at": row.created_at,
-                    "used_by": row.used_by,
-                    "total_uses": row.total_uses,
-                    "used_count": row.used_count,
-                    "note": row.note,
-                }
-                for row in result["items"]
-            ],
-            "has_next": result["has_next"],
-            "next_cursor": encode_next(result["next_key"]),
-            "page_size": result["page_size"],
-        }
+        return await admin_backend.list_invites(cursor, limit)
 
     @router.post("/admin/invites")
     async def create_admin_invite(
@@ -345,8 +282,7 @@ def setup_routes(db: Database, admin_backend, settings_backend, rate_limiter, co
 
     @router.delete("/admin/invites/{code}")
     async def delete_admin_invite(code: str, payload: dict = Depends(admin_required)):
-        await db.user.delete_invite(code)
-        return {"ok": True}
+        return await admin_backend.delete_invite(code)
 
     # ========== Fallback Whitelist ==========
 
