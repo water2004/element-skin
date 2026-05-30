@@ -13,6 +13,7 @@ import os
 import uuid
 
 from utils.jwt_utils import decode_jwt_token
+from utils.pagination import decode_cursor, encode_next
 from database_module import Database
 from config_loader import Config
 
@@ -118,18 +119,18 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
         payload: dict = Depends(admin_required)
     ):
         """获取用户列表（支持搜索和游标分页）"""
-        from utils.pagination import CursorEncoder
-
-        last_id = None
-        if cursor:
-            cursor_data = CursorEncoder.decode(cursor)
-            if not cursor_data or "last_id" not in cursor_data:
-                raise HTTPException(status_code=400, detail="Invalid cursor")
-            last_id = cursor_data["last_id"]
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        last_id = (key or {}).get("last_id")
 
         if q and q.strip():
-            return await db.user.search_users_cursor(query=q.strip(), limit=limit, last_id=last_id)
-        return await db.user.list_users_cursor(limit=limit, last_id=last_id)
+            result = await db.user.search_users_cursor(query=q.strip(), limit=limit, last_id=last_id)
+        else:
+            result = await db.user.list_users_cursor(limit=limit, last_id=last_id)
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
 
     @router.get("/admin/users/{user_id}")
     async def get_single_user_admin(user_id: str, payload: dict = Depends(admin_required)):
@@ -143,14 +144,11 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
         payload: dict = Depends(admin_required)
     ):
         """获取用户的角色列表（仅支持游标分页）"""
-        from utils.pagination import CursorEncoder
-
-        last_id = None
-        if cursor:
-            cursor_data = CursorEncoder.decode(cursor)
-            if not cursor_data or "last_id" not in cursor_data:
-                raise HTTPException(status_code=400, detail="Invalid cursor")
-            last_id = cursor_data["last_id"]
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        last_id = (key or {}).get("last_id")
 
         result = await db.user.get_profiles_by_user_cursor(user_id, limit=limit, last_id=last_id)
         profiles_list = result["items"]
@@ -166,7 +164,7 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
                 for p in profiles_list
             ],
             "has_next": result["has_next"],
-            "next_cursor": result["next_cursor"],
+            "next_cursor": encode_next(result["next_key"]),
             "page_size": result["page_size"],
         }
 
@@ -214,18 +212,9 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
         payload: dict = Depends(admin_required)
     ):
         """获取所有角色列表（支持搜索和游标分页）"""
-        from utils.pagination import CursorEncoder
-
-        last_id = None
-        if cursor:
-            cursor_data = CursorEncoder.decode(cursor)
-            if not cursor_data or "last_id" not in cursor_data:
-                raise HTTPException(status_code=400, detail="Invalid cursor")
-            last_id = cursor_data["last_id"]
-
         return await admin_backend.get_all_profiles(
             limit=limit,
-            after_id=last_id,
+            cursor=cursor,
             query=q.strip() if q and q.strip() else None,
         )
 
@@ -282,7 +271,7 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
         """获取所有材质列表（支持搜索、类型过滤和游标分页）"""
         return await admin_backend.get_all_textures(
             limit=limit,
-            after_cursor=cursor,
+            cursor=cursor,
             query=q.strip() if q and q.strip() else None,
             type_filter=type,
         )
@@ -328,16 +317,12 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
         payload: dict = Depends(admin_required)
     ):
         """获取邀请码列表（仅支持游标分页）"""
-        from utils.pagination import CursorEncoder
-
-        last_created_at = None
-        last_code = None
-        if cursor:
-            cursor_data = CursorEncoder.decode(cursor)
-            if not cursor_data or "last_created_at" not in cursor_data or "last_code" not in cursor_data:
-                raise HTTPException(status_code=400, detail="Invalid cursor")
-            last_created_at = cursor_data["last_created_at"]
-            last_code = cursor_data["last_code"]
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_code"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        last_created_at = (key or {}).get("last_created_at")
+        last_code = (key or {}).get("last_code")
 
         result = await db.user.list_invites_cursor(
             limit=limit,
@@ -357,7 +342,7 @@ def setup_routes(db: Database, admin_backend, rate_limiter, config: Config):
                 for row in result["items"]
             ],
             "has_next": result["has_next"],
-            "next_cursor": result["next_cursor"],
+            "next_cursor": encode_next(result["next_key"]),
             "page_size": result["page_size"],
         }
 

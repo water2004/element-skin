@@ -35,39 +35,55 @@ async def test_api_get_me_info(client, auth_headers):
 
 @pytest.mark.asyncio
 async def test_api_get_me_profiles_paginated(client, auth_headers, db_session):
-    """测试分页获取个人角色列表接口"""
+    """测试分页获取个人角色列表接口：跟随 next_cursor 翻页，全量覆盖且无重叠"""
     user_id = auth_headers["X-User-ID"]
     from utils.typing import PlayerProfile
     for i in range(5):
         await db_session.user.create_profile(PlayerProfile(f"p_{i}", user_id, f"Player_{i}"))
-    
-    resp = await client.get("/me/profiles", 
-        params={"limit": 2},
-        cookies=auth_headers["cookies"]
-    )
-    
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "has_next" in data
-    assert len(data["items"]) == 2
+
+    seen = []
+    cursor = None
+    for _ in range(20):  # 安全上限
+        params = {"limit": 2}
+        if cursor:
+            params["cursor"] = cursor
+        resp = await client.get("/me/profiles", params=params, cookies=auth_headers["cookies"])
+        assert resp.status_code == 200
+        data = resp.json()
+        seen.extend(item["id"] for item in data["items"])
+        if not data["has_next"]:
+            break
+        cursor = data["next_cursor"]
+        assert isinstance(cursor, str) and cursor
+
+    assert set(seen) == {f"p_{i}" for i in range(5)}
+    assert len(seen) == 5
 
 @pytest.mark.asyncio
 async def test_api_get_me_textures_paginated(client, auth_headers, db_session):
-    """测试分页获取个人材质列表接口"""
+    """测试分页获取个人材质列表接口：跟随 next_cursor 翻页，全量覆盖且无重叠"""
     user_id = auth_headers["X-User-ID"]
     for i in range(3):
         await db_session.texture.add_to_library(user_id, f"hash_{i}", "skin", note=f"Note {i}")
-    
-    resp = await client.get("/me/textures", 
-        params={"limit": 2},
-        cookies=auth_headers["cookies"]
-    )
-    
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "has_next" in data
-    assert len(data["items"]) == 2
-    assert "hash" in data["items"][0]
+
+    seen = []
+    cursor = None
+    for _ in range(20):  # 安全上限
+        params = {"limit": 2}
+        if cursor:
+            params["cursor"] = cursor
+        resp = await client.get("/me/textures", params=params, cookies=auth_headers["cookies"])
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "hash" in data["items"][0]
+        seen.extend(item["hash"] for item in data["items"])
+        if not data["has_next"]:
+            break
+        cursor = data["next_cursor"]
+        assert isinstance(cursor, str) and cursor
+
+    assert set(seen) == {f"hash_{i}" for i in range(3)}
+    assert len(seen) == 3
 
 @pytest.mark.asyncio
 async def test_api_update_me_info(client, auth_headers):

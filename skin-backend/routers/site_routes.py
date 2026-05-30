@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 
 from utils.jwt_utils import decode_jwt_token, get_cookie_settings
+from utils.pagination import decode_cursor, encode_next
 from database_module import Database
 from config_loader import Config
 
@@ -208,26 +209,24 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
         payload: dict = Depends(get_current_user)
     ):
         """获取我的材质列表（仅支持游标分页）"""
-        from utils.pagination import CursorEncoder
-
         user_id = payload.get("sub")
 
-        last_created_at = None
-        last_hash = None
-        if cursor:
-            cursor_data = CursorEncoder.decode(cursor)
-            if not cursor_data or "last_created_at" not in cursor_data or "last_hash" not in cursor_data:
-                raise HTTPException(status_code=400, detail="Invalid cursor")
-            last_created_at = cursor_data["last_created_at"]
-            last_hash = cursor_data["last_hash"]
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_hash"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        last_created_at = (key or {}).get("last_created_at")
+        last_hash = (key or {}).get("last_hash")
 
-        return await db.texture.get_for_user_cursor(
+        result = await db.texture.get_for_user_cursor(
             user_id,
             texture_type=texture_type,
             limit=limit,
             last_created_at=last_created_at,
             last_hash=last_hash,
         )
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
 
     @router.get("/me/profiles")
     async def list_my_profiles(
@@ -236,16 +235,13 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
         payload: dict = Depends(get_current_user)
     ):
         """获取我的角色列表（仅支持游标分页）"""
-        from utils.pagination import CursorEncoder
-
         user_id = payload.get("sub")
 
-        last_id = None
-        if cursor:
-            cursor_data = CursorEncoder.decode(cursor)
-            if not cursor_data or "last_id" not in cursor_data:
-                raise HTTPException(status_code=400, detail="Invalid cursor")
-            last_id = cursor_data["last_id"]
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        last_id = (key or {}).get("last_id")
 
         result = await db.user.get_profiles_by_user_cursor(user_id, limit=limit, last_id=last_id)
         profiles_list = result["items"]
@@ -261,7 +257,7 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
                 for p in profiles_list
             ],
             "has_next": result["has_next"],
-            "next_cursor": result["next_cursor"],
+            "next_cursor": encode_next(result["next_key"]),
             "page_size": result["page_size"],
         }
 
@@ -318,20 +314,16 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
         texture_type: Optional[str] = None
     ):
         """获取公开皮肤库（仅支持游标分页）"""
-        from utils.pagination import CursorEncoder
-
         enabled = await db.setting.get("enable_skin_library", "true")
         if enabled != "true":
             raise HTTPException(status_code=403, detail="Skin library is disabled by administrator")
 
-        last_created_at = None
-        last_skin_hash = None
-        if cursor:
-            cursor_data = CursorEncoder.decode(cursor)
-            if not cursor_data or "last_created_at" not in cursor_data or "last_skin_hash" not in cursor_data:
-                raise HTTPException(status_code=400, detail="Invalid cursor")
-            last_created_at = cursor_data["last_created_at"]
-            last_skin_hash = cursor_data["last_skin_hash"]
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_skin_hash"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        last_created_at = (key or {}).get("last_created_at")
+        last_skin_hash = (key or {}).get("last_skin_hash")
 
         result = await db.texture.get_from_library_cursor(
             limit=limit,
@@ -343,7 +335,7 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
         items_list = result["items"]
         uploader_ids = list(set(item.get("uploader") for item in items_list if item.get("uploader")))
         uploader_names = await db.user.get_display_names_by_ids(uploader_ids)
-        
+
         return {
             "items": [
                 {
@@ -353,7 +345,7 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
                 for item in items_list
             ],
             "has_next": result["has_next"],
-            "next_cursor": result["next_cursor"],
+            "next_cursor": encode_next(result["next_key"]),
             "page_size": result["page_size"],
         }
 

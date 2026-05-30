@@ -187,15 +187,19 @@ async def test_list_all_textures_cursor(db_session, user_factory):
     search_result = await db_session.texture.list_all_textures_cursor(limit=20, query="PublicSkin")
     assert search_result["page_size"] >= 1
 
-    # 5. 游标翻页：逐页跟随 next_cursor，断言全量覆盖且无重叠
+    # 5. 游标翻页：逐页跟随 next_key，断言全量覆盖且无重叠
     seen = []
-    after = None
+    last_created_at = None
+    last_skin_hash = None
     for _ in range(10):  # 安全上限，防止死循环
-        page = await db_session.texture.list_all_textures_cursor(limit=2, after_cursor=after)
+        page = await db_session.texture.list_all_textures_cursor(
+            limit=2, last_created_at=last_created_at, last_skin_hash=last_skin_hash
+        )
         seen.extend(item["hash"] for item in page["items"])
         if not page["has_next"]:
             break
-        after = page["next_cursor"]
+        last_created_at = page["next_key"]["last_created_at"]
+        last_skin_hash = page["next_key"]["last_skin_hash"]
 
     # 三个材质全部出现，且无重复
     assert set(seen) == {hash_skin_pub, hash_skin_priv, hash_cape}

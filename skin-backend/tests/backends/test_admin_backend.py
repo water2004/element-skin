@@ -203,6 +203,67 @@ async def test_admin_clear_profile_skin_404(admin_backend_fixture):
         await admin_backend_fixture.update_profile_skin("non-existent", None)
     assert exc.value.status_code == 404
 
+
+@pytest.mark.asyncio
+async def test_admin_get_all_profiles_invalid_cursor(admin_backend_fixture):
+    """非法游标字符串 → HTTPException 400（backend 编解码边界）"""
+    with pytest.raises(HTTPException) as exc:
+        await admin_backend_fixture.get_all_profiles(limit=10, cursor="not-a-valid-cursor!!")
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_admin_get_all_textures_invalid_cursor(admin_backend_fixture):
+    """非法游标字符串 → HTTPException 400（backend 编解码边界）"""
+    with pytest.raises(HTTPException) as exc:
+        await admin_backend_fixture.get_all_textures(limit=10, cursor="garbage==")
+    assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_admin_get_all_profiles_cursor_roundtrip(admin_backend_fixture, db_session, user_factory):
+    """backend 返回 next_cursor(base64)，喂回可翻页：全量覆盖且无重叠"""
+    user = await user_factory()
+    pids = [generate_random_uuid() for _ in range(5)]
+    for i, pid in enumerate(pids):
+        await db_session.user.create_profile(PlayerProfile(pid, user.id, f"RoundTrip{i}", "default", None, None))
+
+    seen = []
+    cursor = None
+    for _ in range(20):  # 安全上限
+        page = await admin_backend_fixture.get_all_profiles(limit=2, cursor=cursor)
+        seen.extend(item["id"] for item in page["items"])
+        if not page["has_next"]:
+            break
+        cursor = page["next_cursor"]
+        assert isinstance(cursor, str) and cursor
+
+    # 至少包含本测试创建的 5 个角色，且无重复
+    assert set(pids).issubset(set(seen))
+    assert len(seen) == len(set(seen))
+
+
+@pytest.mark.asyncio
+async def test_admin_get_all_textures_cursor_roundtrip(admin_backend_fixture, db_session, user_factory):
+    """backend 返回 next_cursor(base64)，喂回可翻页：全量覆盖且无重叠"""
+    user = await user_factory()
+    hashes = [chr(ord("a") + i) * 64 for i in range(5)]
+    for i, h in enumerate(hashes):
+        await db_session.texture.add_to_library(user.id, h, "skin", note=f"RT{i}", is_public=True)
+
+    seen = []
+    cursor = None
+    for _ in range(20):  # 安全上限
+        page = await admin_backend_fixture.get_all_textures(limit=2, cursor=cursor)
+        seen.extend(item["hash"] for item in page["items"])
+        if not page["has_next"]:
+            break
+        cursor = page["next_cursor"]
+        assert isinstance(cursor, str) and cursor
+
+    assert set(hashes).issubset(set(seen))
+    assert len(seen) == len(set(seen))
+
 @pytest.mark.asyncio
 async def test_admin_clear_profile_cape(admin_backend_fixture, db_session, user_factory):
     """Clearing cape sets cape_hash to NULL without affecting skin_hash"""

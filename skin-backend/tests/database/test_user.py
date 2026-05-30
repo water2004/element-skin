@@ -2,7 +2,6 @@ import pytest
 import time
 from utils.typing import User, PlayerProfile, Token, Session, InviteCode
 from utils.uuid_utils import generate_random_uuid
-from utils.pagination import CursorEncoder
 
 @pytest.mark.asyncio
 async def test_user_management(db_session, user_factory):
@@ -210,20 +209,23 @@ async def test_list_all_profiles_cursor(db_session, user_factory):
     page = await db_session.user.list_all_profiles_cursor(limit=10)
     assert len(page["items"]) == 3
     assert page["has_next"] is False
-    assert page["next_cursor"] is None
+    assert page["next_key"] is None
 
     # 2. Pagination: limit=1 (to get proper cursor progression)
     page1 = await db_session.user.list_all_profiles_cursor(limit=1)
     assert len(page1["items"]) == 1
     assert page1["has_next"] is True
-    assert page1["next_cursor"] is not None
+    assert page1["next_key"] is not None
 
-    # Decode cursor and get next page
-    cursor_data = CursorEncoder.decode(page1["next_cursor"])
-    assert cursor_data is not None
+    # Follow raw next_key into next page
+    cursor_data = page1["next_key"]
     page2 = await db_session.user.list_all_profiles_cursor(limit=10, after_id=cursor_data["last_id"])
     assert len(page2["items"]) >= 1
     assert page2["has_next"] is False
+    # 全量覆盖且无重叠：两页合计 3 个角色且不重复
+    seen_ids = [p["id"] for p in page1["items"]] + [p["id"] for p in page2["items"]]
+    assert len(seen_ids) == 3
+    assert len(set(seen_ids)) == 3
 
     # 3. Search by profile name
     search_page = await db_session.user.list_all_profiles_cursor(limit=10, query="Player1")

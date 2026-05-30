@@ -1,7 +1,6 @@
 from ..core import BaseDB
 import time
 from typing import Optional
-from utils.pagination import CursorEncoder
 
 
 class TextureModule:
@@ -77,18 +76,18 @@ class TextureModule:
         has_next = len(rows) > limit
         items = [{"hash": r[0], "type": r[1], "note": r[2], "created_at": r[3], "model": r[4], "is_public": r[5]} for r in rows[:limit]]
         
-        next_cursor = None
+        next_key = None
         if has_next:
             last_row = rows[limit - 1]
-            next_cursor = CursorEncoder.encode({
+            next_key = {
                 "last_created_at": last_row[3],
                 "last_hash": last_row[0]
-            })
-        
+            }
+
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -223,39 +222,31 @@ class TextureModule:
             for r in rows[:limit]
         ]
         
-        next_cursor = None
+        next_key = None
         if has_next:
             last_row = rows[limit - 1]
-            next_cursor = CursorEncoder.encode({
+            next_key = {
                 "last_created_at": last_row[4],
                 "last_skin_hash": last_row[0]
-            })
-        
+            }
+
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
     async def list_all_textures_cursor(
         self,
         limit: int = 20,
-        after_cursor: str | None = None,
+        last_created_at: int | None = None,
+        last_skin_hash: str | None = None,
         query: str | None = None,
         type_filter: str | None = None,
     ) -> dict:
         """全局管理员方法：列出所有材质（公共+私有），支持游标分页、搜索和类型过滤"""
         actual_limit = limit + 1
-
-        # 解码游标
-        last_created_at = None
-        last_skin_hash = None
-        if after_cursor:
-            cursor_data = CursorEncoder.decode(after_cursor)
-            if cursor_data:
-                last_created_at = cursor_data.get("last_created_at")
-                last_skin_hash = cursor_data.get("last_skin_hash")
 
         conditions = []
         params = []
@@ -312,18 +303,18 @@ class TextureModule:
             for r in rows[:limit]
         ]
 
-        next_cursor = None
+        next_key = None
         if has_next:
             last_row = rows[limit - 1]
-            next_cursor = CursorEncoder.encode({
+            next_key = {
                 "last_created_at": last_row[4],
                 "last_skin_hash": last_row[0],
-            })
+            }
 
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 

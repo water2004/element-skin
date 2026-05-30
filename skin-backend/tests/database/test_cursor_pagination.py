@@ -21,7 +21,7 @@ async def test_list_users_cursor_first_page(db_session):
     
     assert len(result["items"]) == 2
     assert result["has_next"] is True
-    assert result["next_cursor"] is not None
+    assert result["next_key"] is not None
     assert result["page_size"] == 2
 
 
@@ -46,7 +46,7 @@ async def test_list_users_cursor_pagination(db_session):
         seen.extend(u.id for u in page["items"])
         if not page["has_next"]:
             break
-        last_id = CursorEncoder.decode(page["next_cursor"])["last_id"]
+        last_id = page["next_key"]["last_id"]
 
     # 8 个用户全部出现，无重复
     assert set(seen) == set(user_ids)
@@ -122,7 +122,7 @@ async def test_list_invites_cursor_pagination(db_session):
         seen.extend(c.code for c in page["items"])
         if not page["has_next"]:
             break
-        cursor_data = CursorEncoder.decode(page["next_cursor"])
+        cursor_data = page["next_key"]
         last_created_at = cursor_data["last_created_at"]
         last_code = cursor_data["last_code"]
 
@@ -154,7 +154,7 @@ async def test_get_for_user_cursor(db_session, user_factory):
         seen.extend(item["hash"] for item in page["items"])
         if not page["has_next"]:
             break
-        cursor_data = CursorEncoder.decode(page["next_cursor"])
+        cursor_data = page["next_key"]
         last_created_at = cursor_data["last_created_at"]
         last_hash = cursor_data["last_hash"]
 
@@ -222,7 +222,7 @@ async def test_get_from_library_cursor(db_session, user_factory):
         seen.extend(item["hash"] for item in page["items"])
         if not page["has_next"]:
             break
-        cursor_data = CursorEncoder.decode(page["next_cursor"])
+        cursor_data = page["next_key"]
         last_created_at = cursor_data["last_created_at"]
         last_skin_hash = cursor_data["last_skin_hash"]
 

@@ -6,6 +6,7 @@ import re
 from fastapi import HTTPException
 
 from utils.typing import InviteCode
+from utils.pagination import decode_cursor, encode_next
 from database_module import Database
 from config_loader import Config
 
@@ -246,8 +247,16 @@ class AdminBackend:
 
     # ========== Profile Management (Admin) ==========
 
-    async def get_all_profiles(self, limit: int = 20, after_id: str | None = None, query: str | None = None) -> dict:
-        return await self.db.user.list_all_profiles_cursor(limit, after_id, query)
+    async def get_all_profiles(self, limit: int = 20, cursor: str | None = None, query: str | None = None) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.user.list_all_profiles_cursor(
+            limit, after_id=(key or {}).get("last_id"), query=query
+        )
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
 
     async def update_profile(self, profile_id: str, name: str | None = None) -> dict:
         # 业务验证
@@ -345,8 +354,20 @@ class AdminBackend:
 
     # ========== Admin Texture Management ==========
 
-    async def get_all_textures(self, limit=20, after_cursor=None, query=None, type_filter=None) -> dict:
-        return await self.db.texture.list_all_textures_cursor(limit, after_cursor, query, type_filter)
+    async def get_all_textures(self, limit: int = 20, cursor: str | None = None, query: str | None = None, type_filter: str | None = None) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_skin_hash"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.texture.list_all_textures_cursor(
+            limit,
+            last_created_at=(key or {}).get("last_created_at"),
+            last_skin_hash=(key or {}).get("last_skin_hash"),
+            query=query,
+            type_filter=type_filter,
+        )
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
 
     async def update_texture_public(self, texture_hash: str, is_public: int) -> dict:
         # 业务验证

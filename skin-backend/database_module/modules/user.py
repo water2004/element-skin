@@ -3,7 +3,6 @@ from utils.typing import User, PlayerProfile, InviteCode, Token, Session, Textur
 import time
 import uuid
 import re
-from utils.pagination import CursorEncoder
 import asyncpg
 
 class UserModule:
@@ -102,14 +101,14 @@ class UserModule:
         has_next = len(rows) > limit
         items = [User(r[0], r[1], "", r[3], r[5], r[2], r[4], r[6]) for r in rows[:limit]]
         
-        next_cursor = None
+        next_key = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit - 1][0]})
+            next_key = {"last_id": rows[limit - 1][0]}
         
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -147,14 +146,14 @@ class UserModule:
         has_next = len(rows) > limit
         items = [User(r[0], r[1], "", r[3], r[5], r[2], r[4], r[6]) for r in rows[:limit]]
         
-        next_cursor = None
+        next_key = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit - 1][0]})
+            next_key = {"last_id": rows[limit - 1][0]}
         
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -229,14 +228,14 @@ class UserModule:
         has_next = len(rows) > limit
         items = [PlayerProfile(*r) for r in rows[:limit]]
         
-        next_cursor = None
+        next_key = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit - 1][0]})
+            next_key = {"last_id": rows[limit - 1][0]}
         
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -298,14 +297,14 @@ class UserModule:
             for r in rows[:limit]
         ]
 
-        next_cursor = None
+        next_key = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit - 1][0]})
+            next_key = {"last_id": rows[limit - 1][0]}
 
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -493,18 +492,18 @@ class UserModule:
         has_next = len(rows) > limit
         items = [InviteCode(*r) for r in rows[:limit]]
         
-        next_cursor = None
+        next_key = None
         if has_next:
             last_row = rows[limit - 1]
-            next_cursor = CursorEncoder.encode({
+            next_key = {
                 "last_created_at": last_row[1],
                 "last_code": last_row[0]
-            })
+            }
         
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
