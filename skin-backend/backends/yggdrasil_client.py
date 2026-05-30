@@ -3,6 +3,8 @@ import json
 import base64
 from typing import Dict, Any
 
+from utils.http import download_texture as download_texture
+
 class YggdrasilClient:
     """Yggdrasil 协议客户端，用于从远程皮肤站获取信息"""
 
@@ -105,12 +107,3 @@ class YggdrasilClient:
                 "skins": [],
                 "capes": []
             }
-
-async def download_texture(url: str) -> bytes:
-    """下载皮肤或披风纹理"""
-    timeout = aiohttp.ClientTimeout(total=15)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                return await resp.read()
-            raise Exception(f"Failed to download texture from {url}")

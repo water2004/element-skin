@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from utils.profile_naming import generate_unique_profile_name
 from utils.typing import PlayerProfile
+from utils.http import download_texture as download_texture
 
 
 class MicrosoftAuthService:
@@ -247,16 +248,6 @@ class MicrosoftAuthService:
             "profile": profile,
             "has_game": has_game,
         }
-
-
-async def download_texture(url: str) -> bytes:
-    """下载皮肤或披风纹理"""
-    timeout = aiohttp.ClientTimeout(total=10)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                return await resp.read()
-            raise Exception(f"Failed to download texture from {url}")
 
 
 class MicrosoftBackend:
