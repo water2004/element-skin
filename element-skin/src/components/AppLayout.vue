@@ -137,18 +137,37 @@
   </div>
 </template>
 
-<script setup>
-import { computed, ref, onMounted, onUnmounted, provide, watch, nextTick } from 'vue'
+<script setup lang="ts">
+import { computed, ref, onMounted, onUnmounted, provide, watch, nextTick, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPublicSettings } from '@/api/public'
 import { getMe } from '@/api/me'
 import { siteLogout } from '@/api/auth'
+import type { User as UserType } from '@/api/types'
 import {
   Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link, Picture, Message, Moon, Sunny
 } from '@element-plus/icons-vue'
 
 import '@/assets/scripts/meow.ts'
 import { useAvatar } from '@/composables/useAvatar'
+
+interface NavLink {
+  type?: 'item' | 'group'
+  path?: string
+  index?: string
+  trigger?: 'hover' | 'click'
+  title?: string
+  icon?: Component
+  adminOnly?: boolean
+  children?: NavLink[]
+}
+
+interface DrawerLink {
+  isDivider?: boolean
+  path?: string
+  title?: string
+  icon?: Component
+}
 
 const { currentAvatarImg: customAvatar, initializeAvatar } = useAvatar()
 const route = useRoute()
@@ -157,7 +176,7 @@ const isHome = computed(() => route.path === '/')
 const isAuthPage = computed(() => ['/login', '/register', '/reset-password'].includes(route.path))
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
 const enableSkinLibrary = ref(localStorage.getItem('enable_skin_library_cache') === 'true' || localStorage.getItem('enable_skin_library_cache') === null)
-const user = ref(null)
+const user = ref<UserType | null>(null)
 const drawer = ref(false)
 const footerText = ref('')
 const filingIcp = ref('')
@@ -165,7 +184,7 @@ const filingIcpLink = ref('')
 const filingMps = ref('')
 const filingMpsLink = ref('')
 const footerHeight = ref(0)
-const footerRef = ref(null)
+const footerRef = ref<HTMLElement | null>(null)
 
 const updateFooterHeight = () => {
   nextTick(() => {
@@ -204,13 +223,13 @@ provide('fetchMe', fetchMe)
 provide('isDark', isDark)
 provide('footerHeight', footerHeight)
 
-const dashboardLinks = [
+const dashboardLinks: NavLink[] = [
   { path: '/dashboard/home', title: '仪表盘', icon: Odometer },
   { path: '/dashboard/wardrobe', title: '我的衣柜', icon: Box },
   { path: '/dashboard/roles', title: '角色管理', icon: User },
   { path: '/dashboard/profile', title: '个人资料', icon: Setting },
 ]
-const adminNavLinks = [
+const adminNavLinks: NavLink[] = [
   { path: '/dashboard', title: '返回面板', icon: Back },
   { path: '/admin/users', title: '用户管理', icon: User },
   { path: '/admin/roles', title: '角色管理', icon: User },
@@ -222,7 +241,7 @@ const adminNavLinks = [
   { path: '/admin/carousel', title: '首页图片', icon: Picture },
 ]
 
-const adminNavItems = computed(() => [
+const adminNavItems = computed<NavLink[]>(() => [
   { type: 'item', path: '/dashboard', title: '返回面板', icon: Back },
   { type: 'group', index: 'admin-content-group', title: '用户与内容', trigger: 'click', children: [
     { path: '/admin/users', title: '用户管理', icon: User },
@@ -240,7 +259,7 @@ const adminNavItems = computed(() => [
 
 const defaultOpeneds = computed(() => {
   const path = route.path
-  const opened = []
+  const opened: string[] = []
   if (['/admin/users', '/admin/roles', '/admin/textures'].some(p => path.startsWith(p))) {
     opened.push('admin-content-group')
   }
@@ -250,9 +269,9 @@ const defaultOpeneds = computed(() => {
   return opened
 })
 
-const navLinks = computed(() => {
+const navLinks = computed<NavLink[]>(() => {
   if (route.path.startsWith('/admin')) return adminNavItems.value
-  const links = []
+  const links: NavLink[] = []
   if (isLogged.value) {
     if (enableSkinLibrary.value) links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
     links.push(...dashboardLinks)
@@ -261,8 +280,8 @@ const navLinks = computed(() => {
   return links
 })
 
-const drawerLinks = computed(() => {
-  const links = []
+const drawerLinks = computed<DrawerLink[]>(() => {
+  const links: DrawerLink[] = []
   if (isLogged.value) {
     if (enableSkinLibrary.value) links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
     links.push({ isDivider: true })
@@ -284,9 +303,9 @@ const accountName = computed(() => user.value?.display_name || user.value?.email
 const avatarInitial = computed(() => (accountName.value || 'U').slice(0, 1).toUpperCase())
 
 
-let resizeObserver = null
+let resizeObserver: ResizeObserver | null = null
 
-function go(path) { push(path); drawer.value = false; }
+function go(path: string) { push(path); drawer.value = false; }
 async function logout() {
   try { await siteLogout() } catch {}
   user.value = null; push('/');
@@ -329,7 +348,7 @@ onMounted(async () => {
 
   if (window.ResizeObserver) {
     resizeObserver = new ResizeObserver(() => updateFooterHeight())
-    nextTick(() => { if (footerRef.value) resizeObserver.observe(footerRef.value) })
+    nextTick(() => { if (footerRef.value) resizeObserver!.observe(footerRef.value) })
   }
   window.addEventListener('resize', updateFooterHeight)
 })
