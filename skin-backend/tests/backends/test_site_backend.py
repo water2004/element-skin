@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
 from backends.site_backend import SiteBackend
+from routes_reference import texture_storage
 from utils.password_utils import verify_password
 from utils.typing import PlayerProfile
 from utils.uuid_utils import get_offline_uuid
@@ -9,7 +10,7 @@ from utils.uuid_utils import get_offline_uuid
 @pytest.mark.asyncio
 async def test_site_auth_flow(db_session, test_config):
     """测试完整的注册、登录及密码修改流程"""
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     
     # 1. 注册 (首个用户应为管理员)
     email = "admin@example.com"
@@ -46,7 +47,7 @@ async def test_site_auth_flow(db_session, test_config):
 @pytest.mark.asyncio
 async def test_verification_code_flow(db_session, test_config):
     """测试邮箱验证码发送与校验流程"""
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     email = "verify@test.com"
     
     # 启用邮件验证
@@ -71,7 +72,7 @@ async def test_verification_code_flow(db_session, test_config):
 @pytest.mark.asyncio
 async def test_profile_and_texture_application(db_session, test_config, user_factory):
     """测试角色创建及材质应用逻辑"""
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     user = await user_factory()
     
     # 1. 创建角色
@@ -98,7 +99,7 @@ async def test_profile_and_texture_application(db_session, test_config, user_fac
 @pytest.mark.asyncio
 async def test_registration_restrictions(db_session, test_config, user_factory):
     """测试注册限制逻辑：邀请码、注册开关、用户名重复"""
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     
     # 1. 禁用注册
     await db_session.setting.set("allow_register", "false")
@@ -134,7 +135,7 @@ async def test_registration_restrictions(db_session, test_config, user_factory):
 
 @pytest.mark.asyncio
 async def test_create_profile_uses_offline_uuid_when_enabled(db_session, test_config, user_factory):
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     user = await user_factory()
     await db_session.setting.set("profile_uuid_mode", "offline")
 
@@ -144,7 +145,7 @@ async def test_create_profile_uses_offline_uuid_when_enabled(db_session, test_co
 
 @pytest.mark.asyncio
 async def test_create_profile_rejects_uuid_conflict(db_session, test_config, user_factory):
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     user = await user_factory()
 
     conflict_id = "abcdabcdabcdabcdabcdabcdabcdabcd"

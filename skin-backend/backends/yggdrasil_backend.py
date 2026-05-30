@@ -8,6 +8,7 @@ from utils.schemas import AuthRequest, RefreshRequest
 from utils.uuid_utils import generate_random_uuid
 from utils.password_utils import hash_password, verify_password
 from database_module import Database
+from services import TextureStorage
 
 
 class YggdrasilError(Exception):
@@ -28,9 +29,10 @@ class IllegalArgumentException(YggdrasilError):
 
 
 class YggdrasilBackend:
-    def __init__(self, db: Database, crypto: CryptoUtils):
+    def __init__(self, db: Database, crypto: CryptoUtils, texture_storage: TextureStorage):
         self.db = db
         self.crypto = crypto
+        self.texture_storage = texture_storage
         self.TOKEN_TTL = 15 * 24 * 3600 * 1000  # 15天 (毫秒)
         self.SESSION_TTL = 30 * 1000  # 30秒 (用于join验证)
 
@@ -245,9 +247,8 @@ class YggdrasilBackend:
             raise IllegalArgumentException(f"Texture file too large.")
 
         try:
-            texture_hash, _ = await self.db.texture.upload(
-                token_data.user_id, file_bytes, texture_type
-            )
+            texture_hash = self.texture_storage.process_and_save(file_bytes, texture_type)
+            await self.db.texture.add_to_library(token_data.user_id, texture_hash, texture_type)
             if texture_type.lower() == "skin":
                 m_val = "slim" if model == "slim" else "default"
                 await self.db.user.update_profile_skin(uuid, texture_hash)

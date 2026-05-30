@@ -14,6 +14,7 @@ from database_module import Database
 from backends.yggdrasil_backend import YggdrasilBackend, YggdrasilError
 from backends.site_backend import SiteBackend
 from backends.admin_backend import AdminBackend
+from services import TextureStorage
 from utils.crypto import CryptoUtils
 from utils.rate_limiter import RateLimiter
 from utils.cached_static import CachedStaticFiles
@@ -26,8 +27,9 @@ db = Database(db_dsn, max_connections=max_conns)
 private_key_path = config.get("keys.private_key", "private.pem")
 crypto = CryptoUtils(private_key_path)
 rate_limiter = RateLimiter(db)  # New dependency-injected rate limiter
-ygg_backend = YggdrasilBackend(db, crypto)
-site_backend = SiteBackend(db, config)
+texture_storage = TextureStorage(config.get("textures.directory", "textures"))
+ygg_backend = YggdrasilBackend(db, crypto, texture_storage)
+site_backend = SiteBackend(db, config, texture_storage)
 admin_backend = AdminBackend(db, config)
 
 
@@ -77,9 +79,7 @@ app.add_middleware(
 
 # ========== 静态资源目录准备 ==========
 # 静态文件现在由前端 Nginx 容器处理，后端仅负责文件的写入和管理
-
-textures_path = config.get("textures.directory", "textures")
-os.makedirs(textures_path, exist_ok=True)
+# 材质目录由 TextureStorage 负责创建
 
 carousel_path = config.get("carousel.directory", "carousel")
 os.makedirs(carousel_path, exist_ok=True)
@@ -104,7 +104,7 @@ app.include_router(site_router)
 admin_router = admin_routes.setup_routes(db, admin_backend, rate_limiter, config)
 app.include_router(admin_router)
 
-microsoft_router = microsoft_routes.setup_routes(db, config)
+microsoft_router = microsoft_routes.setup_routes(db, config, texture_storage)
 app.include_router(microsoft_router)
 
 # ========== 应用启动 ==========

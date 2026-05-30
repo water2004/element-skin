@@ -1,51 +1,12 @@
 from ..core import BaseDB
-import asyncpg
 import time
-from typing import Optional, Tuple
-import os
-from PIL import Image
-from io import BytesIO
+from typing import Optional
 from utils.pagination import CursorEncoder
 
-# Import from utils, this assumes correct python path
-from utils.image_utils import (
-    validate_texture_dimensions,
-    compute_texture_hash_from_image,
-    normalize_png,
-)
-from config_loader import config
 
 class TextureModule:
     def __init__(self, db: BaseDB):
         self.db = db
-        self.textures_dir = config.get("textures.directory", "textures")
-        os.makedirs(self.textures_dir, exist_ok=True)
-
-    async def upload(
-        self, user_id: str, file_bytes: bytes, texture_type: str, note: str = "", is_public: bool = False, model: str = "default"
-    ) -> Tuple[str, str]:
-        """
-        验证、保存并记录材质
-        """
-        # 规范化图像
-        normalized_bytes, img = normalize_png(file_bytes)
-
-        # 验证尺寸
-        is_cape = texture_type.lower() == "cape"
-        if not validate_texture_dimensions(img, is_cape):
-            raise ValueError("Invalid texture dimensions")
-
-        # 计算哈希
-        texture_hash = compute_texture_hash_from_image(img)
-
-        # 保存文件
-        file_path = os.path.join(self.textures_dir, f"{texture_hash}.png")
-        with open(file_path, "wb") as f:
-            f.write(normalized_bytes)
-
-        await self.add_to_library(user_id, texture_hash, texture_type, note, is_public, model)
-
-        return texture_hash, texture_type
 
     async def add_to_library(self, user_id: str, texture_hash: str, texture_type: str, note: str = "", is_public: bool = False, model: str = "default") -> bool:
         async with self.db.get_conn() as conn:
@@ -118,7 +79,7 @@ class TextureModule:
         
         next_cursor = None
         if has_next:
-            last_row = rows[limit]
+            last_row = rows[limit - 1]
             next_cursor = CursorEncoder.encode({
                 "last_created_at": last_row[3],
                 "last_hash": last_row[0]
@@ -264,7 +225,7 @@ class TextureModule:
         
         next_cursor = None
         if has_next:
-            last_row = rows[limit]
+            last_row = rows[limit - 1]
             next_cursor = CursorEncoder.encode({
                 "last_created_at": last_row[4],
                 "last_skin_hash": last_row[0]
@@ -353,7 +314,7 @@ class TextureModule:
 
         next_cursor = None
         if has_next:
-            last_row = rows[limit]
+            last_row = rows[limit - 1]
             next_cursor = CursorEncoder.encode({
                 "last_created_at": last_row[4],
                 "last_skin_hash": last_row[0],

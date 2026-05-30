@@ -193,7 +193,7 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
         content = await file.read()
         public_bool = is_public.lower() == "true"
         try:
-            texture_hash, texture_type = await db.texture.upload(
+            texture_hash, texture_type = await site_backend.upload_texture_to_library(
                 user_id, content, texture_type, note, is_public=public_bool, model=model
             )
             return {"hash": texture_hash, "type": texture_type, "note": note, "is_public": 1 if public_bool else 0, "model": model}
@@ -391,7 +391,7 @@ def setup_routes(db: Database, site_backend, rate_limiter, config: Config):
 
         try:
             # 1. 上传材质到用户库 (或直接保存文件)
-            texture_hash, _ = await db.texture.upload(
+            texture_hash, _ = await site_backend.upload_texture_to_library(
                 user_id, content, texture_type, f"Direct upload to profile {uuid}", is_public=public_bool
             )
 

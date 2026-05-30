@@ -15,7 +15,7 @@ from database_module import Database
 router = APIRouter(prefix="/microsoft")
 
 
-def setup_routes(db: Database, config):
+def setup_routes(db: Database, config, texture_storage):
     """设置路由（注入依赖）"""
 
     # OAuth state 存储（生产环境应使用 Redis）
@@ -231,9 +231,10 @@ def setup_routes(db: Database, config):
         if skin_url:
             try:
                 skin_data = await download_texture(skin_url)
-                skin_hash, _ = await db.texture.upload(
+                skin_hash = texture_storage.process_and_save(skin_data, "skin")
+                await db.texture.add_to_library(
                     user_id,
-                    skin_data,
+                    skin_hash,
                     "skin",
                     f"From Microsoft account - {profile_name}",
                 )
@@ -244,9 +245,10 @@ def setup_routes(db: Database, config):
         if cape_url:
             try:
                 cape_data = await download_texture(cape_url)
-                cape_hash, _ = await db.texture.upload(
+                cape_hash = texture_storage.process_and_save(cape_data, "cape")
+                await db.texture.add_to_library(
                     user_id,
-                    cape_data,
+                    cape_hash,
                     "cape",
                     f"From Microsoft account - {profile_name}",
                 )

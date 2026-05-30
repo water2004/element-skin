@@ -198,10 +198,8 @@ async def test_api_remote_ygg_import_flow(client, auth_headers, db_session):
         mock_get_p.return_value = mock_profile_data
         mock_down.return_value = b"fake_image_bytes"
         
-        # 还需要 Mock 数据库的材质上传，因为 fake_image_bytes 不是真的 PNG
-        with patch.object(db_session.texture, "upload", new_callable=AsyncMock) as mock_upload:
-            mock_upload.return_value = ("fake_hash", "skin")
-            
+        # process_and_save 需 mock，因为 fake_image_bytes 不是真的 PNG
+        with patch("services.texture_storage.TextureStorage.process_and_save", return_value="fake_hash"):
             resp = await client.post("/remote-ygg/import-profiles",
                 json={
                     "api_url": "https://remote.com",

@@ -15,15 +15,33 @@ from backends.yggdrasil_client import YggdrasilClient, download_texture
 from utils.typing import User, PlayerProfile
 from database_module import Database
 from config_loader import Config
+from services import TextureStorage
 
 
 class SiteBackend:
     def __init__(
-        self, db: Database, config: Config
+        self, db: Database, config: Config, texture_storage: TextureStorage
     ):  # Use forward reference for type hint
         self.db = db
         self.config = config
+        self.texture_storage = texture_storage
         self.email_sender = EmailSender(db)
+
+    async def upload_texture_to_library(
+        self,
+        user_id: str,
+        file_bytes: bytes,
+        texture_type: str,
+        note: str = "",
+        is_public: bool = False,
+        model: str = "default",
+    ) -> tuple[str, str]:
+        """处理材质（落盘）并记录到用户库，返回 (hash, type)。校验失败抛 ValueError。"""
+        texture_hash = self.texture_storage.process_and_save(file_bytes, texture_type)
+        await self.db.texture.add_to_library(
+            user_id, texture_hash, texture_type, note, is_public, model
+        )
+        return texture_hash, texture_type
 
     async def _generate_profile_uuid(self, profile_name: str) -> str:
         mode = (await self.db.setting.get("profile_uuid_mode", "random") or "random").strip().lower()
@@ -81,7 +99,7 @@ class SiteBackend:
             skin_model = "slim" if skin_variant == "slim" else "default"
             try:
                 skin_bytes = await download_texture(skin_url)
-                skin_hash, _ = await self.db.texture.upload(
+                skin_hash, _ = await self.upload_texture_to_library(
                     user_id, skin_bytes, "skin", f"Imported from {api_url}", is_public=False, model=skin_model
                 )
             except Exception as e:
@@ -92,7 +110,7 @@ class SiteBackend:
             cape_url = profile_data["capes"][0]["url"]
             try:
                 cape_bytes = await download_texture(cape_url)
-                cape_hash, _ = await self.db.texture.upload(
+                cape_hash, _ = await self.upload_texture_to_library(
                     user_id, cape_bytes, "cape", f"Imported from {api_url}", is_public=False
                 )
             except Exception as e:

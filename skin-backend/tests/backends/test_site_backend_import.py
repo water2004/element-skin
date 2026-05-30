@@ -2,11 +2,12 @@ import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 from fastapi import HTTPException
 from backends.site_backend import SiteBackend
+from routes_reference import texture_storage
 from utils.typing import PlayerProfile
 
 @pytest.mark.asyncio
 async def test_import_ygg_profile_success(db_session, test_config):
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     user_id = "test_user_id"
     api_url = "http://example.com/api/yggdrasil"
     profile_id = "test_profile_id"
@@ -43,7 +44,7 @@ async def test_import_ygg_profile_success(db_session, test_config):
 
 @pytest.mark.asyncio
 async def test_import_ygg_profile_uuid_conflict(db_session, test_config):
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     user_id = "test_user_id_2"
     api_url = "http://example.com/api/yggdrasil"
     profile_id = "conflict_profile_id"
@@ -76,7 +77,7 @@ async def test_import_ygg_profile_uuid_conflict(db_session, test_config):
 
 @pytest.mark.asyncio
 async def test_import_ygg_profile_name_conflict(db_session, test_config):
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     user_id = "test_user_id_3"
     api_url = "http://example.com/api/yggdrasil"
     profile_id = "new_profile_id"
@@ -114,7 +115,7 @@ async def test_import_ygg_profile_name_conflict(db_session, test_config):
 
 @pytest.mark.asyncio
 async def test_import_ygg_profiles_batch_success_and_partial_failure(db_session, test_config):
-    backend = SiteBackend(db_session, test_config)
+    backend = SiteBackend(db_session, test_config, texture_storage)
     user_id = "batch_user_id"
     api_url = "http://example.com/api/yggdrasil"
 

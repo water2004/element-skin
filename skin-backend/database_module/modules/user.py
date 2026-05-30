@@ -104,7 +104,7 @@ class UserModule:
         
         next_cursor = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
+            next_cursor = CursorEncoder.encode({"last_id": rows[limit - 1][0]})
         
         return {
             "items": items,
@@ -149,7 +149,7 @@ class UserModule:
         
         next_cursor = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
+            next_cursor = CursorEncoder.encode({"last_id": rows[limit - 1][0]})
         
         return {
             "items": items,
@@ -231,7 +231,7 @@ class UserModule:
         
         next_cursor = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
+            next_cursor = CursorEncoder.encode({"last_id": rows[limit - 1][0]})
         
         return {
             "items": items,
@@ -300,7 +300,7 @@ class UserModule:
 
         next_cursor = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
+            next_cursor = CursorEncoder.encode({"last_id": rows[limit - 1][0]})
 
         return {
             "items": items,
@@ -495,7 +495,7 @@ class UserModule:
         
         next_cursor = None
         if has_next:
-            last_row = rows[limit]
+            last_row = rows[limit - 1]
             next_cursor = CursorEncoder.encode({
                 "last_created_at": last_row[1],
                 "last_code": last_row[0]

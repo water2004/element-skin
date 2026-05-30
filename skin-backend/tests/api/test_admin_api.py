@@ -214,17 +214,9 @@ async def test_admin_profile_delete(client, admin_headers, auth_headers, db_sess
 @pytest.mark.asyncio
 async def test_admin_textures_endpoints(client, admin_headers, auth_headers, db_session, user_factory):
     """Test all /admin/textures endpoints — list + toggle + delete + 403"""
-    from io import BytesIO
-    from PIL import Image
-
-    def make_img(color):
-        f = BytesIO()
-        Image.new('RGBA', (64, 64), color).save(f, 'png')
-        f.seek(0)
-        return f.read()
-
     user = await user_factory()
-    tex_hash, tex_type = await db_session.texture.upload(user.id, make_img((255, 0, 0)), "skin", note="APITest", is_public=True)
+    tex_hash, tex_type = "a" * 64, "skin"
+    await db_session.texture.add_to_library(user.id, tex_hash, "skin", note="APITest", is_public=True)
 
     # GET — 403 for non-admin
     resp = await client.get("/admin/textures", cookies=auth_headers["cookies"])

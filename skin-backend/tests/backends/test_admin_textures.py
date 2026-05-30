@@ -1,18 +1,6 @@
 import pytest
-from io import BytesIO
 from fastapi import HTTPException
-from PIL import Image
 from utils.uuid_utils import generate_random_uuid
-
-
-def _create_test_image(width=64, height=64, color=(255, 0, 0, 255)):
-    """创建一个测试用的 PNG 字节流"""
-    file = BytesIO()
-    image = Image.new('RGBA', size=(width, height), color=color)
-    image.save(file, 'png')
-    file.name = 'test.png'
-    file.seek(0)
-    return file.read()
 
 
 @pytest.mark.asyncio
@@ -35,9 +23,9 @@ async def test_update_texture_public_not_found(admin_backend_fixture):
 async def test_update_texture_public_success(admin_backend_fixture, db_session, user_factory):
     """验证成功更新材质的公开状态"""
     user = await user_factory()
-    image_bytes = _create_test_image(64, 64)
-    tex_hash, _ = await db_session.texture.upload(
-        user.id, image_bytes, "skin", note="TestTexture", is_public=True, model="default"
+    tex_hash = "a" * 64
+    await db_session.texture.add_to_library(
+        user.id, tex_hash, "skin", note="TestTexture", is_public=True, model="default"
     )
 
     # Toggle to 0
@@ -76,9 +64,9 @@ async def test_update_texture_model_not_found(admin_backend_fixture):
 async def test_update_texture_model_success(admin_backend_fixture, db_session, user_factory):
     """验证成功更新材质模型（三表同步）"""
     user = await user_factory()
-    image_bytes = _create_test_image(64, 64)
-    tex_hash, _ = await db_session.texture.upload(
-        user.id, image_bytes, "skin", note="TestTexture", is_public=True, model="default"
+    tex_hash = "b" * 64
+    await db_session.texture.add_to_library(
+        user.id, tex_hash, "skin", note="TestTexture", is_public=True, model="default"
     )
 
     # Update model from default to slim
@@ -110,9 +98,9 @@ async def test_delete_texture_force_mode(admin_backend_fixture, db_session, user
     """验证 force mode 删除所有引用和皮肤库记录"""
     user1 = await user_factory()
     user2 = await user_factory()
-    image_bytes = _create_test_image(64, 64)
-    tex_hash, tex_type = await db_session.texture.upload(
-        user1.id, image_bytes, "skin", note="ForceTarget", is_public=True, model="default"
+    tex_hash, tex_type = "c" * 64, "skin"
+    await db_session.texture.add_to_library(
+        user1.id, tex_hash, tex_type, note="ForceTarget", is_public=True, model="default"
     )
     # Add same texture to another user's wardrobe
     await db_session.texture.add_to_library(
@@ -139,9 +127,9 @@ async def test_delete_texture_force_mode(admin_backend_fixture, db_session, user
 async def test_delete_texture_per_user_last_ref_removes_library(admin_backend_fixture, db_session, user_factory):
     """验证 per-user mode 最后一个引用时物理删除 skin_library（无残留）"""
     user = await user_factory()
-    image_bytes = _create_test_image(64, 64)
-    tex_hash, tex_type = await db_session.texture.upload(
-        user.id, image_bytes, "skin", note="LastRef", is_public=True, model="default"
+    tex_hash, tex_type = "d" * 64, "skin"
+    await db_session.texture.add_to_library(
+        user.id, tex_hash, tex_type, note="LastRef", is_public=True, model="default"
     )
 
     # Only 1 user has this texture, so deleting it should also remove skin_library
@@ -164,9 +152,9 @@ async def test_delete_texture_per_user_success(admin_backend_fixture, db_session
     """验证 per-user 删除成功（多个用户收藏时只删除指定用户的）"""
     user1 = await user_factory()
     user2 = await user_factory()
-    image_bytes = _create_test_image(64, 64)
-    tex_hash, tex_type = await db_session.texture.upload(
-        user1.id, image_bytes, "skin", note="Shared", is_public=True, model="default"
+    tex_hash, tex_type = "e" * 64, "skin"
+    await db_session.texture.add_to_library(
+        user1.id, tex_hash, tex_type, note="Shared", is_public=True, model="default"
     )
     await db_session.texture.add_to_library(
         user2.id, tex_hash, tex_type, note="Shared2", is_public=True, model="default"

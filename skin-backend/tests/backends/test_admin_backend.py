@@ -1,7 +1,5 @@
 import pytest
-from io import BytesIO
 from fastapi import HTTPException
-from PIL import Image
 from backends.admin_backend import AdminBackend
 from utils.typing import PlayerProfile
 from utils.uuid_utils import generate_random_uuid
@@ -91,15 +89,6 @@ async def test_admin_invite_code_creation(db_session, test_config):
 
 # ========== Admin Profile & Texture Management Tests ==========
 
-def create_test_image_admin(width=64, height=64, color=(255, 0, 0, 255)):
-    """创建一个测试用的 PNG 字节流"""
-    file = BytesIO()
-    image = Image.new('RGBA', size=(width, height), color=color)
-    image.save(file, 'png')
-    file.name = 'test.png'
-    file.seek(0)
-    return file.read()
-
 
 @pytest.mark.asyncio
 async def test_admin_get_all_profiles(admin_backend_fixture, db_session, user_factory):
@@ -165,11 +154,11 @@ async def test_admin_delete_profile(admin_backend_fixture, db_session, user_fact
 async def test_admin_texture_methods(admin_backend_fixture, db_session, user_factory):
     """测试管理端材质管理：列表、公开状态、删除"""
     user = await user_factory()
-    image_bytes = create_test_image_admin(64, 64)
+    tex_hash, tex_type = "a" * 64, "skin"
 
-    # 1. Upload a texture
-    tex_hash, tex_type = await db_session.texture.upload(
-        user.id, image_bytes, "skin", note="AdminTexture", is_public=True, model="default"
+    # 1. Record a texture
+    await db_session.texture.add_to_library(
+        user.id, tex_hash, "skin", note="AdminTexture", is_public=True, model="default"
     )
 
     # 2. get_all_textures → texture appears
