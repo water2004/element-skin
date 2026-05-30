@@ -11,6 +11,7 @@ from utils.password_utils import validate_strong_password
 from utils.jwt_utils import create_jwt_token
 from utils.email_utils import EmailSender
 from utils.uuid_utils import generate_random_uuid, get_offline_uuid
+from utils.profile_naming import is_valid_profile_name, generate_unique_profile_name
 from backends.yggdrasil_client import YggdrasilClient, download_texture
 from utils.typing import User, PlayerProfile
 from database_module import Database
@@ -80,16 +81,10 @@ class SiteBackend:
         if await self.db.user.get_profile_by_id(profile_id):
             raise HTTPException(status_code=400, detail="该角色 UUID 已在本地存在，无法导入")
 
-        target_name = profile_name
-        suffix = 1
-        while True:
-            existing = await self.db.user.get_profile_by_name(target_name)
-            if not existing:
-                break
-            target_name = f"{profile_name}_{suffix}"
-            suffix += 1
-            if suffix > 100:
-                raise HTTPException(status_code=400, detail="无法生成唯一的角色名称")
+        async def _name_exists(n: str) -> bool:
+            return await self.db.user.get_profile_by_name(n) is not None
+
+        target_name = await generate_unique_profile_name(profile_name, _name_exists)
 
         skin_hash = None
         skin_model = "default"
@@ -307,16 +302,14 @@ class SiteBackend:
 
         base_name = email.split("@")[0]
         base_name = re.sub(r"[^a-zA-Z0-9_]", "_", base_name)[:12]
-        profile_name = base_name
-        suffix = 1
-        while True:
-            existing = await self.db.user.get_profile_by_name(profile_name)
-            if not existing:
-                break
-            profile_name = f"{base_name}_{suffix}"
-            suffix += 1
-            if suffix > 100:
-                raise HTTPException(status_code=500, detail="无法生成唯一角色名")
+
+        async def _name_exists(n: str) -> bool:
+            return await self.db.user.get_profile_by_name(n) is not None
+
+        try:
+            profile_name = await generate_unique_profile_name(base_name, _name_exists)
+        except ValueError:
+            raise HTTPException(status_code=500, detail="无法生成唯一角色名")
 
         profile_id = await self._generate_profile_uuid(profile_name)
 
@@ -469,7 +462,7 @@ class SiteBackend:
         if not name:
             raise HTTPException(status_code=400, detail="name required")
 
-        if not re.match(r"^[a-zA-Z0-9_]{1,16}$", name):
+        if not is_valid_profile_name(name):
             raise HTTPException(
                 status_code=400,
                 detail="角色名只能包含字母、数字、下划线，长度1-16字符",
@@ -494,8 +487,8 @@ class SiteBackend:
 
         if not name:
             raise HTTPException(status_code=400, detail="name required")
-        
-        if not re.match(r"^[a-zA-Z0-9_]{1,16}$", name):
+
+        if not is_valid_profile_name(name):
             raise HTTPException(
                 status_code=400,
                 detail="角色名只能包含字母、数字、下划线，长度1-16字符",

@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from utils.typing import InviteCode
 from utils.pagination import decode_cursor, encode_next
+from utils.profile_naming import is_valid_profile_name
 from database_module import Database
 from config_loader import Config
 
@@ -261,7 +262,7 @@ class AdminBackend:
     async def update_profile(self, profile_id: str, name: str | None = None) -> dict:
         # 业务验证
         if name is not None:
-            if not (1 <= len(name) <= 16) or not re.match(r"^[a-zA-Z0-9_]+$", name):
+            if not is_valid_profile_name(name):
                 raise HTTPException(status_code=400, detail="角色名只能包含字母、数字、下划线，长度 1-16 字符")
         # 编排 DB 操作
         if name is not None:
