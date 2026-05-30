@@ -573,6 +573,3 @@ class SiteBackend:
         # Sort by name (or could be by mtime)
         images.sort()
         return images
-    
-    async def get_fallback_services(self) -> list[dict]:
-        return await self.db.fallback.list_endpoints()

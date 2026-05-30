@@ -1,12 +1,10 @@
 import time
-import uuid
 import json
 import base64
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 from utils.crypto import CryptoUtils
 from utils.typing import User, PlayerProfile, Token, Session
-from utils.schemas import AuthRequest, RefreshRequest
 from utils.uuid_utils import generate_random_uuid
 from utils.password_utils import hash_password, verify_password
 from database_module import Database

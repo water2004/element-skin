@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict
 from pydantic import BaseModel
 
 class Agent(BaseModel):
@@ -17,10 +17,6 @@ class RefreshRequest(BaseModel):
     clientToken: Optional[str] = None
     requestUser: bool = False
     selectedProfile: Optional[Dict] = None
-
-class ValidationRequest(BaseModel):
-    accessToken: str
-    clientToken: Optional[str] = None
 
 class JoinRequest(BaseModel):
     accessToken: str

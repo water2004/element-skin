@@ -1,8 +1,6 @@
 from ..core import BaseDB
 from utils.typing import User, PlayerProfile, InviteCode, Token, Session
 import time
-import uuid
-import re
 import asyncpg
 
 class UserModule:
@@ -492,9 +490,6 @@ class UserModule:
                         "UPDATE invites SET used_by=$1 WHERE code=$2 AND used_by IS NULL",
                         used_by, code
                     )
-
-    async def count_invites(self) -> int:
-        return await self.db.fetchval("SELECT COUNT(*) FROM invites") or 0
 
     async def list_invites_cursor(self, limit: int = 15, last_created_at: int | None = None, last_code: str | None = None) -> dict:
         """按created_at+code游标分页获取邀请码列表（时序复合游标）"""

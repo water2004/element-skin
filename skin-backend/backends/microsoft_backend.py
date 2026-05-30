@@ -4,11 +4,8 @@
 """
 
 import aiohttp
-import asyncio
-import uuid
 import urllib.parse
 from typing import Optional, Dict, Tuple
-import time
 
 from fastapi import HTTPException
 

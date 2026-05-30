@@ -4,7 +4,6 @@ Element Skin Backend - 主入口文件
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
@@ -19,7 +18,6 @@ from backends.settings_backend import SettingsBackend
 from services import TextureStorage
 from utils.crypto import CryptoUtils
 from utils.rate_limiter import RateLimiter
-from utils.cached_static import CachedStaticFiles
 from routers import yggdrasil_routes, site_routes, microsoft_routes, admin_routes
 
 # ========== 初始化核心组件 ==========

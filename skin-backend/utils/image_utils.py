@@ -25,26 +25,6 @@ def validate_texture_dimensions(img: Image.Image, is_cape: bool = False) -> bool
         return (w % 64 == 0 and h == w) or (w % 64 == 0 and h * 2 == w)
 
 
-def compute_texture_hash(image_bytes: bytes) -> str:
-    """
-    从PNG字节流计算材质Hash（规范算法：基于像素数据）
-
-    Args:
-        image_bytes: PNG 图像字节
-
-    Returns:
-        str: 材质 hash
-
-    Raises:
-        ValueError: 无效的图像数据
-    """
-    try:
-        img = Image.open(BytesIO(image_bytes)).convert("RGBA")
-        return compute_texture_hash_from_image(img)
-    except Exception:
-        raise ValueError("Invalid image data")
-
-
 def compute_texture_hash_from_image(img: Image.Image) -> str:
     """
     实现规范中定义的特殊材质 Hash 算法：基于像素数据的SHA-256

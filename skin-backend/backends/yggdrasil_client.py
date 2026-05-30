@@ -1,8 +1,7 @@
 import aiohttp
-import asyncio
 import json
 import base64
-from typing import Optional, Dict, List, Any, Tuple
+from typing import Dict, Any
 
 class YggdrasilClient:
     """Yggdrasil 协议客户端，用于从远程皮肤站获取信息"""
