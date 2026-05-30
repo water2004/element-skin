@@ -2,7 +2,6 @@
 
 from fastapi import (
     APIRouter,
-    Request,
     HTTPException,
     Depends,
     Body,
@@ -12,27 +11,13 @@ from fastapi import (
 import os
 import uuid
 
-from utils.jwt_utils import decode_jwt_token
+from routers.deps import admin_required
 
 router = APIRouter()
 
 
 def setup_routes(admin_backend, settings_backend):
     """设置路由（注入依赖）"""
-
-    async def get_current_user(request: Request):
-        token = request.cookies.get("jwt")
-        if not token:
-            raise HTTPException(status_code=401, detail="not authenticated")
-        payload = decode_jwt_token(token)
-        if not payload:
-            raise HTTPException(status_code=401, detail="invalid or expired token")
-        return payload
-
-    def admin_required(payload: dict = Depends(get_current_user)):
-        if not payload.get("is_admin"):
-            raise HTTPException(status_code=403, detail="admin required")
-        return payload
 
     # ========== Settings (Granular) ==========
 

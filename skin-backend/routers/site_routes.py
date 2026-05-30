@@ -13,7 +13,8 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from typing import Optional
 
-from utils.jwt_utils import decode_jwt_token, get_cookie_settings
+from utils.jwt_utils import get_cookie_settings
+from routers.deps import get_current_user
 from config_loader import Config
 
 router = APIRouter()
@@ -21,15 +22,6 @@ router = APIRouter()
 
 def setup_routes(site_backend, profile_import_backend, settings_backend, rate_limiter, config: Config):
     """设置路由（注入依赖）"""
-
-    async def get_current_user(request: Request):
-        token = request.cookies.get("jwt")
-        if not token:
-            raise HTTPException(status_code=401, detail="not authenticated")
-        payload = decode_jwt_token(token)
-        if not payload:
-            raise HTTPException(status_code=401, detail="invalid or expired token")
-        return payload
 
     @router.post("/site-login")
     async def site_login(req: dict, request: Request):
