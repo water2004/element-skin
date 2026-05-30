@@ -1,18 +1,12 @@
 <template>
   <div class="invites-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Ticket /></div>
-        <div class="page-header-text">
-          <h2>邀请码管理</h2>
-          <p class="subtitle">创建并管理用于限制新用户注册的邀请码</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="邀请码管理" subtitle="创建并管理用于限制新用户注册的邀请码">
+      <template #icon><Ticket /></template>
+      <template #actions>
         <el-button :icon="Refresh" @click="loadInvites" plain class="hover-lift">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="showInviteDialog" class="hover-lift">创建邀请码</el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-card class="surface-card" shadow="never">
       <el-table :data="invites" style="width: 100%" class="modern-table">
@@ -135,6 +129,7 @@ import { Refresh, Plus, Check, Delete, Ticket } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getAdminInvites, createAdminInvite, deleteAdminInvite } from '@/api/admin/invites'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const invites = ref([])
 const limit = 15

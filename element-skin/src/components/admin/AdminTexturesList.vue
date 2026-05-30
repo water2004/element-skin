@@ -1,19 +1,13 @@
 <template>
   <div class="textures-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Picture /></div>
-        <div class="page-header-text">
-          <h2>材质管理</h2>
-          <p class="subtitle">浏览和管理皮肤库中所有上传的材质</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="材质管理" subtitle="浏览和管理皮肤库中所有上传的材质">
+      <template #icon><Picture /></template>
+      <template #actions>
         <el-button type="primary" :icon="Refresh" @click="refreshTexturesFromFirst" plain class="hover-lift">
           刷新列表
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <div class="filter-bar">
       <div class="search-bar-container">
@@ -194,6 +188,7 @@ import CapeViewer from '@/components/CapeViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getAdminTextures, patchAdminTexture, deleteAdminTexture } from '@/api/admin/textures'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const isDark = inject('isDark', ref(false))
 

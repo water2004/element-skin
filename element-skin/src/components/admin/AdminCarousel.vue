@@ -1,14 +1,8 @@
 <template>
   <div class="admin-carousel animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><PictureFilled /></div>
-        <div class="page-header-text">
-          <h2>首页图库管理</h2>
-          <p class="subtitle">上传并管理首页展示的轮播图片，建议使用高清横屏大图</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="首页图库管理" subtitle="上传并管理首页展示的轮播图片，建议使用高清横屏大图">
+      <template #icon><PictureFilled /></template>
+      <template #actions>
         <el-upload
           action="#"
           :http-request="uploadCarousel"
@@ -17,8 +11,8 @@
         >
           <el-button type="primary" :icon="Upload" size="large" class="hover-lift">上传图片</el-button>
         </el-upload>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-alert
       title="配置建议"
@@ -57,6 +51,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, PictureFilled, Upload } from '@element-plus/icons-vue'
 import { getPublicCarousel } from '@/api/public'
 import { uploadCarousel as apiUploadCarousel, deleteCarousel as apiDeleteCarousel } from '@/api/admin/carousel'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const carouselImages = ref([])
 const loading = ref(false)

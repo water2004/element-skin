@@ -1,19 +1,13 @@
 <template>
   <div class="settings-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Message /></div>
-        <div class="page-header-text">
-          <h2>邮件服务设置</h2>
-          <p class="subtitle">配置 SMTP 服务器以启用注册验证、找回密码等通知功能</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="邮件服务设置" subtitle="配置 SMTP 服务器以启用注册验证、找回密码等通知功能">
+      <template #icon><Message /></template>
+      <template #actions>
         <el-button type="primary" :icon="Refresh" @click="loadSettings" plain class="hover-lift">
           刷新配置
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-card class="surface-card" shadow="never">
       <template #header>
@@ -98,6 +92,7 @@ import { ref, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Message, Postcard } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const emailSettings = reactive({
   email_verify_enabled: false,

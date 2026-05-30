@@ -1,19 +1,13 @@
 <template>
   <div class="roles-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><UserFilled /></div>
-        <div class="page-header-text">
-          <h2>角色管理</h2>
-          <p class="subtitle">浏览和管理全站所有用户的游戏角色与材质</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="角色管理" subtitle="浏览和管理全站所有用户的游戏角色与材质">
+      <template #icon><UserFilled /></template>
+      <template #actions>
         <el-button type="primary" :icon="Refresh" @click="refreshFromFirst" plain class="hover-lift">
           刷新列表
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <div class="search-bar-container">
       <el-input
@@ -193,6 +187,7 @@ import SkinViewer from '@/components/SkinViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getAdminProfiles, patchAdminProfile, deleteAdminProfile, patchProfileSkin, patchProfileCape } from '@/api/admin/profiles'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 interface Profile {
   id: string

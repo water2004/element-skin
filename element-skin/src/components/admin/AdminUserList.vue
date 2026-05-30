@@ -1,19 +1,13 @@
 <template>
   <div class="users-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><UserFilled /></div>
-        <div class="page-header-text">
-          <h2>用户管理</h2>
-          <p class="subtitle">管理站内所有用户及其角色的状态与权限</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="用户管理" subtitle="管理站内所有用户及其角色的状态与权限">
+      <template #icon><UserFilled /></template>
+      <template #actions>
         <el-button type="primary" :icon="Refresh" @click="refreshUsersFromFirst" plain class="hover-lift">
           刷新列表
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <div class="search-bar-container">
       <el-input
@@ -277,6 +271,7 @@ import CursorPager from '@/components/common/CursorPager.vue'
 import { getAvatarForHash } from '@/composables/useAvatar'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getUsers, getUser, getUserProfiles, toggleAdmin as apiToggleAdmin, deleteUser as apiDeleteUser, banUser as apiBanUser, unbanUser as apiUnbanUser, resetUserPassword } from '@/api/admin/users'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const users = ref([])
 const limit = 15

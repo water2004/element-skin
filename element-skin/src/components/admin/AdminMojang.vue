@@ -1,19 +1,13 @@
 <template>
   <div class="admin-fallback animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Connection /></div>
-        <div class="page-header-text">
-          <h2>Fallback 服务配置</h2>
-          <p class="subtitle">管理外部 Yggdrasil 或 Mojang API 的回退逻辑与白名单</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="Fallback 服务配置" subtitle="管理外部 Yggdrasil 或 Mojang API 的回退逻辑与白名单">
+      <template #icon><Connection /></template>
+      <template #actions>
         <el-button type="primary" :icon="Check" @click="saveSettings" :loading="saving" class="hover-lift">
           保存更改
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- Global Strategy Card -->
     <el-card class="surface-card mb-6" shadow="never">
@@ -225,6 +219,7 @@ import {
 } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 import { getWhitelist, addWhitelistUser, removeWhitelistUser } from '@/api/admin/whitelist'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const settings = ref({
   fallback_strategy: 'serial'

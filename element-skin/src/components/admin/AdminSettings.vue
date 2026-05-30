@@ -1,19 +1,13 @@
 <template>
   <div class="settings-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Setting /></div>
-        <div class="page-header-text">
-          <h2>站点设置</h2>
-          <p class="subtitle">管理站点基础配置、安全策略及第三方集成</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="站点设置" subtitle="管理站点基础配置、安全策略及第三方集成">
+      <template #icon><Setting /></template>
+      <template #actions>
         <el-button type="primary" :icon="Refresh" @click="loadAllSettings" class="hover-lift">
           重新加载所有
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- Site Config -->
     <el-card class="surface-card mb-6" shadow="never">
@@ -200,6 +194,7 @@ import {
   Refresh, Setting, Monitor, Lock, Key, Link
 } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const settings = reactive({
   site: {
