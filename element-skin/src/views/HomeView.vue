@@ -1,15 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { User } from '@element-plus/icons-vue'
 import { getPublicSettings, getPublicCarousel } from '@/api/public'
 import { getMe } from '@/api/me'
+import CanvasGlassButton from '@/components/common/CanvasGlassButton.vue'
 
 const router = useRouter()
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
 const siteSubtitle = ref(localStorage.getItem('site_subtitle_cache') || '简洁、高效、现代的 Minecraft 皮肤 management 站')
 const isLogged = ref(false)
 const carouselImages = ref<string[]>([])
+const activeCarouselIndex = ref(0)
+const activeCarouselUrl = computed(() => {
+  const image = carouselImages.value[activeCarouselIndex.value]
+  return image ? getCarouselUrl(image) : ''
+})
 
 onMounted(async () => {
   // 加载站点配置
@@ -50,13 +56,17 @@ function getCarouselUrl(filename: string) {
   const base = import.meta.env.BASE_URL
   return `${base}static/carousel/${filename}`.replace(/\/+/g, '/')
 }
+
+function handleCarouselChange(index: number) {
+  activeCarouselIndex.value = index
+}
 </script>
 
 <template>
   <div class="home-container">
     <!-- Background is FIXED and outside of main content flow -->
     <div v-if="carouselImages.length > 0" class="hero-bg-fixed">
-      <el-carousel height="100%" indicator-position="none" arrow="never" :interval="5000">
+      <el-carousel height="100%" indicator-position="none" arrow="never" :interval="5000" @change="handleCarouselChange">
         <el-carousel-item v-for="img in carouselImages" :key="img">
           <div class="carousel-img-wrap">
             <img :src="getCarouselUrl(img)" class="carousel-img" />
@@ -73,17 +83,23 @@ function getCarouselUrl(filename: string) {
         <h1 class="hero-title">{{ siteName }}</h1>
         <p class="hero-subtitle">{{ siteSubtitle }}</p>
         <div class="hero-actions">
-          <el-button v-if="isLogged" size="large" @click="goDashboard" class="btn-glass btn-glass-primary hero-btn">
+          <CanvasGlassButton
+            v-if="isLogged"
+            class="hero-btn"
+            variant="primary"
+            :background-url="activeCarouselUrl"
+            @click="goDashboard"
+          >
             <el-icon><User /></el-icon>
             <span>进入个人面板</span>
-          </el-button>
+          </CanvasGlassButton>
           <template v-else>
-            <el-button size="large" @click="goLogin" class="btn-glass btn-glass-primary hero-btn">
+            <CanvasGlassButton class="hero-btn" variant="primary" :background-url="activeCarouselUrl" @click="goLogin">
               登录账号
-            </el-button>
-            <el-button size="large" @click="goRegister" class="btn-glass hero-btn">
+            </CanvasGlassButton>
+            <CanvasGlassButton class="hero-btn" variant="secondary" :background-url="activeCarouselUrl" @click="goRegister">
               即刻注册
-            </el-button>
+            </CanvasGlassButton>
           </template>
         </div>
       </div>
