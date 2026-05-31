@@ -1,11 +1,13 @@
-from typing import Any, List, Dict
+from typing import Any, Dict
 import time
 import secrets
 import os
 import re
 from fastapi import HTTPException
 
-from utils.typing import InviteCode
+from utils.typing import InviteCode, serialize_profile_summary
+from utils.pagination import decode_cursor, encode_next
+from utils.profile_naming import is_valid_profile_name
 from database_module import Database
 from config_loader import Config
 
@@ -14,190 +16,7 @@ class AdminBackend:
         self.db = db
         self.config = config
 
-    # ========== Settings Management (Granular) ==========
-
-    async def get_site_settings(self):
-        s = await self.db.setting.get_all()
-        return {
-            "site_name": s.get("site_name", "皮肤站"),
-            "site_subtitle": s.get("site_subtitle", "简洁、高效、现代的 Minecraft 皮肤管理站"),
-            "require_invite": s.get("require_invite", "false") == "true",
-            "allow_register": s.get("allow_register", "true") == "true",
-            "enable_skin_library": s.get("enable_skin_library", "true") == "true",
-            "max_texture_size": int(s.get("max_texture_size", "1024")),
-            "footer_text": s.get("footer_text", ""),
-            "filing_icp": s.get("filing_icp", ""),
-            "filing_icp_link": s.get("filing_icp_link", ""),
-            "filing_mps": s.get("filing_mps", ""),
-            "filing_mps_link": s.get("filing_mps_link", ""),
-            "profile_uuid_mode": s.get("profile_uuid_mode", "random"),
-        }
-
-    async def get_security_settings(self):
-        s = await self.db.setting.get_all()
-        return {
-            "rate_limit_enabled": s.get("rate_limit_enabled", "true") == "true",
-            "rate_limit_auth_attempts": int(s.get("rate_limit_auth_attempts", "5")),
-            "rate_limit_auth_window": int(s.get("rate_limit_auth_window", "15")),
-            "enable_strong_password_check": s.get("enable_strong_password_check", "false") == "true",
-        }
-
-    async def get_auth_settings(self):
-        s = await self.db.setting.get_all()
-        return {
-            "jwt_expire_days": int(s.get("jwt_expire_days", "7")),
-        }
-
-    async def get_microsoft_settings(self):
-        s = await self.db.setting.get_all()
-        return {
-            "microsoft_client_id": s.get("microsoft_client_id", ""),
-            "microsoft_client_secret": s.get("microsoft_client_secret", ""),
-            "microsoft_redirect_uri": s.get("microsoft_redirect_uri", ""),
-        }
-
-    async def get_email_settings(self):
-        s = await self.db.setting.get_all()
-        return {
-            "email_verify_enabled": s.get("email_verify_enabled", "false") == "true",
-            "email_verify_ttl": int(s.get("email_verify_ttl", "300")),
-            "smtp_host": s.get("smtp_host", ""),
-            "smtp_port": int(s.get("smtp_port", "465")),
-            "smtp_user": s.get("smtp_user", ""),
-            "smtp_ssl": s.get("smtp_ssl", "true") == "true",
-            "smtp_sender": s.get("smtp_sender", ""),
-        }
-
-    async def get_fallback_settings(self):
-        s = await self.db.setting.get_all()
-        return {
-            "fallback_strategy": s.get("fallback_strategy", "serial"),
-            "fallbacks": await self.db.fallback.list_endpoints(),
-        }
-
-    async def save_settings_group(self, group: str, body: dict):
-        allowed_keys = {
-            "site": [
-                "site_name",
-                "site_subtitle",
-                "require_invite",
-                "allow_register",
-                "enable_skin_library",
-                "max_texture_size",
-                "footer_text",
-                "filing_icp",
-                "filing_icp_link",
-                "filing_mps",
-                "filing_mps_link",
-                "profile_uuid_mode",
-            ],
-            "security": ["rate_limit_enabled", "rate_limit_auth_attempts", "rate_limit_auth_window", "enable_strong_password_check"],
-            "auth": ["jwt_expire_days"],
-            "microsoft": ["microsoft_client_id", "microsoft_client_secret", "microsoft_redirect_uri"],
-            "email": ["email_verify_enabled", "email_verify_ttl", "smtp_host", "smtp_port", "smtp_user", "smtp_password", "smtp_ssl", "smtp_sender"],
-            "fallback": ["fallback_strategy"]
-        }
-        
-        if group not in allowed_keys and group != "fallback_endpoints":
-            raise HTTPException(status_code=400, detail="Invalid settings group")
-
-        if group == "fallback_endpoints":
-            if "fallbacks" in body:
-                fallbacks = self._validate_fallback_services(body.get("fallbacks"))
-                await self.db.fallback.save_endpoints(fallbacks)
-            return
-
-        for key in allowed_keys[group]:
-            if key in body:
-                val = body[key]
-                if key == "profile_uuid_mode":
-                    mode = str(val).strip().lower()
-                    if mode not in ["random", "offline"]:
-                        raise HTTPException(status_code=400, detail="profile_uuid_mode must be random or offline")
-                    val = mode
-                # Special handling for password
-                if key == "smtp_password" and not val:
-                    continue
-                
-                value = "true" if isinstance(val, bool) and val else ("false" if isinstance(val, bool) else str(val))
-                await self.db.setting.set(key, value)
-        
-        # If fallback strategy was saved, update endpoints if they were also passed (though we prefer separate)
-        if group == "fallback" and "fallbacks" in body:
-            fallbacks = self._validate_fallback_services(body.get("fallbacks"))
-            await self.db.fallback.save_endpoints(fallbacks)
-
-    # ========== Legacy compatibility (can be removed later) ==========
-
-    async def get_admin_settings(self):
-        site = await self.get_site_settings()
-        sec = await self.get_security_settings()
-        auth = await self.get_auth_settings()
-        ms = await self.get_microsoft_settings()
-        fallback = await self.get_fallback_settings()
-        email = await self.get_email_settings()
-        return {**site, **sec, **auth, **ms, **fallback, **email}
-
-    async def save_admin_settings(self, body: dict):
-        # Determine which groups are present and save them
-        for group in ["site", "security", "auth", "microsoft", "email", "fallback"]:
-            await self.save_settings_group(group, body)
-        if "fallbacks" in body:
-            await self.save_settings_group("fallback_endpoints", body)
-
     # ========== Other Methods ==========
-
-    def _validate_fallback_services(self, services: Any) -> list[dict]:
-        if not isinstance(services, list):
-            raise HTTPException(status_code=400, detail="fallbacks must be a list")
-
-        normalized: list[dict] = []
-        for idx, entry in enumerate(services, start=1):
-            if not isinstance(entry, dict):
-                raise HTTPException(status_code=400, detail="invalid fallback entry")
-
-            endpoint_id = entry.get("id")
-            if endpoint_id is not None:
-                try:
-                    endpoint_id = int(endpoint_id)
-                except (TypeError, ValueError):
-                    raise HTTPException(status_code=400, detail=f"fallback[{idx}] id invalid")
-            
-            session_url = str(entry.get("session_url", "")).strip()
-            account_url = str(entry.get("account_url", "")).strip()
-            services_url = str(entry.get("services_url", "")).strip()
-            cache_ttl = entry.get("cache_ttl", 60)
-            raw_domains = entry.get("skin_domains", "")
-            
-            if not session_url or not account_url or not services_url:
-                raise HTTPException(status_code=400, detail=f"fallback[{idx}] urls are required")
-
-            if isinstance(raw_domains, list):
-                skin_domains = [str(item).strip() for item in raw_domains if str(item).strip()]
-            else:
-                skin_domains = [item.strip() for item in str(raw_domains).split(",") if item.strip()]
-            
-            try:
-                cache_ttl = int(cache_ttl)
-            except (TypeError, ValueError):
-                raise HTTPException(status_code=400, detail=f"fallback[{idx}] cache_ttl invalid")
-            
-            if cache_ttl < 0:
-                raise HTTPException(status_code=400, detail=f"fallback[{idx}] cache_ttl must be non-negative")
-
-            normalized.append({
-                "id": endpoint_id,
-                "session_url": session_url,
-                "account_url": account_url,
-                "services_url": services_url,
-                "cache_ttl": cache_ttl,
-                "skin_domains": ",".join(skin_domains),
-                "enable_profile": bool(entry.get("enable_profile", True)),
-                "enable_hasjoined": bool(entry.get("enable_hasjoined", True)),
-                "enable_whitelist": bool(entry.get("enable_whitelist", False)),
-                "note": str(entry.get("note", "")).strip(),
-            })
-        return normalized
 
     async def get_user_info(self, user_id: str) -> Dict[str, Any]:
         user_row = await self.db.user.get_by_id(user_id)
@@ -210,7 +29,7 @@ class AdminBackend:
         return {
             "id": user_row.id,
             "email": user_row.email,
-            "lang": user_row.preferredLanguage,
+            "lang": user_row.preferred_language,
             "display_name": user_row.display_name,
             "is_admin": bool(user_row.is_admin),
             "banned_until": user_row.banned_until,
@@ -244,6 +63,89 @@ class AdminBackend:
         await self.db.user.ban(user_id, banned_until)
         return banned_until
 
+    async def unban_user(self, user_id: str):
+        await self.db.user.unban(user_id)
+
+    async def list_users(self, cursor: str | None, limit: int, query: str | None) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        last_id = (key or {}).get("last_id")
+        if query and query.strip():
+            result = await self.db.user.search_users_cursor(query=query.strip(), limit=limit, last_id=last_id)
+        else:
+            result = await self.db.user.list_users_cursor(limit=limit, last_id=last_id)
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
+
+    async def get_user_profiles(self, user_id: str, cursor: str | None, limit: int) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.user.get_profiles_by_user_cursor(
+            user_id, limit=limit, last_id=(key or {}).get("last_id")
+        )
+        return {
+            "items": [serialize_profile_summary(p) for p in result["items"]],
+            "has_next": result["has_next"],
+            "next_cursor": encode_next(result["next_key"]),
+            "page_size": result["page_size"],
+        }
+
+    # ========== Profile Management (Admin) ==========
+
+    async def get_all_profiles(self, limit: int = 20, cursor: str | None = None, query: str | None = None) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.user.list_all_profiles_cursor(
+            limit, after_id=(key or {}).get("last_id"), query=query
+        )
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
+
+    async def update_profile(self, profile_id: str, name: str | None = None) -> dict:
+        # 业务验证
+        if name is not None:
+            if not is_valid_profile_name(name):
+                raise HTTPException(status_code=400, detail="角色名只能包含字母、数字、下划线，长度 1-16 字符")
+        # 编排 DB 操作
+        if name is not None:
+            ok = await self.db.user.update_profile_name(profile_id, name)
+            if not ok:
+                raise HTTPException(status_code=409, detail="角色名已被占用")
+        
+        return {"ok": True}
+
+    async def delete_profile(self, profile_id: str) -> dict:
+        # 检查存在性
+        profile = await self.db.user.get_profile_by_id(profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="角色不存在")
+        
+        # 编排级联删除
+        await self.db.user.delete_tokens_by_profile(profile_id)
+        await self.db.user.delete_profile(profile_id)
+        
+        return {"ok": True}
+
+    async def update_profile_skin(self, profile_id: str, skin_hash: str | None = None) -> dict:
+        profile = await self.db.user.get_profile_by_id(profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="角色不存在")
+        await self.db.user.update_profile_skin(profile_id, skin_hash)
+        return {"ok": True}
+
+    async def update_profile_cape(self, profile_id: str, cape_hash: str | None = None) -> dict:
+        profile = await self.db.user.get_profile_by_id(profile_id)
+        if not profile:
+            raise HTTPException(status_code=404, detail="角色不存在")
+        await self.db.user.update_profile_cape(profile_id, cape_hash)
+        return {"ok": True}
+
     async def reset_user_password(self, user_id: str, new_password: str):
         from utils.password_utils import hash_password
         user_row = await self.db.user.get_by_id(user_id)
@@ -252,6 +154,37 @@ class AdminBackend:
         
         password_hash = hash_password(new_password)
         await self.db.user.update_password(user_id, password_hash)
+        return {"ok": True}
+
+    async def list_invites(self, cursor: str | None, limit: int) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_code"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.user.list_invites_cursor(
+            limit=limit,
+            last_created_at=(key or {}).get("last_created_at"),
+            last_code=(key or {}).get("last_code"),
+        )
+        return {
+            "items": [
+                {
+                    "code": row.code,
+                    "created_at": row.created_at,
+                    "used_by": row.used_by,
+                    "total_uses": row.total_uses,
+                    "used_count": row.used_count,
+                    "note": row.note,
+                }
+                for row in result["items"]
+            ],
+            "has_next": result["has_next"],
+            "next_cursor": encode_next(result["next_key"]),
+            "page_size": result["page_size"],
+        }
+
+    async def delete_invite(self, code: str):
+        await self.db.user.delete_invite(code)
         return {"ok": True}
 
     async def create_invite(self, code, total_uses, note: str = ""):
@@ -298,3 +231,57 @@ class AdminBackend:
             raise HTTPException(status_code=400, detail="username required")
         await self.db.fallback.remove_whitelist_user(username, endpoint_id)
         return {"ok": True}
+
+    # ========== Admin Texture Management ==========
+
+    async def get_all_textures(self, limit: int = 20, cursor: str | None = None, query: str | None = None, type_filter: str | None = None) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_skin_hash"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.texture.list_all_textures_cursor(
+            limit,
+            last_created_at=(key or {}).get("last_created_at"),
+            last_skin_hash=(key or {}).get("last_skin_hash"),
+            query=query,
+            type_filter=type_filter,
+        )
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
+
+    async def _get_uploader_or_404(self, texture_hash: str) -> str:
+        texture = await self.db.texture.get_texture_from_library(texture_hash)
+        if not texture:
+            raise HTTPException(status_code=404, detail="材质不存在")
+        return texture["uploader"]
+
+    async def update_texture_public(self, texture_hash: str, is_public: int) -> dict:
+        if is_public not in (0, 1):
+            raise HTTPException(status_code=400, detail="is_public must be 0 or 1")
+        uploader = await self._get_uploader_or_404(texture_hash)
+        await self.db.texture.update_is_public(uploader, texture_hash, "skin", bool(is_public))
+        return {"success": True}
+
+    async def update_texture_model(self, texture_hash: str, model: str) -> dict:
+        if model not in ("default", "slim"):
+            raise HTTPException(status_code=400, detail="model must be 'default' or 'slim'")
+        uploader = await self._get_uploader_or_404(texture_hash)
+        await self.db.texture.update_model(uploader, texture_hash, "skin", model)
+        return {"success": True}
+
+    async def update_texture_note(self, texture_hash: str, note: str) -> dict:
+        uploader = await self._get_uploader_or_404(texture_hash)
+        await self.db.texture.update_note(uploader, texture_hash, "skin", note)
+        return {"success": True}
+
+    async def delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False) -> dict:
+        if not force and not user_id:
+            raise HTTPException(status_code=400, detail="per-user deletion requires user_id")
+        
+        await self.db.texture.delete_texture(
+            texture_hash=texture_hash,
+            texture_type=texture_type,
+            user_id=user_id,
+            force=force,
+        )
+        return {"success": True}

@@ -1,46 +1,3 @@
-import base64
-import json
-import time
-
-
-class Texture:
-    skinHash: str
-    capeHash: str
-    model: str
-
-    def __init__(
-        self, skinHash: str = None, capeHash: str = None, model: str = "default"
-    ):
-        self.skinHash = skinHash
-        self.capeHash = capeHash
-        self.model = model
-
-    def to_json(
-        self, timeStamp: int, profileId: str, profileName: str, baseUrl: str
-    ) -> dict:
-        base_texture_url = "/static/textures/"
-        if baseUrl:
-            base_texture_url = baseUrl.rstrip("/") + "/static/textures/"
-
-        textures_payload = {
-            "timestamp": timeStamp,
-            "profileId": profileId,
-            "profileName": profileName,
-            "textures": {},
-        }
-        if self.skinHash:
-            textures_payload["textures"]["SKIN"] = {
-                "url": base_texture_url + self.skinHash + ".png"
-            }
-            if self.model == "slim":
-                textures_payload["textures"]["SKIN"]["metadata"] = {"model": "slim"}
-
-        if self.capeHash:
-            textures_payload["textures"]["CAPE"] = {
-                "url": base_texture_url + self.capeHash + ".png"
-            }
-
-
 class User:
     id: str
     email: str
@@ -48,7 +5,7 @@ class User:
     is_admin: int
     display_name: str
     banned_until: int
-    preferredLanguage: str
+    preferred_language: str
 
     def __init__(
         self,
@@ -65,16 +22,10 @@ class User:
         self.email = email
         self.password = password
         self.is_admin = is_admin
-        self.preferredLanguage = preferred_language
+        self.preferred_language = preferred_language
         self.display_name = display_name
         self.banned_until = banned_until
         self.avatar_hash = avatar_hash
-
-    def to_json(self) -> dict:
-        return {
-            "id": self.id,
-            "preferredLanguage": self.preferredLanguage,
-        }
 
 
 class PlayerProfile:
@@ -101,22 +52,22 @@ class PlayerProfile:
         self.skin_hash = skin_hash
         self.cape_hash = cape_hash
 
-    def to_json(self, texture: Texture) -> dict:
-        textures_json = json.dumps(
-            texture.to_json(int(time.time() * 1000), self.id, self.name, None)
-        )
-        textures_base64 = base64.b64encode(textures_json.encode("utf-8")).decode(
-            "utf-8"
-        )
-        # 后续再支持签名和 uploadableTextures
-        return {
-            "id": self.id,
-            "name": self.name,
-            "properties": [
-                {"name": "textures", "value": textures_base64},
-                {"name": "uploadableTextures", "value": "skin,cape"},
-            ],
-        }
+
+def normalize_texture_model(value: str) -> str:
+    """把皮肤模型/变体归一化为 'slim' 或 'default'。"""
+    return "slim" if value == "slim" else "default"
+
+
+def serialize_profile_summary(profile: PlayerProfile) -> dict:
+    """角色列表项的统一序列化。"""
+    return {
+        "id": profile.id,
+        "name": profile.name,
+        "model": profile.texture_model,
+        "skin_hash": profile.skin_hash,
+        "cape_hash": profile.cape_hash,
+    }
+
 
 
 class InviteCode:

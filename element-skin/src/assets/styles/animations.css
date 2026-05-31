@@ -64,11 +64,3 @@
   transform: scale(1.05);
 }
 
-/* Motion-off support */
-html.motion-off *,
-html.motion-off *::before,
-html.motion-off *::after {
-  animation-duration: 0s !important;
-  animation-delay: 0s !important;
-  transition-duration: 0s !important;
-}

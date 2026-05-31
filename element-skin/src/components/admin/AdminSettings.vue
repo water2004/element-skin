@@ -1,19 +1,13 @@
 <template>
   <div class="settings-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Setting /></div>
-        <div class="page-header-text">
-          <h2>站点设置</h2>
-          <p class="subtitle">管理站点基础配置、安全策略及第三方集成</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="站点设置" subtitle="管理站点基础配置、安全策略及第三方集成">
+      <template #icon><Setting /></template>
+      <template #actions>
         <el-button type="primary" :icon="Refresh" @click="loadAllSettings" class="hover-lift">
           重新加载所有
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- Site Config -->
     <el-card class="surface-card mb-6" shadow="never">
@@ -193,13 +187,14 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import { 
-  Refresh, Setting, Monitor, Lock, Key, Link 
+import {
+  Refresh, Setting, Monitor, Lock, Key, Link
 } from '@element-plus/icons-vue'
+import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const settings = reactive({
   site: {
@@ -239,13 +234,13 @@ const saving = reactive({
   microsoft: false
 })
 
-const regulatoryCollapse = ref([])
+const regulatoryCollapse = ref<string[]>([])
 
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
+type SettingsGroup = 'site' | 'security' | 'auth' | 'microsoft'
 
-async function loadGroup(group) {
+async function loadGroup(group: SettingsGroup) {
   try {
-    const res = await axios.get(`/admin/settings/${group}`, { headers: authHeaders() })
+    const res = await getAdminSettingsGroup(group)
     Object.assign(settings[group], res.data)
   } catch (e) {
     ElMessage.error(`加载 ${group} 设置失败`)
@@ -261,10 +256,10 @@ async function loadAllSettings() {
   ])
 }
 
-async function saveGroup(group) {
+async function saveGroup(group: SettingsGroup) {
   saving[group] = true
   try {
-    await axios.post(`/admin/settings/${group}`, settings[group], { headers: authHeaders() })
+    await saveAdminSettingsGroup(group, settings[group])
     ElMessage.success('设置已更新')
     if (group === 'microsoft') {
        settings.microsoft.microsoft_client_secret = '' // Clear local secret field
@@ -280,12 +275,6 @@ onMounted(loadAllSettings)
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/buttons.css";
-
 .settings-section {
   max-width: 900px;
   margin: 0 auto;
@@ -306,7 +295,5 @@ onMounted(loadAllSettings)
 }
 
 .hint-text { font-size: 12px; color: var(--color-text-light); line-height: 1.5; margin-top: 4px; display: block; }
-.mb-6 { margin-bottom: 24px; }
-.ml-4 { margin-left: 16px; }
 .uuid-mode-group { display: inline-flex; flex-wrap: wrap; gap: 8px; }
 </style>

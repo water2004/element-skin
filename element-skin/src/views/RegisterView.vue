@@ -100,15 +100,16 @@
   </div>
 </template>
 
-<script setup>
-import { reactive, ref } from 'vue'
-import axios from 'axios'
+<script setup lang="ts">
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
+import { getPublicSettings } from '@/api/public'
+import { sendVerificationCode, register as apiRegister } from '@/api/auth'
 
 const router = useRouter()
-const formRef = ref(null)
+const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 
 const form = reactive({
@@ -123,9 +124,9 @@ const form = reactive({
 const emailVerifyEnabled = ref(false)
 const codeLoading = ref(false)
 const countdown = ref(0)
-let timer = null
+let timer: ReturnType<typeof setInterval> | null = null
 
-const rules = {
+const rules: FormRules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 3, message: '用户名至少需要3个字符', trigger: 'blur' },
@@ -146,7 +147,7 @@ const rules = {
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     {
-      validator: (rule, value, callback) => {
+      validator: (_rule, value, callback) => {
         if (value !== form.password) {
           callback(new Error('两次输入的密码不一致'))
         } else {
@@ -158,12 +159,10 @@ const rules = {
   ]
 }
 
-import { onMounted } from 'vue'
-
 onMounted(async () => {
   try {
-    const res = await axios.get('/public/settings')
-    emailVerifyEnabled.value = res.data.email_verify_enabled
+    const res = await getPublicSettings()
+    emailVerifyEnabled.value = res.data.email_verify_enabled ?? false
   } catch (e) {
     console.error('Failed to fetch settings', e)
   }
@@ -171,6 +170,7 @@ onMounted(async () => {
 
 async function sendCode() {
   try {
+    if (!formRef.value) return
     await formRef.value.validateField('email')
   } catch (e) {
     ElMessage.warning('请先输入有效的邮箱地址')
@@ -179,20 +179,20 @@ async function sendCode() {
 
   try {
     codeLoading.value = true
-    await axios.post('/send-verification-code', {
+    await sendVerificationCode({
       email: form.email,
       type: 'register'
     })
     ElMessage.success('验证码已发送到您的邮箱')
-    
+
     countdown.value = 60
     timer = setInterval(() => {
       countdown.value--
-      if (countdown.value <= 0) {
+      if (countdown.value <= 0 && timer) {
         clearInterval(timer)
       }
     }, 1000)
-  } catch (e) {
+  } catch (e: any) {
     if (e.response?.data?.detail) {
       ElMessage.error('发送失败: ' + e.response.data.detail)
     } else {
@@ -205,6 +205,7 @@ async function sendCode() {
 
 async function register() {
   try {
+    if (!formRef.value) return
     await formRef.value.validate()
     loading.value = true
 
@@ -217,14 +218,14 @@ async function register() {
       code: form.code
     }
 
-    const res = await axios.post('/register', payload)
+    await apiRegister(payload)
     ElMessage.success('注册成功！即将跳转到登录页面...')
 
     // 延迟跳转，让用户看到成功消息
     setTimeout(() => {
       router.push('/login')
     }, 1500)
-  } catch (e) {
+  } catch (e: any) {
     if (e.response?.data?.detail) {
       ElMessage.error('注册失败: ' + e.response.data.detail)
     } else if (e.message && !e.message.includes('validate')) {

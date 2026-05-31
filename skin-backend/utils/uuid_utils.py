@@ -2,7 +2,6 @@
 
 import hashlib
 import uuid
-from typing import Optional
 
 
 def get_offline_uuid(name: str) -> str:

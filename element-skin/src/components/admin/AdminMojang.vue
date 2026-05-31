@@ -1,19 +1,13 @@
 <template>
   <div class="admin-fallback animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Connection /></div>
-        <div class="page-header-text">
-          <h2>Fallback 服务配置</h2>
-          <p class="subtitle">管理外部 Yggdrasil 或 Mojang API 的回退逻辑与白名单</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="Fallback 服务配置" subtitle="管理外部 Yggdrasil 或 Mojang API 的回退逻辑与白名单">
+      <template #icon><Connection /></template>
+      <template #actions>
         <el-button type="primary" :icon="Check" @click="saveSettings" :loading="saving" class="hover-lift">
           保存更改
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <!-- Global Strategy Card -->
     <el-card class="surface-card mb-6" shadow="never">
@@ -121,7 +115,7 @@
                   </div>
                   <div class="feature-card-item" :class="{ active: row.enable_whitelist }">
                     <div class="feature-main-box">
-                      <el-switch v-model="row.enable_whitelist" @change="(val) => onWhitelistToggle(row, val)" />
+                      <el-switch v-model="row.enable_whitelist" @change="(val: string | number | boolean) => onWhitelistToggle(row, val)" />
                       <div class="feature-info-box">
                         <span class="f-name">开启白名单</span>
                         <span class="f-desc">仅允许特定玩家使用此端点进行验证</span>
@@ -216,47 +210,66 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
-import axios from 'axios'
-import { ElMessage, ElMessageBox, ElLoading } from 'element-plus'
-import { 
-  Plus, Delete, ArrowUp, ArrowDown, Connection, Check, Setting, 
-  Sort, Operation, List, User, Lock, Ticket as ShieldCheck 
+import { ElMessage, ElLoading } from 'element-plus'
+import {
+  Plus, Delete, ArrowUp, ArrowDown, Connection, Check, Setting,
+  Sort, Operation, List, User, Lock, Ticket as ShieldCheck
 } from '@element-plus/icons-vue'
+import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
+import { getWhitelist, addWhitelistUser, removeWhitelistUser } from '@/api/admin/whitelist'
+import type { WhitelistEntry } from '@/api/types'
+import PageHeader from '@/components/common/PageHeader.vue'
 
-const settings = ref({
+interface FallbackRow {
+  id: number | null
+  rowKey: string | number
+  priority: number
+  session_url: string
+  account_url: string
+  services_url: string
+  cache_ttl: number
+  enable_profile: boolean
+  enable_hasjoined: boolean
+  enable_whitelist: boolean
+  note: string
+  skin_domains_text: string
+  _whitelist: WhitelistEntry[]
+  _initialWhitelist: WhitelistEntry[]
+  _new_user: string
+  _loaded: boolean
+}
+
+const settings = ref<{ fallback_strategy: string }>({
   fallback_strategy: 'serial'
 })
-const fallbacks = ref([])
+const fallbacks = ref<FallbackRow[]>([])
 const saving = ref(false)
-
-const jwt = localStorage.getItem('jwt')
-const headers = { Authorization: 'Bearer ' + jwt }
 
 async function fetchSettings() {
   try {
-    const res = await axios.get('/admin/settings/fallback', { headers })
-    settings.value.fallback_strategy = res.data.fallback_strategy || 'serial'
-    
-    const raw = Array.isArray(res.data.fallbacks) ? res.data.fallbacks : []
-    
+    const res = await getAdminSettingsGroup('fallback')
+    settings.value.fallback_strategy = (res.data.fallback_strategy as string) || 'serial'
+
+    const raw = Array.isArray(res.data.fallbacks) ? (res.data.fallbacks as any[]) : []
+
     const newFallbacks = raw.map((item, index) => {
       const existing = fallbacks.value.find(f => (f.id && f.id === item.id) || (f.session_url === item.session_url && f.note === item.note))
-      
-      const row = reactive({
+
+      const row = reactive<FallbackRow>({
         ...item,
         rowKey: item.id || (existing ? existing.rowKey : `new_${Date.now()}_${index}`),
         note: item.note || '',
         skin_domains_text: Array.isArray(item.skin_domains) ? item.skin_domains.join(',') : String(item.skin_domains || ''),
-        _whitelist: existing ? existing._whitelist : [], 
+        _whitelist: existing ? existing._whitelist : [],
         _initialWhitelist: existing ? existing._initialWhitelist : [],
         _new_user: existing ? existing._new_user : '',
         _loaded: existing ? existing._loaded : false
       })
       return row
     })
-    
+
     fallbacks.value = newFallbacks
     fallbacks.value.sort((a, b) => a.priority - b.priority)
   } catch (e) {
@@ -284,18 +297,18 @@ async function saveSettings() {
         skin_domains: item.skin_domains_text.split(',').map(s => s.trim()).filter(s => s)
       }))
     }
-    await axios.post('/admin/settings/fallback', payload, { headers })
+    await saveAdminSettingsGroup('fallback', payload)
 
-    const res = await axios.get('/admin/settings/fallback', { headers })
-    const updatedFallbacksFromDB = res.data.fallbacks || []
-    
+    const res = await getAdminSettingsGroup('fallback')
+    const updatedFallbacksFromDB = (res.data.fallbacks as any[]) || []
+
     for (const localRow of fallbacks.value) {
       const dbEndpoint = updatedFallbacksFromDB.find(f => f.session_url === localRow.session_url && f.note === localRow.note)
       if (!dbEndpoint || !dbEndpoint.id) continue
 
       const endpointId = dbEndpoint.id
-      localRow.id = endpointId 
-      
+      localRow.id = endpointId
+
       if (localRow._loaded && hasWhitelistChanges(localRow)) {
         const initialNames = localRow._initialWhitelist.map(u => u.username.toLowerCase())
         const currentNames = localRow._whitelist.map(u => u.username.toLowerCase())
@@ -304,8 +317,8 @@ async function saveSettings() {
         const toRemove = localRow._initialWhitelist.filter(u => !currentNames.includes(u.username.toLowerCase()))
 
         const promises = [
-           ...toAdd.map(u => axios.post('/admin/official-whitelist', { username: u.username, endpoint_id: endpointId }, { headers })),
-           ...toRemove.map(u => axios.delete(`/admin/official-whitelist/${u.username}`, { headers, params: { endpoint_id: endpointId } }))
+           ...toAdd.map(u => addWhitelistUser({ username: u.username, endpoint_id: endpointId })),
+           ...toRemove.map(u => removeWhitelistUser(u.username, endpointId))
         ]
         await Promise.all(promises)
         localRow._initialWhitelist = JSON.parse(JSON.stringify(localRow._whitelist))
@@ -314,7 +327,7 @@ async function saveSettings() {
 
     ElMessage.success('所有配置及白名单已成功同步')
     await fetchSettings()
-  } catch (e) {
+  } catch (e: any) {
     console.error(e)
     ElMessage.error('保存失败: ' + (e.response?.data?.detail || e.message))
   } finally {
@@ -323,7 +336,7 @@ async function saveSettings() {
   }
 }
 
-function hasWhitelistChanges(row) {
+function hasWhitelistChanges(row: FallbackRow) {
   if (!row._loaded) return false
   const initial = row._initialWhitelist.map(u => u.username.toLowerCase()).sort().join(',')
   const current = row._whitelist.map(u => u.username.toLowerCase()).sort().join(',')
@@ -331,7 +344,7 @@ function hasWhitelistChanges(row) {
 }
 
 function addFallback() {
-  fallbacks.value.push(reactive({
+  fallbacks.value.push(reactive<FallbackRow>({
     id: null,
     rowKey: `new_${Date.now()}_${fallbacks.value.length}`,
     priority: fallbacks.value.length + 1,
@@ -347,30 +360,30 @@ function addFallback() {
     _whitelist: [],
     _initialWhitelist: [],
     _new_user: '',
-    _loaded: true 
+    _loaded: true
   }))
 }
 
-function removeFallback(index) {
+function removeFallback(index: number) {
   fallbacks.value.splice(index, 1)
   syncPriority()
 }
 
-function moveUp(index) {
+function moveUp(index: number) {
   if (index === 0) return
   const list = [...fallbacks.value]
-  const temp = list[index]
-  list[index] = list[index - 1]
+  const temp = list[index]!
+  list[index] = list[index - 1]!
   list[index - 1] = temp
   fallbacks.value = list
   syncPriority()
 }
 
-function moveDown(index) {
+function moveDown(index: number) {
   if (index === fallbacks.value.length - 1) return
   const list = [...fallbacks.value]
-  const temp = list[index]
-  list[index] = list[index + 1]
+  const temp = list[index]!
+  list[index] = list[index + 1]!
   list[index + 1] = temp
   fallbacks.value = list
   syncPriority()
@@ -382,26 +395,23 @@ function syncPriority() {
   })
 }
 
-function handleExpandChange(row, expandedRows) {
+function handleExpandChange(row: FallbackRow, expandedRows: FallbackRow[]) {
   const isExpanded = expandedRows.find(r => r.rowKey === row.rowKey)
   if (isExpanded && row.enable_whitelist && row.id && !row._loaded) {
     fetchWhitelist(row)
   }
 }
 
-function onWhitelistToggle(row, val) {
+function onWhitelistToggle(row: FallbackRow, val: string | number | boolean) {
   if (val && row.id && !row._loaded) {
     fetchWhitelist(row)
   }
 }
 
-async function fetchWhitelist(row) {
+async function fetchWhitelist(row: FallbackRow) {
   if (!row.id) return
   try {
-    const res = await axios.get('/admin/official-whitelist', {
-      headers,
-      params: { endpoint_id: row.id }
-    })
+    const res = await getWhitelist(row.id)
     row._whitelist = JSON.parse(JSON.stringify(res.data))
     row._initialWhitelist = JSON.parse(JSON.stringify(res.data))
     row._loaded = true
@@ -410,7 +420,7 @@ async function fetchWhitelist(row) {
   }
 }
 
-function addUser(row) {
+function addUser(row: FallbackRow) {
   if (!row._new_user) return
   const username = row._new_user.trim()
   if (row._whitelist.some(u => u.username.toLowerCase() === username.toLowerCase())) {
@@ -424,7 +434,7 @@ function addUser(row) {
   row._new_user = ''
 }
 
-function removeUser(row, username) {
+function removeUser(row: FallbackRow, username: string) {
   row._whitelist = row._whitelist.filter(u => u.username !== username)
 }
 
@@ -432,13 +442,6 @@ onMounted(fetchSettings)
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/tags.css";
-@import "@/assets/styles/buttons.css";
-
 .admin-fallback {
   max-width: 1100px;
   margin: 0 auto;
@@ -513,9 +516,6 @@ onMounted(fetchSettings)
 .section-header-small { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
 .add-user-form-box { width: 300px; }
 
-.mb-6 { margin-bottom: 24px; }
-.mt-6 { margin-top: 24px; }
-.ml-2 { margin-left: 8px; }
 .action-btns-box { display: flex; gap: 8px; justify-content: flex-end; }
 
 @media (max-width: 768px) {

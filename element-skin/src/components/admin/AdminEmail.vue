@@ -1,19 +1,13 @@
 <template>
   <div class="settings-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Message /></div>
-        <div class="page-header-text">
-          <h2>邮件服务设置</h2>
-          <p class="subtitle">配置 SMTP 服务器以启用注册验证、找回密码等通知功能</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="邮件服务设置" subtitle="配置 SMTP 服务器以启用注册验证、找回密码等通知功能">
+      <template #icon><Message /></template>
+      <template #actions>
         <el-button type="primary" :icon="Refresh" @click="loadSettings" plain class="hover-lift">
           刷新配置
         </el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-card class="surface-card" shadow="never">
       <template #header>
@@ -93,11 +87,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
-import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import { Refresh, Message, Postcard } from '@element-plus/icons-vue'
+import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
+import PageHeader from '@/components/common/PageHeader.vue'
 
 const emailSettings = reactive({
   email_verify_enabled: false,
@@ -111,11 +106,10 @@ const emailSettings = reactive({
 })
 
 const saving = ref(false)
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
 
 async function loadSettings() {
   try {
-    const res = await axios.get('/admin/settings/email', { headers: authHeaders() })
+    const res = await getAdminSettingsGroup('email')
     if (res.data) {
       Object.assign(emailSettings, res.data)
       emailSettings.smtp_password = '' // Don't show password
@@ -128,7 +122,7 @@ async function loadSettings() {
 async function saveSettings() {
   saving.value = true
   try {
-    await axios.post('/admin/settings/email', emailSettings, { headers: authHeaders() })
+    await saveAdminSettingsGroup('email', emailSettings)
     ElMessage.success('设置已保存')
     emailSettings.smtp_password = '' // Clear password field after save
   } catch (e) {
@@ -142,12 +136,6 @@ onMounted(loadSettings)
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/buttons.css";
-
 .settings-section {
   max-width: 900px;
   margin: 0 auto;

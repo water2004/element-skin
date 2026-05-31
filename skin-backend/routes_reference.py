@@ -4,7 +4,6 @@ Element Skin Backend - 主入口文件
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
@@ -13,10 +12,12 @@ from config_loader import config
 from database_module import Database
 from backends.yggdrasil_backend import YggdrasilBackend, YggdrasilError
 from backends.site_backend import SiteBackend
+from backends.profile_import_backend import ProfileImportBackend
 from backends.admin_backend import AdminBackend
+from backends.settings_backend import SettingsBackend
+from services import TextureStorage
 from utils.crypto import CryptoUtils
 from utils.rate_limiter import RateLimiter
-from utils.cached_static import CachedStaticFiles
 from routers import yggdrasil_routes, site_routes, microsoft_routes, admin_routes
 
 # ========== 初始化核心组件 ==========
@@ -26,9 +27,12 @@ db = Database(db_dsn, max_connections=max_conns)
 private_key_path = config.get("keys.private_key", "private.pem")
 crypto = CryptoUtils(private_key_path)
 rate_limiter = RateLimiter(db)  # New dependency-injected rate limiter
-ygg_backend = YggdrasilBackend(db, crypto)
-site_backend = SiteBackend(db, config)
+texture_storage = TextureStorage(config.get("textures.directory", "textures"))
+ygg_backend = YggdrasilBackend(db, crypto, texture_storage, config)
+site_backend = SiteBackend(db, config, texture_storage)
+profile_import_backend = ProfileImportBackend(db, texture_storage)
 admin_backend = AdminBackend(db, config)
+settings_backend = SettingsBackend(db)
 
 
 @asynccontextmanager
@@ -77,9 +81,7 @@ app.add_middleware(
 
 # ========== 静态资源目录准备 ==========
 # 静态文件现在由前端 Nginx 容器处理，后端仅负责文件的写入和管理
-
-textures_path = config.get("textures.directory", "textures")
-os.makedirs(textures_path, exist_ok=True)
+# 材质目录由 TextureStorage 负责创建
 
 carousel_path = config.get("carousel.directory", "carousel")
 os.makedirs(carousel_path, exist_ok=True)
@@ -95,16 +97,16 @@ async def ygg_exception_handler(request: Request, exc: YggdrasilError):
 
 # ========== 注册路由模块 ==========
 
-yggdrasil_router = yggdrasil_routes.setup_routes(ygg_backend, db, crypto, rate_limiter)
+yggdrasil_router = yggdrasil_routes.setup_routes(ygg_backend, db, rate_limiter)
 app.include_router(yggdrasil_router)
 
-site_router = site_routes.setup_routes(db, site_backend, rate_limiter, config)
+site_router = site_routes.setup_routes(site_backend, profile_import_backend, settings_backend, rate_limiter, config)
 app.include_router(site_router)
 
-admin_router = admin_routes.setup_routes(db, admin_backend, rate_limiter, config)
+admin_router = admin_routes.setup_routes(admin_backend, settings_backend)
 app.include_router(admin_router)
 
-microsoft_router = microsoft_routes.setup_routes(db, config)
+microsoft_router = microsoft_routes.setup_routes(db, config, texture_storage)
 app.include_router(microsoft_router)
 
 # ========== 应用启动 ==========

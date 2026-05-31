@@ -1,7 +1,7 @@
 import aiohttp
 import asyncio
 import logging
-from typing import Optional, List, Dict, Any, Callable
+from typing import Optional, List, Dict, Callable
 from fastapi.responses import Response
 from database_module import Database
 

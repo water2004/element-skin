@@ -20,6 +20,8 @@ import AdminInviteList from '@/components/admin/AdminInviteList.vue'
 import AdminMojang from '@/components/admin/AdminMojang.vue'
 import AdminCarousel from '@/components/admin/AdminCarousel.vue'
 import AdminEmail from '@/components/admin/AdminEmail.vue'
+import AdminTexturesList from '@/components/admin/AdminTexturesList.vue'
+import AdminRolesList from '@/components/admin/AdminRolesList.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -79,6 +81,16 @@ const router = createRouter({
           name: 'admin-carousel',
           component: AdminCarousel,
         },
+        {
+          path: 'textures',
+          name: 'admin-textures',
+          component: AdminTexturesList,
+        },
+        {
+          path: 'roles',
+          name: 'admin-roles',
+          component: AdminRolesList,
+        },
       ],
     },
     {
@@ -107,14 +119,6 @@ const router = createRouter({
           component: DashboardProfile,
         },
       ],
-    },
-    {
-      path: '/about',
-      name: 'about',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
-      component: () => import('../views/AboutView.vue'),
     },
     {
       path: '/skin-library',

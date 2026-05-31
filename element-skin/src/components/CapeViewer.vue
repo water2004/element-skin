@@ -31,28 +31,31 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
 // 全局渲染锁：披风渲染也排队
-let globalCapeRenderLock = Promise.resolve();
+let globalCapeRenderLock: Promise<void> = Promise.resolve()
 </script>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import * as skinview3d from 'skinview3d'
 import { Loading } from '@element-plus/icons-vue'
 
-const props = defineProps({
-  capeUrl: { type: String, required: true },
-  width: { type: Number, default: 200 },
-  height: { type: Number, default: 280 },
-  isStatic: { type: Boolean, default: false }
-})
+const props = withDefaults(
+  defineProps<{
+    capeUrl: string
+    width?: number
+    height?: number
+    isStatic?: boolean
+  }>(),
+  { width: 200, height: 280, isStatic: false }
+)
 
-const container = ref(null)
-const snapshotUrl = ref(null)
-let viewer = null
+const container = ref<HTMLDivElement | null>(null)
+const snapshotUrl = ref<string | null>(null)
+let viewer: skinview3d.SkinViewer | null = null
 
-const backEquipment = ref('cape')
+const backEquipment = ref<'cape' | 'elytra'>('cape')
 
 function handleEquipmentChange() {
   if (viewer && !props.isStatic) {
@@ -66,30 +69,29 @@ async function initViewer() {
     viewer = null
   }
 
-  const config = {
+  const config: skinview3d.SkinViewerOptions = {
     width: props.width,
     height: props.height,
-    skin: null,
-    preserveDrawingBuffer: props.isStatic
+    preserveDrawingBuffer: props.isStatic,
   }
 
   if (props.isStatic) {
     globalCapeRenderLock = globalCapeRenderLock.then(async () => {
-      if (snapshotUrl.value) return;
+      if (snapshotUrl.value) return
 
       const tempCanvas = document.createElement('canvas')
-      let staticViewer = null;
+      let staticViewer: skinview3d.SkinViewer | null = null
 
       try {
         staticViewer = new skinview3d.SkinViewer({
           canvas: tempCanvas,
-          ...config
+          ...config,
         })
 
         if (staticViewer.playerObject) {
           staticViewer.playerObject.skin.visible = false
         }
-        
+
         staticViewer.autoRotate = false
         staticViewer.camera.position.set(0, 10, -50)
         staticViewer.camera.lookAt(0, 15, 0)
@@ -106,24 +108,24 @@ async function initViewer() {
           staticViewer = null
         }
       }
-    });
-    await globalCapeRenderLock;
+    })
+    await globalCapeRenderLock
   } else {
     await nextTick()
     if (!container.value) return
     container.value.innerHTML = ''
-    
+
     const canvas = document.createElement('canvas')
     viewer = new skinview3d.SkinViewer({
-      canvas: canvas,
-      ...config
+      canvas,
+      ...config,
     })
-    
+
     container.value.appendChild(viewer.canvas)
     if (viewer.playerObject) {
       viewer.playerObject.skin.visible = false
     }
-    
+
     viewer.autoRotate = true
     viewer.autoRotateSpeed = 0.5
     viewer.zoom = 1
@@ -144,10 +146,14 @@ onUnmounted(() => {
   }
 })
 
-watch(() => [props.capeUrl, props.isStatic], () => {
-  snapshotUrl.value = null
-  initViewer()
-}, { deep: true })
+watch(
+  () => [props.capeUrl, props.isStatic],
+  () => {
+    snapshotUrl.value = null
+    initViewer()
+  },
+  { deep: true }
+)
 </script>
 
 <style scoped>

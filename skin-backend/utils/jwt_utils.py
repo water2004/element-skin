@@ -10,6 +10,22 @@ JWT_SECRET = config.get("jwt.secret", "dev-secret-default-key-at-least-32-chars-
 JWT_ALGO = "HS256"
 
 
+def get_cookie_settings() -> dict:
+    """返回 JWT cookie 配置"""
+    site_url = config.get("server.site_url", "http://localhost")
+    secure = site_url.startswith("https://")
+    expire_days = int(config.get("jwt.expire_days", "7"))
+    return {
+        "key": "jwt",
+        "value": "",  # 由调用方设置
+        "httponly": True,
+        "secure": secure,
+        "samesite": "lax",
+        "max_age": expire_days * 24 * 3600,
+        "path": "/",
+    }
+
+
 def create_jwt_token(user_id: str, is_admin: bool, expire_days: int) -> str:
     """
     创建 JWT 令牌

@@ -56,15 +56,17 @@
   </div>
 </template>
 
-<script setup>
-import { reactive, ref } from 'vue'
-import axios from 'axios'
+<script setup lang="ts">
+import { reactive, ref, inject, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock, Right } from '@element-plus/icons-vue'
+import { getPublicSettings } from '@/api/public'
+import { siteLogin } from '@/api/auth'
 
 const router = useRouter()
-const formRef = ref(null)
+const fetchMe = inject<() => Promise<void>>('fetchMe')
+const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 
 const form = reactive({
@@ -73,18 +75,17 @@ const form = reactive({
 })
 
 const emailVerifyEnabled = ref(false)
-import { onMounted } from 'vue'
 
 onMounted(async () => {
   try {
-    const res = await axios.get('/public/settings')
-    emailVerifyEnabled.value = res.data.email_verify_enabled
+    const res = await getPublicSettings()
+    emailVerifyEnabled.value = res.data.email_verify_enabled ?? false
   } catch (e) {
     console.error('Failed to fetch settings', e)
   }
 })
 
-const rules = {
+const rules: FormRules = {
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
     { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
@@ -96,26 +97,22 @@ const rules = {
 
 async function login() {
   try {
+    if (!formRef.value) return
     await formRef.value.validate()
     loading.value = true
 
-    // 使用站点登录接口（不受封禁影响）
-    const res = await axios.post('/site-login', {
+    // 使用站点登录接口（token 自动存入 HttpOnly Cookie）
+    await siteLogin({
       email: form.email,
       password: form.password,
     })
 
-    if (res.data.token) {
-      localStorage.setItem('jwt', res.data.token)
-    }
+    // Cookie 已设置，刷新顶栏共享的登录状态，避免必须整页刷新
+    if (fetchMe) await fetchMe()
 
     ElMessage.success('登录成功！')
-
-    // 等待一下再跳转，确保 localStorage 保存完成
-    setTimeout(() => {
-      router.push('/dashboard')
-    }, 300)
-  } catch (e) {
+    router.push('/dashboard')
+  } catch (e: any) {
     if (e.response?.data?.detail) {
       ElMessage.error('登录失败: ' + e.response.data.detail)
     } else if (e.message && !e.message.includes('validate')) {

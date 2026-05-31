@@ -4,8 +4,6 @@ from .modules.setting import SettingModule
 from .modules.texture import TextureModule
 from .modules.verification import VerificationModule
 from .modules.fallback import FallbackModule
-from config_loader import config
-import asyncio
 
 from .initsql import INIT_SQL
 

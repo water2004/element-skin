@@ -29,7 +29,7 @@ async def test_user_management(db_session, user_factory):
     assert (await db_session.user.get_by_id(user.id)).display_name == "NewTester"
     
     await db_session.user.update_preferred_language(user.id, "en_US")
-    assert (await db_session.user.get_by_id(user.id)).preferredLanguage == "en_US"
+    assert (await db_session.user.get_by_id(user.id)).preferred_language == "en_US"
     
     # Display Name Taken Check
     assert await db_session.user.is_display_name_taken("NewTester") is True
@@ -155,6 +155,34 @@ async def test_token_and_session(db_session, user_factory):
     assert (await db_session.user.get_session("server_id")) is None
 
 @pytest.mark.asyncio
+async def test_list_and_search_users_cursor_field_mapping(db_session, user_factory):
+    """游标列表/搜索的 User 字段映射必须精确：每字段取独立值，错位即变红"""
+    user = await user_factory(email="mapper@test.com", username="MapName", is_admin=True)
+    await db_session.user.update_preferred_language(user.id, "en_US")
+    banned_until = int((time.time() + 3600) * 1000)
+    await db_session.user.ban(user.id, banned_until)
+
+    def _find(items):
+        return next(u for u in items if u.id == user.id)
+
+    listed = _find((await db_session.user.list_users_cursor(limit=50))["items"])
+    assert listed.email == "mapper@test.com"
+    assert listed.display_name == "MapName"
+    assert listed.is_admin is True
+    assert listed.preferred_language == "en_US"
+    assert listed.banned_until == banned_until
+    assert listed.password == ""
+
+    searched = _find((await db_session.user.search_users_cursor(query="MapName", limit=50))["items"])
+    assert searched.email == "mapper@test.com"
+    assert searched.display_name == "MapName"
+    assert searched.is_admin is True
+    assert searched.preferred_language == "en_US"
+    assert searched.banned_until == banned_until
+    assert searched.password == ""
+
+
+@pytest.mark.asyncio
 async def test_user_edge_cases(db_session):
     """测试用户模块的边界情况"""
     # 查询不存在的用户
@@ -189,3 +217,51 @@ async def test_invite_management(db_session):
     
     await db_session.user.delete_invite(code_str)
     assert (await db_session.user.get_invite(code_str)) is None
+
+
+@pytest.mark.asyncio
+async def test_list_all_profiles_cursor(db_session, user_factory):
+    """测试管理端：游标分页列出所有角色（含搜索）"""
+    user1 = await user_factory(email="user1@test.com")
+    user2 = await user_factory(email="user2@test.com")
+
+    # Create 2 profiles for user1, 1 for user2
+    pid1 = generate_random_uuid()
+    pid2 = generate_random_uuid()
+    pid3 = generate_random_uuid()
+    await db_session.user.create_profile(PlayerProfile(pid1, user1.id, "Player1", "default", None, None))
+    await db_session.user.create_profile(PlayerProfile(pid2, user1.id, "Player2", "slim", None, None))
+    await db_session.user.create_profile(PlayerProfile(pid3, user2.id, "OtherPlayer", "default", None, None))
+
+    # 1. List all with ample limit
+    page = await db_session.user.list_all_profiles_cursor(limit=10)
+    assert len(page["items"]) == 3
+    assert page["has_next"] is False
+    assert page["next_key"] is None
+
+    # 2. Pagination: limit=1 (to get proper cursor progression)
+    page1 = await db_session.user.list_all_profiles_cursor(limit=1)
+    assert len(page1["items"]) == 1
+    assert page1["has_next"] is True
+    assert page1["next_key"] is not None
+
+    # Follow raw next_key into next page
+    cursor_data = page1["next_key"]
+    page2 = await db_session.user.list_all_profiles_cursor(limit=10, after_id=cursor_data["last_id"])
+    assert len(page2["items"]) >= 1
+    assert page2["has_next"] is False
+    # 全量覆盖且无重叠：两页合计 3 个角色且不重复
+    seen_ids = [p["id"] for p in page1["items"]] + [p["id"] for p in page2["items"]]
+    assert len(seen_ids) == 3
+    assert len(set(seen_ids)) == 3
+
+    # 3. Search by profile name
+    search_page = await db_session.user.list_all_profiles_cursor(limit=10, query="Player1")
+    assert len(search_page["items"]) == 1
+    assert search_page["items"][0]["name"] == "Player1"
+
+    # 4. Search by owner email
+    search_page = await db_session.user.list_all_profiles_cursor(limit=10, query="user1@")
+    assert len(search_page["items"]) == 2
+    for item in search_page["items"]:
+        assert item["owner_email"] == "user1@test.com"

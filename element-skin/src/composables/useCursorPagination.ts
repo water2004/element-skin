@@ -1,12 +1,6 @@
 import { ref, computed } from 'vue'
-
-export interface CursorPageResponse<T> {
-	items: T[]
-	has_next: boolean
-	next_cursor: string | null
-	page_size: number
-	total?: number  // 兼容旧API
-}
+import type { CursorPageResponse } from '@/api/types'
+export { type CursorPageResponse } from '@/api/types'
 
 export function useCursorPagination<T>(defaultLimit = 20) {
 	const items = ref<T[]>([])

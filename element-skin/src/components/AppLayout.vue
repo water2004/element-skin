@@ -7,13 +7,20 @@
 
         <!-- Desktop Navigation -->
         <div class="desktop-nav">
-          <el-menu mode="horizontal" :default-active="activeRoute" router :ellipsis="false">
-            <template v-for="(item, index) in navLinks" :key="item.path">
-              <el-menu-item 
-                :index="item.path" 
-                v-if="!item.adminOnly || isAdmin"
-                :class="'nav-priority-' + (index + 1)"
-              >
+          <el-menu mode="horizontal" :default-active="activeRoute" router :ellipsis="false"
+            :default-openeds="defaultOpeneds">
+            <template v-for="(item, index) in navLinks" :key="item.path || item.index">
+              <el-sub-menu v-if="item.type === 'group'" :index="item.index" :trigger="item.trigger">
+                <template #title>
+                  <span>{{ item.title }}</span>
+                </template>
+                <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
+                  <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
+                  <span>{{ child.title }}</span>
+                </el-menu-item>
+              </el-sub-menu>
+              <el-menu-item v-else :index="item.path" v-if="!item.adminOnly || isAdmin"
+                :class="'nav-priority-' + (index + 1)">
                 <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
                 <span>{{ item.title }}</span>
               </el-menu-item>
@@ -130,16 +137,37 @@
   </div>
 </template>
 
-<script setup>
-import { computed, ref, onMounted, onUnmounted, provide, watch, nextTick } from 'vue'
+<script setup lang="ts">
+import { computed, ref, onMounted, onUnmounted, provide, watch, nextTick, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import axios from 'axios'
+import { getPublicSettings } from '@/api/public'
+import { getMe } from '@/api/me'
+import { siteLogout } from '@/api/auth'
+import type { User as UserType } from '@/api/types'
 import {
   Menu as MenuIcon, Box, User, Setting, Tools, Back, Odometer, Link, Picture, Message, Moon, Sunny
 } from '@element-plus/icons-vue'
 
-import '@/assets/scripts/meow.js'
+import '@/assets/scripts/meow.ts'
 import { useAvatar } from '@/composables/useAvatar'
+
+interface NavLink {
+  type?: 'item' | 'group'
+  path?: string
+  index?: string
+  trigger?: 'hover' | 'click'
+  title?: string
+  icon?: Component
+  adminOnly?: boolean
+  children?: NavLink[]
+}
+
+interface DrawerLink {
+  isDivider?: boolean
+  path?: string
+  title?: string
+  icon?: Component
+}
 
 const { currentAvatarImg: customAvatar, initializeAvatar } = useAvatar()
 const route = useRoute()
@@ -148,8 +176,7 @@ const isHome = computed(() => route.path === '/')
 const isAuthPage = computed(() => ['/login', '/register', '/reset-password'].includes(route.path))
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
 const enableSkinLibrary = ref(localStorage.getItem('enable_skin_library_cache') === 'true' || localStorage.getItem('enable_skin_library_cache') === null)
-const jwtToken = ref(localStorage.getItem('jwt') || '')
-const user = ref(null)
+const user = ref<UserType | null>(null)
 const drawer = ref(false)
 const footerText = ref('')
 const filingIcp = ref('')
@@ -157,7 +184,7 @@ const filingIcpLink = ref('')
 const filingMps = ref('')
 const filingMpsLink = ref('')
 const footerHeight = ref(0)
-const footerRef = ref(null)
+const footerRef = ref<HTMLElement | null>(null)
 
 const updateFooterHeight = () => {
   nextTick(() => {
@@ -196,15 +223,17 @@ provide('fetchMe', fetchMe)
 provide('isDark', isDark)
 provide('footerHeight', footerHeight)
 
-const dashboardLinks = [
+const dashboardLinks: NavLink[] = [
   { path: '/dashboard/home', title: '仪表盘', icon: Odometer },
   { path: '/dashboard/wardrobe', title: '我的衣柜', icon: Box },
   { path: '/dashboard/roles', title: '角色管理', icon: User },
   { path: '/dashboard/profile', title: '个人资料', icon: Setting },
 ]
-const adminNavLinks = [
+const adminNavLinks: NavLink[] = [
   { path: '/dashboard', title: '返回面板', icon: Back },
   { path: '/admin/users', title: '用户管理', icon: User },
+  { path: '/admin/roles', title: '角色管理', icon: User },
+  { path: '/admin/textures', title: '材质管理', icon: Box },
   { path: '/admin/invites', title: '邀请码管理', icon: Tools },
   { path: '/admin/settings', title: '站点设置', icon: Setting },
   { path: '/admin/email', title: '邮件服务', icon: Message },
@@ -212,9 +241,37 @@ const adminNavLinks = [
   { path: '/admin/carousel', title: '首页图片', icon: Picture },
 ]
 
-const navLinks = computed(() => {
-  if (route.path.startsWith('/admin')) return adminNavLinks
-  const links = []
+const adminNavItems = computed<NavLink[]>(() => [
+  { type: 'item', path: '/dashboard', title: '返回面板', icon: Back },
+  { type: 'group', index: 'admin-content-group', title: '用户与内容', trigger: 'click', children: [
+    { path: '/admin/users', title: '用户管理', icon: User },
+    { path: '/admin/roles', title: '角色管理', icon: User },
+    { path: '/admin/textures', title: '材质管理', icon: Box },
+  ]},
+  { type: 'item', path: '/admin/invites', title: '邀请码管理', icon: Tools },
+  { type: 'item', path: '/admin/settings', title: '站点设置', icon: Setting },
+  { type: 'group', index: 'admin-config-group', title: '更多设置', trigger: 'click', children: [
+    { path: '/admin/email', title: '邮件服务', icon: Message },
+    { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
+    { path: '/admin/carousel', title: '首页图片', icon: Picture },
+  ]},
+])
+
+const defaultOpeneds = computed(() => {
+  const path = route.path
+  const opened: string[] = []
+  if (['/admin/users', '/admin/roles', '/admin/textures'].some(p => path.startsWith(p))) {
+    opened.push('admin-content-group')
+  }
+  if (['/admin/email', '/admin/mojang', '/admin/carousel'].some(p => path.startsWith(p))) {
+    opened.push('admin-config-group')
+  }
+  return opened
+})
+
+const navLinks = computed<NavLink[]>(() => {
+  if (route.path.startsWith('/admin')) return adminNavItems.value
+  const links: NavLink[] = []
   if (isLogged.value) {
     if (enableSkinLibrary.value) links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
     links.push(...dashboardLinks)
@@ -223,8 +280,8 @@ const navLinks = computed(() => {
   return links
 })
 
-const drawerLinks = computed(() => {
-  const links = []
+const drawerLinks = computed<DrawerLink[]>(() => {
+  const links: DrawerLink[] = []
   if (isLogged.value) {
     if (enableSkinLibrary.value) links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
     links.push({ isDivider: true })
@@ -240,60 +297,37 @@ const repoUrl = 'https://github.com/water2004/element-skin'
 // REPAIRED: Correct version number display
 const repoLabel = `Element Skin ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'v1.3.0'}`
 
-function parseJwt(token) {
-  if (!token) return null
-  try {
-    const payload = token.split('.')[1]
-    const json = decodeURIComponent(atob(payload.replace(/-/g, '+').replace(/_/g, '/')).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''))
-    return JSON.parse(json)
-  } catch (e) { return null }
-}
-
-const isLogged = computed(() => !!jwtToken.value)
+const isLogged = computed(() => !!user.value)
 const isAdmin = computed(() => user.value?.is_admin || false)
 const accountName = computed(() => user.value?.display_name || user.value?.email || '用户')
 const avatarInitial = computed(() => (accountName.value || 'U').slice(0, 1).toUpperCase())
 
 
-let authTimer = null
-let resizeObserver = null
+let resizeObserver: ResizeObserver | null = null
 
-function go(path) { push(path); drawer.value = false; }
-function logout() {
-  localStorage.removeItem('jwt'); localStorage.removeItem('accessToken');
-  jwtToken.value = ''; user.value = null; push('/');
+function go(path: string) { push(path); drawer.value = false; }
+async function logout() {
+  try { await siteLogout() } catch {}
+  user.value = null; push('/');
   setTimeout(() => window.location.reload(), 100)
 }
 
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: 'Bearer ' + token } : {}
-}
-
 async function fetchMe() {
-  if (!isLogged.value) { user.value = null; return; }
   try {
-    const res = await axios.get('/me', { headers: authHeaders() })
+    const res = await getMe()
     user.value = res.data
-    // Initialize avatar from backend hash
     if (res.data.avatar_hash) {
       initializeAvatar(res.data.avatar_hash)
     }
   } catch (e) {
     user.value = null
-    console.error('Failed to fetch user data in AppLayout:', e)
   }
-}
-
-function checkAuth() {
-  const newToken = localStorage.getItem('jwt') || ''
-  if (newToken !== jwtToken.value) { jwtToken.value = newToken; fetchMe(); }
 }
 
 onMounted(async () => {
   initTheme()
   try {
-    const res = await axios.get('/public/settings')
+    const res = await getPublicSettings()
     if (res.data.site_name) {
       siteName.value = res.data.site_name
       localStorage.setItem('site_name_cache', res.data.site_name); document.title = res.data.site_name;
@@ -311,31 +345,21 @@ onMounted(async () => {
   } catch (e) { console.warn('Failed to load site settings:', e) }
 
   await fetchMe()
-  window.addEventListener('storage', checkAuth)
-  authTimer = setInterval(checkAuth, 1000)
 
   if (window.ResizeObserver) {
     resizeObserver = new ResizeObserver(() => updateFooterHeight())
-    nextTick(() => { if (footerRef.value) resizeObserver.observe(footerRef.value) })
+    nextTick(() => { if (footerRef.value) resizeObserver!.observe(footerRef.value) })
   }
   window.addEventListener('resize', updateFooterHeight)
 })
 
 onUnmounted(() => {
-  if (authTimer) clearInterval(authTimer)
-  window.removeEventListener('storage', checkAuth)
   window.removeEventListener('resize', updateFooterHeight)
   if (resizeObserver) resizeObserver.disconnect()
 })
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/buttons.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/footers.css";
-
 .app-shell { min-height: 100vh; display: flex; flex-direction: column; }
 
 /* Home Mode Shell - Allow natural scrolling for global overlays */
@@ -356,7 +380,8 @@ onUnmounted(() => {
 .is-home-layout .layout-header .account-name,
 .is-home-layout .layout-header .theme-toggle,
 .is-home-layout .layout-header .mobile-menu-btn,
-.is-home-layout .layout-header :deep(.el-menu-item) {
+.is-home-layout .layout-header :deep(.el-menu-item),
+.is-home-layout .layout-header :deep(.el-sub-menu__title) {
   color: #fff !important;
 }
 
@@ -365,7 +390,9 @@ onUnmounted(() => {
 .is-home-layout .layout-header .theme-toggle:hover,
 .is-home-layout .layout-header .mobile-menu-btn:hover,
 .is-home-layout .layout-header :deep(.el-menu-item:hover),
-.is-home-layout .layout-header :deep(.el-menu-item.is-active) {
+.is-home-layout .layout-header :deep(.el-menu-item.is-active),
+.is-home-layout .layout-header :deep(.el-sub-menu__title:hover),
+.is-home-layout .layout-header :deep(.el-sub-menu__title.is-active) {
   background-color: rgba(255, 255, 255, 0.15) !important;
   color: #fff !important;
 }
@@ -393,6 +420,14 @@ onUnmounted(() => {
 .desktop-nav { flex-grow: 1; display: flex; justify-content: center; height: 100%; }
 .desktop-nav .el-menu { border-bottom: none; height: 100%; background: transparent; }
 
+.desktop-nav :deep(.el-sub-menu__title) {
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s, border-color 0.2s;
+}
+.desktop-nav :deep(.el-sub-menu__title:hover) {
+  color: var(--el-color-primary);
+}
+
 .header-actions { display: flex; align-items: center; gap: 8px; }
 .theme-toggle { font-size: 20px; border-radius: 8px; }
 
@@ -417,6 +452,6 @@ onUnmounted(() => {
   object-fit: contain; 
 }
 
-@media (max-width: 1200px) { .nav-priority-6 { display: none !important; } .mobile-nav { display: block; } }
+@media (max-width: 1200px) { .mobile-nav { display: block; } }
 @media (max-width: 768px) { .desktop-nav { display: none; } }
 </style>

@@ -226,75 +226,70 @@
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted, inject, computed } from 'vue'
-import axios from 'axios'
+<script setup lang="ts">
+import { ref, onMounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadInstance, UploadFile } from 'element-plus'
+import type { Ref } from 'vue'
 import { Upload, UploadFilled, Edit } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { getProfiles } from '@/api/profiles'
+import { getTextures, uploadTexture, getTextureDetail, patchTexture, deleteTexture, applyTexture } from '@/api/textures'
+import type { Profile, Texture } from '@/api/types'
 
 // Inject shared state from AppLayout
-const user = inject('user')
-const fetchMe = inject('fetchMe')
-const isDark = inject('isDark')
+const fetchMe = inject<() => Promise<void>>('fetchMe')
+const isDark = inject<Ref<boolean>>('isDark', ref(false))
 
-const userProfiles = ref([])
+const userProfiles = ref<Profile[]>([])
 const fetchUserProfiles = async () => {
   try {
     // Fetch all profiles for the dropdown (use a large limit if needed, or implement search)
-    const res = await axios.get('/me/profiles', { 
-      headers: authHeaders(),
-      params: { limit: 100 } 
-    })
+    const res = await getProfiles({ limit: 100 })
     userProfiles.value = res.data.items
   } catch (e) {
     console.error('Failed to fetch profiles for wardrobe:', e)
   }
 }
 
-const textures = ref([])
+const textures = ref<Texture[]>([])
 const limit = 20
-const pagination = useCursorPagination(limit)
+const pagination = useCursorPagination<Texture>(limit)
 const loading = ref(false)
-const textureResolutions = ref(new Map())
+const textureResolutions = ref(new Map<string, number>())
 const showDetailDialog = ref(false)
-const selectedTexture = ref(null)
+const selectedTexture = ref<Texture | null>(null)
 const isDetailLoading = ref(false)
 const editingNoteValue = ref('')
 const isApplying = ref(false)
-const noteInputRef = ref(null)
+const noteInputRef = ref<{ focus: () => void } | null>(null)
 
 const showUploadDialog = ref(false)
-const uploadForm = ref({ texture_type: 'skin', model: 'default', note: '', is_public: false, file: null })
-const uploadRef = ref(null)
+const uploadForm = ref<{ texture_type: string; model: string; note: string; is_public: boolean; file: File | null }>({ texture_type: 'skin', model: 'default', note: '', is_public: false, file: null })
+const uploadRef = ref<UploadInstance | null>(null)
 const applyForm = ref({ profile_id: '', texture_type: '', hash: '' })
 
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: 'Bearer ' + token } : {}
-}
-
-function texturesUrl(hash) {
+function texturesUrl(hash: string | null | undefined) {
   if (!hash) return ''
   const base = import.meta.env.BASE_URL
   return `${base}static/textures/${hash}.png`.replace(/\/+/g, '/')
 }
 
-async function openDetailDialog(tex) {
+async function openDetailDialog(tex: Texture) {
   selectedTexture.value = { ...tex, is_public: 2 }
   editingNoteValue.value = tex.note || ''
   applyForm.value.hash = tex.hash
   applyForm.value.texture_type = tex.type
   applyForm.value.profile_id = ''
-  
+
   showDetailDialog.value = true
   isDetailLoading.value = true
-  
+
   try {
-    const res = await axios.get(`/me/textures/${tex.hash}/${tex.type}`, { headers: authHeaders() })
+    const res = await getTextureDetail(tex.hash, tex.type)
     selectedTexture.value = res.data
     editingNoteValue.value = res.data.note || ''
   } catch (e) {
@@ -316,7 +311,7 @@ async function updateNote() {
   if (updated === (tex.note || '')) return
 
   try {
-    await axios.patch(`/me/textures/${tex.hash}/${tex.type}`, { note: updated }, { headers: authHeaders() })
+    await patchTexture(tex.hash, tex.type, { note: updated })
     tex.note = updated
     const localTex = textures.value.find(t => t.hash === tex.hash && t.type === tex.type)
     if (localTex) localTex.note = updated
@@ -326,25 +321,25 @@ async function updateNote() {
   }
 }
 
-async function updateModel(val) {
+async function updateModel(val: string | number | boolean | undefined) {
   if (!selectedTexture.value || isDetailLoading.value) return
   const tex = selectedTexture.value
   try {
-    await axios.patch(`/me/textures/${tex.hash}/${tex.type}`, { model: val }, { headers: authHeaders() })
-    tex.model = val
+    await patchTexture(tex.hash, tex.type, { model: String(val) })
+    tex.model = String(val)
     const localTex = textures.value.find(t => t.hash === tex.hash && t.type === tex.type)
-    if (localTex) localTex.model = val
+    if (localTex) localTex.model = String(val)
     ElMessage.success(`模型已切换为 ${val === 'slim' ? '纤细' : '普通'}`)
   } catch (e) {
     ElMessage.error('切换模型失败')
   }
 }
 
-async function updateIsPublic(val) {
+async function updateIsPublic(val: string | number | boolean) {
   if (!selectedTexture.value || isDetailLoading.value) return
   const tex = selectedTexture.value
   try {
-    await axios.patch(`/me/textures/${tex.hash}/${tex.type}`, { is_public: val === 1 }, { headers: authHeaders() })
+    await patchTexture(tex.hash, tex.type, { is_public: val === 1 })
     ElMessage.success(val === 1 ? '材质已公开' : '材质已设为私有')
   } catch (e) {
     ElMessage.error('更新公开状态失败')
@@ -359,7 +354,7 @@ async function fetchTextures() {
       cursor: pagination.currentCursor.value,
       limit: limit
     }
-    const res = await axios.get('/me/textures', { headers: authHeaders(), params })
+    const res = await getTextures(params)
     textures.value = res.data.items
     pagination.setPageData(res.data)
     textures.value.forEach(tex => {
@@ -377,7 +372,7 @@ async function fetchTextures() {
 async function handleNextPage() {
   await pagination.goToNextPage(async (cursor, pageLimit) => {
     const params = { cursor, limit: pageLimit }
-    const res = await axios.get('/me/textures', { headers: authHeaders(), params })
+    const res = await getTextures(params)
     textures.value = res.data.items
     return res.data
   })
@@ -392,7 +387,7 @@ async function handleNextPage() {
 async function handlePrevPage() {
   await pagination.goToPrevPage(async (cursor, pageLimit) => {
     const params = { cursor, limit: pageLimit }
-    const res = await axios.get('/me/textures', { headers: authHeaders(), params })
+    const res = await getTextures(params)
     textures.value = res.data.items
     return res.data
   })
@@ -409,7 +404,7 @@ async function refreshFirstPage() {
   await fetchTextures()
 }
 
-function loadTextureResolution(hash) {
+function loadTextureResolution(hash: string) {
   const img = new Image()
   img.crossOrigin = 'anonymous'
   img.onload = () => {
@@ -418,7 +413,8 @@ function loadTextureResolution(hash) {
   img.src = texturesUrl(hash)
 }
 
-function getResolutionBadgeStyle(resolution) {
+function getResolutionBadgeStyle(resolution: number | undefined) {
+  if (!resolution) return {}
   let hue = 0
   if (resolution <= 64) hue = 120
   else if (resolution <= 128) hue = 120 - ((resolution - 64) / 64) * 60
@@ -431,8 +427,8 @@ function getResolutionBadgeStyle(resolution) {
   }
 }
 
-function handleFileChange(file) {
-  uploadForm.value.file = file.raw
+function handleFileChange(file: UploadFile) {
+  uploadForm.value.file = file.raw ?? null
 }
 
 async function doUpload() {
@@ -450,7 +446,7 @@ async function doUpload() {
   formData.append('is_public', uploadForm.value.is_public ? 'true' : 'false')
 
   try {
-    await axios.post('/me/textures', formData, { headers: { ...authHeaders(), 'Content-Type': 'multipart/form-data' } })
+    await uploadTexture(formData)
     ElMessage.success('上传成功')
     showUploadDialog.value = false
     uploadForm.value = { texture_type: 'skin', model: 'default', note: '', is_public: false, file: null }
@@ -458,7 +454,7 @@ async function doUpload() {
       uploadRef.value.clearFiles()
     }
     await refreshFirstPage()
-  } catch (e) {
+  } catch (e: any) {
     ElMessage.error('上传失败: ' + (e.response?.data?.detail || e.message))
   }
 }
@@ -473,7 +469,7 @@ async function confirmDelete() {
       confirmButtonClass: 'el-button--danger'
     })
 
-    await axios.delete(`/me/textures/${selectedTexture.value.hash}/${selectedTexture.value.type}`, { headers: authHeaders() })
+    await deleteTexture(selectedTexture.value.hash, selectedTexture.value.type)
     ElMessage.success('已删除')
     showDetailDialog.value = false
     await refreshFirstPage()
@@ -486,15 +482,15 @@ async function doApply() {
   if (!applyForm.value.profile_id) return ElMessage.error('请选择角色')
   isApplying.value = true
   try {
-    await axios.post(`/me/textures/${applyForm.value.hash}/apply`, {
+    await applyTexture(applyForm.value.hash, {
       profile_id: applyForm.value.profile_id,
       texture_type: applyForm.value.texture_type
-    }, { headers: authHeaders() })
+    })
     ElMessage.success('已应用')
     if (fetchMe) fetchMe()
     fetchUserProfiles()
     fetchTextures()
-  } catch (e) {
+  } catch (e: any) {
     ElMessage.error('应用失败: ' + (e.response?.data?.detail || e.message))
   } finally {
     isApplying.value = false
@@ -507,20 +503,7 @@ onMounted(() => {
 })
 </script>
 
-<style>
-/* Global Styles for Teleported Elements */
-@import "@/assets/styles/dialogs.css";
-@import "@/assets/styles/item-viewer.css";
-@import "@/assets/styles/item-cards.css";
-</style>
-
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/buttons.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/tags.css";
-
 .wardrobe-grid-container {
   min-height: 400px;
 }

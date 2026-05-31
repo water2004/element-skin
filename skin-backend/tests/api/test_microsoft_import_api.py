@@ -16,14 +16,14 @@ async def test_microsoft_import_profile_success(client, auth_headers, db_session
     }
 
     # Mock download_texture
-    # Note: The import in routers/microsoft_routes.py is: from backends.microsoft_backend import download_texture
-    # So we must patch where it is used: routers.microsoft_routes.download_texture
-    with patch("routers.microsoft_routes.download_texture", new_callable=AsyncMock) as mock_download:
+    # download_texture is used inside backends.microsoft_backend.MicrosoftBackend,
+    # so we patch it where it is looked up: backends.microsoft_backend.download_texture
+    with patch("backends.microsoft_backend.download_texture", new_callable=AsyncMock) as mock_download:
         mock_download.return_value = b"skin_bytes"
         
         response = await client.post(
             "/microsoft/import-profile",
-            headers=auth_headers,
+            cookies=auth_headers["cookies"],
             json=payload
         )
         
@@ -57,13 +57,13 @@ async def test_microsoft_import_profile_uuid_conflict(client, auth_headers, db_s
         "skin_url": None
     }
 
-    with patch("routers.microsoft_routes.download_texture", new_callable=AsyncMock):
+    with patch("backends.microsoft_backend.download_texture", new_callable=AsyncMock):
         response = await client.post(
             "/microsoft/import-profile",
-            headers=auth_headers,
+            cookies=auth_headers["cookies"],
             json=payload
         )
-        
+
         assert response.status_code == 400
         assert "UUID" in response.json()["detail"]
 
@@ -86,15 +86,15 @@ async def test_microsoft_import_profile_name_conflict(client, auth_headers, db_s
         "skin_url": "http://skin.url"
     }
 
-    with patch("routers.microsoft_routes.download_texture", new_callable=AsyncMock) as mock_download:
+    with patch("backends.microsoft_backend.download_texture", new_callable=AsyncMock) as mock_download:
         mock_download.return_value = b"skin_bytes"
-        
+
         response = await client.post(
             "/microsoft/import-profile",
-            headers=auth_headers,
+            cookies=auth_headers["cookies"],
             json=payload
         )
-        
+
         assert response.status_code == 200
         data = response.json()
         assert data["profile"]["id"] == profile_id

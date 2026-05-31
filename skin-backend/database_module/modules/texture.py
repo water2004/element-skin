@@ -1,51 +1,11 @@
 from ..core import BaseDB
-import asyncpg
 import time
-from typing import Optional, Tuple
-import os
-from PIL import Image
-from io import BytesIO
-from utils.pagination import CursorEncoder
+from typing import Optional
 
-# Import from utils, this assumes correct python path
-from utils.image_utils import (
-    validate_texture_dimensions,
-    compute_texture_hash_from_image,
-    normalize_png,
-)
-from config_loader import config
 
 class TextureModule:
     def __init__(self, db: BaseDB):
         self.db = db
-        self.textures_dir = config.get("textures.directory", "textures")
-        os.makedirs(self.textures_dir, exist_ok=True)
-
-    async def upload(
-        self, user_id: str, file_bytes: bytes, texture_type: str, note: str = "", is_public: bool = False, model: str = "default"
-    ) -> Tuple[str, str]:
-        """
-        验证、保存并记录材质
-        """
-        # 规范化图像
-        normalized_bytes, img = normalize_png(file_bytes)
-
-        # 验证尺寸
-        is_cape = texture_type.lower() == "cape"
-        if not validate_texture_dimensions(img, is_cape):
-            raise ValueError("Invalid texture dimensions")
-
-        # 计算哈希
-        texture_hash = compute_texture_hash_from_image(img)
-
-        # 保存文件
-        file_path = os.path.join(self.textures_dir, f"{texture_hash}.png")
-        with open(file_path, "wb") as f:
-            f.write(normalized_bytes)
-
-        await self.add_to_library(user_id, texture_hash, texture_type, note, is_public, model)
-
-        return texture_hash, texture_type
 
     async def add_to_library(self, user_id: str, texture_hash: str, texture_type: str, note: str = "", is_public: bool = False, model: str = "default") -> bool:
         async with self.db.get_conn() as conn:
@@ -116,18 +76,18 @@ class TextureModule:
         has_next = len(rows) > limit
         items = [{"hash": r[0], "type": r[1], "note": r[2], "created_at": r[3], "model": r[4], "is_public": r[5]} for r in rows[:limit]]
         
-        next_cursor = None
+        next_key = None
         if has_next:
-            last_row = rows[limit]
-            next_cursor = CursorEncoder.encode({
+            last_row = rows[limit - 1]
+            next_key = {
                 "last_created_at": last_row[3],
                 "last_hash": last_row[0]
-            })
-        
+            }
+
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -262,18 +222,99 @@ class TextureModule:
             for r in rows[:limit]
         ]
         
-        next_cursor = None
+        next_key = None
         if has_next:
-            last_row = rows[limit]
-            next_cursor = CursorEncoder.encode({
+            last_row = rows[limit - 1]
+            next_key = {
                 "last_created_at": last_row[4],
                 "last_skin_hash": last_row[0]
-            })
-        
+            }
+
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
+            "page_size": len(items),
+        }
+
+    async def list_all_textures_cursor(
+        self,
+        limit: int = 20,
+        last_created_at: int | None = None,
+        last_skin_hash: str | None = None,
+        query: str | None = None,
+        type_filter: str | None = None,
+    ) -> dict:
+        """全局管理员方法：列出所有材质（公共+私有），支持游标分页、搜索和类型过滤"""
+        actual_limit = limit + 1
+
+        conditions = []
+        params = []
+        p_idx = 1
+
+        # 类型过滤
+        if type_filter:
+            conditions.append(f"sl.texture_type = ${p_idx}")
+            params.append(type_filter)
+            p_idx += 1
+
+        # 搜索 (ILIKE on skin_hash and name)
+        if query:
+            conditions.append(f"(sl.skin_hash ILIKE ${p_idx} OR sl.name ILIKE ${p_idx} OR u.display_name ILIKE ${p_idx})")
+            params.append(f"%{query}%")
+            p_idx += 1
+
+        # 游标条件 (created_at DESC, skin_hash DESC)
+        if last_created_at is not None and last_skin_hash:
+            conditions.append(
+                f"(sl.created_at < ${p_idx} OR (sl.created_at = ${p_idx} AND sl.skin_hash < ${p_idx + 1}))"
+            )
+            params.extend([last_created_at, last_skin_hash])
+            p_idx += 2
+
+        query_sql = """
+            SELECT sl.skin_hash, sl.texture_type, sl.is_public, sl.uploader,
+                   sl.created_at, sl.model, sl.name,
+                   u.email AS uploader_email, u.display_name AS uploader_display_name
+            FROM skin_library sl
+            LEFT JOIN users u ON sl.uploader = u.id
+        """
+        if conditions:
+            query_sql += " WHERE " + " AND ".join(conditions)
+
+        query_sql += f" ORDER BY sl.created_at DESC, sl.skin_hash DESC LIMIT ${p_idx}"
+        params.append(actual_limit)
+
+        rows = await self.db.fetch(query_sql, *params)
+
+        has_next = len(rows) > limit
+        items = [
+            {
+                "hash": r[0],
+                "type": r[1],
+                "is_public": bool(r[2]),
+                "uploader_user_id": r[3],
+                "created_at": r[4],
+                "model": r[5],
+                "name": r[6],
+                "uploader_email": r[7],
+                "uploader_display_name": r[8],
+            }
+            for r in rows[:limit]
+        ]
+
+        next_key = None
+        if has_next:
+            last_row = rows[limit - 1]
+            next_key = {
+                "last_created_at": last_row[4],
+                "last_skin_hash": last_row[0],
+            }
+
+        return {
+            "items": items,
+            "has_next": has_next,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -322,3 +363,48 @@ class TextureModule:
                     user_id, texture_hash, texture_type, name, model, is_public, created_at,
                 )
                 return True
+
+    # ========== Admin-facing Base Methods (pure CRUD) ==========
+
+    async def get_texture_from_library(self, texture_hash: str) -> dict | None:
+        """获取皮肤库中的材质记录"""
+        row = await self.db.fetchrow(
+            "SELECT skin_hash, uploader FROM skin_library WHERE skin_hash=$1", texture_hash
+        )
+        return dict(row) if row else None
+
+    async def delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False):
+        """删除材质记录（事务安全）。
+        
+        force=True: 删除所有用户引用 + 皮肤库记录
+        force=False + user_id: 删除单个用户引用，若剩余为0则物理删除皮肤库记录
+        """
+        if not force and not user_id:
+            raise ValueError("per-user deletion requires user_id")
+        
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                if force:
+                    await conn.execute(
+                        "DELETE FROM user_textures WHERE hash=$1 AND texture_type=$2",
+                        texture_hash, texture_type,
+                    )
+                    await conn.execute(
+                        "DELETE FROM skin_library WHERE skin_hash=$1",
+                        texture_hash,
+                    )
+                else:
+                    await conn.execute(
+                        "DELETE FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
+                        user_id, texture_hash, texture_type,
+                    )
+                    remaining = await conn.fetchval(
+                        "SELECT COUNT(*) FROM user_textures WHERE hash=$1 AND texture_type=$2",
+                        texture_hash, texture_type,
+                    )
+                    if remaining == 0:
+                        await conn.execute(
+                            "DELETE FROM skin_library WHERE skin_hash=$1",
+                            texture_hash,
+                        )
+

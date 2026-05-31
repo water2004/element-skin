@@ -1,1 +1,1 @@
-from .main import Database
+from .main import Database as Database

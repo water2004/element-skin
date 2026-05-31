@@ -1,18 +1,12 @@
 <template>
   <div class="invites-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div class="page-header-icon"><Ticket /></div>
-        <div class="page-header-text">
-          <h2>邀请码管理</h2>
-          <p class="subtitle">创建并管理用于限制新用户注册的邀请码</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
+    <PageHeader title="邀请码管理" subtitle="创建并管理用于限制新用户注册的邀请码">
+      <template #icon><Ticket /></template>
+      <template #actions>
         <el-button :icon="Refresh" @click="loadInvites" plain class="hover-lift">刷新</el-button>
         <el-button type="primary" :icon="Plus" @click="showInviteDialog" class="hover-lift">创建邀请码</el-button>
-      </div>
-    </div>
+      </template>
+    </PageHeader>
 
     <el-card class="surface-card" shadow="never">
       <el-table :data="invites" style="width: 100%" class="modern-table">
@@ -74,6 +68,7 @@
       v-model="inviteDialogVisible"
       title="创建新邀请码"
       class="dialog-form"
+      append-to-body
     >
       <div style="padding: 24px">
         <el-form label-position="top">
@@ -127,17 +122,19 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Plus, Check, Delete, Ticket } from '@element-plus/icons-vue'
+import { Refresh, Plus, Delete, Ticket } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { getAdminInvites, createAdminInvite, deleteAdminInvite } from '@/api/admin/invites'
+import type { Invite } from '@/api/types'
+import PageHeader from '@/components/common/PageHeader.vue'
 
-const invites = ref([])
+const invites = ref<Invite[]>([])
 const limit = 15
-const pagination = useCursorPagination(limit)
+const pagination = useCursorPagination<Invite>(limit)
 const inviteDialogVisible = ref(false)
 const inviteMode = ref('auto')
 const customInviteCode = ref('')
@@ -147,20 +144,15 @@ const inviteUsesMode = ref('limited')
 const inviteUses = ref(1)
 const inviteNote = ref('')
 
-const authHeaders = () => ({ Authorization: 'Bearer ' + localStorage.getItem('jwt') })
-
-function formatDate(ts) {
+function formatDate(ts: number | undefined) {
   return ts ? new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'
 }
 
 async function loadInvites() {
   try {
-    const res = await axios.get('/admin/invites', { 
-      headers: authHeaders(),
-      params: {
-        cursor: pagination.currentCursor.value,
-        limit: limit
-      }
+    const res = await getAdminInvites({
+      cursor: pagination.currentCursor.value,
+      limit: limit
     })
     invites.value = res.data.items
     pagination.setPageData(res.data)
@@ -171,10 +163,7 @@ async function loadInvites() {
 
 async function handleNextPage() {
   await pagination.goToNextPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/invites', {
-      headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
-    })
+    const res = await getAdminInvites({ cursor, limit: pageLimit })
     invites.value = res.data.items
     return res.data
   })
@@ -182,10 +171,7 @@ async function handleNextPage() {
 
 async function handlePrevPage() {
   await pagination.goToPrevPage(async (cursor, pageLimit) => {
-    const res = await axios.get('/admin/invites', {
-      headers: authHeaders(),
-      params: { cursor, limit: pageLimit }
-    })
+    const res = await getAdminInvites({ cursor, limit: pageLimit })
     invites.value = res.data.items
     return res.data
   })
@@ -214,17 +200,17 @@ function refreshPreview() {
   previewInviteCode.value = generateRandomCode()
 }
 
-const getRemainingBg = (row) => {
+const getRemainingBg = (row: Invite) => {
   if (!row.total_uses) return 'rgba(103, 194, 58, 0.1)'
-  const rem = row.total_uses - row.used_count
+  const rem = row.total_uses - (row.used_count || 0)
   if (rem <= 0) return 'rgba(245, 108, 108, 0.1)'
   if (rem <= row.total_uses * 0.2) return 'rgba(230, 162, 60, 0.1)'
   return 'rgba(64, 158, 255, 0.1)'
 }
 
-const getRemainingColor = (row) => {
+const getRemainingColor = (row: Invite) => {
   if (!row.total_uses) return 'var(--el-color-success)'
-  const rem = row.total_uses - row.used_count
+  const rem = row.total_uses - (row.used_count || 0)
   if (rem <= 0) return 'var(--el-color-danger)'
   if (rem <= row.total_uses * 0.2) return 'var(--el-color-warning)'
   return 'var(--el-color-primary)'
@@ -233,29 +219,29 @@ const getRemainingColor = (row) => {
 async function confirmCreateInvite() {
   const code = inviteMode.value === 'auto' ? previewInviteCode.value : customInviteCode.value.trim()
   if (!code || code.length < 6) return ElMessage.warning('邀请码长度不足')
-  
+
   creating.value = true
   try {
-    const payload = { 
-      code, 
+    const payload = {
+      code,
       note: inviteNote.value,
       total_uses: inviteUsesMode.value === 'unlimited' ? null : inviteUses.value
     }
-    await axios.post('/admin/invites', payload, { headers: authHeaders() })
+    await createAdminInvite(payload)
     ElMessage.success('创建成功')
     inviteDialogVisible.value = false
     await refreshFirstPage()
-  } catch (e) {
+  } catch (e: any) {
     ElMessage.error(e.response?.data?.detail || '创建失败')
   } finally {
     creating.value = false
   }
 }
 
-async function deleteInvite(invite) {
+async function deleteInvite(invite: Invite) {
   try {
     await ElMessageBox.confirm('确定删除该邀请码吗？', '确认', { type: 'warning' })
-    await axios.delete(`/admin/invites/${invite.code}`, { headers: authHeaders() })
+    await deleteAdminInvite(invite.code)
     ElMessage.success('已删除')
     await refreshFirstPage()
   } catch (e) {}
@@ -264,18 +250,7 @@ async function deleteInvite(invite) {
 onMounted(refreshFirstPage)
 </script>
 
-<style>
-@import "@/assets/styles/dialogs.css";
-</style>
-
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-@import "@/assets/styles/headers.css";
-@import "@/assets/styles/tags.css";
-@import "@/assets/styles/buttons.css";
-
 .invites-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
 
 .code-text { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 600; color: var(--color-heading); }
@@ -285,6 +260,4 @@ onMounted(refreshFirstPage)
 
 .code-preview-box { display: flex; align-items: center; justify-content: space-between; background: var(--color-background-soft); padding: 12px 16px; border-radius: 8px; border: 1px dashed var(--el-color-primary); }
 .code-preview-box span { font-family: monospace; font-size: 18px; font-weight: bold; color: var(--el-color-primary); }
-
-.mb-2 { margin-bottom: 8px; }
 </style>

@@ -1,6 +1,9 @@
 import pytest
 from unittest.mock import AsyncMock, patch
-from backends.microsoft_backend import MicrosoftAuthService
+from fastapi import HTTPException
+from backends.microsoft_backend import MicrosoftAuthService, MicrosoftBackend
+from routes_reference import texture_storage
+from utils.typing import PlayerProfile
 
 @pytest.mark.asyncio
 async def test_microsoft_auth_url_generation():
@@ -81,3 +84,81 @@ async def test_microsoft_auth_flow_mock(test_config):
         # 验证调用次数
         assert mock_post.call_count == 4
         assert mock_get.call_count == 2
+
+
+# ========== Phase 4: MicrosoftBackend.import_profile orchestration ==========
+
+
+@pytest.mark.asyncio
+async def test_microsoft_import_profile_skin_and_cape(db_session, test_config, user_factory):
+    """皮肤+披风都下载：hash 落到角色，模型按 variant=slim 设为 slim"""
+    backend = MicrosoftBackend(db_session, test_config, texture_storage)
+    user = await user_factory()
+
+    with patch("backends.microsoft_backend.download_texture", new_callable=AsyncMock) as mock_dl, \
+         patch.object(texture_storage, "process_and_save", side_effect=["skin_h", "cape_h"]):
+        mock_dl.return_value = b"bytes"
+        result = await backend.import_profile(
+            user.id, "ms_uuid_1", "MsImported",
+            skin_url="http://skin", skin_variant="slim", cape_url="http://cape",
+        )
+
+    assert result["ok"] is True
+    assert result["profile"]["model"] == "slim"
+    profile = await db_session.user.get_profile_by_id("ms_uuid_1")
+    assert profile.skin_hash == "skin_h"
+    assert profile.cape_hash == "cape_h"
+    assert profile.texture_model == "slim"
+
+
+@pytest.mark.asyncio
+async def test_microsoft_import_profile_uuid_conflict(db_session, test_config, user_factory):
+    backend = MicrosoftBackend(db_session, test_config, texture_storage)
+    user = await user_factory()
+    await db_session.user.create_profile(
+        PlayerProfile("dup_uuid", user.id, "AlreadyHere", "default")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await backend.import_profile(
+            user.id, "dup_uuid", "Whatever", None, "classic", None
+        )
+    assert exc.value.status_code == 400
+    assert "UUID" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_microsoft_import_profile_name_dedup(db_session, test_config, user_factory):
+    """同名角色已存在时自动加 _1 后缀"""
+    backend = MicrosoftBackend(db_session, test_config, texture_storage)
+    user = await user_factory()
+    await db_session.user.create_profile(
+        PlayerProfile("other_uuid", user.id, "TakenName", "default")
+    )
+
+    result = await backend.import_profile(
+        user.id, "fresh_uuid", "TakenName", None, "classic", None
+    )
+    assert result["profile"]["name"] == "TakenName_1"
+    profile = await db_session.user.get_profile_by_id("fresh_uuid")
+    assert profile.name == "TakenName_1"
+    assert profile.skin_hash is None
+
+
+@pytest.mark.asyncio
+async def test_microsoft_import_profile_skin_download_failure_is_tolerated(db_session, test_config, user_factory):
+    """皮肤下载失败不应中断导入：角色仍创建，skin_hash 为 None"""
+    backend = MicrosoftBackend(db_session, test_config, texture_storage)
+    user = await user_factory()
+
+    with patch("backends.microsoft_backend.download_texture", new_callable=AsyncMock) as mock_dl:
+        mock_dl.side_effect = Exception("network down")
+        result = await backend.import_profile(
+            user.id, "tolerant_uuid", "Tolerant", "http://skin", "classic", None
+        )
+
+    assert result["ok"] is True
+    assert result["profile"]["skin_hash"] is None
+    profile = await db_session.user.get_profile_by_id("tolerant_uuid")
+    assert profile is not None
+    assert profile.skin_hash is None

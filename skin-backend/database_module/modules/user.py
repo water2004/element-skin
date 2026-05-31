@@ -1,9 +1,7 @@
 from ..core import BaseDB
-from utils.typing import User, PlayerProfile, InviteCode, Token, Session, Texture
+from utils.typing import User, PlayerProfile, InviteCode, Token, Session
 import time
-import uuid
-import re
-from utils.pagination import CursorEncoder
+import asyncpg
 
 class UserModule:
     def __init__(self, db: BaseDB):
@@ -99,16 +97,28 @@ class UserModule:
             )
         
         has_next = len(rows) > limit
-        items = [User(r[0], r[1], "", r[3], r[5], r[2], r[4], r[6]) for r in rows[:limit]]
-        
-        next_cursor = None
+        items = [
+            User(
+                id=r[0],
+                email=r[1],
+                password="",
+                is_admin=r[3],
+                preferred_language=r[5],
+                display_name=r[2],
+                banned_until=r[4],
+                avatar_hash=r[6],
+            )
+            for r in rows[:limit]
+        ]
+
+        next_key = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
-        
+            next_key = {"last_id": rows[limit - 1][0]}
+
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -144,16 +154,28 @@ class UserModule:
             rows = await self.db.fetch(sql, like_pattern, actual_limit)
         
         has_next = len(rows) > limit
-        items = [User(r[0], r[1], "", r[3], r[5], r[2], r[4], r[6]) for r in rows[:limit]]
-        
-        next_cursor = None
+        items = [
+            User(
+                id=r[0],
+                email=r[1],
+                password="",
+                is_admin=r[3],
+                preferred_language=r[5],
+                display_name=r[2],
+                banned_until=r[4],
+                avatar_hash=r[6],
+            )
+            for r in rows[:limit]
+        ]
+
+        next_key = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
-        
+            next_key = {"last_id": rows[limit - 1][0]}
+
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
@@ -228,25 +250,100 @@ class UserModule:
         has_next = len(rows) > limit
         items = [PlayerProfile(*r) for r in rows[:limit]]
         
-        next_cursor = None
+        next_key = None
         if has_next:
-            next_cursor = CursorEncoder.encode({"last_id": rows[limit][0]})
+            next_key = {"last_id": rows[limit - 1][0]}
         
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
+            "page_size": len(items),
+        }
+
+    async def list_all_profiles_cursor(self, limit: int = 20, after_id: str | None = None, query: str | None = None) -> dict:
+        """按ID游标分页获取所有游戏角色（含所属用户信息），支持按角色名/邮箱搜索"""
+        actual_limit = limit + 1
+
+        if query:
+            like_pattern = f"%{query}%"
+            if after_id:
+                rows = await self.db.fetch(
+                    """SELECT p.id, p.user_id, p.name, p.texture_model, p.skin_hash, p.cape_hash,
+                              u.email AS owner_email, u.display_name AS owner_display_name
+                       FROM profiles p JOIN users u ON p.user_id = u.id
+                       WHERE (p.name ILIKE $1 OR u.email ILIKE $1 OR u.display_name ILIKE $1) AND p.id > $2
+                       ORDER BY p.id LIMIT $3""",
+                    like_pattern, after_id, actual_limit
+                )
+            else:
+                rows = await self.db.fetch(
+                    """SELECT p.id, p.user_id, p.name, p.texture_model, p.skin_hash, p.cape_hash,
+                              u.email AS owner_email, u.display_name AS owner_display_name
+                       FROM profiles p JOIN users u ON p.user_id = u.id
+                       WHERE (p.name ILIKE $1 OR u.email ILIKE $1 OR u.display_name ILIKE $1)
+                       ORDER BY p.id LIMIT $2""",
+                    like_pattern, actual_limit
+                )
+        else:
+            if after_id:
+                rows = await self.db.fetch(
+                    """SELECT p.id, p.user_id, p.name, p.texture_model, p.skin_hash, p.cape_hash,
+                              u.email AS owner_email, u.display_name AS owner_display_name
+                       FROM profiles p JOIN users u ON p.user_id = u.id
+                       WHERE p.id > $1
+                       ORDER BY p.id LIMIT $2""",
+                    after_id, actual_limit
+                )
+            else:
+                rows = await self.db.fetch(
+                    """SELECT p.id, p.user_id, p.name, p.texture_model, p.skin_hash, p.cape_hash,
+                              u.email AS owner_email, u.display_name AS owner_display_name
+                       FROM profiles p JOIN users u ON p.user_id = u.id
+                       ORDER BY p.id LIMIT $1""",
+                    actual_limit
+                )
+
+        has_next = len(rows) > limit
+        items = [
+            {
+                "id": r[0],
+                "user_id": r[1],
+                "name": r[2],
+                "texture_model": r[3],
+                "skin_hash": r[4],
+                "cape_hash": r[5],
+                "owner_email": r[6],
+                "owner_display_name": r[7],
+            }
+            for r in rows[:limit]
+        ]
+
+        next_key = None
+        if has_next:
+            next_key = {"last_id": rows[limit - 1][0]}
+
+        return {
+            "items": items,
+            "has_next": has_next,
+            "next_key": next_key,
             "page_size": len(items),
         }
 
     async def create_profile(self, profile: PlayerProfile):
         await self.db.execute(
-            "INSERT INTO profiles (id, user_id, name, texture_model) VALUES ($1, $2, $3, $4)",
-            profile.id, profile.user_id, profile.name, profile.texture_model,
+            "INSERT INTO profiles (id, user_id, name, texture_model, skin_hash, cape_hash) VALUES ($1, $2, $3, $4, $5, $6)",
+            profile.id, profile.user_id, profile.name, profile.texture_model, profile.skin_hash, profile.cape_hash,
         )
             
-    async def delete_profile(self, profile_id: str):
-        await self.db.execute("DELETE FROM profiles WHERE id=$1", profile_id)
+    async def delete_profile(self, profile_id: str) -> bool:
+        """删除角色（单表操作），返回是否成功"""
+        result = await self.db.execute("DELETE FROM profiles WHERE id=$1", profile_id)
+        return result is not None
+
+    async def delete_tokens_by_profile(self, profile_id: str):
+        """删除与角色关联的所有 tokens（单表操作）"""
+        await self.db.execute("DELETE FROM tokens WHERE profile_id=$1", profile_id)
 
     async def verify_profile_ownership(self, user_id: str, profile_id: str) -> bool:
         val = await self.db.fetchval(
@@ -255,12 +352,12 @@ class UserModule:
         )
         return val is not None
 
-    async def update_profile_skin(self, profile_id: str, skin_hash: str):
+    async def update_profile_skin(self, profile_id: str, skin_hash: str | None = None):
         await self.db.execute(
             "UPDATE profiles SET skin_hash=$1 WHERE id=$2", skin_hash, profile_id
         )
 
-    async def update_profile_cape(self, profile_id: str, cape_hash: str):
+    async def update_profile_cape(self, profile_id: str, cape_hash: str | None = None):
         await self.db.execute(
             "UPDATE profiles SET cape_hash=$1 WHERE id=$2", cape_hash, profile_id
         )
@@ -271,12 +368,14 @@ class UserModule:
             texture_model, profile_id,
         )
 
-    async def update_profile_name(self, profile_id: str, name: str):
-        await self.db.execute(
-            "UPDATE profiles SET name=$1 WHERE id=$2",
-            name, profile_id,
-        )
-            
+    async def update_profile_name(self, profile_id: str, name: str) -> bool:
+        """更新角色名，返回是否成功（不处理验证）"""
+        try:
+            await self.db.execute("UPDATE profiles SET name=$1 WHERE id=$2", name, profile_id)
+            return True
+        except asyncpg.exceptions.UniqueViolationError:
+            return False
+
     async def search_profiles_by_names(self, names: list[str], limit: int = 20) -> list[PlayerProfile]:
         # asyncpg handle array nicely with ANY
         rows = await self.db.fetch(
@@ -392,9 +491,6 @@ class UserModule:
                         used_by, code
                     )
 
-    async def count_invites(self) -> int:
-        return await self.db.fetchval("SELECT COUNT(*) FROM invites") or 0
-
     async def list_invites_cursor(self, limit: int = 15, last_created_at: int | None = None, last_code: str | None = None) -> dict:
         """按created_at+code游标分页获取邀请码列表（时序复合游标）"""
         actual_limit = limit + 1
@@ -415,18 +511,18 @@ class UserModule:
         has_next = len(rows) > limit
         items = [InviteCode(*r) for r in rows[:limit]]
         
-        next_cursor = None
+        next_key = None
         if has_next:
-            last_row = rows[limit]
-            next_cursor = CursorEncoder.encode({
+            last_row = rows[limit - 1]
+            next_key = {
                 "last_created_at": last_row[1],
                 "last_code": last_row[0]
-            })
+            }
         
         return {
             "items": items,
             "has_next": has_next,
-            "next_cursor": next_cursor,
+            "next_key": next_key,
             "page_size": len(items),
         }
 

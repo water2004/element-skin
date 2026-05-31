@@ -4,11 +4,14 @@
 """
 
 import aiohttp
-import asyncio
-import uuid
 import urllib.parse
 from typing import Optional, Dict, Tuple
-import time
+
+from fastapi import HTTPException
+
+from utils.profile_naming import generate_unique_profile_name
+from utils.typing import PlayerProfile, normalize_texture_model
+from utils.http import download_texture as download_texture
 
 
 class MicrosoftAuthService:
@@ -247,11 +250,100 @@ class MicrosoftAuthService:
         }
 
 
-async def download_texture(url: str) -> bytes:
-    """下载皮肤或披风纹理"""
-    timeout = aiohttp.ClientTimeout(total=10)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.get(url) as resp:
-            if resp.status == 200:
-                return await resp.read()
-            raise Exception(f"Failed to download texture from {url}")
+class MicrosoftBackend:
+    """微软登录编排：读取配置、构造认证服务、导入正版角色。"""
+
+    def __init__(self, db, config, texture_storage):
+        self.db = db
+        self.config = config
+        self.texture_storage = texture_storage
+
+    async def _build_service(self) -> MicrosoftAuthService:
+        client_id = await self.db.setting.get("microsoft_client_id")
+        client_secret = await self.db.setting.get("microsoft_client_secret")
+        if not client_id:
+            raise HTTPException(
+                status_code=500,
+                detail="Microsoft OAuth not configured. Please contact administrator.",
+            )
+        if not client_secret:
+            raise HTTPException(
+                status_code=500,
+                detail="Microsoft OAuth client_secret not configured. Please contact administrator.",
+            )
+        default_redirect = (
+            self.config.get("server.site_url", "http://localhost:8000").rstrip("/")
+            + "/microsoft/callback"
+        )
+        redirect_uri = await self.db.setting.get("microsoft_redirect_uri", default_redirect)
+        return MicrosoftAuthService(client_id, client_secret, redirect_uri)
+
+    async def get_authorization_url(self, state: str) -> str:
+        service = await self._build_service()
+        return service.get_authorization_url(state)
+
+    async def complete_auth_flow(self, code: str) -> Dict:
+        service = await self._build_service()
+        token_data = await service.exchange_code_for_token(code)
+        return await service.complete_auth_flow(token_data["access_token"])
+
+    async def import_profile(
+        self,
+        user_id: str,
+        profile_id: str,
+        profile_name: str,
+        skin_url: Optional[str],
+        skin_variant: str,
+        cape_url: Optional[str],
+    ) -> Dict:
+        if await self.db.user.get_profile_by_id(profile_id):
+            raise HTTPException(status_code=400, detail="该角色 UUID 已在本地存在，无法导入")
+
+        async def _name_exists(n: str) -> bool:
+            return await self.db.user.get_profile_by_name(n) is not None
+
+        try:
+            profile_name = await generate_unique_profile_name(profile_name, _name_exists)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        skin_hash = await self._import_texture(
+            user_id, skin_url, "skin", f"From Microsoft account - {profile_name}"
+        )
+        cape_hash = await self._import_texture(
+            user_id, cape_url, "cape", f"From Microsoft account - {profile_name}"
+        )
+
+        texture_model = normalize_texture_model(skin_variant)
+        await self.db.user.create_profile(
+            PlayerProfile(profile_id, user_id, profile_name, texture_model)
+        )
+        if skin_hash:
+            await self.db.user.update_profile_skin(profile_id, skin_hash)
+        if cape_hash:
+            await self.db.user.update_profile_cape(profile_id, cape_hash)
+
+        return {
+            "ok": True,
+            "profile": {
+                "id": profile_id,
+                "name": profile_name,
+                "model": texture_model,
+                "skin_hash": skin_hash,
+                "cape_hash": cape_hash,
+            },
+        }
+
+    async def _import_texture(
+        self, user_id: str, url: Optional[str], texture_type: str, note: str
+    ) -> Optional[str]:
+        if not url:
+            return None
+        try:
+            data = await download_texture(url)
+            texture_hash = self.texture_storage.process_and_save(data, texture_type)
+            await self.db.texture.add_to_library(user_id, texture_hash, texture_type, note)
+            return texture_hash
+        except Exception as e:
+            print(f"Failed to download {texture_type}: {e}")
+            return None

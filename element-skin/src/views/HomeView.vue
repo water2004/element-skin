@@ -1,19 +1,26 @@
-<script setup>
-import { ref, onMounted } from 'vue'
+<script setup lang="ts">
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { User } from '@element-plus/icons-vue'
-import axios from 'axios'
+import { getPublicSettings, getPublicCarousel } from '@/api/public'
+import { getMe } from '@/api/me'
+import CanvasGlassButton from '@/components/common/CanvasGlassButton.vue'
 
 const router = useRouter()
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
 const siteSubtitle = ref(localStorage.getItem('site_subtitle_cache') || '简洁、高效、现代的 Minecraft 皮肤 management 站')
 const isLogged = ref(false)
-const carouselImages = ref([])
+const carouselImages = ref<string[]>([])
+const activeCarouselIndex = ref(0)
+const activeCarouselUrl = computed(() => {
+  const image = carouselImages.value[activeCarouselIndex.value]
+  return image ? getCarouselUrl(image) : ''
+})
 
 onMounted(async () => {
   // 加载站点配置
   try {
-    const res = await axios.get('/public/settings')
+    const res = await getPublicSettings()
     if (res.data.site_name) {
       siteName.value = res.data.site_name
       localStorage.setItem('site_name_cache', res.data.site_name)
@@ -28,32 +35,30 @@ onMounted(async () => {
 
   // 加载轮播图
   try {
-    const res = await axios.get('/public/carousel')
+    const res = await getPublicCarousel()
     carouselImages.value = res.data
   } catch (e) {
     console.warn('Failed to load carousel images:', e)
   }
 
-  // 检查登录状态
-  const jwt = localStorage.getItem('jwt')
-  if (jwt) {
-    try {
-      await axios.get('/me', { headers: { Authorization: 'Bearer ' + jwt } })
-      isLogged.value = true
-    } catch (e) {
-      localStorage.removeItem('jwt')
-      localStorage.removeItem('accessToken')
-    }
-  }
+  // 检查登录状态（cookie 自动携带）
+  try {
+    await getMe()
+    isLogged.value = true
+  } catch {}
 })
 
 function goDashboard() { router.push('/dashboard') }
 function goLogin() { router.push('/login') }
 function goRegister() { router.push('/register') }
 
-function getCarouselUrl(filename) {
+function getCarouselUrl(filename: string) {
   const base = import.meta.env.BASE_URL
   return `${base}static/carousel/${filename}`.replace(/\/+/g, '/')
+}
+
+function handleCarouselChange(index: number) {
+  activeCarouselIndex.value = index
 }
 </script>
 
@@ -61,7 +66,7 @@ function getCarouselUrl(filename) {
   <div class="home-container">
     <!-- Background is FIXED and outside of main content flow -->
     <div v-if="carouselImages.length > 0" class="hero-bg-fixed">
-      <el-carousel height="100%" indicator-position="none" arrow="never" :interval="5000">
+      <el-carousel height="100%" indicator-position="none" arrow="never" :interval="5000" @change="handleCarouselChange">
         <el-carousel-item v-for="img in carouselImages" :key="img">
           <div class="carousel-img-wrap">
             <img :src="getCarouselUrl(img)" class="carousel-img" />
@@ -78,17 +83,23 @@ function getCarouselUrl(filename) {
         <h1 class="hero-title">{{ siteName }}</h1>
         <p class="hero-subtitle">{{ siteSubtitle }}</p>
         <div class="hero-actions">
-          <el-button v-if="isLogged" size="large" @click="goDashboard" class="btn-glass btn-glass-primary hero-btn">
+          <CanvasGlassButton
+            v-if="isLogged"
+            class="hero-btn"
+            variant="primary"
+            :background-url="activeCarouselUrl"
+            @click="goDashboard"
+          >
             <el-icon><User /></el-icon>
             <span>进入个人面板</span>
-          </el-button>
+          </CanvasGlassButton>
           <template v-else>
-            <el-button size="large" @click="goLogin" class="btn-glass btn-glass-primary hero-btn">
+            <CanvasGlassButton class="hero-btn" variant="primary" :background-url="activeCarouselUrl" @click="goLogin">
               登录账号
-            </el-button>
-            <el-button size="large" @click="goRegister" class="btn-glass hero-btn">
+            </CanvasGlassButton>
+            <CanvasGlassButton class="hero-btn" variant="secondary" :background-url="activeCarouselUrl" @click="goRegister">
               即刻注册
-            </el-button>
+            </CanvasGlassButton>
           </template>
         </div>
       </div>
@@ -97,10 +108,7 @@ function getCarouselUrl(filename) {
 </template>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/buttons.css";
-
-.home-container { 
+.home-container {
   width: 100%; 
   height: calc(100vh - var(--footer-height, 0px));
   display: flex; 

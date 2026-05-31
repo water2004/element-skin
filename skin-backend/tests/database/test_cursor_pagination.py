@@ -3,7 +3,6 @@
 import pytest
 from utils.typing import User, PlayerProfile, InviteCode
 from utils.pagination import CursorEncoder
-import time
 
 
 @pytest.mark.asyncio
@@ -22,13 +21,13 @@ async def test_list_users_cursor_first_page(db_session):
     
     assert len(result["items"]) == 2
     assert result["has_next"] is True
-    assert result["next_cursor"] is not None
+    assert result["next_key"] is not None
     assert result["page_size"] == 2
 
 
 @pytest.mark.asyncio
 async def test_list_users_cursor_pagination(db_session):
-    """测试用户列表游标分页 - 翻页"""
+    """测试用户列表游标分页 - 翻页：全量覆盖且无重叠"""
     from utils.uuid_utils import generate_random_uuid
 
     # 创建8个用户
@@ -39,24 +38,19 @@ async def test_list_users_cursor_pagination(db_session):
         await db_session.user.create(user)
         user_ids.append(uid)
 
-    # 获取首页（limit=3）
-    page1 = await db_session.user.list_users_cursor(limit=3)
-    assert len(page1["items"]) == 3
-    assert page1["has_next"] is True
-    first_page_ids = [u.id for u in page1["items"]]
+    # 逐页跟随游标，收集所有 id
+    seen = []
+    last_id = None
+    for _ in range(20):  # 安全上限
+        page = await db_session.user.list_users_cursor(limit=3, last_id=last_id)
+        seen.extend(u.id for u in page["items"])
+        if not page["has_next"]:
+            break
+        last_id = page["next_key"]["last_id"]
 
-    # 使用游标获取第二页
-    cursor_data = CursorEncoder.decode(page1["next_cursor"])
-    page2 = await db_session.user.list_users_cursor(
-        limit=3, 
-        last_id=cursor_data["last_id"]
-    )
-    assert len(page2["items"]) == 3
-    assert page2["has_next"] is True
-    second_page_ids = [u.id for u in page2["items"]]
-    
-    # 确保没有重复
-    assert len(set(first_page_ids + second_page_ids)) == 6
+    # 8 个用户全部出现，无重复
+    assert set(seen) == set(user_ids)
+    assert len(seen) == 8
 
 
 @pytest.mark.asyncio
@@ -105,57 +99,67 @@ async def test_list_invites_cursor(db_session):
 
 @pytest.mark.asyncio
 async def test_list_invites_cursor_pagination(db_session):
-    """测试邀请码游标分页翻页"""
+    """测试邀请码游标分页翻页：全量覆盖且无重叠"""
     from utils.typing import InviteCode
     import time
 
     # 创建6个邀请码
     base_time = int(time.time() * 1000)
+    codes = []
     for i in range(6):
-        code = InviteCode(
-            f"CODE_{i:02d}",
-            base_time - i * 1000,
-            total_uses=1
+        code = f"CODE_{i:02d}"
+        await db_session.user.create_invite(InviteCode(code, base_time - i * 1000, total_uses=1))
+        codes.append(code)
+
+    # 逐页跟随游标
+    seen = []
+    last_created_at = None
+    last_code = None
+    for _ in range(20):  # 安全上限
+        page = await db_session.user.list_invites_cursor(
+            limit=2, last_created_at=last_created_at, last_code=last_code
         )
-        await db_session.user.create_invite(code)
+        seen.extend(c.code for c in page["items"])
+        if not page["has_next"]:
+            break
+        cursor_data = page["next_key"]
+        last_created_at = cursor_data["last_created_at"]
+        last_code = cursor_data["last_code"]
 
-    # 首页
-    page1 = await db_session.user.list_invites_cursor(limit=2)
-    assert len(page1["items"]) == 2
-    assert page1["has_next"] is True
-
-    # 翻页
-    cursor_data = CursorEncoder.decode(page1["next_cursor"])
-    page2 = await db_session.user.list_invites_cursor(
-        limit=2,
-        last_created_at=cursor_data["last_created_at"],
-        last_code=cursor_data["last_code"]
-    )
-    assert len(page2["items"]) == 2
-    assert page2["has_next"] is True
+    assert set(seen) == set(codes)
+    assert len(seen) == 6
 
 
 @pytest.mark.asyncio
 async def test_get_for_user_cursor(db_session, user_factory):
-    """测试用户材质列表游标分页"""
+    """测试用户材质列表游标分页：全量覆盖且无重叠"""
     user = await user_factory()
-    
-    # 创建5个材质
-    base_time = int(time.time() * 1000)
+
+    # 创建5个材质（注意：同毫秒内 created_at 相同，靠 hash 做次级排序键）
+    hashes = []
     for i in range(5):
         hash_val = f"hash_{i}"
         await db_session.texture.add_to_library(
-            user.id, 
-            hash_val, 
-            "skin", 
-            note=f"Skin {i}",
-            is_public=False
+            user.id, hash_val, "skin", note=f"Skin {i}", is_public=False
         )
+        hashes.append(hash_val)
 
-    # 获取首页
-    result = await db_session.texture.get_for_user_cursor(user.id, limit=2)
-    assert len(result["items"]) == 2
-    assert result["has_next"] is True
+    seen = []
+    last_created_at = None
+    last_hash = None
+    for _ in range(20):  # 安全上限
+        page = await db_session.texture.get_for_user_cursor(
+            user.id, limit=2, last_created_at=last_created_at, last_hash=last_hash
+        )
+        seen.extend(item["hash"] for item in page["items"])
+        if not page["has_next"]:
+            break
+        cursor_data = page["next_key"]
+        last_created_at = cursor_data["last_created_at"]
+        last_hash = cursor_data["last_hash"]
+
+    assert set(seen) == set(hashes)
+    assert len(seen) == 5
 
 
 @pytest.mark.asyncio
@@ -195,25 +199,35 @@ async def test_get_for_user_cursor_with_type_filter(db_session, user_factory):
 
 @pytest.mark.asyncio
 async def test_get_from_library_cursor(db_session, user_factory):
-    """测试公开皮肤库游标分页"""
+    """测试公开皮肤库游标分页：全量覆盖且无重叠"""
     uploader = await user_factory()
-    
+
     # 创建5个公开材质
+    hashes = []
     for i in range(5):
         hash_val = f"public_hash_{i}"
         await db_session.texture.add_to_library(
-            uploader.id,
-            hash_val,
-            "skin",
-            note=f"Public Skin {i}",
-            is_public=True
+            uploader.id, hash_val, "skin", note=f"Public Skin {i}", is_public=True
         )
+        hashes.append(hash_val)
 
-    # 获取首页
-    result = await db_session.texture.get_from_library_cursor(limit=2)
-    assert len(result["items"]) == 2
-    assert result["has_next"] is True
-    assert all(item["is_public"] is True for item in result["items"])
+    seen = []
+    last_created_at = None
+    last_skin_hash = None
+    for _ in range(20):  # 安全上限
+        page = await db_session.texture.get_from_library_cursor(
+            limit=2, last_created_at=last_created_at, last_skin_hash=last_skin_hash
+        )
+        assert all(item["is_public"] is True for item in page["items"])
+        seen.extend(item["hash"] for item in page["items"])
+        if not page["has_next"]:
+            break
+        cursor_data = page["next_key"]
+        last_created_at = cursor_data["last_created_at"]
+        last_skin_hash = cursor_data["last_skin_hash"]
+
+    assert set(seen) == set(hashes)
+    assert len(seen) == 5
 
 
 @pytest.mark.asyncio

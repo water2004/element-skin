@@ -70,12 +70,6 @@
         >
           个性化
         </el-divider>
-        <el-form-item v-if="user" label="关闭页面动效">
-          <el-switch v-model="motionDisabled" />
-          <el-text size="small" type="info" style="margin-left: 12px">
-            关闭页面进入动画
-          </el-text>
-        </el-form-item>
         <el-form-item v-if="user" label="关闭彩蛋">
           <el-switch v-model="disableMeowEasterEgg" />
           <el-text size="small" type="info" style="margin-left: 12px">
@@ -133,25 +127,25 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, watch, inject, onMounted } from 'vue'
-import axios from 'axios'
+<script setup lang="ts">
+import { ref, computed, watch, inject, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Clock, Check, Delete } from '@element-plus/icons-vue'
 import { useAvatar } from '@/composables/useAvatar'
+import { changePassword, patchMe, deleteMe } from '@/api/me'
+import type { User } from '@/api/types'
 
 const { currentAvatarImg: customAvatar } = useAvatar()
 
 // Inject shared state from AppLayout
-const user = inject('user')
-const fetchMe = inject('fetchMe')
+const user = inject<Ref<User | null>>('user', ref(null))
+const fetchMe = inject<() => Promise<void>>('fetchMe')
 
 const router = useRouter()
 const form = ref({ email: '', display_name: '', old_password: '', new_password: '', confirm_password: '' })
 const showDeleteDialog = ref(false)
 const deleteConfirmText = ref('')
-const motionDisabled = ref(localStorage.getItem('motionDisabled') === '1')
 const disableMeowEasterEgg = ref(localStorage.getItem('disableMeowEasterEgg') === '1')
 
 const emailInitial = computed(() => {
@@ -166,15 +160,6 @@ watch(() => user.value, (newUser) => {
   }
 }, { immediate: true, deep: true })
 
-function applyMotionSetting(disabled) {
-  document.documentElement.classList.toggle('motion-off', disabled)
-}
-
-watch(motionDisabled, (disabled) => {
-  localStorage.setItem('motionDisabled', disabled ? '1' : '0')
-  applyMotionSetting(disabled)
-})
-
 watch(disableMeowEasterEgg, (disabled) => {
   localStorage.setItem('disableMeowEasterEgg', disabled ? '1' : '0')
   if (disabled) {
@@ -187,15 +172,6 @@ watch(disableMeowEasterEgg, (disabled) => {
     window.meowReinit()
   }
 })
-
-onMounted(() => {
-  applyMotionSetting(motionDisabled.value)
-})
-
-function authHeaders() {
-  const token = localStorage.getItem('jwt')
-  return token ? { Authorization: 'Bearer ' + token } : {}
-}
 
 function getUserBanStatus() {
   if (!user.value?.banned_until) return false
@@ -242,10 +218,10 @@ async function updateProfile() {
         return
       }
 
-      await axios.post('/me/password', {
+      await changePassword({
         old_password: form.value.old_password,
         new_password: form.value.new_password
-      }, { headers: authHeaders() })
+      })
 
       ElMessage.success('密码修改成功')
       form.value.old_password = ''
@@ -257,37 +233,28 @@ async function updateProfile() {
       email: form.value.email,
       display_name: form.value.display_name
     }
-    await axios.patch('/me', payload, { headers: authHeaders() })
+    await patchMe(payload)
     ElMessage.success('信息修改成功')
-    fetchMe()
-  } catch (e) {
+    if (fetchMe) fetchMe()
+  } catch (e: any) {
     ElMessage.error('保存失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 
 async function confirmDeleteAccount() {
   try {
-    await axios.delete('/me', { headers: authHeaders() })
+    await deleteMe()
     ElMessage.success('账号已注销')
-    localStorage.removeItem('jwt')
-    localStorage.removeItem('accessToken')
     setTimeout(() => {
       router.push('/')
     }, 1000)
-  } catch (e) {
+  } catch (e: any) {
     ElMessage.error('注销失败: ' + (e.response?.data?.detail || e.message))
   }
 }
 </script>
 
 <style scoped>
-@import "@/assets/styles/animations.css";
-@import "@/assets/styles/layout.css";
-@import "@/assets/styles/cards.css";
-
-.profile-section {
-}
-
 .profile-form-card {
   max-width: 600px;
   margin: 0 auto;

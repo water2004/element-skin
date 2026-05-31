@@ -138,3 +138,44 @@ async def test_api_yggdrasil_join_has_joined(client, user_factory, db_session):
     })
     assert has_resp.status_code == 200
     assert has_resp.json()["id"] == pid
+
+
+@pytest.mark.asyncio
+async def test_api_yggdrasil_name_lookup_local_hit(client, user_factory, db_session):
+    """玩家名查询：命中本地角色时返回 {id,name}（覆盖共享 lookup helper）"""
+    from utils.typing import PlayerProfile
+    user = await user_factory()
+    await db_session.user.create_profile(PlayerProfile("look_pid", user.id, "LookupMe"))
+
+    # 两条共享 helper 的路由都应命中本地
+    for path in (
+        "/api/users/profiles/minecraft/LookupMe",
+        "/minecraft/profile/lookup/name/LookupMe",
+    ):
+        resp = await client.get(path)
+        assert resp.status_code == 200, path
+        assert resp.json() == {"id": "look_pid", "name": "LookupMe"}
+
+
+@pytest.mark.asyncio
+async def test_api_yggdrasil_name_lookup_miss_returns_204(client, db_session):
+    """玩家名查询：本地无角色且无 fallback 时返回 204"""
+    resp = await client.get("/api/profiles/minecraft/NoSuchPlayer")
+    assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_api_yggdrasil_texture_put_requires_bearer(client):
+    """材质上传缺少 Bearer 头时返回 401（覆盖 _require_bearer_token）"""
+    resp = await client.put(
+        "/api/user/profile/some_uuid/skin",
+        files={"file": ("skin.png", b"not-a-real-png", "image/png")},
+    )
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_api_yggdrasil_texture_delete_requires_bearer(client):
+    """材质删除缺少 Bearer 头时返回 401"""
+    resp = await client.delete("/api/user/profile/some_uuid/skin")
+    assert resp.status_code == 401

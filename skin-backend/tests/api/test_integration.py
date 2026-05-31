@@ -19,11 +19,11 @@ async def test_admin_access_control(client, auth_headers, admin_headers):
     endpoint = "/admin/users"
     
     # 普通用户尝试访问
-    resp_user = await client.get(endpoint, headers=auth_headers)
+    resp_user = await client.get(endpoint, cookies=auth_headers["cookies"])
     assert resp_user.status_code == 403
     
     # 管理员尝试访问
-    resp_admin = await client.get(endpoint, headers=admin_headers)
+    resp_admin = await client.get(endpoint, cookies=admin_headers["cookies"])
     assert resp_admin.status_code == 200
     data = resp_admin.json()
     assert "items" in data
@@ -51,12 +51,16 @@ async def test_login_flow(client, user_factory, db_session):
     
     assert response.status_code == 200
     data = response.json()
-    assert "token" in data
     assert "user_id" in data
-    
-    # 验证返回的 token 可用
-    token = data["token"]
-    headers = {"Authorization": f"Bearer {token}"}
-    me_resp = await client.get("/me", headers=headers)
+
+    # token 现在在 HttpOnly cookie 中，不再出现在 body 里
+    assert "set-cookie" in response.headers
+    cookie_header = response.headers["set-cookie"]
+    assert "jwt=" in cookie_header
+    assert "HttpOnly" in cookie_header
+
+    # 从 cookie 中提取 token 用于 /me 验证
+    token = cookie_header.split("jwt=")[1].split(";")[0]
+    me_resp = await client.get("/me", cookies={"jwt": token})
     assert me_resp.status_code == 200
     assert me_resp.json()["email"] == email

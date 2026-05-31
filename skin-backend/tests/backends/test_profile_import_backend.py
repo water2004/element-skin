@@ -1,21 +1,22 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, patch
 from fastapi import HTTPException
-from backends.site_backend import SiteBackend
+from backends.profile_import_backend import ProfileImportBackend
+from routes_reference import texture_storage
 from utils.typing import PlayerProfile
 
 @pytest.mark.asyncio
 async def test_import_ygg_profile_success(db_session, test_config):
-    backend = SiteBackend(db_session, test_config)
+    backend = ProfileImportBackend(db_session, texture_storage)
     user_id = "test_user_id"
     api_url = "http://example.com/api/yggdrasil"
     profile_id = "test_profile_id"
     profile_name = "TestPlayer"
 
     # Mock YggdrasilClient and download_texture
-    with patch("backends.site_backend.YggdrasilClient") as MockClient, \
-         patch("backends.site_backend.download_texture", new_callable=AsyncMock) as mock_download:
-        
+    with patch("backends.profile_import_backend.YggdrasilClient") as MockClient, \
+         patch("backends.profile_import_backend.download_texture", new_callable=AsyncMock) as mock_download:
+
         mock_instance = MockClient.return_value
         mock_instance.get_profile_with_textures = AsyncMock(return_value={
             "id": profile_id,
@@ -34,7 +35,7 @@ async def test_import_ygg_profile_success(db_session, test_config):
 
         assert result["id"] == profile_id
         assert result["name"] == profile_name
-        
+
         # Verify profile created in DB
         profile = await db_session.user.get_profile_by_id(profile_id)
         assert profile is not None
@@ -43,7 +44,7 @@ async def test_import_ygg_profile_success(db_session, test_config):
 
 @pytest.mark.asyncio
 async def test_import_ygg_profile_uuid_conflict(db_session, test_config):
-    backend = SiteBackend(db_session, test_config)
+    backend = ProfileImportBackend(db_session, texture_storage)
     user_id = "test_user_id_2"
     api_url = "http://example.com/api/yggdrasil"
     profile_id = "conflict_profile_id"
@@ -59,7 +60,7 @@ async def test_import_ygg_profile_uuid_conflict(db_session, test_config):
         PlayerProfile(profile_id, user_id, "ExistingPlayer", "default")
     )
 
-    with patch("backends.site_backend.YggdrasilClient") as MockClient:
+    with patch("backends.profile_import_backend.YggdrasilClient") as MockClient:
         mock_instance = MockClient.return_value
         mock_instance.get_profile_with_textures = AsyncMock(return_value={
             "id": profile_id,
@@ -70,13 +71,13 @@ async def test_import_ygg_profile_uuid_conflict(db_session, test_config):
 
         with pytest.raises(HTTPException) as exc:
             await backend.import_ygg_profile(user_id, api_url, profile_id, profile_name)
-        
+
         assert exc.value.status_code == 400
         assert "UUID" in exc.value.detail
 
 @pytest.mark.asyncio
 async def test_import_ygg_profile_name_conflict(db_session, test_config):
-    backend = SiteBackend(db_session, test_config)
+    backend = ProfileImportBackend(db_session, texture_storage)
     user_id = "test_user_id_3"
     api_url = "http://example.com/api/yggdrasil"
     profile_id = "new_profile_id"
@@ -92,9 +93,9 @@ async def test_import_ygg_profile_name_conflict(db_session, test_config):
         PlayerProfile("other_id", user_id, profile_name, "default")
     )
 
-    with patch("backends.site_backend.YggdrasilClient") as MockClient, \
-         patch("backends.site_backend.download_texture", new_callable=AsyncMock):
-        
+    with patch("backends.profile_import_backend.YggdrasilClient") as MockClient, \
+         patch("backends.profile_import_backend.download_texture", new_callable=AsyncMock):
+
         mock_instance = MockClient.return_value
         mock_instance.get_profile_with_textures = AsyncMock(return_value={
             "id": profile_id,
@@ -107,14 +108,14 @@ async def test_import_ygg_profile_name_conflict(db_session, test_config):
 
         assert result["id"] == profile_id
         assert result["name"] == f"{profile_name}_1"
-        
+
         profile = await db_session.user.get_profile_by_id(profile_id)
         assert profile.name == f"{profile_name}_1"
 
 
 @pytest.mark.asyncio
 async def test_import_ygg_profiles_batch_success_and_partial_failure(db_session, test_config):
-    backend = SiteBackend(db_session, test_config)
+    backend = ProfileImportBackend(db_session, texture_storage)
     user_id = "batch_user_id"
     api_url = "http://example.com/api/yggdrasil"
 
@@ -129,8 +130,8 @@ async def test_import_ygg_profiles_batch_success_and_partial_failure(db_session,
         {"profile_id": "", "profile_name": "BrokenProfile"},
     ]
 
-    with patch("backends.site_backend.YggdrasilClient") as MockClient, \
-         patch("backends.site_backend.download_texture", new_callable=AsyncMock) as mock_download:
+    with patch("backends.profile_import_backend.YggdrasilClient") as MockClient, \
+         patch("backends.profile_import_backend.download_texture", new_callable=AsyncMock) as mock_download:
         mock_instance = MockClient.return_value
 
         async def get_profile_with_textures(profile_id):

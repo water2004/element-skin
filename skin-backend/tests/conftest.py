@@ -8,7 +8,7 @@ from typing import AsyncGenerator
 from httpx import AsyncClient, ASGITransport
 
 # 导入应用实例和配置对象
-from routes_reference import app, db, config, site_backend, admin_backend, ygg_backend, crypto
+from routes_reference import app, db, config, site_backend, admin_backend, ygg_backend, crypto, texture_storage
 from utils.jwt_utils import create_jwt_token
 from utils.typing import User
 from utils.password_utils import hash_password
@@ -71,7 +71,7 @@ async def db_session(test_env_setup_data):
     original_dsn = db.dsn
     db.dsn = test_dsn
     config._data["database"]["dsn"] = test_dsn
-    db.texture.textures_dir = test_env_setup_data["textures_dir"]
+    texture_storage.textures_dir = test_env_setup_data["textures_dir"]
 
     await db.connect()
     async with db.get_conn() as conn:
@@ -117,13 +117,13 @@ def user_factory(db_session):
 async def auth_headers(user_factory):
     user = await user_factory(is_admin=False)
     token = create_jwt_token(user.id, is_admin=False, expire_days=1)
-    return {"Authorization": f"Bearer {token}", "X-User-ID": user.id}
+    return {"cookies": {"jwt": token}, "X-User-ID": user.id}
 
 @pytest.fixture
 async def admin_headers(user_factory):
     user = await user_factory(is_admin=True)
     token = create_jwt_token(user.id, is_admin=True, expire_days=1)
-    return {"Authorization": f"Bearer {token}", "X-User-ID": user.id}
+    return {"cookies": {"jwt": token}, "X-User-ID": user.id}
 
 @pytest.fixture
 def site_backend_fixture(db_session):
@@ -140,3 +140,7 @@ def ygg_backend_fixture(db_session):
 @pytest.fixture
 def crypto_fixture():
     return crypto
+
+@pytest.fixture
+def texture_storage_fixture(db_session):
+    return texture_storage

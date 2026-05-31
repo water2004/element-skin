@@ -1,5 +1,26 @@
-/* Page and Section Headers */
+<template>
+  <div class="page-header">
+    <div class="page-header-content">
+      <div v-if="$slots.icon" class="page-header-icon"><slot name="icon" /></div>
+      <div class="page-header-text">
+        <h2>{{ title }}</h2>
+        <p v-if="subtitle" class="subtitle">{{ subtitle }}</p>
+      </div>
+    </div>
+    <div v-if="$slots.actions" class="page-header-actions">
+      <slot name="actions" />
+    </div>
+  </div>
+</template>
 
+<script setup lang="ts">
+defineProps<{
+  title: string
+  subtitle?: string
+}>()
+</script>
+
+<style scoped>
 .page-header {
   display: flex;
   justify-content: space-between;
@@ -17,11 +38,10 @@
   min-width: 0;
 }
 
-/* Icon box variant - Enhanced size and visibility */
 .page-header-icon {
   width: 56px;
   height: 56px;
-  font-size: 26px; /* Icon size */
+  font-size: 26px;
   color: var(--el-color-primary);
   background: rgba(64, 158, 255, 0.12);
   border-radius: 16px;
@@ -62,16 +82,16 @@
   flex-wrap: wrap;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
   }
-  
+
   .page-header-actions {
     width: 100%;
     justify-content: flex-start;
   }
 }
+</style>

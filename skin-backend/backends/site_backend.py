@@ -1,4 +1,4 @@
-from typing import Optional, Dict, List, Any
+from typing import Dict, List, Any
 import re
 import time
 import os
@@ -11,19 +11,158 @@ from utils.password_utils import validate_strong_password
 from utils.jwt_utils import create_jwt_token
 from utils.email_utils import EmailSender
 from utils.uuid_utils import generate_random_uuid, get_offline_uuid
-from backends.yggdrasil_client import YggdrasilClient, download_texture
-from utils.typing import User, PlayerProfile
+from utils.profile_naming import is_valid_profile_name, generate_unique_profile_name
+from utils.pagination import decode_cursor, encode_next
+from utils.typing import User, PlayerProfile, normalize_texture_model, serialize_profile_summary
 from database_module import Database
 from config_loader import Config
+from services import TextureStorage
 
 
 class SiteBackend:
     def __init__(
-        self, db: Database, config: Config
+        self, db: Database, config: Config, texture_storage: TextureStorage
     ):  # Use forward reference for type hint
         self.db = db
         self.config = config
+        self.texture_storage = texture_storage
         self.email_sender = EmailSender(db)
+
+    async def upload_texture_to_library(
+        self,
+        user_id: str,
+        file_bytes: bytes,
+        texture_type: str,
+        note: str = "",
+        is_public: bool = False,
+        model: str = "default",
+    ) -> tuple[str, str]:
+        """处理材质（落盘）并记录到用户库，返回 (hash, type)。校验失败抛 ValueError。"""
+        texture_hash = self.texture_storage.process_and_save(file_bytes, texture_type)
+        await self.db.texture.add_to_library(
+            user_id, texture_hash, texture_type, note, is_public, model
+        )
+        return texture_hash, texture_type
+
+    async def upload_and_apply_texture(
+        self,
+        user_id: str,
+        profile_id: str,
+        file_bytes: bytes,
+        texture_type: str,
+        model: str = "",
+        is_public: bool = False,
+    ):
+        """上传材质到用户库 → 应用到角色 →（皮肤时）更新模型。校验失败抛 ValueError。"""
+        texture_hash, _ = await self.upload_texture_to_library(
+            user_id,
+            file_bytes,
+            texture_type,
+            f"Direct upload to profile {profile_id}",
+            is_public=is_public,
+        )
+        await self.apply_texture_to_profile(
+            user_id, profile_id, texture_hash, texture_type
+        )
+        if texture_type.lower() == "skin":
+            m_val = normalize_texture_model(model)
+            await self.db.user.update_profile_texture_model(profile_id, m_val)
+        return {"ok": True}
+
+    async def list_my_textures(
+        self,
+        user_id: str,
+        cursor: str | None,
+        limit: int,
+        texture_type: str | None,
+    ) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_hash"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.texture.get_for_user_cursor(
+            user_id,
+            texture_type=texture_type,
+            limit=limit,
+            last_created_at=(key or {}).get("last_created_at"),
+            last_hash=(key or {}).get("last_hash"),
+        )
+        result["next_cursor"] = encode_next(result.pop("next_key"))
+        return result
+
+    async def list_my_profiles(self, user_id: str, cursor: str | None, limit: int) -> dict:
+        try:
+            key = decode_cursor(cursor, ("last_id",))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.user.get_profiles_by_user_cursor(
+            user_id, limit=limit, last_id=(key or {}).get("last_id")
+        )
+        return {
+            "items": [serialize_profile_summary(p) for p in result["items"]],
+            "has_next": result["has_next"],
+            "next_cursor": encode_next(result["next_key"]),
+            "page_size": result["page_size"],
+        }
+
+    async def get_my_texture_detail(self, user_id: str, texture_hash: str, texture_type: str) -> dict:
+        info = await self.db.texture.get_texture_info(user_id, texture_hash, texture_type)
+        if not info:
+            raise HTTPException(status_code=404, detail="Texture not found")
+        return info
+
+    async def update_my_texture(
+        self, user_id: str, texture_hash: str, texture_type: str, data: Dict[str, Any]
+    ) -> dict:
+        if "note" in data:
+            await self.db.texture.update_note(user_id, texture_hash, texture_type, data["note"])
+        if "model" in data:
+            await self.db.texture.update_model(user_id, texture_hash, texture_type, data["model"])
+        if "is_public" in data:
+            await self.db.texture.update_is_public(user_id, texture_hash, texture_type, data["is_public"])
+
+        info = await self.db.texture.get_texture_info(user_id, texture_hash, texture_type)
+        return {"ok": True, **info}
+
+    async def remove_my_texture(self, user_id: str, texture_hash: str, texture_type: str):
+        await self.db.texture.delete_from_library(user_id, texture_hash, texture_type)
+
+    async def add_texture_to_wardrobe(self, user_id: str, texture_hash: str):
+        success = await self.db.texture.add_to_user_wardrobe(user_id, texture_hash)
+        if not success:
+            raise HTTPException(status_code=404, detail="Texture not found in library")
+
+    async def get_public_skin_library(
+        self, cursor: str | None, limit: int, texture_type: str | None
+    ) -> dict:
+        enabled = await self.db.setting.get("enable_skin_library", "true")
+        if enabled != "true":
+            raise HTTPException(status_code=403, detail="Skin library is disabled by administrator")
+
+        try:
+            key = decode_cursor(cursor, ("last_created_at", "last_skin_hash"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        result = await self.db.texture.get_from_library_cursor(
+            limit=limit,
+            texture_type=texture_type,
+            only_public=True,
+            last_created_at=(key or {}).get("last_created_at"),
+            last_skin_hash=(key or {}).get("last_skin_hash"),
+        )
+        items_list = result["items"]
+        uploader_ids = list({item.get("uploader") for item in items_list if item.get("uploader")})
+        uploader_names = await self.db.user.get_display_names_by_ids(uploader_ids)
+
+        return {
+            "items": [
+                {**item, "uploader_name": uploader_names.get(item.get("uploader"), "")}
+                for item in items_list
+            ],
+            "has_next": result["has_next"],
+            "next_cursor": encode_next(result["next_key"]),
+            "page_size": result["page_size"],
+        }
 
     async def _generate_profile_uuid(self, profile_name: str) -> str:
         mode = (await self.db.setting.get("profile_uuid_mode", "random") or "random").strip().lower()
@@ -38,129 +177,6 @@ class SiteBackend:
         return profile_id
 
     # ========== Auth & User ==========
-
-    async def get_ygg_profiles(self, api_url: str, username: str, password: str):
-        client = YggdrasilClient(api_url)
-        try:
-            result = await client.authenticate(username, password)
-            # Standard Yggdrasil authenticate response
-            profiles = result.get("availableProfiles", [])
-            return {"profiles": profiles}
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
-
-    async def _import_single_ygg_profile(
-        self,
-        user_id: str,
-        api_url: str,
-        profile_id: str,
-        profile_name: str,
-        client: YggdrasilClient,
-    ):
-        profile_data = await client.get_profile_with_textures(profile_id)
-
-        if await self.db.user.get_profile_by_id(profile_id):
-            raise HTTPException(status_code=400, detail="该角色 UUID 已在本地存在，无法导入")
-
-        target_name = profile_name
-        suffix = 1
-        while True:
-            existing = await self.db.user.get_profile_by_name(target_name)
-            if not existing:
-                break
-            target_name = f"{profile_name}_{suffix}"
-            suffix += 1
-            if suffix > 100:
-                raise HTTPException(status_code=400, detail="无法生成唯一的角色名称")
-
-        skin_hash = None
-        skin_model = "default"
-        if profile_data.get("skins"):
-            skin_url = profile_data["skins"][0]["url"]
-            skin_variant = profile_data["skins"][0].get("variant", "classic")
-            skin_model = "slim" if skin_variant == "slim" else "default"
-            try:
-                skin_bytes = await download_texture(skin_url)
-                skin_hash, _ = await self.db.texture.upload(
-                    user_id, skin_bytes, "skin", f"Imported from {api_url}", is_public=False, model=skin_model
-                )
-            except Exception as e:
-                print(f"Failed to download/upload skin: {e}")
-
-        cape_hash = None
-        if profile_data.get("capes"):
-            cape_url = profile_data["capes"][0]["url"]
-            try:
-                cape_bytes = await download_texture(cape_url)
-                cape_hash, _ = await self.db.texture.upload(
-                    user_id, cape_bytes, "cape", f"Imported from {api_url}", is_public=False
-                )
-            except Exception as e:
-                print(f"Failed to download/upload cape: {e}")
-
-        await self.db.user.create_profile(
-            PlayerProfile(profile_id, user_id, target_name, skin_model)
-        )
-
-        if skin_hash:
-            await self.db.user.update_profile_skin(profile_id, skin_hash)
-        if cape_hash:
-            await self.db.user.update_profile_cape(profile_id, cape_hash)
-
-        return {"id": profile_id, "name": target_name}
-
-    async def import_ygg_profile(self, user_id: str, api_url: str, profile_id: str, profile_name: str):
-        client = YggdrasilClient(api_url)
-        try:
-            return await self._import_single_ygg_profile(user_id, api_url, profile_id, profile_name, client)
-        except Exception as e:
-            if isinstance(e, HTTPException):
-                raise e
-            raise HTTPException(status_code=400, detail=str(e))
-
-    async def import_ygg_profiles(self, user_id: str, api_url: str, profiles: List[Dict[str, str]]):
-        if not isinstance(profiles, list):
-            raise HTTPException(status_code=400, detail="profiles must be a list")
-        if not profiles:
-            raise HTTPException(status_code=400, detail="profiles cannot be empty")
-
-        client = YggdrasilClient(api_url)
-        succeeded = []
-        failed = []
-
-        for profile in profiles:
-            profile_id = str(profile.get("profile_id", "")).strip()
-            profile_name = str(profile.get("profile_name", "")).strip()
-            if not profile_id or not profile_name:
-                failed.append({
-                    "profile_id": profile_id,
-                    "profile_name": profile_name,
-                    "detail": "profile_id and profile_name are required",
-                })
-                continue
-
-            try:
-                result = await self._import_single_ygg_profile(user_id, api_url, profile_id, profile_name, client)
-                succeeded.append(result)
-            except HTTPException as exc:
-                failed.append({
-                    "profile_id": profile_id,
-                    "profile_name": profile_name,
-                    "detail": exc.detail,
-                })
-            except Exception as exc:
-                failed.append({
-                    "profile_id": profile_id,
-                    "profile_name": profile_name,
-                    "detail": str(exc),
-                })
-
-        return {
-            "items": succeeded,
-            "success_count": len(succeeded),
-            "failure_count": len(failed),
-            "failed": failed,
-        }
 
     async def send_verification_code(self, email: str, type: str):
         # Check if email verification is enabled
@@ -289,16 +305,14 @@ class SiteBackend:
 
         base_name = email.split("@")[0]
         base_name = re.sub(r"[^a-zA-Z0-9_]", "_", base_name)[:12]
-        profile_name = base_name
-        suffix = 1
-        while True:
-            existing = await self.db.user.get_profile_by_name(profile_name)
-            if not existing:
-                break
-            profile_name = f"{base_name}_{suffix}"
-            suffix += 1
-            if suffix > 100:
-                raise HTTPException(status_code=500, detail="无法生成唯一角色名")
+
+        async def _name_exists(n: str) -> bool:
+            return await self.db.user.get_profile_by_name(n) is not None
+
+        try:
+            profile_name = await generate_unique_profile_name(base_name, _name_exists)
+        except ValueError:
+            raise HTTPException(status_code=500, detail="无法生成唯一角色名")
 
         profile_id = await self._generate_profile_uuid(profile_name)
 
@@ -333,7 +347,7 @@ class SiteBackend:
         return {
             "id": user_row.id,
             "email": user_row.email,
-            "lang": user_row.preferredLanguage,
+            "lang": user_row.preferred_language,
             "display_name": user_row.display_name,
             "is_admin": bool(user_row.is_admin),
             "banned_until": user_row.banned_until,
@@ -451,7 +465,7 @@ class SiteBackend:
         if not name:
             raise HTTPException(status_code=400, detail="name required")
 
-        if not re.match(r"^[a-zA-Z0-9_]{1,16}$", name):
+        if not is_valid_profile_name(name):
             raise HTTPException(
                 status_code=400,
                 detail="角色名只能包含字母、数字、下划线，长度1-16字符",
@@ -476,8 +490,8 @@ class SiteBackend:
 
         if not name:
             raise HTTPException(status_code=400, detail="name required")
-        
-        if not re.match(r"^[a-zA-Z0-9_]{1,16}$", name):
+
+        if not is_valid_profile_name(name):
             raise HTTPException(
                 status_code=400,
                 detail="角色名只能包含字母、数字、下划线，长度1-16字符",
@@ -550,6 +564,3 @@ class SiteBackend:
         # Sort by name (or could be by mtime)
         images.sort()
         return images
-    
-    async def get_fallback_services(self) -> list[dict]:
-        return await self.db.fallback.list_endpoints()

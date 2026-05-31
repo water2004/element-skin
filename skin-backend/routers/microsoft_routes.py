@@ -1,77 +1,35 @@
 """Microsoft 正版验证模块路由"""
 
-from fastapi import APIRouter, Request, HTTPException, Depends, Body
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import APIRouter, HTTPException, Depends, Body
 from fastapi.responses import Response
 import time
 import secrets
-import hashlib
-import os
+import urllib.parse
 
-from backends.microsoft_backend import MicrosoftAuthService, download_texture
-from utils.jwt_utils import decode_jwt_token
-from utils.uuid_utils import generate_random_uuid
-from database_module import Database
+from backends.microsoft_backend import MicrosoftBackend
+from routers.deps import get_current_user
 
 router = APIRouter(prefix="/microsoft")
-security = HTTPBearer()
 
 
-def setup_routes(db: Database, config):
+def setup_routes(db, config, texture_storage):
     """设置路由（注入依赖）"""
+
+    microsoft_backend = MicrosoftBackend(db, config, texture_storage)
 
     # OAuth state 存储（生产环境应使用 Redis）
     oauth_states = {}
 
-    async def get_current_user(creds: HTTPAuthorizationCredentials = Depends(security)):
-        """获取当前用户"""
-        token = creds.credentials
-        payload = decode_jwt_token(token)
-        if not payload:
-            raise HTTPException(status_code=401, detail="invalid or expired token")
-        return payload
-
     @router.get("/auth-url")
     async def microsoft_get_auth_url(payload: dict = Depends(get_current_user)):
         """获取微软 OAuth 授权 URL"""
-        client_id = await db.setting.get("microsoft_client_id")
-        client_secret = await db.setting.get("microsoft_client_secret")
-
-        if not client_id or client_id == "":
-            raise HTTPException(
-                status_code=500,
-                detail="Microsoft OAuth not configured. Please contact administrator.",
-            )
-
-        if not client_secret or client_secret == "":
-            raise HTTPException(
-                status_code=500,
-                detail="Microsoft OAuth client_secret not configured. Please contact administrator.",
-            )
-
-        try:
-            # 生成 state 用于防 CSRF
-            state = secrets.token_urlsafe(32)
-            user_id = payload.get("sub")
-
-            # 存储 state 与用户 ID 的映射（10分钟过期）
-            oauth_states[state] = {
-                "user_id": user_id,
-                "expires_at": time.time() + 600,
-            }
-
-            # 获取 redirect_uri 配置
-            default_redirect = config.get("server.site_url", "http://localhost:8000").rstrip("/") + "/microsoft/callback"
-            redirect_uri = await db.setting.get(
-                "microsoft_redirect_uri", default_redirect
-            )
-
-            service = MicrosoftAuthService(client_id, client_secret, redirect_uri)
-            auth_url = service.get_authorization_url(state)
-
-            return {"auth_url": auth_url, "state": state}
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+        state = secrets.token_urlsafe(32)
+        auth_url = await microsoft_backend.get_authorization_url(state)
+        oauth_states[state] = {
+            "user_id": payload.get("sub"),
+            "expires_at": time.time() + 600,
+        }
+        return {"auth_url": auth_url, "state": state}
 
     @router.get("/callback")
     async def microsoft_callback(
@@ -102,23 +60,9 @@ def setup_routes(db: Database, config):
         user_id = session_data["user_id"]
         del oauth_states[state]  # 使用后立即删除
 
-        # 获取 OAuth 配置
-        client_id = await db.setting.get("microsoft_client_id")
-        client_secret = await db.setting.get("microsoft_client_secret")
-        default_redirect = config.get("server.site_url", "http://localhost:8000").rstrip("/") + "/microsoft/callback"
-        redirect_uri = await db.setting.get(
-            "microsoft_redirect_uri", default_redirect
-        )
-
+        frontend_url = config.get("server.site_url", "http://localhost:5173").rstrip("/")
         try:
-            service = MicrosoftAuthService(client_id, client_secret, redirect_uri)
-
-            # 交换授权码获取令牌
-            token_data = await service.exchange_code_for_token(code)
-            ms_access_token = token_data["access_token"]
-
-            # 执行完整认证链
-            profile = await service.complete_auth_flow(ms_access_token)
+            profile = await microsoft_backend.complete_auth_flow(code)
 
             if not profile.get("profile"):
                 raise Exception("No Minecraft Java Edition profile found for this account.")
@@ -130,31 +74,12 @@ def setup_routes(db: Database, config):
                 "profile": profile,
                 "expires_at": time.time() + 300,  # 5分钟
             }
-
-            # 重定向回前端
-            # 优先使用 server.site_url 作为前端地址（通常部署时 site_url 指向前端）
-            # 开发环境下默认为 localhost:5173
-            frontend_url = config.get("server.site_url", "http://localhost:5173")
-            
-            return Response(
-                status_code=302,
-                headers={
-                    "Location": f"{frontend_url.rstrip('/')}/dashboard/roles?ms_token={temp_token}"
-                },
-            )
-
+            location = f"{frontend_url}/dashboard/roles?ms_token={temp_token}"
         except Exception as e:
-            import urllib.parse
+            error_msg = urllib.parse.quote(str(e).replace("\n", " "))
+            location = f"{frontend_url}/dashboard/roles?error={error_msg}"
 
-            frontend_url = config.get("server.site_url", "http://localhost:5173")
-            error_msg = str(e).replace("\n", " ")
-            error_msg_encoded = urllib.parse.quote(error_msg)
-            return Response(
-                status_code=302,
-                headers={
-                    "Location": f"{frontend_url.rstrip('/')}/dashboard/roles?error={error_msg_encoded}"
-                },
-            )
+        return Response(status_code=302, headers={"Location": location})
 
     @router.post("/get-profile")
     async def microsoft_get_profile(
@@ -196,87 +121,18 @@ def setup_routes(db: Database, config):
         data: dict, payload: dict = Depends(get_current_user)
     ):
         """导入正版角色"""
-        user_id = payload.get("sub")
         profile_id = data.get("profile_id")
         profile_name = data.get("profile_name")
-        skin_url = data.get("skin_url")
-        skin_variant = data.get("skin_variant", "classic")
-        cape_url = data.get("cape_url")
-
         if not profile_id or not profile_name:
             raise HTTPException(status_code=400, detail="Missing required fields")
 
-        # 1. Check for conflicts
-        # Check UUID conflict (refuse import if UUID exists)
-        if await db.user.get_profile_by_id(profile_id):
-            raise HTTPException(status_code=400, detail="该角色 UUID 已在本地存在，无法导入")
-
-        # Check name conflict and auto-rename
-        target_name = profile_name
-        suffix = 1
-        while True:
-            existing = await db.user.get_profile_by_name(target_name)
-            if not existing:
-                break
-            target_name = f"{profile_name}_{suffix}"
-            suffix += 1
-            if suffix > 100:
-                 raise HTTPException(status_code=400, detail="无法生成唯一的角色名称")
-        
-        profile_name = target_name
-
-        skin_hash, cape_hash = None, None
-
-        # 下载并保存皮肤
-        if skin_url:
-            try:
-                skin_data = await download_texture(skin_url)
-                skin_hash, _ = await db.texture.upload(
-                    user_id,
-                    skin_data,
-                    "skin",
-                    f"From Microsoft account - {profile_name}",
-                )
-            except Exception as e:
-                print(f"Failed to download skin: {e}")
-
-        # 下载并保存披风
-        if cape_url:
-            try:
-                cape_data = await download_texture(cape_url)
-                cape_hash, _ = await db.texture.upload(
-                    user_id,
-                    cape_data,
-                    "cape",
-                    f"From Microsoft account - {profile_name}",
-                )
-            except Exception as e:
-                print(f"Failed to download cape: {e}")
-
-        from utils.typing import PlayerProfile
-
-        texture_model = "slim" if skin_variant == "slim" else "default"
-        await db.user.create_profile(
-            PlayerProfile(
-                profile_id, user_id, profile_name, texture_model
-            )
+        return await microsoft_backend.import_profile(
+            payload.get("sub"),
+            profile_id,
+            profile_name,
+            data.get("skin_url"),
+            data.get("skin_variant", "classic"),
+            data.get("cape_url"),
         )
-
-        if skin_hash:
-            await db.user.update_profile_skin(profile_id, skin_hash)
-        
-        if cape_hash:
-            await db.user.update_profile_cape(profile_id, cape_hash)
-
-        return {
-            "ok": True,
-            "profile": {
-                "id": profile_id,
-                "name": profile_name,
-                "model": texture_model,
-                "skin_hash": skin_hash,
-                "cape_hash": cape_hash,
-            },
-        }
 
     return router
