@@ -9,6 +9,11 @@ from contextlib import asynccontextmanager
 import os
 
 from config_loader import config
+from utils.logging_config import setup_logging
+
+# 尽早配置日志（级别由 server.debug 驱动），使后续各模块的 logger 生效
+setup_logging(config.get("server.debug", False))
+
 from database_module import Database
 from backends.yggdrasil_backend import YggdrasilBackend, YggdrasilError
 from backends.site_backend import SiteBackend

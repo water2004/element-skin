@@ -4,6 +4,7 @@
 """
 
 import aiohttp
+import logging
 import urllib.parse
 from typing import Optional, Dict, Tuple
 
@@ -13,6 +14,8 @@ from utils.profile_naming import generate_unique_profile_name
 from utils.typing import PlayerProfile, normalize_texture_model
 from utils.http import download_texture as download_texture
 from services import assert_texture_size
+
+logger = logging.getLogger(__name__)
 
 
 class MicrosoftAuthService:
@@ -347,5 +350,5 @@ class MicrosoftBackend:
             await self.db.texture.add_to_library(user_id, texture_hash, texture_type, note)
             return texture_hash
         except Exception as e:
-            print(f"Failed to download {texture_type}: {e}")
+            logger.warning("Failed to download %s: %s", texture_type, e)
             return None

@@ -1,12 +1,16 @@
 """Microsoft 正版验证模块路由"""
 
+import logging
+import secrets
+
 from fastapi import APIRouter, HTTPException, Depends, Body
 from fastapi.responses import Response
-import time
-import secrets
 
 from backends.microsoft_backend import MicrosoftBackend
 from routers.deps import get_current_user
+from utils.state_store import InMemoryStateStore
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/microsoft")
 
@@ -16,18 +20,16 @@ def setup_routes(db, config, texture_storage):
 
     microsoft_backend = MicrosoftBackend(db, config, texture_storage)
 
-    # OAuth state 存储（生产环境应使用 Redis）
-    oauth_states = {}
+    # OAuth state / 临时 token 存储：一次性、带 TTL。
+    # 内存实现仅支持单实例；多实例需换 Redis（见 utils/state_store.py）。
+    oauth_states = InMemoryStateStore()
 
     @router.get("/auth-url")
     async def microsoft_get_auth_url(payload: dict = Depends(get_current_user)):
         """获取微软 OAuth 授权 URL"""
         state = secrets.token_urlsafe(32)
         auth_url = await microsoft_backend.get_authorization_url(state)
-        oauth_states[state] = {
-            "user_id": payload.get("sub"),
-            "expires_at": time.time() + 600,
-        }
+        oauth_states.put(state, {"user_id": payload.get("sub")}, ttl_seconds=600)
         return {"auth_url": auth_url, "state": state}
 
     @router.get("/callback")
@@ -45,19 +47,12 @@ def setup_routes(db, config, texture_storage):
                 status_code=400, detail="Missing code or state parameter"
             )
 
-        # 验证 state
-        if state not in oauth_states:
-            raise HTTPException(status_code=400, detail="Invalid state parameter")
-
-        session_data = oauth_states[state]
-
-        # 检查是否过期
-        if time.time() > session_data["expires_at"]:
-            del oauth_states[state]
-            raise HTTPException(status_code=400, detail="State expired")
+        # 验证 state（pop 取出即删，过期返回 None）
+        session_data = oauth_states.pop(state)
+        if not session_data:
+            raise HTTPException(status_code=400, detail="Invalid or expired state parameter")
 
         user_id = session_data["user_id"]
-        del oauth_states[state]  # 使用后立即删除
 
         frontend_url = config.get("server.site_url", "http://localhost:5173").rstrip("/")
         try:
@@ -68,15 +63,15 @@ def setup_routes(db, config, texture_storage):
 
             # 将 profile 数据临时存储，供前端获取
             temp_token = secrets.token_urlsafe(32)
-            oauth_states[temp_token] = {
-                "user_id": user_id,
-                "profile": profile,
-                "expires_at": time.time() + 300,  # 5分钟
-            }
+            oauth_states.put(
+                temp_token,
+                {"user_id": user_id, "profile": profile},
+                ttl_seconds=300,  # 5分钟
+            )
             location = f"{frontend_url}/dashboard/roles?ms_token={temp_token}"
         except Exception as e:
             # 不把内部异常细节回显到重定向 URL（避免信息泄露），仅记录到服务端日志。
-            print(f"Microsoft OAuth callback failed: {e}")
+            logger.warning("Microsoft OAuth callback failed: %s", e)
             location = f"{frontend_url}/dashboard/roles?error=auth_failed"
 
         return Response(status_code=302, headers={"Location": location})
@@ -89,22 +84,16 @@ def setup_routes(db, config, texture_storage):
         """使用临时 token 获取 profile 数据"""
         user_id = payload.get("sub")
 
-        if ms_token not in oauth_states:
+        # pop 取出即删（一次性），过期返回 None
+        session_data = oauth_states.pop(ms_token)
+        if not session_data:
             raise HTTPException(status_code=400, detail="Invalid or expired token")
-
-        session_data = oauth_states[ms_token]
-
-        # 检查是否过期
-        if time.time() > session_data["expires_at"]:
-            del oauth_states[ms_token]
-            raise HTTPException(status_code=400, detail="Token expired")
 
         # 验证用户 ID
         if session_data["user_id"] != user_id:
             raise HTTPException(status_code=403, detail="Unauthorized")
 
         profile = session_data["profile"]
-        del oauth_states[ms_token]  # 使用后删除
 
         return {
             "profile": {

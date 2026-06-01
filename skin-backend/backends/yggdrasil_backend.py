@@ -1,6 +1,7 @@
 import time
 import json
 import base64
+import logging
 from typing import Dict, Optional, Tuple
 
 from utils.crypto import CryptoUtils
@@ -9,6 +10,8 @@ from utils.uuid_utils import generate_random_uuid
 from utils.password_utils import hash_password, verify_password
 from database_module import Database
 from services import TextureStorage, assert_texture_size
+
+logger = logging.getLogger(__name__)
 
 
 class YggdrasilError(Exception):
@@ -358,7 +361,7 @@ class YggdrasilBackend:
         except Exception as e:
             if isinstance(e, YggdrasilError):
                 raise
-            print(f"Texture processing error: {e}")
+            logger.warning("Texture processing error: %s", e)
             raise IllegalArgumentException("Failed to process texture")
 
     async def delete_texture(self, access_token: str, uuid: str, texture_type: str):

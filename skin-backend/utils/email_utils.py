@@ -1,9 +1,12 @@
+import logging
 import aiosmtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.header import Header
 from email.utils import formataddr, parseaddr
 from database_module import Database
+
+logger = logging.getLogger(__name__)
 
 class EmailSender:
     def __init__(self, db: Database):
@@ -27,7 +30,7 @@ class EmailSender:
             return False
 
         if not settings["host"]:
-             print("SMTP host not configured.")
+             logger.warning("SMTP host not configured.")
              return False
 
         subject = "SkinServer 验证码"
@@ -83,5 +86,5 @@ class EmailSender:
             )
             return True
         except Exception as e:
-            print(f"Failed to send email: {e}")
+            logger.error("Failed to send email: %s", e)
             return False

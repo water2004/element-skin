@@ -1,5 +1,6 @@
 """远程 Yggdrasil 角色导入后端"""
 
+import logging
 from typing import Dict, List
 
 from fastapi import HTTPException
@@ -9,6 +10,8 @@ from utils.profile_naming import generate_unique_profile_name
 from utils.typing import PlayerProfile, normalize_texture_model
 from database_module import Database
 from services import TextureStorage, assert_texture_size
+
+logger = logging.getLogger(__name__)
 
 
 class ProfileImportBackend:
@@ -65,7 +68,7 @@ class ProfileImportBackend:
                     user_id, skin_bytes, "skin", f"Imported from {api_url}", model=skin_model
                 )
             except Exception as e:
-                print(f"Failed to download/upload skin: {e}")
+                logger.warning("Failed to download/upload skin: %s", e)
 
         cape_hash = None
         if profile_data.get("capes"):
@@ -76,7 +79,7 @@ class ProfileImportBackend:
                     user_id, cape_bytes, "cape", f"Imported from {api_url}"
                 )
             except Exception as e:
-                print(f"Failed to download/upload cape: {e}")
+                logger.warning("Failed to download/upload cape: %s", e)
 
         await self.db.user.create_profile(
             PlayerProfile(profile_id, user_id, target_name, skin_model)

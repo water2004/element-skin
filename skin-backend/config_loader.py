@@ -4,8 +4,11 @@
 """
 
 import os
+import logging
 import yaml
 from typing import Any, Dict
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -20,7 +23,7 @@ class Config:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 self._data = yaml.safe_load(f) or {}
         else:
-            print(f"Warning: Config file {self.config_path} not found, using defaults")
+            logger.warning("Config file %s not found, using defaults", self.config_path)
             self._data = self._get_defaults()
         self._normalize_fallbacks()
 
