@@ -65,10 +65,10 @@ export interface SiteSettings {
   mojang_status_urls?: Record<string, string>
 }
 
-// Auth responses
+// Auth responses（token 现在通过 HttpOnly cookie 下发，不再出现在 body）
 export interface LoginResponse {
-  token: string
   user_id: string
+  is_admin: boolean
 }
 
 // Invite code

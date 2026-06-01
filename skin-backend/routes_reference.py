@@ -47,8 +47,11 @@ _deps.bind_db(db)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
+    import time
     await db.connect()
     await db.init()
+    # 启动时清理一次过期的站点 refresh token
+    await db.user.delete_expired_refresh_tokens(int(time.time() * 1000))
     try:
         yield
     finally:

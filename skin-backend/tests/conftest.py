@@ -9,7 +9,7 @@ from httpx import AsyncClient, ASGITransport
 
 # 导入应用实例和配置对象
 from routes_reference import app, db, config, site_backend, admin_backend, ygg_backend, crypto, texture_storage
-from utils.jwt_utils import create_jwt_token
+from utils.jwt_utils import create_access_token
 from utils.typing import User
 from utils.password_utils import hash_password
 from utils.uuid_utils import generate_random_uuid
@@ -116,14 +116,14 @@ def user_factory(db_session):
 @pytest.fixture
 async def auth_headers(user_factory):
     user = await user_factory(is_admin=False)
-    token = create_jwt_token(user.id, is_admin=False, expire_days=1)
-    return {"cookies": {"jwt": token}, "X-User-ID": user.id}
+    token = create_access_token(user.id, is_admin=False)
+    return {"cookies": {"access_token": token}, "X-User-ID": user.id}
 
 @pytest.fixture
 async def admin_headers(user_factory):
     user = await user_factory(is_admin=True)
-    token = create_jwt_token(user.id, is_admin=True, expire_days=1)
-    return {"cookies": {"jwt": token}, "X-User-ID": user.id}
+    token = create_access_token(user.id, is_admin=True)
+    return {"cookies": {"access_token": token}, "X-User-ID": user.id}
 
 @pytest.fixture
 def site_backend_fixture(db_session):

@@ -17,9 +17,12 @@ async def test_api_site_login_success(client, user_factory):
     assert resp.status_code == 200
     data = resp.json()
     assert "user_id" in data
-    # token 现在通过 Set-Cookie header 返回
+    assert data["is_admin"] is False
+    # token 现在通过 Set-Cookie header 返回（access + refresh 两个）
     assert "set-cookie" in resp.headers
-    assert "jwt=" in resp.headers["set-cookie"]
+    set_cookie = resp.headers["set-cookie"]
+    assert "access_token=" in set_cookie
+    assert "refresh_token=" in set_cookie
 
 @pytest.mark.asyncio
 async def test_api_get_me_info(client, auth_headers):
@@ -61,12 +64,12 @@ async def test_deleted_user_token_is_rejected(client, auth_headers, db_session):
 @pytest.mark.asyncio
 async def test_admin_token_loses_access_after_demotion(client, db_session, user_factory):
     """携带 is_admin=true 的旧 JWT，在用户被降权后不应再通过 admin 校验。"""
-    from utils.jwt_utils import create_jwt_token
+    from utils.jwt_utils import create_access_token
 
     user = await user_factory(is_admin=True)
     # 颁发一个 is_admin=True 的 token
-    token = create_jwt_token(user.id, is_admin=True, expire_days=1)
-    cookies = {"jwt": token}
+    token = create_access_token(user.id, is_admin=True)
+    cookies = {"access_token": token}
 
     # 降权（DB 内 is_admin -> False）
     await db_session.user.toggle_admin(user.id)

@@ -2,7 +2,7 @@
 
 from fastapi import Request, HTTPException, Depends
 
-from utils.jwt_utils import decode_jwt_token
+from utils.jwt_utils import decode_access_token
 
 
 # 由 routes_reference 在应用初始化时通过 bind_db(db) 注入。
@@ -17,7 +17,7 @@ def bind_db(db) -> None:
 
 
 async def get_current_user(request: Request) -> dict:
-    """从 cookie 解析 JWT 并校验账号实时状态，返回 payload。
+    """从 cookie 解析 access token 并校验账号实时状态，返回 payload。
 
     在解析 token 之外，额外查库校验：
     - 用户仍存在（删号后旧 token 立即失效）；
@@ -26,10 +26,10 @@ async def get_current_user(request: Request) -> dict:
     注意：封禁（banned_until）**不**在此拦截——封禁仅限制通过 Yggdrasil
     登录游戏（见 yggdrasil_backend），被封禁用户仍可正常访问主站。
     """
-    token = request.cookies.get("jwt")
+    token = request.cookies.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="not authenticated")
-    payload = decode_jwt_token(token)
+    payload = decode_access_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="invalid or expired token")
 

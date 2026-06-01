@@ -154,3 +154,54 @@ async def login(self, email, password):
 ## 风险与回滚
 
 中风险，主因是 **4.1 改变了鉴权热路径**（每请求多一次 DB 查询）与**测试假设**（token 不再独立于 DB 用户存在）。若性能敏感，后续可加用户状态短 TTL 缓存。各子项相对独立：4.2/4.3/4.4 可与 4.1 分开提交、独立 revert。
+
+---
+
+## 后续升级：access token + refresh token（2026-05）
+
+阶段 4 的鉴权仍是「单一长效 JWT（7 天）+ 每请求查库」。本次升级改为标准的
+**短效 access token + 长效可撤销 refresh token** 模型，缩短无状态 token 的有效窗口，
+并让登出/改密真正能使会话失效。详见 `docs/access-refresh-token-plan.md`。
+
+### 模型
+
+| 项 | 说明 |
+|---|---|
+| access token | 无状态 JWT，cookie `access_token`，有效期 30 分钟（`payload.type=="access"`） |
+| refresh token | 不透明随机串（`secrets.token_urlsafe(48)`），cookie `refresh_token`，有效期沿用 `jwt_expire_days`（默认 7 天） |
+| 存储 | refresh 只存 **SHA-256 哈希** 于新表 `site_refresh_tokens`；access 不入库 |
+| 轮换 | **每次刷新即轮换**：校验旧 refresh → 删旧行 → 写新行 → 同时下发新 access+refresh。旧 refresh 一次性作废 |
+| 撤销 | 登出撤销当前 refresh；改密/重置密码撤销该用户**全部** refresh；删号级联删除 |
+
+### 鉴权语义（不变）
+
+- `get_current_user` 仍每请求查库校验「用户存在 + 以库内 `is_admin` 为准」，删号/降权即时生效。
+  唯一变化：读 `access_token` cookie、用 `decode_access_token`。
+- **封禁仍不在站点层拦截**——封禁只影响 Yggdrasil 游戏登录（语义同上方说明）。
+
+### 端点变化
+
+- `POST /site-login`：set `access_token` + `refresh_token` 两个 httponly cookie；body `{user_id, is_admin}`。
+- `POST /site-logout`：读 refresh cookie → 撤销 → 删两个 cookie。
+- `POST /me/refresh-token`：**不再依赖 access token**（access 过期时也可调用）；读 refresh cookie →
+  轮换 → set 新的两个 cookie，body `{is_admin}`；缺失/无效 refresh → 401。
+
+### 前端
+
+`src/api/client.ts` 加 axios 响应拦截器：401 时自动调 `/me/refresh-token`（cookie 自动携带）→
+成功则重试原请求；刷新失败或刷新端点自身 401 → 跳 `/login`。并发 401 共享单个刷新 Promise 去重，
+`/me/refresh-token`、`/site-login`、`/site-logout` 自身 401 不触发刷新（防死循环）。
+
+### 数据库迁移
+
+新表 `site_refresh_tokens(token_hash PK, user_id FK, expires_at, created_at)` + 两个索引，
+全部 `CREATE TABLE/INDEX IF NOT EXISTS`，对旧库幂等即迁移（无需 ALTER）。
+启动 `lifespan` 顺手清理一次过期 refresh。
+
+### 影响文件
+
+- 后端：`database_module/initsql.py`、`database_module/modules/user.py`、`utils/jwt_utils.py`、
+  `backends/site_backend.py`、`routers/deps.py`、`routers/site_routes.py`、`routes_reference.py`。
+- 前端：`src/api/client.ts`、`src/api/me.ts`、`src/api/types.ts`。
+- 测试：`tests/conftest.py`、`tests/api/test_site_api.py`、`tests/api/test_integration.py`、
+  `tests/backends/test_site_backend.py`、`tests/database/test_user.py`、新增 `tests/api/test_refresh_token.py`。

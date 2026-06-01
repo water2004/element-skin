@@ -13,11 +13,22 @@ from fastapi import (
 from fastapi.responses import JSONResponse
 from typing import Optional
 
-from utils.jwt_utils import get_cookie_settings
+from utils.jwt_utils import get_access_cookie_settings, get_refresh_cookie_settings
 from routers.deps import get_current_user
 from config_loader import Config
 
 router = APIRouter()
+
+
+def _set_session_cookies(response: JSONResponse, access_token: str, refresh_token: str) -> None:
+    """在响应上写入 access + refresh 两个 httponly cookie。"""
+    access_cookie = get_access_cookie_settings()
+    access_cookie["value"] = access_token
+    response.set_cookie(**access_cookie)
+
+    refresh_cookie = get_refresh_cookie_settings()
+    refresh_cookie["value"] = refresh_token
+    response.set_cookie(**refresh_cookie)
 
 
 def setup_routes(site_backend, profile_import_backend, settings_backend, rate_limiter, config: Config):
@@ -29,16 +40,18 @@ def setup_routes(site_backend, profile_import_backend, settings_backend, rate_li
         result = await site_backend.login(req.get("email"), req.get("password"))
         rate_limiter.reset(request.client.host, request.url.path)
 
-        cookie = get_cookie_settings()
-        cookie["value"] = result["token"]
-        response = JSONResponse(content={"user_id": result["user_id"]})
-        response.set_cookie(**cookie)
+        response = JSONResponse(content={"user_id": result["user_id"], "is_admin": result["is_admin"]})
+        _set_session_cookies(response, result["access_token"], result["refresh_token"])
         return response
 
     @router.post("/site-logout")
-    async def site_logout():
+    async def site_logout(request: Request):
+        raw_refresh = request.cookies.get("refresh_token")
+        if raw_refresh:
+            await site_backend.revoke_refresh_token(raw_refresh)
         response = JSONResponse(content={"ok": True})
-        response.delete_cookie("jwt", path="/")
+        response.delete_cookie("access_token", path="/")
+        response.delete_cookie("refresh_token", path="/")
         return response
 
     @router.post("/register")
@@ -83,12 +96,13 @@ def setup_routes(site_backend, profile_import_backend, settings_backend, rate_li
         return await site_backend.get_user_info(payload.get("sub"))
 
     @router.post("/me/refresh-token")
-    async def refresh_jwt(payload: dict = Depends(get_current_user)):
-        result = await site_backend.refresh_token(payload.get("sub"))
-        cookie = get_cookie_settings()
-        cookie["value"] = result["token"]
+    async def refresh_jwt(request: Request):
+        raw_refresh = request.cookies.get("refresh_token")
+        if not raw_refresh:
+            raise HTTPException(status_code=401, detail="not authenticated")
+        result = await site_backend.rotate_refresh_token(raw_refresh)
         response = JSONResponse(content={"is_admin": result["is_admin"]})
-        response.set_cookie(**cookie)
+        _set_session_cookies(response, result["access_token"], result["refresh_token"])
         return response
 
     @router.patch("/me")

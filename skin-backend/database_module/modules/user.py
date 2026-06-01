@@ -76,6 +76,7 @@ class UserModule:
             async with conn.transaction():
                 await conn.execute("DELETE FROM profiles WHERE user_id=$1", user_id)
                 await conn.execute("DELETE FROM tokens WHERE user_id=$1", user_id)
+                await conn.execute("DELETE FROM site_refresh_tokens WHERE user_id=$1", user_id)
                 await conn.execute("DELETE FROM user_textures WHERE user_id=$1", user_id)
                 await conn.execute("DELETE FROM users WHERE id=$1", user_id)
 
@@ -442,8 +443,33 @@ class UserModule:
             user_id, keep,
         )
             
+    # ========== Site Refresh Tokens ==========
+    # 站点会话的 refresh token（不透明随机串，库中仅存 SHA-256 哈希）。
+    # 与 Yggdrasil 游戏令牌的 tokens 表完全无关。
+
+    async def add_refresh_token(self, token_hash: str, user_id: str, expires_at: int, created_at: int):
+        await self.db.execute(
+            "INSERT INTO site_refresh_tokens (token_hash, user_id, expires_at, created_at) VALUES ($1, $2, $3, $4)",
+            token_hash, user_id, expires_at, created_at,
+        )
+
+    async def get_refresh_token(self, token_hash: str):
+        return await self.db.fetchrow(
+            "SELECT token_hash, user_id, expires_at, created_at FROM site_refresh_tokens WHERE token_hash=$1",
+            token_hash,
+        )
+
+    async def delete_refresh_token(self, token_hash: str):
+        await self.db.execute("DELETE FROM site_refresh_tokens WHERE token_hash=$1", token_hash)
+
+    async def delete_refresh_tokens_by_user(self, user_id: str):
+        await self.db.execute("DELETE FROM site_refresh_tokens WHERE user_id=$1", user_id)
+
+    async def delete_expired_refresh_tokens(self, cutoff: int):
+        await self.db.execute("DELETE FROM site_refresh_tokens WHERE expires_at < $1", cutoff)
+
     # ========== Sessions ==========
-    
+
     async def add_session(self, session: Session):
         await self.db.execute(
             "INSERT INTO sessions (server_id, access_token, ip, created_at) VALUES ($1, $2, $3, $4)",

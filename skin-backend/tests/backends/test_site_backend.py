@@ -29,7 +29,9 @@ async def test_site_auth_flow(db_session, test_config):
     # 2. 登录
     login_res = await backend.login(email, password)
     assert login_res["user_id"] == uid
-    assert "token" in login_res
+    assert "access_token" in login_res
+    assert "refresh_token" in login_res
+    assert login_res["is_admin"] is True
     
     # 3. 修改密码
     new_password = "NewStrongPassword456!"

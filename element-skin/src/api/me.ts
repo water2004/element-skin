@@ -22,6 +22,6 @@ export function changePassword(data: { old_password: string; new_password: strin
   return client.post('/me/password', data)
 }
 
-export function refreshToken(): Promise<{ data: { token: string; is_admin: boolean } }> {
+export function refreshToken(): Promise<{ data: { is_admin: boolean } }> {
   return client.post('/me/refresh-token')
 }

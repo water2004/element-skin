@@ -8,7 +8,7 @@ from fastapi import HTTPException
 
 from utils.password_utils import hash_password, verify_password, needs_rehash
 from utils.password_utils import validate_strong_password
-from utils.jwt_utils import create_jwt_token
+from utils.jwt_utils import create_access_token, generate_refresh_token, hash_refresh_token
 from utils.email_utils import EmailSender
 from utils.uuid_utils import generate_random_uuid, get_offline_uuid
 from utils.profile_naming import is_valid_profile_name, generate_unique_profile_name
@@ -257,11 +257,26 @@ class SiteBackend:
             new_hash = hash_password(password)
             await self.db.user.update_password(user_id, new_hash)
 
-        expire_days_str = await self.db.setting.get("jwt_expire_days", "7")
-        expire_days = int(expire_days_str)
-        token = create_jwt_token(user_id, bool(is_admin), expire_days)
+        return await self._issue_session(user_id, bool(is_admin), extra={"user_id": user_id})
 
-        return {"token": token, "user_id": user_id}
+    async def _issue_session(self, user_id: str, is_admin: bool, extra: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        """签发一对 access + refresh：access 为无状态 JWT，refresh 入库（存哈希）。"""
+        expire_days = int(await self.db.setting.get("jwt_expire_days", "7"))
+        now_ms = int(time.time() * 1000)
+        expires_at = now_ms + expire_days * 24 * 3600 * 1000
+
+        access_token = create_access_token(user_id, is_admin)
+        raw_refresh, refresh_hash = generate_refresh_token()
+        await self.db.user.add_refresh_token(refresh_hash, user_id, expires_at, now_ms)
+
+        result = {
+            "access_token": access_token,
+            "refresh_token": raw_refresh,
+            "is_admin": is_admin,
+        }
+        if extra:
+            result.update(extra)
+        return result
 
     async def register(self, email, password, username, invite_code=None, verification_code=None) -> str:
         if not username or not username.strip():
@@ -368,17 +383,34 @@ class SiteBackend:
             "texture_count": texture_count,
         }
 
-    async def refresh_token(self, user_id: str) -> Dict[str, Any]:
+    async def rotate_refresh_token(self, raw_refresh: str) -> Dict[str, Any]:
+        """用 refresh token 换发新一对令牌，并轮换 refresh（旧的一次性作废）。
+
+        校验失败（缺失/未知/过期/用户已删）一律抛 401。
+        """
+        token_hash = hash_refresh_token(raw_refresh)
+        row = await self.db.user.get_refresh_token(token_hash)
+        if not row:
+            raise HTTPException(status_code=401, detail="invalid refresh token")
+
+        user_id = row["user_id"]
+        expires_at = row["expires_at"]
+        if int(time.time() * 1000) >= expires_at:
+            await self.db.user.delete_refresh_token(token_hash)
+            raise HTTPException(status_code=401, detail="refresh token expired")
+
         user_row = await self.db.user.get_by_id(user_id)
         if not user_row:
-            raise HTTPException(status_code=404, detail="user not found")
+            await self.db.user.delete_refresh_token(token_hash)
+            raise HTTPException(status_code=401, detail="invalid refresh token")
 
-        is_admin = bool(user_row.is_admin)
-        expire_days_str = await self.db.setting.get("jwt_expire_days", "7")
-        expire_days = int(expire_days_str)
-        token = create_jwt_token(user_id, is_admin, expire_days)
+        # 轮换：作废旧 refresh，再签发新的一对
+        await self.db.user.delete_refresh_token(token_hash)
+        return await self._issue_session(user_id, bool(user_row.is_admin))
 
-        return {"token": token, "is_admin": is_admin}
+    async def revoke_refresh_token(self, raw_refresh: str):
+        """撤销单个 refresh token（登出用）。找不到也无所谓。"""
+        await self.db.user.delete_refresh_token(hash_refresh_token(raw_refresh))
 
     async def update_user_info(self, user_id: str, data: Dict[str, Any]):
         if "email" in data and data["email"]:
@@ -456,7 +488,10 @@ class SiteBackend:
 
         new_hash = hash_password(new_password)
         await self.db.user.update_password(user.id, new_hash)
-        
+
+        # 改密使该用户其它所有会话失效（强制重新登录）
+        await self.db.user.delete_refresh_tokens_by_user(user.id)
+
         await self.db.verification.delete_code(email, "reset")
         return True
 
@@ -478,6 +513,9 @@ class SiteBackend:
 
         new_hash = hash_password(new_password)
         await self.db.user.update_password(user_id, new_hash)
+
+        # 改密使该用户其它所有会话失效（强制重新登录）
+        await self.db.user.delete_refresh_tokens_by_user(user_id)
         return True
 
     # ========== Profile ==========

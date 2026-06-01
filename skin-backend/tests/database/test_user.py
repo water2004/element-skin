@@ -155,6 +155,52 @@ async def test_token_and_session(db_session, user_factory):
     assert (await db_session.user.get_session("server_id")) is None
 
 @pytest.mark.asyncio
+async def test_refresh_token_crud(db_session, user_factory):
+    """站点 refresh token：增/查/单删/按用户删/过期清理。"""
+    user = await user_factory()
+    now = int(time.time() * 1000)
+    future = now + 7 * 24 * 3600 * 1000
+
+    # 增 + 查
+    await db_session.user.add_refresh_token("hash_a", user.id, future, now)
+    row = await db_session.user.get_refresh_token("hash_a")
+    assert row is not None
+    assert row["user_id"] == user.id
+    assert row["expires_at"] == future
+
+    # 单条撤销
+    await db_session.user.delete_refresh_token("hash_a")
+    assert (await db_session.user.get_refresh_token("hash_a")) is None
+
+    # 按用户批量撤销
+    await db_session.user.add_refresh_token("hash_b", user.id, future, now)
+    await db_session.user.add_refresh_token("hash_c", user.id, future, now)
+    await db_session.user.delete_refresh_tokens_by_user(user.id)
+    assert (await db_session.user.get_refresh_token("hash_b")) is None
+    assert (await db_session.user.get_refresh_token("hash_c")) is None
+
+    # 过期清理：只删早于 cutoff 的
+    past = now - 10000
+    await db_session.user.add_refresh_token("hash_old", user.id, past, now)
+    await db_session.user.add_refresh_token("hash_new", user.id, future, now)
+    await db_session.user.delete_expired_refresh_tokens(now)
+    assert (await db_session.user.get_refresh_token("hash_old")) is None
+    assert (await db_session.user.get_refresh_token("hash_new")) is not None
+
+
+@pytest.mark.asyncio
+async def test_delete_user_cascades_refresh_tokens(db_session, user_factory):
+    """删号应级联删除该用户的 refresh token。"""
+    user = await user_factory()
+    now = int(time.time() * 1000)
+    future = now + 7 * 24 * 3600 * 1000
+    await db_session.user.add_refresh_token("hash_del", user.id, future, now)
+
+    await db_session.user.delete(user.id)
+    assert (await db_session.user.get_refresh_token("hash_del")) is None
+
+
+@pytest.mark.asyncio
 async def test_list_and_search_users_cursor_field_mapping(db_session, user_factory):
     """游标列表/搜索的 User 字段映射必须精确：每字段取独立值，错位即变红"""
     user = await user_factory(email="mapper@test.com", username="MapName", is_admin=True)

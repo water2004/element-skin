@@ -56,11 +56,12 @@ async def test_login_flow(client, user_factory, db_session):
     # token 现在在 HttpOnly cookie 中，不再出现在 body 里
     assert "set-cookie" in response.headers
     cookie_header = response.headers["set-cookie"]
-    assert "jwt=" in cookie_header
+    assert "access_token=" in cookie_header
+    assert "refresh_token=" in cookie_header
     assert "HttpOnly" in cookie_header
 
-    # 从 cookie 中提取 token 用于 /me 验证
-    token = cookie_header.split("jwt=")[1].split(";")[0]
-    me_resp = await client.get("/me", cookies={"jwt": token})
+    # 从 cookie 中提取 access token 用于 /me 验证
+    token = cookie_header.split("access_token=")[1].split(";")[0]
+    me_resp = await client.get("/me", cookies={"access_token": token})
     assert me_resp.status_code == 200
     assert me_resp.json()["email"] == email

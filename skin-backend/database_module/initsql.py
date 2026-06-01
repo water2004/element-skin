@@ -47,6 +47,17 @@ CREATE TABLE IF NOT EXISTS tokens (
     created_at BIGINT NOT NULL
 );
 
+-- 创建站点 refresh token 表（与 Yggdrasil 游戏令牌的 tokens 表无关）
+-- 仅存 refresh token 的 SHA-256 哈希；access token 为无状态 JWT，不入库。
+-- 旧库升级：本表为新增表，CREATE TABLE IF NOT EXISTS 本身即迁移，无需 ALTER。
+CREATE TABLE IF NOT EXISTS site_refresh_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+);
+
 -- 创建会话表
 CREATE TABLE IF NOT EXISTS sessions (
     server_id TEXT PRIMARY KEY,
@@ -142,6 +153,10 @@ CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles (user_id, id);
 CREATE INDEX IF NOT EXISTS idx_tokens_user_created ON tokens (user_id, created_at);
 -- tokens：按角色删除（delete_tokens_by_profile）
 CREATE INDEX IF NOT EXISTS idx_tokens_profile_id ON tokens (profile_id);
+
+-- site_refresh_tokens：按用户批量撤销（改密/重置/删号）+ 按过期时间清理
+CREATE INDEX IF NOT EXISTS idx_site_refresh_user ON site_refresh_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_site_refresh_expires ON site_refresh_tokens (expires_at);
 
 -- user_textures：用户衣柜按 (created_at, hash) 游标分页（get_for_user_cursor）
 -- 排序为 created_at DESC, hash DESC，全 DESC 可由升序复合索引反向扫描满足
