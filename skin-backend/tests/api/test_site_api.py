@@ -25,13 +25,55 @@ async def test_api_site_login_success(client, user_factory):
 async def test_api_get_me_info(client, auth_headers):
     """测试获取当前用户信息接口"""
     resp = await client.get("/me", cookies=auth_headers["cookies"])
-    
+
     assert resp.status_code == 200
     data = resp.json()
     assert data["id"] == auth_headers["X-User-ID"]
     assert "profile_count" in data
     assert "texture_count" in data
     assert "profiles" not in data
+
+
+@pytest.mark.asyncio
+async def test_banned_user_is_rejected_on_site_api(client, auth_headers, db_session):
+    """封禁后，即使持有有效 JWT，站点 API 也应立即拒绝（403）。"""
+    user_id = auth_headers["X-User-ID"]
+    # 未封禁时可访问
+    assert (await client.get("/me", cookies=auth_headers["cookies"])).status_code == 200
+
+    import time
+    await db_session.user.ban(user_id, int((time.time() + 3600) * 1000))
+
+    resp = await client.get("/me", cookies=auth_headers["cookies"])
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_deleted_user_token_is_rejected(client, auth_headers, db_session):
+    """删号后旧 JWT 立即失效（401）。"""
+    user_id = auth_headers["X-User-ID"]
+    await db_session.user.delete(user_id)
+
+    resp = await client.get("/me", cookies=auth_headers["cookies"])
+    assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_admin_token_loses_access_after_demotion(client, db_session, user_factory):
+    """携带 is_admin=true 的旧 JWT，在用户被降权后不应再通过 admin 校验。"""
+    from utils.jwt_utils import create_jwt_token
+
+    user = await user_factory(is_admin=True)
+    # 颁发一个 is_admin=True 的 token
+    token = create_jwt_token(user.id, is_admin=True, expire_days=1)
+    cookies = {"jwt": token}
+
+    # 降权（DB 内 is_admin -> False）
+    await db_session.user.toggle_admin(user.id)
+
+    # 旧 token 仍声称 is_admin，但 deps 以 DB 为准，应拒绝管理员接口
+    resp = await client.get("/admin/users", cookies=cookies)
+    assert resp.status_code == 403
 
 @pytest.mark.asyncio
 async def test_api_get_me_profiles_paginated(client, auth_headers, db_session):

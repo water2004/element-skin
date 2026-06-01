@@ -19,6 +19,14 @@ from config_loader import Config
 from services import TextureStorage, assert_texture_size
 
 
+# 预先计算的 bcrypt 哈希，用于登录时对"用户不存在"分支做等时校验，
+# 抹平用户枚举的计时侧信道。值本身无意义（不会有人能匹配）。
+_DUMMY_PASSWORD_HASH = hash_password("dummy-password-for-timing-equalization")
+
+# 邮箱格式校验：基础但足够实用的正则（非严格 RFC 5322）
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 class SiteBackend:
     def __init__(
         self, db: Database, config: Config, texture_storage: TextureStorage
@@ -230,6 +238,9 @@ class SiteBackend:
     async def login(self, email, password) -> Dict[str, Any]:
         user_row = await self.db.user.get_by_email(email)
         if not user_row:
+            # 对不存在的用户也执行一次等价的 bcrypt 校验，使响应耗时与
+            # "用户存在但密码错误"相近，避免通过计时差异枚举注册邮箱。
+            verify_password(password, _DUMMY_PASSWORD_HASH)
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         user_id, email, password_hash, is_admin = (
@@ -255,7 +266,7 @@ class SiteBackend:
     async def register(self, email, password, username, invite_code=None, verification_code=None) -> str:
         if not username or not username.strip():
             raise HTTPException(status_code=400, detail="Username is required")
-        
+
         username = username.strip()
 
         # Check if username (display_name) is taken
@@ -371,7 +382,16 @@ class SiteBackend:
 
     async def update_user_info(self, user_id: str, data: Dict[str, Any]):
         if "email" in data and data["email"]:
-            await self.db.user.update_email(user_id, data["email"])
+            new_email = data["email"].strip()
+            # 基本邮箱格式校验
+            if not _EMAIL_RE.match(new_email):
+                raise HTTPException(status_code=400, detail="Invalid email format")
+            # 唯一性预检：直接写入会撞 DB 的 UNIQUE 约束抛出未处理异常(500)，
+            # 这里先查重并返回明确的 400。
+            existing = await self.db.user.get_by_email(new_email)
+            if existing and existing.id != user_id:
+                raise HTTPException(status_code=400, detail="Email already in use")
+            await self.db.user.update_email(user_id, new_email)
         
         if "display_name" in data and data["display_name"]:
             new_name = data["display_name"].strip()

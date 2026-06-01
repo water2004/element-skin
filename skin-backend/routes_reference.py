@@ -19,6 +19,7 @@ from services import TextureStorage
 from utils.crypto import CryptoUtils
 from utils.rate_limiter import RateLimiter
 from routers import yggdrasil_routes, site_routes, microsoft_routes, admin_routes
+from routers import deps as _deps
 
 # ========== 初始化核心组件 ==========
 db_dsn = config.get("database.dsn", "postgresql://elementskin:password@localhost:5432/elementskin")
@@ -33,6 +34,9 @@ site_backend = SiteBackend(db, config, texture_storage)
 profile_import_backend = ProfileImportBackend(db, texture_storage)
 admin_backend = AdminBackend(db, config)
 settings_backend = SettingsBackend(db)
+
+# 让鉴权依赖能查库校验封禁/管理员实时状态
+_deps.bind_db(db)
 
 
 @asynccontextmanager
