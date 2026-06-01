@@ -16,7 +16,7 @@ from utils.pagination import decode_cursor, encode_next
 from utils.typing import User, PlayerProfile, normalize_texture_model, serialize_profile_summary
 from database_module import Database
 from config_loader import Config
-from services import TextureStorage
+from services import TextureStorage, assert_texture_size
 
 
 class SiteBackend:
@@ -38,7 +38,8 @@ class SiteBackend:
         model: str = "default",
     ) -> tuple[str, str]:
         """处理材质（落盘）并记录到用户库，返回 (hash, type)。校验失败抛 ValueError。"""
-        texture_hash = self.texture_storage.process_and_save(file_bytes, texture_type)
+        await assert_texture_size(self.db, file_bytes)
+        texture_hash = await self.texture_storage.process_and_save_async(file_bytes, texture_type)
         await self.db.texture.add_to_library(
             user_id, texture_hash, texture_type, note, is_public, model
         )

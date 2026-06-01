@@ -295,9 +295,12 @@ def setup_routes(admin_backend, settings_backend):
         ext = os.path.splitext(file.filename)[1].lower()
         if ext not in [".png", ".jpg", ".jpeg", ".webp"]:
             raise HTTPException(status_code=400, detail="Unsupported file format")
-        
+
         filename = f"{generate_random_uuid()}{ext}"
         content = await file.read()
+        # 轮播图大小上限：5MB。轮播图不走材质存储，单独设固定上限防止超大文件落盘。
+        if len(content) > 5 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="File too large")
         return await admin_backend.upload_carousel_image(filename, content)
 
     @router.delete("/admin/carousel/{filename}")

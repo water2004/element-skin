@@ -83,3 +83,54 @@ def test_delete_file_is_idempotent(storage):
     assert not os.path.exists(path)
     # Deleting again must not raise
     storage.delete_file(tex_hash)
+
+
+# ========== DoS hardening (Phase 2) ==========
+
+
+def test_oversize_dimensions_rejected(storage):
+    # 2048x2048 is a valid multiple of 64 but exceeds MAX_TEXTURE_DIMENSION (1024)
+    with pytest.raises(ValueError):
+        storage.process_and_save(_png_bytes(2048, 2048), "skin")
+
+
+def test_hash_unchanged_after_alpha_zero_handling(storage):
+    # Alpha=0 pixels must have RGB zeroed before hashing (spec). Two images that
+    # differ only in the RGB of fully-transparent pixels must hash identically.
+    h1 = storage.process_and_save(_png_bytes(64, 64, (10, 20, 30, 0)), "skin")
+    h2 = storage.process_and_save(_png_bytes(64, 64, (200, 100, 50, 0)), "skin")
+    assert h1 == h2
+
+
+@pytest.mark.asyncio
+async def test_process_and_save_async_matches_sync(storage):
+    sync_hash = storage.process_and_save(_png_bytes(64, 64, (7, 8, 9, 255)), "skin")
+    async_hash = await storage.process_and_save_async(
+        _png_bytes(64, 64, (7, 8, 9, 255)), "skin"
+    )
+    assert sync_hash == async_hash
+
+
+class _FakeSetting:
+    def __init__(self, value):
+        self._value = value
+
+    async def get(self, key, default=None):
+        return self._value
+
+
+class _FakeDB:
+    def __init__(self, max_kb):
+        self.setting = _FakeSetting(str(max_kb))
+
+
+@pytest.mark.asyncio
+async def test_assert_texture_size_enforced():
+    from services import assert_texture_size
+
+    db = _FakeDB(max_kb=1)  # 1 KB limit
+    # under the limit: passes
+    await assert_texture_size(db, b"x" * 500)
+    # over the limit: raises
+    with pytest.raises(ValueError):
+        await assert_texture_size(db, b"x" * (2 * 1024))

@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from utils.profile_naming import generate_unique_profile_name
 from utils.typing import PlayerProfile, normalize_texture_model
 from utils.http import download_texture as download_texture
+from services import assert_texture_size
 
 
 class MicrosoftAuthService:
@@ -341,7 +342,8 @@ class MicrosoftBackend:
             return None
         try:
             data = await download_texture(url)
-            texture_hash = self.texture_storage.process_and_save(data, texture_type)
+            await assert_texture_size(self.db, data)
+            texture_hash = await self.texture_storage.process_and_save_async(data, texture_type)
             await self.db.texture.add_to_library(user_id, texture_hash, texture_type, note)
             return texture_hash
         except Exception as e:

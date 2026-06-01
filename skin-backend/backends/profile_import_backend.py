@@ -8,7 +8,7 @@ from backends.yggdrasil_client import YggdrasilClient, download_texture
 from utils.profile_naming import generate_unique_profile_name
 from utils.typing import PlayerProfile, normalize_texture_model
 from database_module import Database
-from services import TextureStorage
+from services import TextureStorage, assert_texture_size
 
 
 class ProfileImportBackend:
@@ -19,7 +19,8 @@ class ProfileImportBackend:
     async def _import_texture(
         self, user_id: str, texture_bytes: bytes, texture_type: str, note: str, model: str = "default"
     ) -> str:
-        texture_hash = self.texture_storage.process_and_save(texture_bytes, texture_type)
+        await assert_texture_size(self.db, texture_bytes)
+        texture_hash = await self.texture_storage.process_and_save_async(texture_bytes, texture_type)
         await self.db.texture.add_to_library(
             user_id, texture_hash, texture_type, note, is_public=False, model=model
         )
