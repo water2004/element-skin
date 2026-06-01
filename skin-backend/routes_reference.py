@@ -130,4 +130,6 @@ if __name__ == "__main__":
         reload=debug,
         loop="asyncio",
         log_level="info" if debug else "warning",
+        proxy_headers=True,
+        forwarded_allow_ips="*",
     )

@@ -18,12 +18,13 @@ class Database(BaseDB):
 
     async def init(self):
         """同步数据库结构并初始化模块缓存"""
-        # 1. 直接运行初始化 SQL (幂等)
+        # 1. 直接运行初始化 SQL (幂等)。失败必须 fail-fast：
+        #    schema 未就绪时继续启动只会在运行期抛出更隐蔽的错误。
         try:
             await self.ensure_conn()
             await self.execute(INIT_SQL)
         except Exception as e:
-            print(f"⚠️ 数据库初始化失败: {e}")
+            raise RuntimeError(f"数据库初始化失败，已终止启动: {e}") from e
 
         # 2. 触发各模块内部逻辑 (加载缓存等)
         await self.setting.init()

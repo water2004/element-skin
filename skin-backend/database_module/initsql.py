@@ -131,8 +131,32 @@ CREATE TABLE IF NOT EXISTS verification_codes (
     PRIMARY KEY(email, type)
 );
 
+-- ========== 索引 ==========
+-- 全部使用 IF NOT EXISTS 保证幂等；这些索引服务于代码中已有的高频查询路径。
+
+-- profiles：按 user_id 查询角色 + 按 id 游标分页（get_profiles_by_user_cursor 等）
+CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles (user_id, id);
+
+-- tokens：按用户清理 / 按时间裁剪 / 保留最近 N 个（delete_expired_tokens、delete_surplus_tokens、
+-- delete_tokens_by_user 均以 user_id 为前缀，单个复合索引即可覆盖）
+CREATE INDEX IF NOT EXISTS idx_tokens_user_created ON tokens (user_id, created_at);
+-- tokens：按角色删除（delete_tokens_by_profile）
+CREATE INDEX IF NOT EXISTS idx_tokens_profile_id ON tokens (profile_id);
+
+-- user_textures：用户衣柜按 (created_at, hash) 游标分页（get_for_user_cursor）
+-- 排序为 created_at DESC, hash DESC，全 DESC 可由升序复合索引反向扫描满足
+CREATE INDEX IF NOT EXISTS idx_user_textures_user_created_hash ON user_textures (user_id, created_at, hash);
+
+-- skin_library：公共皮肤库浏览（is_public 过滤 + 时序游标，get_from_library_cursor）
+CREATE INDEX IF NOT EXISTS idx_skin_library_public_created_hash ON skin_library (is_public, created_at, skin_hash);
+-- skin_library：管理员全量材质列表（无 is_public 过滤的时序游标，list_all_textures_cursor）
+CREATE INDEX IF NOT EXISTS idx_skin_library_created_hash ON skin_library (created_at, skin_hash);
+
+-- whitelisted_users：按 endpoint 列出白名单 / 缓存刷新（UNIQUE(username,endpoint_id) 前缀不匹配）
+CREATE INDEX IF NOT EXISTS idx_whitelisted_users_endpoint ON whitelisted_users (endpoint_id);
+
 -- 初始化默认设置
-INSERT INTO settings (key, value) VALUES 
+INSERT INTO settings (key, value) VALUES
 ('microsoft_client_id', ''),
 ('microsoft_client_secret', ''),
 ('microsoft_redirect_uri', 'http://localhost:8000/microsoft/callback'),
