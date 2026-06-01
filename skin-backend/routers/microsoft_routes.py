@@ -4,7 +4,6 @@ from fastapi import APIRouter, HTTPException, Depends, Body
 from fastapi.responses import Response
 import time
 import secrets
-import urllib.parse
 
 from backends.microsoft_backend import MicrosoftBackend
 from routers.deps import get_current_user
@@ -76,8 +75,9 @@ def setup_routes(db, config, texture_storage):
             }
             location = f"{frontend_url}/dashboard/roles?ms_token={temp_token}"
         except Exception as e:
-            error_msg = urllib.parse.quote(str(e).replace("\n", " "))
-            location = f"{frontend_url}/dashboard/roles?error={error_msg}"
+            # 不把内部异常细节回显到重定向 URL（避免信息泄露），仅记录到服务端日志。
+            print(f"Microsoft OAuth callback failed: {e}")
+            location = f"{frontend_url}/dashboard/roles?error=auth_failed"
 
         return Response(status_code=302, headers={"Location": location})
 

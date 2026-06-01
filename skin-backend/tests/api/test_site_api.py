@@ -209,7 +209,7 @@ async def test_api_remote_ygg_import_flow(client, auth_headers, db_session):
     }
     
     with patch("backends.yggdrasil_client.YggdrasilClient.get_profile_with_textures", new_callable=AsyncMock) as mock_get_p, \
-         patch("backends.yggdrasil_client.download_texture", new_callable=AsyncMock) as mock_down:
+         patch("backends.profile_import_backend.download_texture", new_callable=AsyncMock) as mock_down:
         
         mock_get_p.return_value = mock_profile_data
         mock_down.return_value = b"fake_image_bytes"
