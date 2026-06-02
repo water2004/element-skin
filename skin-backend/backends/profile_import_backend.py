@@ -35,8 +35,12 @@ class ProfileImportBackend:
             result = await client.authenticate(username, password)
             profiles = result.get("availableProfiles", [])
             return {"profiles": profiles}
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=str(e))
+        except HTTPException:
+            raise  # 已是面向用户的业务错误，原样抛
+        except Exception:
+            # 不回显底层异常（含远端 URL/连接细节）；服务端记完整堆栈
+            logger.warning("get_ygg_profiles failed", exc_info=True)
+            raise HTTPException(status_code=400, detail="无法获取远端资料，请检查账号或稍后重试")
 
     async def _import_single_ygg_profile(
         self,
@@ -97,10 +101,11 @@ class ProfileImportBackend:
         client = YggdrasilClient(api_url)
         try:
             return await self._import_single_ygg_profile(user_id, api_url, profile_id, profile_name, client)
-        except Exception as e:
-            if isinstance(e, HTTPException):
-                raise e
-            raise HTTPException(status_code=400, detail=str(e))
+        except HTTPException:
+            raise  # 已是面向用户的业务错误，原样抛
+        except Exception:
+            logger.warning("profile import failed for %s", profile_id, exc_info=True)
+            raise HTTPException(status_code=400, detail="导入失败，请稍后重试")
 
     async def import_ygg_profiles(self, user_id: str, api_url: str, profiles: List[Dict[str, str]]):
         if not isinstance(profiles, list):
@@ -132,11 +137,12 @@ class ProfileImportBackend:
                     "profile_name": profile_name,
                     "detail": exc.detail,
                 })
-            except Exception as exc:
+            except Exception:
+                logger.warning("batch import item failed: %s", profile_id, exc_info=True)
                 failed.append({
                     "profile_id": profile_id,
                     "profile_name": profile_name,
-                    "detail": str(exc),
+                    "detail": "导入失败",
                 })
 
         return {
