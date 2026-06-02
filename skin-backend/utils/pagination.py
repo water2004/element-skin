@@ -5,6 +5,25 @@ import base64
 from typing import Any, Dict, Optional
 
 
+DEFAULT_LIMIT = 20
+MAX_LIMIT = 100
+
+
+def clamp_limit(limit: Optional[int], default: int = DEFAULT_LIMIT) -> int:
+    """把分页 limit 收敛到 [1, MAX_LIMIT]。None 取 default。
+
+    防御：limit=-1 触发 IndexError/500；limit=0 导致分页死循环；
+    超大 limit 造成单次查询 DoS。非法/不可解析值回退 default。
+    """
+    if limit is None:
+        return default
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(limit, MAX_LIMIT))
+
+
 class CursorEncoder:
     """游标编码/解码工具"""
 

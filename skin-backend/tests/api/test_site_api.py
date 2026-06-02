@@ -308,3 +308,32 @@ async def test_api_add_texture_from_library_preserves_name(client, auth_headers,
     items = me_tex_resp.json()["items"]
     assert any(item["hash"] == tex_hash and item["note"] == tex_name for item in items)
 
+
+
+@pytest.mark.asyncio
+async def test_api_list_textures_limit_clamped(client, auth_headers, db_session):
+    """异常 limit（-1 / 0 / 超大）不应触发 500，且结果数量受 MAX_LIMIT 收敛。"""
+    from utils.pagination import MAX_LIMIT
+
+    user_id = auth_headers["X-User-ID"]
+    # 造 5 条材质，确保有数据可分页
+    for i in range(5):
+        await db_session.texture.add_to_library(
+            user_id, f"clamp_tex_{i}", "skin", note=f"t{i}", is_public=False, model="default"
+        )
+
+    for bad_limit in (-1, 0, 99999999):
+        resp = await client.get(
+            f"/me/textures?limit={bad_limit}", cookies=auth_headers["cookies"]
+        )
+        assert resp.status_code == 200, f"limit={bad_limit} 应返回 200，实际 {resp.status_code}"
+        items = resp.json()["items"]
+        assert len(items) <= MAX_LIMIT
+
+
+@pytest.mark.asyncio
+async def test_api_public_skin_library_limit_clamped(client):
+    """公开皮肤库异常 limit 不触发 500。"""
+    for bad_limit in (-1, 0, 99999999):
+        resp = await client.get(f"/public/skin-library?limit={bad_limit}")
+        assert resp.status_code == 200

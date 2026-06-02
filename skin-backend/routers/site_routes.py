@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 
 from utils.jwt_utils import get_access_cookie_settings, get_refresh_cookie_settings
+from utils.pagination import clamp_limit
 from routers.deps import get_current_user
 from config_loader import Config
 
@@ -214,7 +215,7 @@ def setup_routes(site_backend, profile_import_backend, settings_backend, rate_li
     ):
         """获取我的材质列表（仅支持游标分页）"""
         return await site_backend.list_my_textures(
-            payload.get("sub"), cursor, limit, texture_type
+            payload.get("sub"), cursor, clamp_limit(limit), texture_type
         )
 
     @router.get("/me/profiles")
@@ -224,7 +225,7 @@ def setup_routes(site_backend, profile_import_backend, settings_backend, rate_li
         payload: dict = Depends(get_current_user)
     ):
         """获取我的角色列表（仅支持游标分页）"""
-        return await site_backend.list_my_profiles(payload.get("sub"), cursor, limit)
+        return await site_backend.list_my_profiles(payload.get("sub"), cursor, clamp_limit(limit))
 
     @router.get("/me/textures/{hash}/{texture_type}")
     async def get_my_texture_detail(
@@ -268,7 +269,7 @@ def setup_routes(site_backend, profile_import_backend, settings_backend, rate_li
         texture_type: Optional[str] = None
     ):
         """获取公开皮肤库（仅支持游标分页）"""
-        return await site_backend.get_public_skin_library(cursor, limit, texture_type)
+        return await site_backend.get_public_skin_library(cursor, clamp_limit(limit), texture_type)
 
     @router.post("/me/textures/{hash}/apply")
     async def apply_texture_to_profile(

@@ -12,6 +12,7 @@ import os
 
 from routers.deps import admin_required
 from utils.uuid_utils import generate_random_uuid
+from utils.pagination import clamp_limit
 
 router = APIRouter()
 
@@ -86,7 +87,7 @@ def setup_routes(admin_backend, settings_backend):
         payload: dict = Depends(admin_required)
     ):
         """获取用户列表（支持搜索和游标分页）"""
-        return await admin_backend.list_users(cursor, limit, q)
+        return await admin_backend.list_users(cursor, clamp_limit(limit), q)
 
     @router.get("/admin/users/{user_id}")
     async def get_single_user_admin(user_id: str, payload: dict = Depends(admin_required)):
@@ -100,7 +101,7 @@ def setup_routes(admin_backend, settings_backend):
         payload: dict = Depends(admin_required)
     ):
         """获取用户的角色列表（仅支持游标分页）"""
-        return await admin_backend.get_user_profiles(user_id, cursor, limit)
+        return await admin_backend.get_user_profiles(user_id, cursor, clamp_limit(limit))
 
     @router.post("/admin/users/{user_id}/toggle-admin")
     async def toggle_user_admin(user_id: str, payload: dict = Depends(admin_required)):
@@ -147,7 +148,7 @@ def setup_routes(admin_backend, settings_backend):
     ):
         """获取所有角色列表（支持搜索和游标分页）"""
         return await admin_backend.get_all_profiles(
-            limit=limit,
+            limit=clamp_limit(limit),
             cursor=cursor,
             query=q.strip() if q and q.strip() else None,
         )
@@ -204,7 +205,7 @@ def setup_routes(admin_backend, settings_backend):
     ):
         """获取所有材质列表（支持搜索、类型过滤和游标分页）"""
         return await admin_backend.get_all_textures(
-            limit=limit,
+            limit=clamp_limit(limit),
             cursor=cursor,
             query=q.strip() if q and q.strip() else None,
             type_filter=type,
@@ -251,7 +252,7 @@ def setup_routes(admin_backend, settings_backend):
         payload: dict = Depends(admin_required)
     ):
         """获取邀请码列表（仅支持游标分页）"""
-        return await admin_backend.list_invites(cursor, limit)
+        return await admin_backend.list_invites(cursor, clamp_limit(limit))
 
     @router.post("/admin/invites")
     async def create_admin_invite(
