@@ -8,11 +8,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import os
 
+import logging
+
 from config_loader import config
 from utils.logging_config import setup_logging
 
 # 尽早配置日志（级别由 server.debug 驱动），使后续各模块的 logger 生效
 setup_logging(config.get("server.debug", False))
+
+logger = logging.getLogger(__name__)
 
 from database_module import Database
 from backends.yggdrasil_backend import YggdrasilBackend, YggdrasilError
@@ -44,9 +48,28 @@ settings_backend = SettingsBackend(db)
 _deps.bind_db(db)
 
 
+async def _refresh_cleanup_loop(db, interval_seconds: int = 3600):
+    """周期清理过期 refresh token。单实例运行，进程内任务即可。
+
+    清理失败不应中断循环：记录后继续，等待下一轮。
+    """
+    import asyncio
+    import time
+
+    while True:
+        try:
+            await asyncio.sleep(interval_seconds)
+            await db.user.delete_expired_refresh_tokens(int(time.time() * 1000))
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            logger.warning("refresh token cleanup failed", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
+    import asyncio
     import time
     from utils.jwt_utils import assert_jwt_secret_ok
     # 启动期 fail-fast：JWT 密钥缺失/默认/过短即拒绝起服务，杜绝可伪造 token 的致命路径
@@ -55,9 +78,17 @@ async def lifespan(app: FastAPI):
     await db.init()
     # 启动时清理一次过期的站点 refresh token
     await db.user.delete_expired_refresh_tokens(int(time.time() * 1000))
+    # 周期性清理过期 refresh token：仅启动清一次会让过期行无限累积（每次登录/新设备一行）。
+    # 单实例约束下进程内 asyncio 任务即可，无需外部定时器。
+    cleanup_task = asyncio.create_task(_refresh_cleanup_loop(db))
     try:
         yield
     finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
         await db.close()
 
 
