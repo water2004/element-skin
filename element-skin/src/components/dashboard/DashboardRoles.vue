@@ -356,6 +356,7 @@ const newRoleName = ref('')
 const showMicrosoftLoginDialog = ref(false)
 const microsoftStep = ref('select-profile')
 const microsoftProfile = ref<any>(null)
+const microsoftImportToken = ref<string | null>(null)
 const importing = ref(false)
 
 const showPreviewDialog = ref(false)
@@ -555,23 +556,17 @@ async function startMicrosoftAuth() {
 
 async function importMicrosoftProfile() {
   if (!microsoftProfile.value) return
+  if (!microsoftImportToken.value) {
+    ElMessage.error('导入凭证已失效，请重新授权')
+    return
+  }
 
   try {
     importing.value = true
     // Do NOT switch step, just show loading on button
 
-    const skinData = microsoftProfile.value.skins?.[0]
-    const capeData = microsoftProfile.value.capes?.[0]
-
-    const importData = {
-      profile_id: microsoftProfile.value.id,
-      profile_name: microsoftProfile.value.name,
-      skin_url: skinData?.url || null,
-      skin_variant: skinData?.variant || 'classic',
-      cape_url: capeData?.url || null
-    }
-
-    await apiImportMicrosoftProfile(importData)
+    // 导入资料由服务端依据一次性 import_token 固化，前端只需回传该 token。
+    await apiImportMicrosoftProfile({ ms_token: microsoftImportToken.value })
 
     ElMessage.success('正版角色导入成功！')
 
@@ -580,6 +575,7 @@ async function importMicrosoftProfile() {
     // But safely clearing it prevents state leak if reopened somehow without reload (unlikely but possible)
     setTimeout(() => {
         microsoftProfile.value = null
+        microsoftImportToken.value = null
         microsoftStep.value = 'select-profile'
     }, 300)
 
@@ -602,6 +598,7 @@ function cancelMicrosoftLogin() {
   showMicrosoftLoginDialog.value = false
   microsoftStep.value = 'select-profile'
   microsoftProfile.value = null
+  microsoftImportToken.value = null
   importing.value = false
 }
 
@@ -703,6 +700,8 @@ onMounted(async () => {
 
       microsoftProfile.value = response.data.profile
       microsoftProfile.value.has_game = response.data.has_game
+      // 服务端换发的一次性导入凭证：确认导入时回传，导入资料以服务端固化为准。
+      microsoftImportToken.value = response.data.import_token
       microsoftStep.value = 'select-profile'
       showMicrosoftLoginDialog.value = true
 
