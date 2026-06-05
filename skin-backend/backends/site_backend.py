@@ -154,7 +154,8 @@ class SiteBackend:
             raise HTTPException(status_code=404, detail="Texture not found in library")
 
     async def get_public_skin_library(
-        self, cursor: str | None, limit: int, texture_type: str | None
+        self, cursor: str | None, limit: int, texture_type: str | None,
+        query: str | None = None,
     ) -> dict:
         enabled = await self.db.setting.get("enable_skin_library", "true")
         if enabled != "true":
@@ -170,15 +171,13 @@ class SiteBackend:
             only_public=True,
             last_created_at=(key or {}).get("last_created_at"),
             last_skin_hash=(key or {}).get("last_skin_hash"),
+            query=query,
         )
-        items_list = result["items"]
-        uploader_ids = list({item.get("uploader") for item in items_list if item.get("uploader")})
-        uploader_names = await self.db.user.get_display_names_by_ids(uploader_ids)
-
+        # uploader_name 已由 LEFT JOIN 直接返回，无需二次查库
         return {
             "items": [
-                {**item, "uploader_name": uploader_names.get(item.get("uploader"), "")}
-                for item in items_list
+                {**item, "uploader_name": item.get("uploader_display_name", "")}
+                for item in result["items"]
             ],
             "has_next": result["has_next"],
             "next_cursor": encode_next(result["next_key"]),

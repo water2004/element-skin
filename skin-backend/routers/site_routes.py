@@ -266,10 +266,14 @@ def setup_routes(site_backend, profile_import_backend, settings_backend, rate_li
     async def get_skin_library(
         cursor: str | None = None,
         limit: int = 20,
-        texture_type: Optional[str] = None
+        texture_type: Optional[str] = None,
+        q: str | None = None,
     ):
-        """获取公开皮肤库（仅支持游标分页）"""
-        return await site_backend.get_public_skin_library(cursor, clamp_limit(limit), texture_type)
+        """获取公开皮肤库（支持游标分页、类型过滤与名称搜索）"""
+        return await site_backend.get_public_skin_library(
+            cursor, clamp_limit(limit), texture_type,
+            query=q.strip() if q and q.strip() else None,
+        )
 
     @router.post("/me/textures/{hash}/apply")
     async def apply_texture_to_profile(

@@ -16,6 +16,23 @@
           </div>
         </div>
         <div class="page-header-actions">
+          <div class="search-bar-container">
+            <el-input
+              v-model="searchQuery"
+              placeholder="搜索哈希、材质名或上传者"
+              clearable
+              @clear="handleClearSearch"
+              @keyup.enter="handleSearch"
+              size="large"
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+              <template #append>
+                <el-button :icon="Search" @click="handleSearch">搜索</el-button>
+              </template>
+            </el-input>
+          </div>
           <el-radio-group v-model="filterType" @change="handleFilterChange" size="large" class="capsule-radio">
             <el-radio-button value="">全部</el-radio-button>
             <el-radio-button value="skin">皮肤</el-radio-button>
@@ -171,7 +188,7 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, computed, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, User } from '@element-plus/icons-vue'
+import { Plus, Search, User } from '@element-plus/icons-vue'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
@@ -190,6 +207,8 @@ const pagination = useCursorPagination<Texture>(limit)
 const loading = ref(false)
 const isDisabled = ref(false)
 const filterType = ref('')
+const searchQuery = ref('')
+const activeSearchQuery = ref('')
 const textureResolutions = ref(new Map<string, number>())
 const showPreviewDialog = ref(false)
 const selectedItem = ref<Texture | null>(null)
@@ -218,7 +237,8 @@ async function fetchLibrary() {
     const params = {
       cursor: pagination.currentCursor.value,
       limit: limit,
-      texture_type: filterType.value || undefined
+      texture_type: filterType.value || undefined,
+      q: activeSearchQuery.value || undefined,
     }
     const res = await getPublicSkinLibrary(params)
     items.value = res.data.items
@@ -272,7 +292,8 @@ async function handleNextPage() {
     const params = {
       cursor,
       limit: pageLimit,
-      texture_type: filterType.value || undefined
+      texture_type: filterType.value || undefined,
+      q: activeSearchQuery.value || undefined,
     }
     const res = await getPublicSkinLibrary(params)
     items.value = res.data.items
@@ -291,7 +312,8 @@ async function handlePrevPage() {
     const params = {
       cursor,
       limit: pageLimit,
-      texture_type: filterType.value || undefined
+      texture_type: filterType.value || undefined,
+      q: activeSearchQuery.value || undefined,
     }
     const res = await getPublicSkinLibrary(params)
     items.value = res.data.items
@@ -308,6 +330,19 @@ async function handlePrevPage() {
 async function handleFilterChange() {
   pagination.reset()
   await fetchLibrary()
+}
+
+function handleSearch() {
+  activeSearchQuery.value = searchQuery.value.trim()
+  pagination.reset()
+  fetchLibrary()
+}
+
+function handleClearSearch() {
+  searchQuery.value = ''
+  activeSearchQuery.value = ''
+  pagination.reset()
+  fetchLibrary()
 }
 
 async function addToWardrobe(hash: string) {
@@ -407,5 +442,37 @@ onMounted(() => {
 
 .clickable-card {
   cursor: pointer;
+}
+
+.search-bar-container {
+  flex: 1;
+  min-width: 260px;
+}
+
+.search-bar-container :deep(.el-input-group) {
+  display: flex;
+  align-items: stretch;
+}
+
+.search-bar-container :deep(.el-input-group__append) {
+  background: var(--el-color-primary);
+  color: #fff;
+  border-color: var(--el-color-primary);
+  cursor: pointer;
+  padding: 0 20px;
+}
+
+.search-bar-container :deep(.el-input-group__append:hover) {
+  background: var(--el-color-primary-light-3);
+  border-color: var(--el-color-primary-light-3);
+  opacity: 0.9;
+}
+
+.search-bar-container :deep(.el-input-group__append .el-button) {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
 }
 </style>

@@ -13,6 +13,7 @@ export function getPublicSkinLibrary(params: {
   cursor?: string | null
   limit?: number
   texture_type?: string
+  q?: string
 }): Promise<{ data: { items: Texture[]; has_next: boolean; next_cursor: string | null; page_size: number } }> {
   return client.get('/public/skin-library', { params })
 }
