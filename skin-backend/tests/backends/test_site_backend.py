@@ -210,6 +210,91 @@ async def test_get_public_skin_library_invalid_cursor(db_session, test_config):
 
 
 @pytest.mark.asyncio
+async def test_get_public_skin_library_search_matches_name_hash_uploader(db_session, test_config, user_factory):
+    """搜索功能：分别可按名称、hash 子串、上传者 display_name 命中，并排除非匹配项。
+
+    这是一个三向区分测试：每条材质的 name / hash / 上传者名互不重叠，
+    保证当某一列的过滤被遗漏时，对应查询会返回 0 条而不是 1 条；当 q
+    完全被忽略时则会返回 3 条。
+    """
+    backend = SiteBackend(db_session, test_config, texture_storage)
+    alice = await user_factory(username="AliceWonder")
+    bob = await user_factory(username="BobBuilder")
+    charlie = await user_factory(username="CharlieBrown")
+
+    hash_a = "a" * 64  # alice / MagicSword
+    hash_b = "b" * 64  # bob / DragonShield
+    hash_c = "c" * 64  # charlie / HolyArmor
+
+    await db_session.texture.add_to_library(alice.id, hash_a, "skin", note="MagicSword", is_public=True)
+    await db_session.texture.add_to_library(bob.id, hash_b, "skin", note="DragonShield", is_public=True)
+    await db_session.texture.add_to_library(charlie.id, hash_c, "skin", note="HolyArmor", is_public=True)
+
+    # 1. 按名称匹配：仅 A
+    page = await backend.get_public_skin_library(None, 20, None, query="MagicSword")
+    assert [it["hash"] for it in page["items"]] == [hash_a]
+    assert page["items"][0]["name"] == "MagicSword"
+
+    # 2. 按 hash 子串匹配：仅 B（"bbb" 不会匹配名字或任一上传者名）
+    page = await backend.get_public_skin_library(None, 20, None, query="bbb")
+    assert [it["hash"] for it in page["items"]] == [hash_b]
+
+    # 3. 按上传者 display_name 匹配：仅 C
+    page = await backend.get_public_skin_library(None, 20, None, query="CharlieBrown")
+    assert [it["hash"] for it in page["items"]] == [hash_c]
+    assert page["items"][0]["uploader_name"] == "CharlieBrown"
+
+    # 4. 大小写不敏感（ILIKE）
+    page = await backend.get_public_skin_library(None, 20, None, query="magicsword")
+    assert [it["hash"] for it in page["items"]] == [hash_a]
+
+    # 5. 不命中：返回空
+    page = await backend.get_public_skin_library(None, 20, None, query="ZZZ_no_such_token")
+    assert page["items"] == []
+    assert page["has_next"] is False
+
+    # 6. 不带 query：三条都在
+    page = await backend.get_public_skin_library(None, 20, None)
+    returned = {it["hash"] for it in page["items"]}
+    assert {hash_a, hash_b, hash_c}.issubset(returned)
+
+
+@pytest.mark.asyncio
+async def test_get_public_skin_library_search_combined_with_type_filter(db_session, test_config, user_factory):
+    """搜索 + texture_type 过滤可联合使用：同名 cape 不会被 skin 类型搜索命中。"""
+    backend = SiteBackend(db_session, test_config, texture_storage)
+    user = await user_factory(username="DualUploader")
+    skin_hash = "1" * 64
+    cape_hash = "2" * 64
+    # 故意同名，确保差异只在 texture_type
+    await db_session.texture.add_to_library(user.id, skin_hash, "skin", note="SharedName", is_public=True)
+    await db_session.texture.add_to_library(user.id, cape_hash, "cape", note="SharedName", is_public=True)
+
+    page = await backend.get_public_skin_library(None, 20, "skin", query="SharedName")
+    assert [it["hash"] for it in page["items"]] == [skin_hash]
+
+    page = await backend.get_public_skin_library(None, 20, "cape", query="SharedName")
+    assert [it["hash"] for it in page["items"]] == [cape_hash]
+
+
+@pytest.mark.asyncio
+async def test_get_public_skin_library_search_excludes_private(db_session, test_config, user_factory):
+    """搜索结果仍受 only_public=True 约束：私有材质即便命中也不返回。"""
+    backend = SiteBackend(db_session, test_config, texture_storage)
+    user = await user_factory(username="PrivOwner")
+    pub_hash = "e" * 64
+    priv_hash = "f" * 64
+    await db_session.texture.add_to_library(user.id, pub_hash, "skin", note="UniquePublicTex", is_public=True)
+    await db_session.texture.add_to_library(user.id, priv_hash, "skin", note="UniquePrivateTex", is_public=False)
+
+    page = await backend.get_public_skin_library(None, 20, None, query="UniquePublicTex")
+    assert [it["hash"] for it in page["items"]] == [pub_hash]
+
+    page = await backend.get_public_skin_library(None, 20, None, query="UniquePrivateTex")
+    assert page["items"] == []
+
+
+@pytest.mark.asyncio
 async def test_update_my_texture_field_branches(db_session, test_config, user_factory):
     """note/model/is_public 三个分支独立生效，返回最新 info"""
     backend = SiteBackend(db_session, test_config, texture_storage)

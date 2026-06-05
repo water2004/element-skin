@@ -337,3 +337,35 @@ async def test_api_public_skin_library_limit_clamped(client):
     for bad_limit in (-1, 0, 99999999):
         resp = await client.get(f"/public/skin-library?limit={bad_limit}")
         assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_api_public_skin_library_search_query(client, db_session, user_factory):
+    """/public/skin-library?q=... 走完整 HTTP 链路，验证 q 参数确实下达到 SQL。"""
+    alice = await user_factory(username="ApiSearchAlice")
+    bob = await user_factory(username="ApiSearchBob")
+
+    h_alice = "9" * 64
+    h_bob = "8" * 64
+    await db_session.texture.add_to_library(alice.id, h_alice, "skin", note="UniqueAlpha", is_public=True)
+    await db_session.texture.add_to_library(bob.id, h_bob, "skin", note="UniqueBeta", is_public=True)
+
+    # 按名称命中 alice 的材质
+    resp = await client.get("/public/skin-library", params={"q": "UniqueAlpha"})
+    assert resp.status_code == 200
+    items = resp.json()["items"]
+    assert [it["hash"] for it in items] == [h_alice]
+    assert items[0]["uploader_name"] == "ApiSearchAlice"
+
+    # 按上传者名命中 bob 的材质
+    resp = await client.get("/public/skin-library", params={"q": "ApiSearchBob"})
+    assert [it["hash"] for it in resp.json()["items"]] == [h_bob]
+
+    # q 仅含空白时等价于不传：两条都在
+    resp = await client.get("/public/skin-library", params={"q": "   "})
+    returned = {it["hash"] for it in resp.json()["items"]}
+    assert {h_alice, h_bob}.issubset(returned)
+
+    # 空集合
+    resp = await client.get("/public/skin-library", params={"q": "nothing_matches_xyz"})
+    assert resp.json()["items"] == []
