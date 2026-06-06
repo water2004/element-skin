@@ -56,11 +56,18 @@ coverage/
 ### Backend textures / uploaded assets (can be large)
 /skin-backend/textures/
 /skin-backend/carousel/
+/skin-backend-go/textures/
+/skin-backend-go/carousel/
+
+### Go backend build artifacts
+skin-backend-go/element-skin.exe
+skin-backend-go/element-skin-debug.exe
+*.exe~
+
 ### Misc
 .cache/
 .gocache/
 .gomodcache/
-skin-backend-go/element-skin.exe
 node_modules/
 .history/
 

@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"log"
 	"os"
 	"strconv"
 
@@ -23,7 +24,7 @@ type Config struct {
 	FallbackDomains []string
 }
 
-type rawConfig map[string]any
+type rawConfig = map[string]any
 
 func Load(path string) (Config, error) {
 	cfg := Defaults()
@@ -33,7 +34,9 @@ func Load(path string) (Config, error) {
 			return cfg, err
 		}
 		cfg.apply(raw)
-	} else if !errors.Is(err, os.ErrNotExist) {
+	} else if errors.Is(err, os.ErrNotExist) {
+		log.Printf("警告：配置文件 %s 未找到，使用默认配置（JWT secret 为占位值，启动将失败）", path)
+	} else {
 		return cfg, err
 	}
 	if env := os.Getenv("DATABASE_DSN"); env != "" {
