@@ -459,13 +459,26 @@ onMounted(() => {
   cursor: pointer;
 }
 
+.skin-library-container .page-header-actions {
+  align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .search-bar-container {
-  flex: 1;
+  flex: 1 1 360px;
   min-width: 260px;
+  max-width: 520px;
 }
 
 .sort-select {
-  width: 140px;
+  flex: 0 0 150px;
+}
+
+.skin-library-container .capsule-radio {
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .search-bar-container :deep(.el-input-group) {
@@ -493,5 +506,39 @@ onMounted(() => {
   color: inherit;
   padding: 0;
   margin: 0;
+}
+
+@media (max-width: 900px) {
+  .skin-library-container .page-header-actions {
+    width: 100%;
+  }
+
+  .search-bar-container {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .search-bar-container {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .skin-library-container .capsule-radio {
+    flex: 1 1 260px;
+  }
+
+  .skin-library-container .capsule-radio :deep(.el-radio-button) {
+    flex: 1 1 0;
+  }
+
+  .skin-library-container .capsule-radio :deep(.el-radio-button__inner) {
+    width: 100%;
+  }
+
+  .sort-select {
+    flex: 1 1 150px;
+    min-width: 150px;
+  }
 }
 </style>
