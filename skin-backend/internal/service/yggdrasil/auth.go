@@ -2,11 +2,16 @@ package yggdrasil
 
 import (
 	"context"
+	"errors"
+	"time"
 
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/model"
+	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/util"
 )
+
+const tokenTTL = 15 * 24 * time.Hour
 
 func (y Yggdrasil) Authenticate(ctx context.Context, username, password, clientToken string, requestUser bool) (map[string]any, error) {
 	u, loginProfile, err := y.verifyCredentials(ctx, username, password)
@@ -41,10 +46,13 @@ func (y Yggdrasil) Authenticate(ctx context.Context, username, password, clientT
 	if selected != nil {
 		pid = &selected.ID
 	}
-	if err := y.DB.Tokens.Add(ctx, model.Token{AccessToken: access, ClientToken: clientToken, UserID: u.ID, ProfileID: pid, CreatedAt: database.NowMS()}); err != nil {
+	createdAt := database.NowMS()
+	if err := y.Redis.SetYggToken(ctx, model.Token{AccessToken: access, ClientToken: clientToken, UserID: u.ID, ProfileID: pid, CreatedAt: createdAt}, tokenTTL); err != nil {
 		return nil, err
 	}
-	_ = y.DB.Tokens.Cleanup(ctx, u.ID, database.NowMS()-15*24*3600*1000, 5)
+	if err := y.Redis.TrimYggTokensByUser(ctx, u.ID, 5); err != nil {
+		return nil, err
+	}
 	available := make([]map[string]any, 0, len(profiles))
 	for _, p := range profiles {
 		available = append(available, map[string]any{"id": p.ID, "name": p.Name})
@@ -84,14 +92,16 @@ func (y Yggdrasil) verifyCredentials(ctx context.Context, username, password str
 }
 
 func (y Yggdrasil) Refresh(ctx context.Context, accessToken, clientToken, selectedID string, requestUser bool) (map[string]any, error) {
-	t, err := y.DB.Tokens.Get(ctx, accessToken)
+	t, err := y.Redis.GetYggToken(ctx, accessToken)
+	if errors.Is(err, redisstore.ErrCacheMiss) {
+		return nil, yggErr(403, "ForbiddenOperationException", "Invalid token.")
+	}
 	if err != nil {
 		return nil, err
 	}
-	if t == nil || (clientToken != "" && clientToken != t.ClientToken) {
+	if clientToken != "" && clientToken != t.ClientToken {
 		return nil, yggErr(403, "ForbiddenOperationException", "Invalid token.")
 	}
-	_ = y.DB.Tokens.Delete(ctx, accessToken)
 	newProfile := t.ProfileID
 	var selected map[string]any
 	if selectedID != "" {
@@ -118,8 +128,13 @@ func (y Yggdrasil) Refresh(ctx context.Context, accessToken, clientToken, select
 	if err != nil {
 		return nil, err
 	}
-	if err := y.DB.Tokens.Add(ctx, model.Token{AccessToken: newAccess, ClientToken: t.ClientToken, UserID: t.UserID, ProfileID: newProfile, CreatedAt: database.NowMS()}); err != nil {
+	createdAt := database.NowMS()
+	replaced, err := y.Redis.ReplaceYggToken(ctx, accessToken, model.Token{AccessToken: newAccess, ClientToken: t.ClientToken, UserID: t.UserID, ProfileID: newProfile, CreatedAt: createdAt}, tokenTTL)
+	if err != nil {
 		return nil, err
+	}
+	if !replaced {
+		return nil, yggErr(403, "ForbiddenOperationException", "Invalid token.")
 	}
 	resp := map[string]any{"accessToken": newAccess, "clientToken": t.ClientToken}
 	if selected != nil {
@@ -135,14 +150,43 @@ func (y Yggdrasil) Refresh(ctx context.Context, accessToken, clientToken, select
 }
 
 func (y Yggdrasil) Validate(ctx context.Context, access, client string) error {
-	t, err := y.DB.Tokens.Get(ctx, access)
+	t, err := y.Redis.GetYggToken(ctx, access)
+	if errors.Is(err, redisstore.ErrCacheMiss) {
+		return yggErr(403, "ForbiddenOperationException", "Invalid token.")
+	}
 	if err != nil {
 		return err
 	}
-	if t == nil || (client != "" && client != t.ClientToken) || database.NowMS()-t.CreatedAt > 15*24*3600*1000 {
+	if (client != "" && client != t.ClientToken) || database.NowMS()-t.CreatedAt > int64(tokenTTL/time.Millisecond) {
 		return yggErr(403, "ForbiddenOperationException", "Invalid token.")
 	}
 	return nil
+}
+
+func (y Yggdrasil) Token(ctx context.Context, access string) (model.Token, error) {
+	token, err := y.Redis.GetYggToken(ctx, access)
+	if errors.Is(err, redisstore.ErrCacheMiss) {
+		return model.Token{}, yggErr(401, "Unauthorized", "Invalid token")
+	}
+	return token, err
+}
+
+func (y Yggdrasil) Invalidate(ctx context.Context, access string) error {
+	if access == "" {
+		return nil
+	}
+	return y.Redis.DeleteYggToken(ctx, access)
+}
+
+func (y Yggdrasil) Signout(ctx context.Context, username, password string) error {
+	u, _, err := y.verifyCredentials(ctx, username, password)
+	if err != nil {
+		return err
+	}
+	if u == nil {
+		return yggErr(403, "ForbiddenOperationException", "Invalid credentials. Invalid username or password.")
+	}
+	return y.Redis.DeleteYggTokensByUser(ctx, u.ID)
 }
 
 func yggUserPayload(u model.User) map[string]any {

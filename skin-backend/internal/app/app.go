@@ -45,7 +45,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 	settings := settingssvc.Settings{DB: db, Redis: redis}
 	site := sitepkg.Site{DB: db, Cfg: cfg, Redis: redis, Settings: settings}
-	ygg, err := yggpkg.New(db, cfg, settings)
+	ygg, err := yggpkg.New(db, cfg, redis, settings)
 	if err != nil {
 		_ = redis.Close()
 		db.Close()
@@ -72,7 +72,7 @@ func NewWithDB(cfg config.Config, db *database.DB) (*App, error) {
 func NewWithDBAndRedis(cfg config.Config, db *database.DB, redis redisstore.Store) (*App, error) {
 	settings := settingssvc.Settings{DB: db, Redis: redis}
 	site := sitepkg.Site{DB: db, Cfg: cfg, Redis: redis, Settings: settings}
-	ygg, err := yggpkg.New(db, cfg, settings)
+	ygg, err := yggpkg.New(db, cfg, redis, settings)
 	if err != nil {
 		_ = redis.Close()
 		return nil, err

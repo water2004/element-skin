@@ -15,7 +15,8 @@ import (
 func TestLookupRoutesNamesReturnExactLocalProfiles(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
-	h := yggdrasil.New(cfg, db, settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 	user := testutil.CreateUser(t, db, "ygg-lookup@test.com", "Password123", "YggLookup", false)
 	profile := testutil.CreateProfile(t, db, user.ID, "ygg_lookup_profile", "YggLookupProfile")
 

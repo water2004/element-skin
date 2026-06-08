@@ -77,13 +77,23 @@ func (h Handler) Invalidate(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
 		return
 	}
-	if body["accessToken"] != "" {
-		_ = h.db.Tokens.Delete(req.Context(), body["accessToken"])
+	if err := h.ygg.Invalidate(req.Context(), body["accessToken"]); err != nil {
+		util.Error(w, err)
+		return
 	}
 	w.WriteHeader(204)
 }
 
 func (h Handler) Signout(w http.ResponseWriter, req *http.Request) {
+	var body map[string]string
+	if err := shared.DecodeJSON(req, &body); err != nil {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		return
+	}
+	if err := h.ygg.Signout(req.Context(), body["username"], body["password"]); err != nil {
+		util.Error(w, err)
+		return
+	}
 	w.WriteHeader(204)
 }
 

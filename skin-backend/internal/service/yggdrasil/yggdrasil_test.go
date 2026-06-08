@@ -10,11 +10,12 @@ import (
 
 func TestNewLoadsSignerAndStoresDependencies(t *testing.T) {
 	cfg := testutil.TestConfig()
-	ygg, err := yggdrasil.New(nil, cfg, settings.Settings{Redis: testutil.NewMemoryRedis()})
+	redis := testutil.NewMemoryRedis()
+	ygg, err := yggdrasil.New(nil, cfg, redis, settings.Settings{Redis: redis})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ygg.Cfg.PublicKeyPath != cfg.PublicKeyPath || ygg.Signer == nil {
+	if ygg.Cfg.PublicKeyPath != cfg.PublicKeyPath || ygg.Signer == nil || ygg.Redis == nil {
 		t.Fatalf("New should retain config and load signer: %#v", ygg)
 	}
 }

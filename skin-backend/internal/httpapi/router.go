@@ -33,6 +33,7 @@ func NewRouterWithRedis(cfg config.Config, db *database.DB, redis redisstore.Sto
 	settings := settingssvc.Settings{DB: db, Redis: redis}
 	site.Redis = redis
 	site.Settings = settings
+	ygg.Redis = redis
 	ygg.Settings = settings
 	r := &Router{cfg: cfg, db: db, redis: redis, settings: settings, site: site, ygg: ygg, mux: http.NewServeMux()}
 	r.routes()

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/redisstore"
 )
 
@@ -103,5 +104,75 @@ func TestMemoryStoreVerificationRateLimitAndAuthCache(t *testing.T) {
 	}
 	if _, err := store.GetAuthUser(ctx, "u1"); !errors.Is(err, redisstore.ErrCacheMiss) {
 		t.Fatalf("invalidated auth cache should miss, got %v", err)
+	}
+}
+
+func TestMemoryStoreYggTokenLifecycleAndTrim(t *testing.T) {
+	store := redisstore.NewMemoryStore()
+	ctx := context.Background()
+	profileID := "p1"
+
+	for i := 1; i <= 4; i++ {
+		if err := store.SetYggToken(ctx, model.Token{
+			AccessToken: "access_" + string(rune('0'+i)),
+			ClientToken: "client",
+			UserID:      "u1",
+			ProfileID:   &profileID,
+			CreatedAt:   int64(i),
+		}, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.TrimYggTokensByUser(ctx, "u1", 2); err != nil {
+		t.Fatal(err)
+	}
+	for _, access := range []string{"access_1", "access_2"} {
+		if _, err := store.GetYggToken(ctx, access); !errors.Is(err, redisstore.ErrCacheMiss) {
+			t.Fatalf("%s should be trimmed, got %v", access, err)
+		}
+	}
+	for _, access := range []string{"access_3", "access_4"} {
+		token, err := store.GetYggToken(ctx, access)
+		if err != nil || token.UserID != "u1" || token.ProfileID == nil || *token.ProfileID != profileID {
+			t.Fatalf("%s should remain: %#v err=%v", access, token, err)
+		}
+	}
+
+	replaced, err := store.ReplaceYggToken(ctx, "access_3", model.Token{
+		AccessToken: "access_new",
+		ClientToken: "client",
+		UserID:      "u1",
+		ProfileID:   &profileID,
+		CreatedAt:   5,
+	}, time.Minute)
+	if err != nil || !replaced {
+		t.Fatalf("replace should succeed: replaced=%v err=%v", replaced, err)
+	}
+	if _, err := store.GetYggToken(ctx, "access_3"); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("old token should miss after replace, got %v", err)
+	}
+	if token, err := store.GetYggToken(ctx, "access_new"); err != nil || token.UserID != "u1" {
+		t.Fatalf("new token mismatch: %#v err=%v", token, err)
+	}
+
+	if err := store.DeleteYggTokensByUser(ctx, "u1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, access := range []string{"access_4", "access_new"} {
+		if _, err := store.GetYggToken(ctx, access); !errors.Is(err, redisstore.ErrCacheMiss) {
+			t.Fatalf("%s should be deleted by user, got %v", access, err)
+		}
+	}
+}
+
+func TestMemoryStoreYggSessionTTL(t *testing.T) {
+	store := redisstore.NewMemoryStore()
+	ctx := context.Background()
+	if err := store.SetYggSession(ctx, model.Session{ServerID: "server", AccessToken: "access", CreatedAt: 1}, time.Nanosecond); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Millisecond)
+	if _, err := store.GetYggSession(ctx, "server"); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("expired ygg session should miss, got %v", err)
 	}
 }

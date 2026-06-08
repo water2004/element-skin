@@ -16,12 +16,12 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 401, Detail: "Bearer token required"})
 		return
 	}
-	tok, err := h.db.Tokens.Get(req.Context(), token)
+	tok, err := h.ygg.Token(req.Context(), token)
 	if err != nil {
 		util.Error(w, err)
 		return
 	}
-	if tok == nil || tok.ProfileID == nil || *tok.ProfileID != req.PathValue("uuid") {
+	if tok.ProfileID == nil || *tok.ProfileID != req.PathValue("uuid") {
 		util.Error(w, util.HTTPError{Status: 401, Detail: "Invalid token"})
 		return
 	}
@@ -82,12 +82,12 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 401, Detail: "Bearer token required"})
 		return
 	}
-	tok, err := h.db.Tokens.Get(req.Context(), token)
+	tok, err := h.ygg.Token(req.Context(), token)
 	if err != nil {
 		util.Error(w, err)
 		return
 	}
-	if tok == nil || tok.ProfileID == nil || *tok.ProfileID != req.PathValue("uuid") {
+	if tok.ProfileID == nil || *tok.ProfileID != req.PathValue("uuid") {
 		util.Error(w, util.HTTPError{Status: 401, Detail: "Invalid token"})
 		return
 	}

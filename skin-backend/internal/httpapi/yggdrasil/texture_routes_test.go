@@ -1,10 +1,12 @@
 package yggdrasil_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"element-skin/backend/internal/httpapi/yggdrasil"
 	"element-skin/backend/internal/model"
@@ -16,7 +18,8 @@ import (
 func TestTextureRoutesRequireBearerAndDeleteClearsProfileSkinExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
-	h := yggdrasil.New(cfg, db, settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 	user := testutil.CreateUser(t, db, "ygg-texture@test.com", "Password123", "YggTexture", false)
 	profile := testutil.CreateProfile(t, db, user.ID, "ygg_texture_profile", "YggTextureProfile")
 
@@ -30,8 +33,11 @@ func TestTextureRoutesRequireBearerAndDeleteClearsProfileSkinExactly(t *testing.
 	}
 
 	profileID := profile.ID
-	if err := db.Tokens.Add(req.Context(), model.Token{AccessToken: "delete_texture_token", ClientToken: "client", UserID: user.ID, ProfileID: &profileID, CreatedAt: 1}); err != nil {
+	if err := redis.SetYggToken(context.Background(), model.Token{AccessToken: "delete_texture_token", ClientToken: "client", UserID: user.ID, ProfileID: &profileID, CreatedAt: time.Now().UnixMilli()}, time.Minute); err != nil {
 		t.Fatal(err)
+	}
+	if token, err := db.Tokens.Get(context.Background(), "delete_texture_token"); err != nil || token != nil {
+		t.Fatalf("texture route seed token must be redis-only: %#v err=%v", token, err)
 	}
 	skin := "skin_before_delete"
 	if err := db.Profiles.UpdateSkin(req.Context(), profile.ID, &skin); err != nil {
