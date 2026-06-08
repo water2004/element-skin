@@ -9,6 +9,7 @@ import (
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/httpapi"
 	"element-skin/backend/internal/redisstore"
+	settingssvc "element-skin/backend/internal/service/settings"
 	sitepkg "element-skin/backend/internal/service/site"
 	yggpkg "element-skin/backend/internal/service/yggdrasil"
 	"element-skin/backend/internal/util"
@@ -42,8 +43,9 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		db.Close()
 		return nil, err
 	}
-	site := sitepkg.Site{DB: db, Cfg: cfg, Redis: redis}
-	ygg, err := yggpkg.New(db, cfg)
+	settings := settingssvc.Settings{DB: db, Redis: redis}
+	site := sitepkg.Site{DB: db, Cfg: cfg, Redis: redis, Settings: settings}
+	ygg, err := yggpkg.New(db, cfg, settings)
 	if err != nil {
 		_ = redis.Close()
 		db.Close()
@@ -68,8 +70,9 @@ func NewWithDB(cfg config.Config, db *database.DB) (*App, error) {
 }
 
 func NewWithDBAndRedis(cfg config.Config, db *database.DB, redis redisstore.Store) (*App, error) {
-	site := sitepkg.Site{DB: db, Cfg: cfg, Redis: redis}
-	ygg, err := yggpkg.New(db, cfg)
+	settings := settingssvc.Settings{DB: db, Redis: redis}
+	site := sitepkg.Site{DB: db, Cfg: cfg, Redis: redis, Settings: settings}
+	ygg, err := yggpkg.New(db, cfg, settings)
 	if err != nil {
 		_ = redis.Close()
 		return nil, err

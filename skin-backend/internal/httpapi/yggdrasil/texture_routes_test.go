@@ -8,6 +8,7 @@ import (
 
 	"element-skin/backend/internal/httpapi/yggdrasil"
 	"element-skin/backend/internal/model"
+	"element-skin/backend/internal/service/settings"
 	yggsvc "element-skin/backend/internal/service/yggdrasil"
 	"element-skin/backend/internal/testutil"
 )
@@ -15,7 +16,7 @@ import (
 func TestTextureRoutesRequireBearerAndDeleteClearsProfileSkinExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
-	h := yggdrasil.New(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+	h := yggdrasil.New(cfg, db, settings.Settings{DB: db}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 	user := testutil.CreateUser(t, db, "ygg-texture@test.com", "Password123", "YggTexture", false)
 	profile := testutil.CreateProfile(t, db, user.ID, "ygg_texture_profile", "YggTextureProfile")
 

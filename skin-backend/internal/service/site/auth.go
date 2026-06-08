@@ -10,14 +10,26 @@ import (
 	invitestore "element-skin/backend/internal/database/invite"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/redisstore"
+	settingssvc "element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/util"
 )
 
 // Site contains user-facing account, profile, and texture operations.
 type Site struct {
-	DB    *database.DB
-	Cfg   config.Config
-	Redis redisstore.Store
+	DB       *database.DB
+	Cfg      config.Config
+	Redis    redisstore.Store
+	Settings settingssvc.Settings
+}
+
+func (s Site) settings() settingssvc.Settings {
+	if s.Settings.DB == nil {
+		s.Settings.DB = s.DB
+	}
+	if s.Settings.Redis == nil {
+		s.Settings.Redis = s.Redis
+	}
+	return s.Settings
 }
 
 func (s Site) Login(ctx context.Context, email, password string) (map[string]any, error) {
@@ -50,15 +62,28 @@ func (s Site) Register(ctx context.Context, email, password, username, invite, c
 	} else if existing != nil {
 		return "", util.HTTPError{Status: 400, Detail: "Email already registered"}
 	}
-	if strong, _ := s.DB.Settings.Get(ctx, "enable_strong_password_check", "false"); strong == "true" {
+	settings := s.settings()
+	strong, err := settings.Get(ctx, "enable_strong_password_check", "false")
+	if err != nil {
+		return "", err
+	}
+	if strong == "true" {
 		if errs := util.ValidateStrongPassword(password); len(errs) > 0 {
 			return "", util.HTTPError{Status: 400, Detail: util.JoinPasswordErrors(errs)}
 		}
 	}
-	if allow, _ := s.DB.Settings.Get(ctx, "allow_register", "true"); allow != "true" {
+	allow, err := settings.Get(ctx, "allow_register", "true")
+	if err != nil {
+		return "", err
+	}
+	if allow != "true" {
 		return "", util.HTTPError{Status: 403, Detail: "registration is disabled"}
 	}
-	if enabled, _ := s.DB.Settings.Get(ctx, "email_verify_enabled", "false"); enabled == "true" {
+	enabled, err := settings.Get(ctx, "email_verify_enabled", "false")
+	if err != nil {
+		return "", err
+	}
+	if enabled == "true" {
 		if code == "" {
 			return "", util.HTTPError{Status: 400, Detail: "Verification code required"}
 		}
@@ -71,7 +96,10 @@ func (s Site) Register(ctx context.Context, email, password, username, invite, c
 		}
 		defer s.Redis.DeleteVerificationCode(ctx, email, "register")
 	}
-	requireInvite, _ := s.DB.Settings.Get(ctx, "require_invite", "false")
+	requireInvite, err := settings.Get(ctx, "require_invite", "false")
+	if err != nil {
+		return "", err
+	}
 	inviteCode := ""
 	if requireInvite == "true" {
 		if invite == "" {
@@ -93,7 +121,10 @@ func (s Site) Register(ctx context.Context, email, password, username, invite, c
 	if err != nil {
 		return "", err
 	}
-	mode, _ := s.DB.Settings.Get(ctx, "profile_uuid_mode", "random")
+	mode, err := settings.Get(ctx, "profile_uuid_mode", "random")
+	if err != nil {
+		return "", err
+	}
 	base := regexp.MustCompile(`[^a-zA-Z0-9_]`).ReplaceAllString(strings.Split(email, "@")[0], "_")
 	if len(base) > 12 {
 		base = base[:12]

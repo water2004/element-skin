@@ -7,51 +7,51 @@ import (
 )
 
 func (s Settings) Public(ctx context.Context, cfgSiteURL, cfgAPIURL string) (map[string]any, error) {
-	siteName, err := s.DB.Settings.Get(ctx, "site_name", SettingDefaults["site_name"])
+	siteName, err := s.Get(ctx, "site_name", SettingDefaults["site_name"])
 	if err != nil {
 		return nil, err
 	}
-	allow, err := s.DB.Settings.Get(ctx, "allow_register", SettingDefaults["allow_register"])
+	allow, err := s.Get(ctx, "allow_register", SettingDefaults["allow_register"])
 	if err != nil {
 		return nil, err
 	}
-	siteURL, err := s.DB.Settings.Get(ctx, "site_url", cfgSiteURL)
+	siteURL, err := s.Get(ctx, "site_url", cfgSiteURL)
 	if err != nil {
 		return nil, err
 	}
-	apiURL, err := s.DB.Settings.Get(ctx, "api_url", cfgAPIURL)
+	apiURL, err := s.Get(ctx, "api_url", cfgAPIURL)
 	if err != nil {
 		return nil, err
 	}
-	subtitle, err := s.DB.Settings.Get(ctx, "site_subtitle", SettingDefaults["site_subtitle"])
+	subtitle, err := s.Get(ctx, "site_subtitle", SettingDefaults["site_subtitle"])
 	if err != nil {
 		return nil, err
 	}
-	enableLibrary, err := s.DB.Settings.Get(ctx, "enable_skin_library", SettingDefaults["enable_skin_library"])
+	enableLibrary, err := s.Get(ctx, "enable_skin_library", SettingDefaults["enable_skin_library"])
 	if err != nil {
 		return nil, err
 	}
-	emailVerify, err := s.DB.Settings.Get(ctx, "email_verify_enabled", SettingDefaults["email_verify_enabled"])
+	emailVerify, err := s.Get(ctx, "email_verify_enabled", SettingDefaults["email_verify_enabled"])
 	if err != nil {
 		return nil, err
 	}
-	footer, err := s.DB.Settings.Get(ctx, "footer_text", SettingDefaults["footer_text"])
+	footer, err := s.Get(ctx, "footer_text", SettingDefaults["footer_text"])
 	if err != nil {
 		return nil, err
 	}
-	icp, err := s.DB.Settings.Get(ctx, "filing_icp", SettingDefaults["filing_icp"])
+	icp, err := s.Get(ctx, "filing_icp", SettingDefaults["filing_icp"])
 	if err != nil {
 		return nil, err
 	}
-	icpLink, err := s.DB.Settings.Get(ctx, "filing_icp_link", SettingDefaults["filing_icp_link"])
+	icpLink, err := s.Get(ctx, "filing_icp_link", SettingDefaults["filing_icp_link"])
 	if err != nil {
 		return nil, err
 	}
-	mps, err := s.DB.Settings.Get(ctx, "filing_mps", SettingDefaults["filing_mps"])
+	mps, err := s.Get(ctx, "filing_mps", SettingDefaults["filing_mps"])
 	if err != nil {
 		return nil, err
 	}
-	mpsLink, err := s.DB.Settings.Get(ctx, "filing_mps_link", SettingDefaults["filing_mps_link"])
+	mpsLink, err := s.Get(ctx, "filing_mps_link", SettingDefaults["filing_mps_link"])
 	if err != nil {
 		return nil, err
 	}

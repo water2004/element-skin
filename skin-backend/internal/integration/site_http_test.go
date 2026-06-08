@@ -151,7 +151,7 @@ func TestPublicSettingsAndAuthlibHeader(t *testing.T) {
 }
 
 func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
-	db, h := testutil.NewTestApp(t)
+	db, h, redis := testutil.NewTestAppWithRedisTB(t)
 	alice := testutil.CreateUser(t, db, "alice@test.com", "Password123", "ApiSearchAlice", false)
 	bob := testutil.CreateUser(t, db, "bob@test.com", "Password123", "ApiSearchBob", false)
 	charlie := testutil.CreateUser(t, db, "charlie@test.com", "Password123", "ApiSearchCharlie", false)
@@ -245,13 +245,14 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 	if err := db.Settings.Set(context.Background(), "enable_skin_library", false); err != nil {
 		t.Fatal(err)
 	}
+	invalidateSettings(t, redis)
 	if disabled := doJSON(t, h, "GET", "/public/skin-library", nil); disabled.Code != 403 {
 		t.Fatalf("disabled public library should be 403, got %d body=%s", disabled.Code, disabled.Body.String())
 	}
 }
 
 func TestSiteProfileTextureHTTPFlows(t *testing.T) {
-	db, h := testutil.NewTestApp(t)
+	db, h, redis := testutil.NewTestAppWithRedisTB(t)
 	user := testutil.CreateUser(t, db, "siteflow@test.com", "Password123", "SiteFlow", false)
 	token, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, user.ID, false, time.Hour)
 	cookie := &http.Cookie{Name: "access_token", Value: token}
@@ -268,6 +269,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 	if err := db.Settings.Set(context.Background(), "profile_uuid_mode", "offline"); err != nil {
 		t.Fatal(err)
 	}
+	invalidateSettings(t, redis)
 	offline := doJSON(t, h, "POST", "/me/profiles", map[string]any{"name": "OfflinePlayerA", "model": "default"}, cookie)
 	if offline.Code != 200 {
 		t.Fatalf("offline profile status=%d body=%s", offline.Code, offline.Body.String())
@@ -278,6 +280,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 	if err := db.Settings.Set(context.Background(), "profile_uuid_mode", "random"); err != nil {
 		t.Fatal(err)
 	}
+	invalidateSettings(t, redis)
 
 	create := doJSON(t, h, "POST", "/me/profiles", map[string]any{"name": "ApiPlayer", "model": "default"}, cookie)
 	if create.Code != 200 {
@@ -498,7 +501,7 @@ func TestSelfDeleteAndDirectTextureUploadHTTP(t *testing.T) {
 }
 
 func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
-	db, h := testutil.NewTestApp(t)
+	db, h, redis := testutil.NewTestAppWithRedisTB(t)
 	ctx := context.Background()
 	first := doJSON(t, h, "POST", "/register", map[string]any{"email": "admin-first@test.com", "password": "Password123", "username": "FirstAdmin"})
 	if first.Code != 200 {
@@ -523,6 +526,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	if err := db.Settings.Set(ctx, "enable_strong_password_check", true); err != nil {
 		t.Fatal(err)
 	}
+	invalidateSettings(t, redis)
 	for _, weak := range []string{"12345", "simplepass"} {
 		resp := doJSON(t, h, "POST", "/register", map[string]any{"email": "weak_" + weak + "@test.com", "password": weak, "username": "Weak" + weak})
 		if resp.Code != 400 {
@@ -536,6 +540,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	if err := db.Settings.Set(ctx, "enable_strong_password_check", false); err != nil {
 		t.Fatal(err)
 	}
+	invalidateSettings(t, redis)
 	for _, badEmail := range []string{"a@b", "a@x.com\r\nBcc: x@y.com", "notanemail"} {
 		bad := doJSON(t, h, "POST", "/register", map[string]any{"email": badEmail, "password": "Password123!", "username": "SomeUser"})
 		if bad.Code != 400 || !strings.Contains(bad.Body.String(), "Invalid email format") {
@@ -548,6 +553,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	if err := db.Settings.Set(ctx, "allow_register", false); err != nil {
 		t.Fatal(err)
 	}
+	invalidateSettings(t, redis)
 	disabled := doJSON(t, h, "POST", "/register", map[string]any{"email": "x@test.com", "password": "Password123", "username": "XUser"})
 	if disabled.Code != 403 {
 		t.Fatalf("disabled register should be 403, got %d body=%s", disabled.Code, disabled.Body.String())
@@ -558,6 +564,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	if err := db.Settings.Set(ctx, "require_invite", true); err != nil {
 		t.Fatal(err)
 	}
+	invalidateSettings(t, redis)
 	missingInvite := doJSON(t, h, "POST", "/register", map[string]any{"email": "x@test.com", "password": "Password123", "username": "XUser"})
 	if missingInvite.Code != 400 {
 		t.Fatalf("missing invite should be 400, got %d", missingInvite.Code)
@@ -593,6 +600,7 @@ func TestVerificationCodeRegisterAndResetPasswordHTTP(t *testing.T) {
 	if err := db.Settings.Set(ctx, "email_verify_ttl", 300); err != nil {
 		t.Fatal(err)
 	}
+	invalidateSettings(t, redis)
 
 	send := doJSON(t, h, "POST", "/send-verification-code", map[string]any{"email": "verify@test.com", "type": "register"})
 	if send.Code != 200 {

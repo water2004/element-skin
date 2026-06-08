@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"element-skin/backend/internal/httpapi/microsoft"
+	"element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
 )
@@ -16,7 +17,7 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
 	states := util.NewInMemoryStateStore()
-	h := microsoft.New(cfg, db, func(next http.HandlerFunc, requireAdmin bool) http.HandlerFunc {
+	h := microsoft.New(cfg, db, settings.Settings{DB: db}, func(next http.HandlerFunc, requireAdmin bool) http.HandlerFunc {
 		return next
 	}, states)
 

@@ -9,7 +9,10 @@ import (
 )
 
 func (s Site) issueSession(ctx context.Context, userID string, isAdmin bool, extra map[string]any) (map[string]any, error) {
-	expireDays, _ := s.DB.Settings.Int(ctx, "jwt_expire_days", s.Cfg.JWTExpireDays)
+	expireDays, err := s.settings().Int(ctx, "jwt_expire_days", s.Cfg.JWTExpireDays)
+	if err != nil {
+		return nil, err
+	}
 	access, err := util.CreateAccessToken(s.Cfg.JWTSecret, userID, isAdmin, time.Duration(s.Cfg.AccessMinutes)*time.Minute)
 	if err != nil {
 		return nil, err

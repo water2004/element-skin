@@ -7,15 +7,17 @@ import (
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/httpapi/shared"
 	"element-skin/backend/internal/redisstore"
+	settingssvc "element-skin/backend/internal/service/settings"
 	sitepkg "element-skin/backend/internal/service/site"
 )
 
 type Handler struct {
-	cfg   config.Config
-	db    *database.DB
-	redis redisstore.Store
-	site  sitepkg.Site
-	auth  shared.AuthFunc
+	cfg      config.Config
+	db       *database.DB
+	redis    redisstore.Store
+	site     sitepkg.Site
+	settings settingssvc.Settings
+	auth     shared.AuthFunc
 }
 
 func New(cfg config.Config, db *database.DB, svc sitepkg.Site, auth shared.AuthFunc) Handler {
@@ -30,7 +32,11 @@ func NewWithRedis(cfg config.Config, db *database.DB, redis redisstore.Store, sv
 	if svc.Redis == nil {
 		svc.Redis = redis
 	}
-	return Handler{cfg: cfg, db: db, redis: redis, site: svc, auth: auth}
+	settings := settingssvc.Settings{DB: db, Redis: redis}
+	if svc.Settings.DB == nil {
+		svc.Settings = settings
+	}
+	return Handler{cfg: cfg, db: db, redis: redis, site: svc, settings: settings, auth: auth}
 }
 
 func (h Handler) Auth(next http.HandlerFunc) http.HandlerFunc {

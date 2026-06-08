@@ -15,7 +15,12 @@ func (s Site) SendVerificationCode(ctx context.Context, email, typ string) (map[
 	if typ == "" {
 		typ = "register"
 	}
-	if enabled, _ := s.DB.Settings.Get(ctx, "email_verify_enabled", "false"); enabled != "true" {
+	settings := s.settings()
+	enabled, err := settings.Get(ctx, "email_verify_enabled", "false")
+	if err != nil {
+		return nil, err
+	}
+	if enabled != "true" {
 		return nil, util.HTTPError{Status: 400, Detail: "Email verification is disabled"}
 	}
 	if !validEmail(email) {
@@ -41,7 +46,10 @@ func (s Site) SendVerificationCode(ctx context.Context, email, typ string) (map[
 	default:
 		return nil, util.HTTPError{Status: 400, Detail: "invalid verification type"}
 	}
-	ttl, _ := s.DB.Settings.Int(ctx, "email_verify_ttl", 300)
+	ttl, err := settings.Int(ctx, "email_verify_ttl", 300)
+	if err != nil {
+		return nil, err
+	}
 	code, err := randomVerificationCode(8)
 	if err != nil {
 		return nil, err
@@ -64,12 +72,21 @@ func (s Site) VerifyCode(ctx context.Context, email, code, typ string) (bool, er
 }
 
 func (s Site) ResetPassword(ctx context.Context, email, newPassword, code string) error {
-	if strong, _ := s.DB.Settings.Get(ctx, "enable_strong_password_check", "false"); strong == "true" {
+	settings := s.settings()
+	strong, err := settings.Get(ctx, "enable_strong_password_check", "false")
+	if err != nil {
+		return err
+	}
+	if strong == "true" {
 		if errs := util.ValidateStrongPassword(newPassword); len(errs) > 0 {
 			return util.HTTPError{Status: 400, Detail: util.JoinPasswordErrors(errs)}
 		}
 	}
-	if enabled, _ := s.DB.Settings.Get(ctx, "email_verify_enabled", "false"); enabled != "true" {
+	enabled, err := settings.Get(ctx, "email_verify_enabled", "false")
+	if err != nil {
+		return err
+	}
+	if enabled != "true" {
 		return util.HTTPError{Status: 403, Detail: "Password reset via email is disabled"}
 	}
 	ok, err := s.VerifyCode(ctx, email, code, "reset")

@@ -32,6 +32,9 @@ func TestRedisBackedPublicSettingsAndCarouselHTTP(t *testing.T) {
 	if err := redis.InvalidatePublicSettings(ctx); err != nil {
 		t.Fatal(err)
 	}
+	if err := redis.InvalidateSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
 	refreshed := doJSON(t, h, "GET", "/public/settings", nil)
 	if refreshed.Code != 200 || parseJSON(t, refreshed)["site_name"] != "DB Changed Without Invalidation" {
 		t.Fatalf("public settings should refresh after invalidation: %d %s", refreshed.Code, refreshed.Body.String())
@@ -59,13 +62,22 @@ func TestAdminSettingsInvalidatePublicCacheAndApplySecurityImmediately(t *testin
 	if err := db.Settings.Set(ctx, "site_name", "Cached Site"); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := redis.GetSetting(ctx, "site_name"); err == nil {
+		t.Fatal("site_name setting should not be cached before first read")
+	}
 	first := doJSON(t, h, "GET", "/public/settings", nil)
 	if first.Code != 200 || parseJSON(t, first)["site_name"] != "Cached Site" {
 		t.Fatalf("prime public settings cache failed: %d %s", first.Code, first.Body.String())
 	}
+	if cachedSetting, err := redis.GetSetting(ctx, "site_name"); err != nil || cachedSetting != "Cached Site" {
+		t.Fatalf("site_name should be cached after public settings read: %q err=%v", cachedSetting, err)
+	}
 	saveSite := doJSON(t, h, "POST", "/admin/settings/site", map[string]any{"site_name": "Admin Saved Site"}, adminCookie)
 	if saveSite.Code != 200 {
 		t.Fatalf("save site settings status=%d body=%s", saveSite.Code, saveSite.Body.String())
+	}
+	if _, err := redis.GetSetting(ctx, "site_name"); err == nil {
+		t.Fatal("admin settings save should invalidate settings key cache")
 	}
 	afterSite := doJSON(t, h, "GET", "/public/settings", nil)
 	if afterSite.Code != 200 || parseJSON(t, afterSite)["site_name"] != "Admin Saved Site" {
@@ -158,6 +170,9 @@ func TestRedisBackedRateLimitAndVerificationHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := db.Settings.Set(ctx, "email_verify_enabled", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.InvalidateSettings(ctx); err != nil {
 		t.Fatal(err)
 	}
 	send := doJSON(t, h, "POST", "/send-verification-code", map[string]any{"email": "redis-register@test.com", "type": "register"})

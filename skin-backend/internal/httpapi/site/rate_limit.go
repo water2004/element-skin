@@ -12,7 +12,7 @@ import (
 )
 
 func (h Handler) checkAuthRateLimit(w http.ResponseWriter, req *http.Request, scope string) bool {
-	enabled, err := h.db.Settings.Get(req.Context(), "rate_limit_enabled", settings.SettingDefaults["rate_limit_enabled"])
+	enabled, err := h.settings.Get(req.Context(), "rate_limit_enabled", settings.SettingDefaults["rate_limit_enabled"])
 	if err != nil {
 		util.Error(w, err)
 		return false
@@ -20,12 +20,12 @@ func (h Handler) checkAuthRateLimit(w http.ResponseWriter, req *http.Request, sc
 	if enabled != "true" {
 		return true
 	}
-	limit, err := h.db.Settings.Int(req.Context(), "rate_limit_auth_attempts", 5)
+	limit, err := h.settings.Int(req.Context(), "rate_limit_auth_attempts", 5)
 	if err != nil {
 		util.Error(w, err)
 		return false
 	}
-	windowMinutes, err := h.db.Settings.Int(req.Context(), "rate_limit_auth_window", 15)
+	windowMinutes, err := h.settings.Int(req.Context(), "rate_limit_auth_window", 15)
 	if err != nil {
 		util.Error(w, err)
 		return false

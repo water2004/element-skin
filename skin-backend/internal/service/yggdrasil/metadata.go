@@ -10,7 +10,10 @@ func (y Yggdrasil) Metadata(ctx context.Context) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	name, _ := y.DB.Settings.Get(ctx, "site_name", "皮肤站")
+	name, err := y.settings().Get(ctx, "site_name", "皮肤站")
+	if err != nil {
+		return nil, err
+	}
 	site := strings.TrimRight(y.Cfg.SiteURL, "/")
 	host := strings.TrimPrefix(strings.TrimPrefix(site, "https://"), "http://")
 	if i := strings.Index(host, "/"); i >= 0 {

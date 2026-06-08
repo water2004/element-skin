@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"element-skin/backend/internal/redisstore"
 )
 
 var testRequestIP atomic.Uint64
@@ -76,6 +78,13 @@ func cookieNamed(rr *httptest.ResponseRecorder, name string) *http.Cookie {
 		}
 	}
 	return nil
+}
+
+func invalidateSettings(t *testing.T, redis redisstore.Store) {
+	t.Helper()
+	if err := redis.InvalidateSettings(t.Context()); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func pngTexture(t *testing.T, w, h int) []byte {

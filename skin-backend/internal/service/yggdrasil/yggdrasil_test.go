@@ -3,13 +3,14 @@ package yggdrasil_test
 import (
 	"testing"
 
+	"element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/service/yggdrasil"
 	"element-skin/backend/internal/testutil"
 )
 
 func TestNewLoadsSignerAndStoresDependencies(t *testing.T) {
 	cfg := testutil.TestConfig()
-	ygg, err := yggdrasil.New(nil, cfg)
+	ygg, err := yggdrasil.New(nil, cfg, settings.Settings{})
 	if err != nil {
 		t.Fatal(err)
 	}

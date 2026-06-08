@@ -26,7 +26,10 @@ func (s Site) CreateProfile(ctx context.Context, userID, name, mdl string) (map[
 	if err != nil {
 		return nil, err
 	}
-	mode, _ := s.DB.Settings.Get(ctx, "profile_uuid_mode", "random")
+	mode, err := s.settings().Get(ctx, "profile_uuid_mode", "random")
+	if err != nil {
+		return nil, err
+	}
 	if mode == "offline" {
 		id = util.OfflineUUIDNoDash(name)
 	}
@@ -43,7 +46,11 @@ func (s Site) CreateProfile(ctx context.Context, userID, name, mdl string) (map[
 }
 
 func (s Site) PublicLibrary(ctx context.Context, cursor string, limit int, typ, q string) (map[string]any, error) {
-	if enabled, _ := s.DB.Settings.Get(ctx, "enable_skin_library", "true"); enabled != "true" {
+	enabled, err := s.settings().Get(ctx, "enable_skin_library", "true")
+	if err != nil {
+		return nil, err
+	}
+	if enabled != "true" {
 		return nil, util.HTTPError{Status: 403, Detail: "Skin library is disabled by administrator"}
 	}
 	lastCreated, lastHash, err := textureCursor(cursor, "last_skin_hash")

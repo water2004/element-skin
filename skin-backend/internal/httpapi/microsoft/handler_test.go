@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"element-skin/backend/internal/httpapi/microsoft"
+	"element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
 )
@@ -13,7 +14,7 @@ import (
 func TestHandlerAuthRequestsUserAccessAndKeepsStateStore(t *testing.T) {
 	var requireAdmin bool
 	states := util.NewInMemoryStateStore()
-	h := microsoft.New(testutil.TestConfig(), nil, func(next http.HandlerFunc, require bool) http.HandlerFunc {
+	h := microsoft.New(testutil.TestConfig(), nil, settings.Settings{}, func(next http.HandlerFunc, require bool) http.HandlerFunc {
 		requireAdmin = require
 		return next
 	}, states)

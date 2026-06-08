@@ -13,6 +13,23 @@ func TestMemoryStoreCachesAndInvalidatesPublicData(t *testing.T) {
 	store := redisstore.NewMemoryStore()
 	ctx := context.Background()
 
+	if _, err := store.GetSetting(ctx, "site_name"); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("empty setting should miss, got %v", err)
+	}
+	if err := store.SetSetting(ctx, "site_name", "Cached Setting", time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	setting, err := store.GetSetting(ctx, "site_name")
+	if err != nil || setting != "Cached Setting" {
+		t.Fatalf("setting cache mismatch: %q err=%v", setting, err)
+	}
+	if err := store.InvalidateSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.GetSetting(ctx, "site_name"); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("invalidated setting should miss, got %v", err)
+	}
+
 	if _, err := store.GetPublicSettings(ctx); !errors.Is(err, redisstore.ErrCacheMiss) {
 		t.Fatalf("empty settings should miss, got %v", err)
 	}

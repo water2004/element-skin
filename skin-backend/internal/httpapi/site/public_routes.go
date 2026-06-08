@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"element-skin/backend/internal/redisstore"
-	settingssvc "element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/util"
 )
 
@@ -31,7 +30,7 @@ func (h Handler) PublicSettings(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	res, err := (settingssvc.Settings{DB: h.db}).Public(req.Context(), h.cfg.SiteURL, h.cfg.APIURL)
+	res, err := h.settings.Public(req.Context(), h.cfg.SiteURL, h.cfg.APIURL)
 	if err != nil {
 		util.Error(w, err)
 		return

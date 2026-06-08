@@ -4,12 +4,11 @@ import (
 	"net/http"
 
 	"element-skin/backend/internal/httpapi/shared"
-	settingssvc "element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/util"
 )
 
 func (h Handler) GetSiteSettings(w http.ResponseWriter, req *http.Request) {
-	res, err := (settingssvc.Settings{DB: h.db}).GetGroup(req.Context(), "site")
+	res, err := h.settings.GetGroup(req.Context(), "site")
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -23,7 +22,11 @@ func (h Handler) SaveSiteSettings(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
 		return
 	}
-	if err := (settingssvc.Settings{DB: h.db}).SaveGroup(req.Context(), "site", body); err != nil {
+	if err := h.settings.SaveGroup(req.Context(), "site", body); err != nil {
+		util.Error(w, err)
+		return
+	}
+	if err := h.settings.InvalidateCache(req.Context()); err != nil {
 		util.Error(w, err)
 		return
 	}
@@ -35,7 +38,7 @@ func (h Handler) SaveSiteSettings(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) GetSettingsGroup(w http.ResponseWriter, req *http.Request) {
-	res, err := (settingssvc.Settings{DB: h.db}).GetGroup(req.Context(), req.PathValue("group"))
+	res, err := h.settings.GetGroup(req.Context(), req.PathValue("group"))
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -49,7 +52,11 @@ func (h Handler) SaveSettingsGroup(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
 		return
 	}
-	if err := (settingssvc.Settings{DB: h.db}).SaveGroup(req.Context(), req.PathValue("group"), body); err != nil {
+	if err := h.settings.SaveGroup(req.Context(), req.PathValue("group"), body); err != nil {
+		util.Error(w, err)
+		return
+	}
+	if err := h.settings.InvalidateCache(req.Context()); err != nil {
 		util.Error(w, err)
 		return
 	}

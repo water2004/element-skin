@@ -38,6 +38,9 @@ type RateLimitResult struct {
 
 type Store interface {
 	Close() error
+	GetSetting(context.Context, string) (string, error)
+	SetSetting(context.Context, string, string, time.Duration) error
+	InvalidateSettings(context.Context) error
 	GetPublicSettings(context.Context) (map[string]any, error)
 	SetPublicSettings(context.Context, map[string]any, time.Duration) error
 	InvalidatePublicSettings(context.Context) error
@@ -114,6 +117,22 @@ func (s *RedisStore) setJSON(ctx context.Context, key string, value any, ttl tim
 		return err
 	}
 	return s.client.Set(ctx, key, b, ttl).Err()
+}
+
+func (s *RedisStore) GetSetting(ctx context.Context, key string) (string, error) {
+	value, err := s.client.Get(ctx, s.key("settings", key)).Result()
+	if err == redis.Nil {
+		return "", ErrCacheMiss
+	}
+	return value, err
+}
+
+func (s *RedisStore) SetSetting(ctx context.Context, key, value string, ttl time.Duration) error {
+	return s.client.Set(ctx, s.key("settings", key), value, ttl).Err()
+}
+
+func (s *RedisStore) InvalidateSettings(ctx context.Context) error {
+	return s.DeleteByPrefix(ctx, "settings:")
 }
 
 func (s *RedisStore) GetPublicSettings(ctx context.Context) (map[string]any, error) {

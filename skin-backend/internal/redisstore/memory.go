@@ -70,6 +70,27 @@ func cloneValue(v any) any {
 	return out
 }
 
+func (s *MemoryStore) GetSetting(_ context.Context, key string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, err := s.get(s.key("settings", key))
+	if err != nil {
+		return "", err
+	}
+	out, _ := v.(string)
+	return out, nil
+}
+
+func (s *MemoryStore) SetSetting(_ context.Context, key, value string, ttl time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.set(s.key("settings", key), value, ttl)
+}
+
+func (s *MemoryStore) InvalidateSettings(ctx context.Context) error {
+	return s.DeleteByPrefix(ctx, "settings:")
+}
+
 func (s *MemoryStore) GetPublicSettings(context.Context) (map[string]any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

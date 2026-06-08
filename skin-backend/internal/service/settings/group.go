@@ -15,7 +15,7 @@ func (s Settings) GetGroup(ctx context.Context, group string) (map[string]any, e
 	}
 	out := map[string]any{}
 	for _, key := range keys {
-		raw, err := s.DB.Settings.Get(ctx, key, SettingDefaults[key])
+		raw, err := s.Get(ctx, key, SettingDefaults[key])
 		if err != nil {
 			return nil, err
 		}
