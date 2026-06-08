@@ -25,3 +25,29 @@ func TestInviteRoutesCreateInvitePersistsExactState(t *testing.T) {
 		t.Fatalf("created invite state mismatch: invite=%#v err=%v", invite, err)
 	}
 }
+
+func TestInviteRoutesListAndDeleteExactState(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	h := admin.New(testutil.TestConfig(), db, nil)
+	if err := db.Invites.Create(t.Context(), "route-list-invite", 3, "List Invite"); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/invites?limit=1", nil)
+	rec := httptest.NewRecorder()
+	h.Invites(rec, req)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"code":"route-list-invite"`) || !strings.Contains(rec.Body.String(), `"page_size":1`) {
+		t.Fatalf("invite list response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/admin/invites/route-list-invite", nil)
+	req.SetPathValue("code", "route-list-invite")
+	rec = httptest.NewRecorder()
+	h.DeleteInvite(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+		t.Fatalf("delete invite response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if invite, err := db.Invites.Get(req.Context(), "route-list-invite"); err != nil || invite != nil {
+		t.Fatalf("invite should be deleted: invite=%#v err=%v", invite, err)
+	}
+}
