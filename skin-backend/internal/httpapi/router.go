@@ -5,26 +5,22 @@ import (
 
 	"element-skin/backend/internal/config"
 	"element-skin/backend/internal/database"
-	"element-skin/backend/internal/service"
+	sitepkg "element-skin/backend/internal/service/site"
+	yggpkg "element-skin/backend/internal/service/yggdrasil"
 	"element-skin/backend/internal/util"
 )
 
 type Router struct {
 	cfg  config.Config
 	db   *database.DB
-	site service.Site
-	ygg  service.Yggdrasil
+	site sitepkg.Site
+	ygg  yggpkg.Yggdrasil
 	mux  *http.ServeMux
 }
 
 var MicrosoftImportStates = util.NewInMemoryStateStore()
 
-type ctxKey string
-
-const userIDKey ctxKey = "user_id"
-const adminKey ctxKey = "admin"
-
-func NewRouter(cfg config.Config, db *database.DB, site service.Site, ygg service.Yggdrasil) http.Handler {
+func NewRouter(cfg config.Config, db *database.DB, site sitepkg.Site, ygg yggpkg.Yggdrasil) http.Handler {
 	r := &Router{cfg: cfg, db: db, site: site, ygg: ygg, mux: http.NewServeMux()}
 	r.routes()
 	return r

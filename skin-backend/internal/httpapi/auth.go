@@ -1,9 +1,9 @@
 package httpapi
 
 import (
-	"context"
 	"net/http"
 
+	"element-skin/backend/internal/httpapi/shared"
 	"element-skin/backend/internal/util"
 )
 
@@ -33,13 +33,6 @@ func (r *Router) auth(next http.HandlerFunc, requireAdmin bool) http.HandlerFunc
 			util.Error(w, util.HTTPError{Status: 403, Detail: "admin required"})
 			return
 		}
-		ctx := context.WithValue(req.Context(), userIDKey, user.ID)
-		ctx = context.WithValue(ctx, adminKey, user.IsAdmin)
-		next(w, req.WithContext(ctx))
+		next(w, req.WithContext(shared.WithUser(req.Context(), user.ID, user.IsAdmin)))
 	}
-}
-
-func currentUserID(req *http.Request) string {
-	v, _ := req.Context().Value(userIDKey).(string)
-	return v
 }

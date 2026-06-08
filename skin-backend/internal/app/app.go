@@ -8,7 +8,8 @@ import (
 	"element-skin/backend/internal/config"
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/httpapi"
-	"element-skin/backend/internal/service"
+	sitepkg "element-skin/backend/internal/service/site"
+	yggpkg "element-skin/backend/internal/service/yggdrasil"
 	"element-skin/backend/internal/util"
 )
 
@@ -34,8 +35,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		db.Close()
 		return nil, err
 	}
-	site := service.Site{DB: db, Cfg: cfg}
-	ygg := service.Yggdrasil{DB: db, Cfg: cfg}
+	site := sitepkg.Site{DB: db, Cfg: cfg}
+	ygg := yggpkg.Yggdrasil{DB: db, Cfg: cfg}
 	cleanupCtx, cancel := context.WithCancel(context.Background())
 	go RunRefreshCleanupLoop(cleanupCtx, db, time.Hour)
 	return &App{
@@ -46,8 +47,8 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 }
 
 func NewWithDB(cfg config.Config, db *database.DB) *App {
-	site := service.Site{DB: db, Cfg: cfg}
-	ygg := service.Yggdrasil{DB: db, Cfg: cfg}
+	site := sitepkg.Site{DB: db, Cfg: cfg}
+	ygg := yggpkg.Yggdrasil{DB: db, Cfg: cfg}
 	return &App{db: db, handler: httpapi.NewRouter(cfg, db, site, ygg)}
 }
 
