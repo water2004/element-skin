@@ -123,7 +123,7 @@ func (s Store) UpdateNote(ctx context.Context, userID, hash, textureType, note s
 	if _, err := tx.Exec(ctx, `UPDATE user_textures SET note=$1 WHERE user_id=$2 AND hash=$3 AND texture_type=$4`, note, userID, hash, textureType); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE skin_library SET name=$1 WHERE skin_hash=$2 AND uploader=$3`, note, hash, userID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE skin_library SET name=$1 WHERE skin_hash=$2 AND uploader=$3 AND texture_type=$4`, note, hash, userID, textureType); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -138,7 +138,7 @@ func (s Store) UpdateModel(ctx context.Context, userID, hash, textureType, model
 	if _, err := tx.Exec(ctx, `UPDATE user_textures SET model=$1 WHERE user_id=$2 AND hash=$3 AND texture_type=$4`, model, userID, hash, textureType); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE skin_library SET model=$1 WHERE skin_hash=$2 AND uploader=$3`, model, hash, userID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE skin_library SET model=$1 WHERE skin_hash=$2 AND uploader=$3 AND texture_type=$4`, model, hash, userID, textureType); err != nil {
 		return err
 	}
 	if strings.EqualFold(textureType, "skin") {
@@ -162,7 +162,7 @@ func (s Store) UpdatePublic(ctx context.Context, userID, hash, textureType strin
 	if _, err := tx.Exec(ctx, `UPDATE user_textures SET is_public=$1 WHERE user_id=$2 AND hash=$3 AND texture_type=$4 AND is_public != 2`, pub, userID, hash, textureType); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE skin_library SET is_public=$1 WHERE skin_hash=$2 AND uploader=$3`, pub, hash, userID); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE skin_library SET is_public=$1 WHERE skin_hash=$2 AND uploader=$3 AND texture_type=$4`, pub, hash, userID, textureType); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -185,7 +185,7 @@ func (s Store) DeleteFromLibrary(ctx context.Context, userID, hash, textureType 
 	if _, err := tx.Exec(ctx, `DELETE FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3`, userID, hash, textureType); err != nil {
 		return false, err
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM skin_library WHERE uploader=$1 AND skin_hash=$2`, userID, hash); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM skin_library WHERE uploader=$1 AND skin_hash=$2 AND texture_type=$3`, userID, hash, textureType); err != nil {
 		return false, err
 	}
 	return true, tx.Commit(ctx)

@@ -73,13 +73,14 @@ CREATE TABLE IF NOT EXISTS user_textures (
 );
 
 CREATE TABLE IF NOT EXISTS skin_library (
-    skin_hash TEXT PRIMARY KEY,
+    skin_hash TEXT NOT NULL,
     texture_type TEXT NOT NULL,
     is_public INTEGER DEFAULT 0,
     uploader TEXT,
     model TEXT DEFAULT 'default',
     name TEXT DEFAULT '',
-    created_at BIGINT NOT NULL
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY(skin_hash, texture_type)
 );
 
 CREATE TABLE IF NOT EXISTS fallback_endpoints (
@@ -125,6 +126,9 @@ CREATE INDEX IF NOT EXISTS idx_users_display_name ON users (display_name);
 CREATE INDEX IF NOT EXISTS idx_skin_library_public_created_hash ON skin_library (is_public, created_at, skin_hash);
 CREATE INDEX IF NOT EXISTS idx_skin_library_created_hash ON skin_library (created_at, skin_hash);
 CREATE INDEX IF NOT EXISTS idx_whitelisted_users_endpoint ON whitelisted_users (endpoint_id);
+
+ALTER TABLE skin_library DROP CONSTRAINT IF EXISTS skin_library_pkey;
+ALTER TABLE skin_library ADD CONSTRAINT skin_library_pkey PRIMARY KEY (skin_hash, texture_type);
 
 INSERT INTO settings (key, value) VALUES
 ('microsoft_client_id', ''),

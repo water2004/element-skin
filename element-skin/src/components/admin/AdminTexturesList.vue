@@ -270,7 +270,7 @@ async function updatePreviewNote() {
   const newName = previewNote.value.trim()
   if (newName === selectedItem.value.name) return
   try {
-    await patchAdminTexture(selectedItem.value.hash, { note: newName })
+    await patchAdminTexture(selectedItem.value.hash, { type: selectedItem.value.type, note: newName })
     selectedItem.value.name = newName
     ElMessage.success('名称已更新')
   } catch (e) {
@@ -281,7 +281,7 @@ async function updatePreviewNote() {
 async function updateModel(newModel: string | number | boolean | undefined) {
   if (!selectedItem.value) return
   try {
-    await patchAdminTexture(selectedItem.value.hash, { model: String(newModel) })
+    await patchAdminTexture(selectedItem.value.hash, { type: selectedItem.value.type, model: String(newModel) })
     selectedItem.value.model = String(newModel)
     ElMessage.success('模型已更新')
   } catch (e) {
@@ -310,7 +310,7 @@ async function updateIsPublic(newValue: string | number | boolean) {
   }
 
   try {
-    await patchAdminTexture(item.hash, { is_public: Boolean(newValue) })
+    await patchAdminTexture(item.hash, { type: item.type, is_public: Boolean(newValue) })
     item.is_public = Boolean(newValue)
     ElMessage.success(newValue ? '材质已公开' : '已取消公开')
   } catch (e) {

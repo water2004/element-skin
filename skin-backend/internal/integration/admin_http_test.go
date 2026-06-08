@@ -103,7 +103,7 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if len(textureItems) != 1 || textureItems[0].(map[string]any)["hash"] != "adm_hash" {
 		t.Fatalf("unexpected admin textures: %#v", textureItems)
 	}
-	patchTex := doJSON(t, h, "PATCH", "/admin/textures/adm_hash", map[string]any{"is_public": 0, "note": "AdminRenamedTexture"}, adminCookie)
+	patchTex := doJSON(t, h, "PATCH", "/admin/textures/adm_hash", map[string]any{"type": "skin", "is_public": 0, "note": "AdminRenamedTexture"}, adminCookie)
 	if patchTex.Code != 200 {
 		t.Fatalf("admin patch texture status=%d body=%s", patchTex.Code, patchTex.Body.String())
 	}
@@ -111,7 +111,7 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if info["is_public"].(int) != 0 || info["note"] != "AdminRenamedTexture" {
 		t.Fatalf("admin texture patch did not persist: %#v", info)
 	}
-	forbiddenPatchTexture := doJSON(t, h, "PATCH", "/admin/textures/adm_hash", map[string]any{"is_public": 1}, userCookie)
+	forbiddenPatchTexture := doJSON(t, h, "PATCH", "/admin/textures/adm_hash", map[string]any{"type": "skin", "is_public": 1}, userCookie)
 	if forbiddenPatchTexture.Code != 403 {
 		t.Fatalf("non-admin texture patch should be 403, got %d", forbiddenPatchTexture.Code)
 	}

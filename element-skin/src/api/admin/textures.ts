@@ -12,7 +12,7 @@ export function getAdminTextures(params: {
   return client.get('/admin/textures', { params })
 }
 
-export function patchAdminTexture(hash: string, data: { model?: string; note?: string; is_public?: boolean | number }): Promise<{ data: { ok: boolean } }> {
+export function patchAdminTexture(hash: string, data: { type: string; model?: string; note?: string; is_public?: boolean | number }): Promise<{ data: { ok: boolean } }> {
   return client.patch(`/admin/textures/${hash}`, data)
 }
 

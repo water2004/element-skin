@@ -470,7 +470,7 @@ func TestDatabaseUserProfileTokenAndTextureCRUD(t *testing.T) {
 		t.Fatal(err)
 	}
 	other := testutil.CreateUser(t, db, "other@test.com", "Password123", "Other", false)
-	ok, err := db.Textures.AddToWardrobe(ctx, other.ID, "texhash")
+	ok, err := db.Textures.AddToWardrobe(ctx, other.ID, "texhash", "skin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +480,7 @@ func TestDatabaseUserProfileTokenAndTextureCRUD(t *testing.T) {
 	if err := db.Textures.UpdatePublic(ctx, user.ID, "texhash", "skin", true); err != nil {
 		t.Fatal(err)
 	}
-	ok, err = db.Textures.AddToWardrobe(ctx, other.ID, "texhash")
+	ok, err = db.Textures.AddToWardrobe(ctx, other.ID, "texhash", "skin")
 	if err != nil || !ok {
 		t.Fatalf("public wardrobe add ok=%v err=%v", ok, err)
 	}
@@ -504,7 +504,7 @@ func TestDatabaseUserProfileTokenAndTextureCRUD(t *testing.T) {
 		t.Fatalf("owner model update should cascade to profile, got %#v", updatedModelProfile)
 	}
 	otherModelUser := testutil.CreateUser(t, db, "other-model@test.com", "Password123", "OtherModel", false)
-	if ok, err := db.Textures.AddToWardrobe(ctx, otherModelUser.ID, modelHash); err != nil || !ok {
+	if ok, err := db.Textures.AddToWardrobe(ctx, otherModelUser.ID, modelHash, "skin"); err != nil || !ok {
 		t.Fatalf("other model wardrobe add ok=%v err=%v", ok, err)
 	}
 	if err := db.Textures.UpdateModel(ctx, otherModelUser.ID, modelHash, "skin", "default"); err != nil {
@@ -519,7 +519,7 @@ func TestDatabaseUserProfileTokenAndTextureCRUD(t *testing.T) {
 	if err := db.Textures.AddToLibrary(ctx, user.ID, privateHash, "skin", "PrivateSkin", false, "default"); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := db.Textures.AddToWardrobe(ctx, other.ID, privateHash); err != nil || ok {
+	if ok, err := db.Textures.AddToWardrobe(ctx, other.ID, privateHash, "skin"); err != nil || ok {
 		t.Fatalf("private library texture should not be addable through public wardrobe flow ok=%v err=%v", ok, err)
 	}
 }

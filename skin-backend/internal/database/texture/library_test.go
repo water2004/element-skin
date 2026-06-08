@@ -25,7 +25,7 @@ func TestPublicLibraryAndWardrobeCopyVisibilityRules(t *testing.T) {
 	if len(items) != 1 || items[0]["hash"] != "domain_texture_library_hash" || items[0]["uploader_display_name"] != "DomainTextureLibraryOwner" {
 		t.Fatalf("public library mismatch: %#v", page)
 	}
-	added, err := store.AddToWardrobe(ctx, other.ID, "domain_texture_library_hash")
+	added, err := store.AddToWardrobe(ctx, other.ID, "domain_texture_library_hash", "skin")
 	if err != nil || !added {
 		t.Fatalf("wardrobe add mismatch: added=%v err=%v", added, err)
 	}
@@ -36,7 +36,7 @@ func TestPublicLibraryAndWardrobeCopyVisibilityRules(t *testing.T) {
 	if err := store.AddToLibrary(ctx, owner.ID, "domain_private_library_hash", "skin", "Private Library", false, "default"); err != nil {
 		t.Fatal(err)
 	}
-	added, err = store.AddToWardrobe(ctx, other.ID, "domain_private_library_hash")
+	added, err = store.AddToWardrobe(ctx, other.ID, "domain_private_library_hash", "skin")
 	if err != nil || added {
 		t.Fatalf("private library texture should not be wardrobe-addable: added=%v err=%v", added, err)
 	}

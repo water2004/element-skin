@@ -79,8 +79,8 @@ func (s Site) ListMyTextures(ctx context.Context, userID, cursor string, limit i
 	return s.DB.Textures.ListForUser(ctx, userID, typ, limit, lastCreated, lastHash)
 }
 
-func (s Site) AddTextureToWardrobe(ctx context.Context, userID, hash string) error {
-	ok, err := s.DB.Textures.AddToWardrobe(ctx, userID, hash)
+func (s Site) AddTextureToWardrobe(ctx context.Context, userID, hash, textureType string) error {
+	ok, err := s.DB.Textures.AddToWardrobe(ctx, userID, hash, textureType)
 	if err != nil {
 		return err
 	}

@@ -90,7 +90,7 @@
           <div class="texture-actions" @click.stop>
             <el-button 
               class="btn-gradient btn-gradient-primary" 
-              @click="addToWardrobe(item.hash)"
+              @click="addToWardrobe(item)"
               :disabled="!isLogged"
             >
               <el-icon><Plus /></el-icon>
@@ -157,7 +157,7 @@
                 size="large" 
                 class="btn-gradient btn-gradient-primary" 
                 style="width: 100%; border-radius: 12px; height: 50px;"
-                @click="addToWardrobe(selectedItem.hash)"
+                @click="addToWardrobe(selectedItem)"
                 :disabled="!isLogged"
               >
                 <el-icon><Plus /></el-icon>
@@ -345,9 +345,9 @@ function handleClearSearch() {
   fetchLibrary()
 }
 
-async function addToWardrobe(hash: string) {
+async function addToWardrobe(item: Texture) {
   try {
-    await apiAddToWardrobe(hash)
+    await apiAddToWardrobe(item.hash, item.type)
     ElMessage.success('已成功添加到我的衣柜')
   } catch (e: any) {
     ElMessage.error('添加失败: ' + (e.response?.data?.detail || e.message))

@@ -58,8 +58,8 @@ func (s Store) ListAll(ctx context.Context, limit int, lastCreated *int64, lastH
 	return map[string]any{"items": items, "has_next": hasNext, "next_key": next, "page_size": len(items)}, rows.Err()
 }
 
-func (s Store) AdminUpdatePublic(ctx context.Context, hash string, isPublic bool) error {
-	exists, err := s.Exists(ctx, hash)
+func (s Store) AdminUpdatePublic(ctx context.Context, hash, textureType string, isPublic bool) error {
+	exists, err := s.Exists(ctx, hash, textureType)
 	if err != nil {
 		return err
 	}
@@ -75,17 +75,17 @@ func (s Store) AdminUpdatePublic(ctx context.Context, hash string, isPublic bool
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `UPDATE skin_library SET is_public=$1 WHERE skin_hash=$2`, pub, hash); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE skin_library SET is_public=$1 WHERE skin_hash=$2 AND texture_type=$3`, pub, hash, textureType); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE user_textures SET is_public=$1 WHERE hash=$2 AND is_public != 2`, pub, hash); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE user_textures SET is_public=$1 WHERE hash=$2 AND texture_type=$3 AND is_public != 2`, pub, hash, textureType); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-func (s Store) AdminUpdateNote(ctx context.Context, hash, note string) error {
-	exists, err := s.Exists(ctx, hash)
+func (s Store) AdminUpdateNote(ctx context.Context, hash, textureType, note string) error {
+	exists, err := s.Exists(ctx, hash, textureType)
 	if err != nil {
 		return err
 	}
@@ -97,17 +97,17 @@ func (s Store) AdminUpdateNote(ctx context.Context, hash, note string) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `UPDATE skin_library SET name=$1 WHERE skin_hash=$2`, note, hash); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE skin_library SET name=$1 WHERE skin_hash=$2 AND texture_type=$3`, note, hash, textureType); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE user_textures SET note=$1 WHERE hash=$2`, note, hash); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE user_textures SET note=$1 WHERE hash=$2 AND texture_type=$3`, note, hash, textureType); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-func (s Store) AdminUpdateModel(ctx context.Context, hash, model string) error {
-	exists, err := s.Exists(ctx, hash)
+func (s Store) AdminUpdateModel(ctx context.Context, hash, textureType, model string) error {
+	exists, err := s.Exists(ctx, hash, textureType)
 	if err != nil {
 		return err
 	}
@@ -119,18 +119,18 @@ func (s Store) AdminUpdateModel(ctx context.Context, hash, model string) error {
 		return err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `UPDATE skin_library SET model=$1 WHERE skin_hash=$2`, model, hash); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE skin_library SET model=$1 WHERE skin_hash=$2 AND texture_type=$3`, model, hash, textureType); err != nil {
 		return err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE user_textures SET model=$1 WHERE hash=$2`, model, hash); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE user_textures SET model=$1 WHERE hash=$2 AND texture_type=$3`, model, hash, textureType); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
 }
 
-func (s Store) Exists(ctx context.Context, hash string) (bool, error) {
+func (s Store) Exists(ctx context.Context, hash, textureType string) (bool, error) {
 	var one int
-	err := s.Pool.QueryRow(ctx, `SELECT 1 FROM skin_library WHERE skin_hash=$1`, hash).Scan(&one)
+	err := s.Pool.QueryRow(ctx, `SELECT 1 FROM skin_library WHERE skin_hash=$1 AND texture_type=$2`, hash, textureType).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -147,7 +147,7 @@ func (s Store) AdminDelete(ctx context.Context, hash, textureType, userID string
 		if _, err := tx.Exec(ctx, `DELETE FROM user_textures WHERE hash=$1 AND texture_type=$2`, hash, textureType); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(ctx, `DELETE FROM skin_library WHERE skin_hash=$1`, hash); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM skin_library WHERE skin_hash=$1 AND texture_type=$2`, hash, textureType); err != nil {
 			return err
 		}
 		return tx.Commit(ctx)
@@ -163,7 +163,7 @@ func (s Store) AdminDelete(ctx context.Context, hash, textureType, userID string
 		return err
 	}
 	if remaining == 0 {
-		if _, err := tx.Exec(ctx, `DELETE FROM skin_library WHERE skin_hash=$1`, hash); err != nil {
+		if _, err := tx.Exec(ctx, `DELETE FROM skin_library WHERE skin_hash=$1 AND texture_type=$2`, hash, textureType); err != nil {
 			return err
 		}
 	}

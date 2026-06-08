@@ -14,6 +14,7 @@ func TestInitSQLContainsExpectedTablesConstraintsIndexesAndSeeds(t *testing.T) {
 		"email TEXT UNIQUE NOT NULL",
 		"name TEXT UNIQUE NOT NULL",
 		"PRIMARY KEY(user_id, hash, texture_type)",
+		"PRIMARY KEY(skin_hash, texture_type)",
 		"UNIQUE(username, endpoint_id)",
 		"idx_profiles_user_id",
 		"idx_site_refresh_expires",

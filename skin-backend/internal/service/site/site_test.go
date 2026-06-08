@@ -154,10 +154,10 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 		t.Fatalf("UpdateTexture model should propagate to profile using skin: %#v", afterModel)
 	}
 
-	if err := db.Textures.AdminUpdatePublic(ctx, "site_skin", true); err != nil {
+	if err := db.Textures.AdminUpdatePublic(ctx, "site_skin", "skin", true); err != nil {
 		t.Fatal(err)
 	}
-	if err := site.AddTextureToWardrobe(ctx, other.ID, "site_skin"); err != nil {
+	if err := site.AddTextureToWardrobe(ctx, other.ID, "site_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 	otherTexture, err := site.TextureDetail(ctx, other.ID, "site_skin", "skin")

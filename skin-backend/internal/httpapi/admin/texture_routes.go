@@ -32,9 +32,14 @@ func (h Handler) UpdateTexture(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	hash := req.PathValue("hash")
+	textureType := textureTypeFromRequest(req, body)
+	if textureType != "skin" && textureType != "cape" {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid texture_type"})
+		return
+	}
 	updated := false
 	if v, ok := body["note"].(string); ok {
-		if err := h.db.Textures.AdminUpdateNote(req.Context(), hash, v); err != nil {
+		if err := h.db.Textures.AdminUpdateNote(req.Context(), hash, textureType, v); err != nil {
 			if err == texture.ErrNotFound {
 				util.Error(w, util.HTTPError{Status: 404, Detail: "Texture not found"})
 				return
@@ -49,7 +54,7 @@ func (h Handler) UpdateTexture(w http.ResponseWriter, req *http.Request) {
 			util.Error(w, util.HTTPError{Status: 400, Detail: "invalid model"})
 			return
 		}
-		if err := h.db.Textures.AdminUpdateModel(req.Context(), hash, v); err != nil {
+		if err := h.db.Textures.AdminUpdateModel(req.Context(), hash, textureType, v); err != nil {
 			if err == texture.ErrNotFound {
 				util.Error(w, util.HTTPError{Status: 404, Detail: "Texture not found"})
 				return
@@ -65,7 +70,7 @@ func (h Handler) UpdateTexture(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 		pub := shared.PublicBool(v)
-		if err := h.db.Textures.AdminUpdatePublic(req.Context(), hash, pub); err != nil {
+		if err := h.db.Textures.AdminUpdatePublic(req.Context(), hash, textureType, pub); err != nil {
 			if err == texture.ErrNotFound {
 				util.Error(w, util.HTTPError{Status: 404, Detail: "Texture not found"})
 				return
@@ -97,4 +102,15 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	util.JSON(w, 200, map[string]any{"success": true})
+}
+
+func textureTypeFromRequest(req *http.Request, body map[string]any) string {
+	textureType := strings.TrimSpace(req.URL.Query().Get("type"))
+	if textureType != "" {
+		return textureType
+	}
+	if v, ok := body["type"].(string); ok {
+		return strings.TrimSpace(v)
+	}
+	return "skin"
 }

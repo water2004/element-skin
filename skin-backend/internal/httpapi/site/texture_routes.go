@@ -125,7 +125,7 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) AddTexture(w http.ResponseWriter, req *http.Request) {
-	if err := h.site.AddTextureToWardrobe(req.Context(), shared.CurrentUserID(req), req.PathValue("hash")); err != nil {
+	if err := h.site.AddTextureToWardrobe(req.Context(), shared.CurrentUserID(req), req.PathValue("hash"), req.URL.Query().Get("texture_type")); err != nil {
 		util.Error(w, err)
 		return
 	}

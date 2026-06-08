@@ -61,15 +61,21 @@ func (s Store) ListPublic(ctx context.Context, limit int, textureType, query str
 	return map[string]any{"items": items, "has_next": hasNext, "next_cursor": util.EncodeCursor(next), "page_size": len(items)}, rows.Err()
 }
 
-func (s Store) AddToWardrobe(ctx context.Context, userID, hash string) (bool, error) {
+func (s Store) AddToWardrobe(ctx context.Context, userID, hash, textureType string) (bool, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return false, err
 	}
 	defer tx.Rollback(ctx)
-	var textureType, model, uploader, name string
+	var selectedType, model, uploader, name string
 	var pub int
-	err = tx.QueryRow(ctx, `SELECT texture_type,model,uploader,name,is_public FROM skin_library WHERE skin_hash=$1`, hash).Scan(&textureType, &model, &uploader, &name, &pub)
+	args := []any{hash}
+	where := `skin_hash=$1`
+	if textureType != "" {
+		where += ` AND texture_type=$2`
+		args = append(args, textureType)
+	}
+	err = tx.QueryRow(ctx, `SELECT texture_type,model,uploader,name,is_public FROM skin_library WHERE `+where+` ORDER BY CASE WHEN texture_type='skin' THEN 0 ELSE 1 END LIMIT 1`, args...).Scan(&selectedType, &model, &uploader, &name, &pub)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -79,7 +85,7 @@ func (s Store) AddToWardrobe(ctx context.Context, userID, hash string) (bool, er
 	if pub != 1 {
 		return false, nil
 	}
-	if _, err := tx.Exec(ctx, `INSERT INTO user_textures (user_id,hash,texture_type,note,model,is_public,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, userID, hash, textureType, name, model, 2, time.Now().UnixMilli()); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO user_textures (user_id,hash,texture_type,note,model,is_public,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, userID, hash, selectedType, name, model, 2, time.Now().UnixMilli()); err != nil {
 		return false, err
 	}
 	return true, tx.Commit(ctx)

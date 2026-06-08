@@ -25,8 +25,8 @@ export function deleteTexture(hash: string, textureType: string): Promise<{ data
   return client.delete(`/me/textures/${hash}/${textureType}`)
 }
 
-export function addToWardrobe(hash: string): Promise<{ data: { ok: boolean } }> {
-  return client.post(`/me/textures/${hash}/add`)
+export function addToWardrobe(hash: string, textureType?: string): Promise<{ data: { ok: boolean } }> {
+  return client.post(`/me/textures/${hash}/add`, null, { params: { texture_type: textureType } })
 }
 
 export function applyTexture(hash: string, data: { profile_id: string; texture_type: string }): Promise<{ data: { ok: boolean } }> {
