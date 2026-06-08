@@ -52,6 +52,7 @@ func TestNewTestAppCreateHelpersExactState(t *testing.T) {
 func TestEnsureTestDatabaseIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	dbName := "elementskin_go_test_idempotent"
+	t.Cleanup(func() { dropTestDatabase(t, context.Background(), dbName) })
 	ensureTestDatabase(t, ctx, dbName)
 	ensureTestDatabase(t, ctx, dbName)
 	cfg := TestConfig()

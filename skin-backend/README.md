@@ -33,6 +33,44 @@ go vet ./...
 go build ./cmd/element-skin
 ```
 
+## Load Testing
+
+`cmd/loadtest` runs an opt-in concurrency ladder against a running backend. It is
+kept outside the default test suite because it measures the current machine,
+PostgreSQL, and network path rather than a stable unit-test invariant.
+
+To measure a manually started backend, start the backend first, then run:
+
+```powershell
+go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /public/settings -concurrency 1,5,10,25,50,100 -duration 10s
+```
+
+For authenticated frontend endpoints, let the tool log in once and reuse the
+returned cookies:
+
+```powershell
+go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /me -login-email user@example.com -login-password Password123 -concurrency 1,5,10,25,50 -duration 10s
+```
+
+The final "Suggested capacity" is the highest tested concurrency whose failure
+rate is below `-fail-threshold` and, when set, whose p95 latency is below
+`-max-p95`.
+
+For a cleaner real-backend test that does not touch the normal configured
+database, run the opt-in test harness. It creates an isolated PostgreSQL test
+database, seeds users/profiles/textures, starts an in-process HTTP server, and
+then runs the same concurrency ladder against real routes:
+
+```powershell
+$env:LOADTEST_ENABLE='1'
+$env:LOADTEST_CONCURRENCY='1,10,50,100,200'
+$env:LOADTEST_DURATION='5s'
+go test ./cmd/loadtest -run TestRealBackendLoad -count=1 -v
+```
+
+The harness uses `TEST_DATABASE_DSN`/`ADMIN_DATABASE_DSN` when set, otherwise it
+follows the same local PostgreSQL defaults as the integration tests.
+
 The integration tests create isolated PostgreSQL databases through
 `internal/testutil`; they exercise the HTTP router, services, stores, token
 rotation, import flows, fallback dispatch, pagination, and important failure

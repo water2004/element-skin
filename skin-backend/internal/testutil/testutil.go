@@ -52,6 +52,10 @@ func repoRoot() string {
 }
 
 func NewTestApp(t *testing.T) (*database.DB, http.Handler) {
+	return NewTestAppTB(t)
+}
+
+func NewTestAppTB(t testing.TB) (*database.DB, http.Handler) {
 	t.Helper()
 	ctx := context.Background()
 	cfg := TestConfig()
@@ -68,6 +72,7 @@ func NewTestApp(t *testing.T) (*database.DB, http.Handler) {
 		db.Close()
 		t.Fatalf("reset test schema: %v", err)
 	}
+	t.Cleanup(func() { dropTestDatabase(t, context.Background(), dbName) })
 	t.Cleanup(db.Close)
 	application, err := app.NewWithDB(cfg, db)
 	if err != nil {
@@ -76,7 +81,7 @@ func NewTestApp(t *testing.T) (*database.DB, http.Handler) {
 	return db, application.Handler()
 }
 
-func ensureTestDatabase(t *testing.T, ctx context.Context, dbName string) {
+func ensureTestDatabase(t testing.TB, ctx context.Context, dbName string) {
 	t.Helper()
 	adminDSN := os.Getenv("ADMIN_DATABASE_DSN")
 	if adminDSN == "" {
@@ -97,7 +102,23 @@ func ensureTestDatabase(t *testing.T, ctx context.Context, dbName string) {
 	}
 }
 
-func CreateUser(t *testing.T, db *database.DB, email, password, username string, isAdmin bool) model.User {
+func dropTestDatabase(t testing.TB, ctx context.Context, dbName string) {
+	t.Helper()
+	adminDSN := os.Getenv("ADMIN_DATABASE_DSN")
+	if adminDSN == "" {
+		adminDSN = "postgresql://postgres:12345678@localhost:5432/postgres?sslmode=disable"
+	}
+	conn, err := pgx.Connect(ctx, adminDSN)
+	if err != nil {
+		t.Fatalf("connect admin database for cleanup: %v", err)
+	}
+	defer conn.Close(ctx)
+	if _, err := conn.Exec(ctx, fmt.Sprintf(`DROP DATABASE IF EXISTS "%s"`, dbName)); err != nil {
+		t.Fatalf("drop test database: %v", err)
+	}
+}
+
+func CreateUser(t testing.TB, db *database.DB, email, password, username string, isAdmin bool) model.User {
 	t.Helper()
 	if email == "" {
 		email = randomID(t)[:8] + "@example.com"
@@ -119,7 +140,7 @@ func CreateUser(t *testing.T, db *database.DB, email, password, username string,
 	return user
 }
 
-func CreateProfile(t *testing.T, db *database.DB, userID, id, name string) model.Profile {
+func CreateProfile(t testing.TB, db *database.DB, userID, id, name string) model.Profile {
 	t.Helper()
 	if id == "" {
 		id = randomID(t)
@@ -131,7 +152,7 @@ func CreateProfile(t *testing.T, db *database.DB, userID, id, name string) model
 	return p
 }
 
-func randomID(t *testing.T) string {
+func randomID(t testing.TB) string {
 	t.Helper()
 	id, err := util.GenerateUUIDNoDash()
 	if err != nil {
