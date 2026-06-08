@@ -173,6 +173,18 @@ func (s Store) IsBanned(ctx context.Context, id string) (bool, error) {
 	return *until > time.Now().UnixMilli(), err
 }
 
+func PublicUser(u model.User) map[string]any {
+	return map[string]any{
+		"id":                 u.ID,
+		"email":              u.Email,
+		"display_name":       u.DisplayName,
+		"is_admin":           u.IsAdmin,
+		"banned_until":       u.BannedUntil,
+		"preferred_language": u.PreferredLanguage,
+		"avatar_hash":        u.AvatarHash,
+	}
+}
+
 func scan(row pgx.Row) (model.User, error) {
 	var u model.User
 	err := row.Scan(&u.ID, &u.Email, &u.Password, &u.IsAdmin, &u.PreferredLanguage, &u.DisplayName, &u.BannedUntil, &u.AvatarHash)

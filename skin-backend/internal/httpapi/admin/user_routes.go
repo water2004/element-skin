@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"element-skin/backend/internal/database"
+	userstore "element-skin/backend/internal/database/user"
 	"element-skin/backend/internal/httpapi/shared"
 	"element-skin/backend/internal/util"
 )
@@ -28,6 +29,19 @@ func (h Handler) Users(w http.ResponseWriter, req *http.Request) {
 	res["next_cursor"] = util.EncodeCursor(shared.AsMap(res["next_key"]))
 	delete(res, "next_key")
 	util.JSON(w, 200, res)
+}
+
+func (h Handler) User(w http.ResponseWriter, req *http.Request) {
+	user, err := h.db.Users.GetByID(req.Context(), req.PathValue("user_id"))
+	if err != nil {
+		util.Error(w, err)
+		return
+	}
+	if user == nil {
+		util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
+		return
+	}
+	util.JSON(w, 200, userstore.PublicUser(*user))
 }
 
 func (h Handler) ToggleUserAdmin(w http.ResponseWriter, req *http.Request) {

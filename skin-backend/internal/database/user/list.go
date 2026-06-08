@@ -47,7 +47,7 @@ func (s Store) List(ctx context.Context, limit int, lastID, query string) (map[s
 	}
 	out := make([]map[string]any, 0, len(items))
 	for _, u := range items {
-		out = append(out, map[string]any{"id": u.ID, "email": u.Email, "display_name": u.DisplayName, "is_admin": u.IsAdmin, "banned_until": u.BannedUntil, "preferred_language": u.PreferredLanguage, "avatar_hash": u.AvatarHash})
+		out = append(out, PublicUser(u))
 	}
 	return map[string]any{"items": out, "has_next": hasNext, "next_key": next, "page_size": len(out)}, rows.Err()
 }

@@ -177,6 +177,21 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	if len(items) != 1 || items[0].(map[string]any)["id"] != user.ID {
 		t.Fatalf("unexpected user search result: %#v", items)
 	}
+	detail := doJSON(t, h, "GET", "/admin/users/"+user.ID, nil, adminCookie)
+	if detail.Code != 200 {
+		t.Fatalf("admin user detail status=%d body=%s", detail.Code, detail.Body.String())
+	}
+	detailBody := parseJSON(t, detail)
+	if detailBody["id"] != user.ID || detailBody["email"] != user.Email || detailBody["display_name"] != user.DisplayName {
+		t.Fatalf("unexpected admin user detail: %#v", detailBody)
+	}
+	if _, ok := detailBody["password"]; ok {
+		t.Fatalf("admin user detail should not expose password: %#v", detailBody)
+	}
+	missingDetail := doJSON(t, h, "GET", "/admin/users/missing-user", nil, adminCookie)
+	if missingDetail.Code != 404 {
+		t.Fatalf("missing admin user detail should be 404, got %d body=%s", missingDetail.Code, missingDetail.Body.String())
+	}
 
 	invalidCursor := doJSON(t, h, "GET", "/admin/users?cursor=garbage!!", nil, adminCookie)
 	if invalidCursor.Code != 400 {

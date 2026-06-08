@@ -69,6 +69,7 @@ func (r *Router) routes() {
 	r.handle("POST /remote-ygg/import-profiles", remoteRoutes.Auth(remoteRoutes.ImportProfiles))
 
 	r.handle("GET /admin/users", adminRoutes.Auth(adminRoutes.Users))
+	r.handle("GET /admin/users/{user_id}", adminRoutes.Auth(adminRoutes.User))
 	r.handle("GET /admin/users/{user_id}/profiles", adminRoutes.Auth(adminRoutes.UserProfiles))
 	r.handle("POST /admin/users/{user_id}/toggle-admin", adminRoutes.Auth(adminRoutes.ToggleUserAdmin))
 	r.handle("DELETE /admin/users/{user_id}", adminRoutes.Auth(adminRoutes.DeleteUser))
