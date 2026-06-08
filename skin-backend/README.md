@@ -68,6 +68,9 @@ $env:LOADTEST_DURATION='5s'
 go test ./cmd/loadtest -run TestRealBackendLoad -count=1 -v
 ```
 
+By default the harness writes `../reports/concurrency-load-test.md`; override it
+with `LOADTEST_REPORT` when you want a different report path.
+
 The harness uses `TEST_DATABASE_DSN`/`ADMIN_DATABASE_DSN` when set, otherwise it
 follows the same local PostgreSQL defaults as the integration tests.
 

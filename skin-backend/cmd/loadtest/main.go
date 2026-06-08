@@ -22,6 +22,7 @@ type requestResult struct {
 	status  int
 	latency time.Duration
 	err     error
+	detail  string
 }
 
 type stepSummary struct {
@@ -37,6 +38,7 @@ type stepSummary struct {
 	P99         time.Duration
 	Statuses    map[int]int
 	Wall        time.Duration
+	FirstError  string
 }
 
 type options struct {
@@ -262,17 +264,23 @@ func doRequest(client *http.Client, target string, opts options, cookieHeader st
 	resp, err := client.Do(req)
 	latency := time.Since(start)
 	if err != nil {
-		return requestResult{latency: latency, err: err}
+		return requestResult{latency: latency, err: err, detail: err.Error()}
 	}
 	defer resp.Body.Close()
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 	_, _ = io.Copy(io.Discard, resp.Body)
-	return requestResult{status: resp.StatusCode, latency: latency}
+	detail := ""
+	if resp.StatusCode < 200 || resp.StatusCode >= 400 {
+		detail = strings.TrimSpace(string(data))
+	}
+	return requestResult{status: resp.StatusCode, latency: latency, detail: detail}
 }
 
 func summarize(concurrency int, results []requestResult, wall time.Duration) stepSummary {
 	statuses := map[int]int{}
 	latencies := make([]time.Duration, 0, len(results))
 	var totalLatency time.Duration
+	firstError := ""
 	success := 0
 	for _, result := range results {
 		latencies = append(latencies, result.latency)
@@ -282,6 +290,14 @@ func summarize(concurrency int, results []requestResult, wall time.Duration) ste
 		}
 		if result.err == nil && result.status >= 200 && result.status < 400 {
 			success++
+		} else if firstError == "" {
+			if result.detail != "" {
+				firstError = result.detail
+			} else if result.err != nil {
+				firstError = result.err.Error()
+			} else {
+				firstError = fmt.Sprintf("status %d", result.status)
+			}
 		}
 	}
 	sort.Slice(latencies, func(i, j int) bool { return latencies[i] < latencies[j] })
@@ -310,6 +326,7 @@ func summarize(concurrency int, results []requestResult, wall time.Duration) ste
 		P99:         percentile(latencies, 99),
 		Statuses:    statuses,
 		Wall:        wall,
+		FirstError:  firstError,
 	}
 }
 

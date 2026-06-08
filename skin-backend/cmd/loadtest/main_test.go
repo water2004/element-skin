@@ -98,3 +98,22 @@ func TestSummarize(t *testing.T) {
 		t.Fatalf("unexpected percentiles: p50=%s p95=%s", summary.P50, summary.P95)
 	}
 }
+
+func TestSummarizeCapacities(t *testing.T) {
+	results := []scenarioResult{
+		{Scenario: loadScenario{Name: "a"}, Concurrency: 1, Summary: stepSummary{Concurrency: 1, FailurePct: 0}},
+		{Scenario: loadScenario{Name: "a"}, Concurrency: 10, Summary: stepSummary{Concurrency: 10, FailurePct: 2}},
+		{Scenario: loadScenario{Name: "a"}, Concurrency: 5, Summary: stepSummary{Concurrency: 5, FailurePct: 0}},
+		{Scenario: loadScenario{Name: "b"}, Concurrency: 10, Summary: stepSummary{Concurrency: 10, FailurePct: 0}},
+	}
+	got := summarizeCapacities(results)
+	if len(got) != 2 {
+		t.Fatalf("unexpected capacity count: %#v", got)
+	}
+	if got[0].Scenario.Name != "a" || got[0].Concurrency != 5 {
+		t.Fatalf("scenario a capacity mismatch: %#v", got[0])
+	}
+	if got[1].Scenario.Name != "b" || got[1].Concurrency != 10 {
+		t.Fatalf("scenario b capacity mismatch: %#v", got[1])
+	}
+}
