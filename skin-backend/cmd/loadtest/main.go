@@ -32,6 +32,7 @@ type stepSummary struct {
 	Failed      int
 	FailurePct  float64
 	RPS         float64
+	SuccessRPS  float64
 	Avg         time.Duration
 	P50         time.Duration
 	P95         time.Duration
@@ -171,7 +172,13 @@ func buildURL(base, requestPath string) (string, error) {
 	if u.Scheme == "" || u.Host == "" {
 		return "", fmt.Errorf("target must include scheme and host")
 	}
-	u.Path = strings.TrimRight(u.Path, "/") + "/" + strings.TrimLeft(requestPath, "/")
+	req, err := url.Parse(requestPath)
+	if err != nil {
+		return "", err
+	}
+	u.Path = strings.TrimRight(u.Path, "/") + "/" + strings.TrimLeft(req.Path, "/")
+	u.RawQuery = req.RawQuery
+	u.Fragment = req.Fragment
 	return u.String(), nil
 }
 
@@ -306,12 +313,14 @@ func summarize(concurrency int, results []requestResult, wall time.Duration) ste
 	var avg time.Duration
 	var failurePct float64
 	var rps float64
+	var successRPS float64
 	if total > 0 {
 		avg = totalLatency / time.Duration(total)
 		failurePct = float64(failed) * 100 / float64(total)
 	}
 	if wall > 0 {
 		rps = float64(total) / wall.Seconds()
+		successRPS = float64(success) / wall.Seconds()
 	}
 	return stepSummary{
 		Concurrency: concurrency,
@@ -320,6 +329,7 @@ func summarize(concurrency int, results []requestResult, wall time.Duration) ste
 		Failed:      failed,
 		FailurePct:  failurePct,
 		RPS:         rps,
+		SuccessRPS:  successRPS,
 		Avg:         avg,
 		P50:         percentile(latencies, 50),
 		P95:         percentile(latencies, 95),

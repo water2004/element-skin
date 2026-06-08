@@ -49,6 +49,16 @@ func TestNewTestAppCreateHelpersExactState(t *testing.T) {
 	}
 }
 
+func TestNewTestAppWithMaxConnections(t *testing.T) {
+	db, handler := NewTestAppWithMaxConnectionsTB(t, 12)
+	if handler == nil {
+		t.Fatal("NewTestAppWithMaxConnectionsTB should return a handler")
+	}
+	if got := db.Pool.Stat().MaxConns(); got != 12 {
+		t.Fatalf("MaxConns mismatch: got=%d want=12", got)
+	}
+}
+
 func TestEnsureTestDatabaseIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	dbName := "elementskin_go_test_idempotent"

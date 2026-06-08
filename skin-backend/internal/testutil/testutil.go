@@ -56,6 +56,18 @@ func NewTestApp(t *testing.T) (*database.DB, http.Handler) {
 }
 
 func NewTestAppTB(t testing.TB) (*database.DB, http.Handler) {
+	return newTestAppTB(t, nil)
+}
+
+func NewTestAppWithMaxConnectionsTB(t testing.TB, maxConnections int32) (*database.DB, http.Handler) {
+	return newTestAppTB(t, func(cfg *config.Config) {
+		if maxConnections > 0 {
+			cfg.MaxConnections = maxConnections
+		}
+	})
+}
+
+func newTestAppTB(t testing.TB, configure func(*config.Config)) (*database.DB, http.Handler) {
 	t.Helper()
 	ctx := context.Background()
 	cfg := TestConfig()
@@ -63,6 +75,9 @@ func NewTestAppTB(t testing.TB) (*database.DB, http.Handler) {
 	cfg.CarouselDir = t.TempDir()
 	dbName := fmt.Sprintf("%s_%d_%d", testDBName, os.Getpid(), atomic.AddUint64(&dbCounter, 1))
 	cfg.DatabaseDSN = "postgresql://postgres:12345678@localhost:5432/" + dbName + "?sslmode=disable"
+	if configure != nil {
+		configure(&cfg)
+	}
 	ensureTestDatabase(t, ctx, dbName)
 	db, err := database.Open(ctx, cfg)
 	if err != nil {

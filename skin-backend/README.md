@@ -54,7 +54,8 @@ go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /me -login-email user@
 
 The final "Suggested capacity" is the highest tested concurrency whose failure
 rate is below `-fail-threshold` and, when set, whose p95 latency is below
-`-max-p95`.
+`-max-p95`. The detailed test harness below reports both sustainable
+concurrency and successful requests per second for each frontend-facing endpoint.
 
 For a cleaner real-backend test that does not touch the normal configured
 database, run the opt-in test harness. It creates an isolated PostgreSQL test
@@ -63,13 +64,17 @@ then runs the same concurrency ladder against real routes:
 
 ```powershell
 $env:LOADTEST_ENABLE='1'
-$env:LOADTEST_CONCURRENCY='1,10,50,100,200'
-$env:LOADTEST_DURATION='5s'
+$env:LOADTEST_CONCURRENCY='1,10,50,100,200,400,800'
+$env:LOADTEST_DURATION='1s'
+$env:LOADTEST_FAIL_THRESHOLD='1'
+$env:LOADTEST_MAX_P95='1s'
 go test ./cmd/loadtest -run TestRealBackendLoad -count=1 -v
 ```
 
 By default the harness writes `../reports/concurrency-load-test.md`; override it
 with `LOADTEST_REPORT` when you want a different report path.
+Use `LOADTEST_DB_MAX_CONNECTIONS` to match the backend database pool size you
+want to measure; the harness defaults this to `20`.
 
 The harness uses `TEST_DATABASE_DSN`/`ADMIN_DATABASE_DSN` when set, otherwise it
 follows the same local PostgreSQL defaults as the integration tests.
