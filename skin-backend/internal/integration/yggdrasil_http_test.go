@@ -3,6 +3,10 @@ package integration_test
 import (
 	"bytes"
 	"context"
+	"crypto"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/x509"
 	"errors"
 
 	"element-skin/backend/internal/database/fallback"
@@ -13,9 +17,11 @@ import (
 
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -148,14 +154,10 @@ func TestYggdrasilAuthenticateJoinAndProfile(t *testing.T) {
 	if !strings.Contains(textures["CAPE"].(map[string]any)["url"].(string), "my_cape_hash.png") {
 		t.Fatalf("cape url missing from textures payload: %#v", textures)
 	}
-	hasUploadable := false
-	for _, raw := range props {
-		if raw.(map[string]any)["name"] == "uploadableTextures" {
-			hasUploadable = true
-		}
-	}
-	if !hasUploadable {
-		t.Fatalf("profile properties should include uploadableTextures: %#v", props)
+	if len(props) != 2 ||
+		props[1].(map[string]any)["name"] != "uploadableTextures" ||
+		props[1].(map[string]any)["value"] != "skin,cape" {
+		t.Fatalf("profile properties should include exact uploadableTextures property: %#v", props)
 	}
 
 	defaultProfile := testutil.CreateProfile(t, db, user.ID, "default_profile_id", "DefaultModel")
@@ -188,19 +190,47 @@ func TestYggdrasilAuthenticateJoinAndProfile(t *testing.T) {
 		t.Fatalf("signed profile status=%d body=%s", signedResp.Code, signedResp.Body.String())
 	}
 	signedProps := parseJSON(t, signedResp)["properties"].([]any)
-	if signedProps[0].(map[string]any)["signature"] == "" {
-		t.Fatal("signed profile should include a non-empty signature")
-	}
+	signedTexture := signedProps[0].(map[string]any)
 	meta := doJSON(t, h, "GET", "/", nil)
 	metaBody := parseJSON(t, meta)
-	if metaBody["signaturePublickey"] == "" {
-		t.Fatal("metadata should include a non-empty signature public key")
+	wantPublicKey, err := os.ReadFile(testutil.TestConfig().PublicKeyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if metaBody["signaturePublickey"] != string(wantPublicKey) {
+		t.Fatalf("metadata public key mismatch: got=%q want=%q", metaBody["signaturePublickey"], string(wantPublicKey))
+	}
+	verifyYggPropertySignature(t, string(wantPublicKey), signedTexture["value"].(string), signedTexture["signature"].(string))
+	skinDomains := metaBody["skinDomains"].([]any)
+	if len(skinDomains) != 2 || skinDomains[0] != "textures.minecraft.net" || skinDomains[1] != "test" {
+		t.Fatalf("metadata skinDomains mismatch: %#v", metaBody)
 	}
 	if metaBody["meta"].(map[string]any)["serverName"] != "皮肤站" {
 		t.Fatalf("metadata should include site serverName: %#v", metaBody)
 	}
-	if len(metaBody["skinDomains"].([]any)) == 0 {
-		t.Fatalf("metadata should include skinDomains: %#v", metaBody)
+}
+
+func verifyYggPropertySignature(t *testing.T, publicKeyPEM, value, signature string) {
+	t.Helper()
+	block, _ := pem.Decode([]byte(publicKeyPEM))
+	if block == nil {
+		t.Fatal("metadata public key is not PEM")
+	}
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, ok := key.(*rsa.PublicKey)
+	if !ok {
+		t.Fatal("metadata public key is not RSA")
+	}
+	rawSignature, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha1.Sum([]byte(value))
+	if err := rsa.VerifyPKCS1v15(publicKey, crypto.SHA1, digest[:], rawSignature); err != nil {
+		t.Fatalf("signed textures property signature mismatch: %v", err)
 	}
 }
 

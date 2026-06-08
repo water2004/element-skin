@@ -2,9 +2,14 @@ package main
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
+
+	"element-skin/backend/internal/model"
 )
 
 func TestParseConcurrency(t *testing.T) {
@@ -129,5 +134,95 @@ func TestLoadTestConcurrency(t *testing.T) {
 	t.Setenv("LOADTEST_CONCURRENCY", "1,2")
 	if _, err := loadTestConcurrency(); err == nil {
 		t.Fatal("fixed concurrency should reject comma-separated levels")
+	}
+}
+
+func TestDefaultLoadScenariosIncludeExactYggdrasilEndpoints(t *testing.T) {
+	profileID := "load_profile_id"
+	seed := loadSeed{
+		User:           model.User{ID: "user-id", Email: "load-user@example.com"},
+		Admin:          model.User{ID: "admin-id", Email: "load-admin@example.com"},
+		YggUser:        model.User{ID: "ygg-user-id", Email: "load-ygg@example.com"},
+		ProfileID:      profileID,
+		ProfileName:    "LoadProfile",
+		TextureHash:    "load_texture_hash",
+		YggAccessToken: "access-token",
+		YggClientToken: "client-token",
+		YggServerID:    "server-id",
+	}
+	scenarios := defaultLoadScenarios(seed, "user_cookie=1", "admin_cookie=1", func(testing.TB) {})
+	got := map[string]loadScenario{}
+	for _, scenario := range scenarios {
+		got[scenario.Name] = scenario
+	}
+	want := map[string]loadScenario{
+		"ygg-metadata":     {Area: "Yggdrasil", Method: http.MethodGet, Path: "/"},
+		"ygg-authenticate": {Area: "Yggdrasil", Method: http.MethodPost, Path: "/authserver/authenticate", Body: `{"username":"load-user@example.com","password":"Password123","requestUser":true}`},
+		"ygg-validate":     {Area: "Yggdrasil", Method: http.MethodPost, Path: "/authserver/validate", Body: `{"accessToken":"access-token","clientToken":"client-token"}`},
+		"ygg-profile":      {Area: "Yggdrasil", Method: http.MethodGet, Path: "/sessionserver/session/minecraft/profile/load_profile_id"},
+		"ygg-lookup-name":  {Area: "Yggdrasil", Method: http.MethodGet, Path: "/api/users/profiles/minecraft/LoadProfile"},
+		"ygg-has-joined":   {Area: "Yggdrasil", Method: http.MethodGet, Path: "/sessionserver/session/minecraft/hasJoined?username=LoadProfile&serverId=server-id"},
+	}
+	for name, expected := range want {
+		actual, ok := got[name]
+		if !ok {
+			t.Fatalf("missing scenario %s in %#v", name, got)
+		}
+		if actual.Area != expected.Area || actual.Method != expected.Method || actual.Path != expected.Path || actual.Body != expected.Body {
+			t.Fatalf("scenario %s mismatch:\n got: area=%q method=%q path=%q body=%q\nwant: area=%q method=%q path=%q body=%q",
+				name, actual.Area, actual.Method, actual.Path, actual.Body, expected.Area, expected.Method, expected.Path, expected.Body)
+		}
+	}
+	if got["me"].Cookie != "user_cookie=1" || got["admin-users"].Cookie != "admin_cookie=1" {
+		t.Fatalf("authenticated scenario cookies mismatch: me=%q admin-users=%q", got["me"].Cookie, got["admin-users"].Cookie)
+	}
+	if got["ygg-has-joined"].Prepare == nil {
+		t.Fatal("ygg-has-joined should refresh its pre-joined session before measurement")
+	}
+	if len(scenarios) != 21 {
+		t.Fatalf("default scenario count mismatch: got=%d want=21", len(scenarios))
+	}
+}
+
+func TestWriteLoadTestReportIncludesExactYggdrasilRows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "report.md")
+	results := []scenarioResult{
+		{
+			Scenario:    loadScenario{Area: "Yggdrasil", Name: "ygg-profile", Method: http.MethodGet, Path: "/sessionserver/session/minecraft/profile/load_profile_id"},
+			Concurrency: 200,
+			Summary: stepSummary{
+				Concurrency: 200,
+				Total:       300,
+				Success:     300,
+				Failed:      0,
+				SuccessRPS:  299.5,
+				RPS:         299.5,
+				Avg:         2 * time.Millisecond,
+				P50:         time.Millisecond,
+				P95:         4 * time.Millisecond,
+				P99:         5 * time.Millisecond,
+				Statuses:    map[int]int{200: 300},
+			},
+		},
+	}
+	err := writeLoadTestReport(path, loadTestConfigValue{Duration: time.Second, MaxDBConns: 20}, 200, results)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	report := string(data)
+	for _, want := range []string{
+		"- Data set: 100 users, 300 profiles, 500 texture rows, 50 invites, 1 pre-joined Yggdrasil session",
+		"- Test database: isolated `elementskin_go_test_*`, dropped by test cleanup\n- Redis: real test Redis with isolated `elementskin:test:*` key prefix, cleaned by test cleanup",
+		"| Yggdrasil | `ygg-profile` | `GET` | `/sessionserver/session/minecraft/profile/load_profile_id` |",
+		"| Yggdrasil | `ygg-profile` | 200 | 300 | 300 | 0 | 0.00 | 299.5 | 299.5 | 2.0ms | 1.0ms | 4.0ms | 5.0ms | `200:300` | `` |",
+		"- This report covers public, site, admin, and common Yggdrasil client endpoints; destructive write endpoints are intentionally excluded from high-concurrency runs.",
+	} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("load-test report missing exact line:\n%s\n\nreport:\n%s", want, report)
+		}
 	}
 }

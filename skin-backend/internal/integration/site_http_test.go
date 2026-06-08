@@ -43,11 +43,8 @@ func TestSiteLoginMeAndRefresh(t *testing.T) {
 	if _, ok := meBody["profiles"]; ok {
 		t.Fatalf("/me should not inline profiles: %#v", meBody)
 	}
-	if _, ok := meBody["profile_count"]; !ok {
-		t.Fatalf("/me should include profile_count: %#v", meBody)
-	}
-	if _, ok := meBody["texture_count"]; !ok {
-		t.Fatalf("/me should include texture_count: %#v", meBody)
+	if meBody["profile_count"] != float64(0) || meBody["texture_count"] != float64(0) {
+		t.Fatalf("/me counts should start at zero: %#v", meBody)
 	}
 	if err := db.Users.Ban(context.Background(), user.ID, time.Now().Add(time.Hour).UnixMilli()); err != nil {
 		t.Fatal(err)
@@ -355,6 +352,10 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	expectedTextures := map[string]bool{"apply_hash": true}
+	for i := 0; i < 3; i++ {
+		expectedTextures["http_tex_"+strconv.Itoa(i)] = true
+	}
 	seenTextures := map[string]bool{}
 	textureCursor := ""
 	for i := 0; i < 20; i++ {
@@ -369,10 +370,10 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		page := parseJSON(t, pageResp)
 		for _, raw := range page["items"].([]any) {
 			item := raw.(map[string]any)
-			if _, ok := item["hash"]; !ok {
-				t.Fatalf("/me/textures item should include hash: %#v", item)
-			}
 			hash := item["hash"].(string)
+			if !expectedTextures[hash] {
+				t.Fatalf("/me/textures returned unexpected hash %q in item %#v; expected one of %#v", hash, item, expectedTextures)
+			}
 			if seenTextures[hash] {
 				t.Fatalf("duplicate /me/textures item %q", hash)
 			}
@@ -386,8 +387,10 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 			t.Fatalf("has_next /me/textures response should include next_cursor: %#v", page)
 		}
 	}
-	for i := 0; i < 3; i++ {
-		hash := "http_tex_" + strconv.Itoa(i)
+	if len(seenTextures) != len(expectedTextures) {
+		t.Fatalf("/me/textures pagination saw %d textures, want %d: saw=%#v want=%#v", len(seenTextures), len(expectedTextures), seenTextures, expectedTextures)
+	}
+	for hash := range expectedTextures {
 		if !seenTextures[hash] {
 			t.Fatalf("/me/textures pagination missed %s, saw %#v", hash, seenTextures)
 		}

@@ -24,7 +24,7 @@
 ## ✨ 功能特性
 
 - **✅ 极致性能**: 后端基于 Go 重构，使用 PostgreSQL + Redis 支撑高并发读写路径。
-- **✅ 现代化数据库**: 使用 **PostgreSQL 18** 作为主存储，支持高性能异步驱动 (`asyncpg`)。
+- **✅ 现代化数据库**: 使用 **PostgreSQL 18** 作为主存储，Go 后端通过高性能 PostgreSQL 驱动与连接池访问数据。
 - **✅ 完整协议支持**: 完美实现 Yggdrasil API，无缝对接 Authlib-Injector 等主流加载器。
 - **✅ 完整的Fallback机制**: 支持多个第三方服务作为数据源，允许其他其他皮肤站的用户进入服务器。
 - **✅ 正版登录支持**: 集成 Mojang 官方认证服务，允许正版用户直接使用 Minecraft 账号登录。
@@ -349,10 +349,11 @@ element-skin/
 - [ ] 批量材质导入工具
 
 ### 测试
-- [x] 分层自动化测试框架 (Pytest + Asyncio)
-- [x] 数据库层 (Database Layer) 全接口覆盖
-- [x] 业务逻辑层 (Backend Logic Layer) 完整覆盖
-- [x] API 接口层 (Integration Layer) 核心流程覆盖
+- [x] Go 分层自动化测试框架
+- [x] 数据库层 (Database Layer) 核心接口覆盖
+- [x] 业务逻辑层 (Service Layer) 核心规则覆盖
+- [x] API 接口层 (HTTP Integration Layer) 核心流程覆盖
+- [x] 固定并发压测覆盖公开接口、用户中心、管理后台与 Yggdrasil 常用端点
 
 ---
 
@@ -375,6 +376,43 @@ go test ./...
 
 ### 编写新测试
 单元测试使用内存 Redis mock；`internal/integration` 使用真实 Redis，并通过唯一 key 前缀自动清理测试数据，不会清空你的本地 Redis。
+
+## 📈 并发压测结果
+
+最新一次压测在本机通过 `skin-backend/cmd/loadtest` 启动隔离测试数据库、真实 Redis key 前缀和进程内 HTTP 服务完成，不会触碰正常运行数据库。命令如下：
+
+```bash
+cd skin-backend
+LOADTEST_ENABLE=1 LOADTEST_CONCURRENCY=200 LOADTEST_DURATION=1s go test ./cmd/loadtest -run TestRealBackendLoad -count=1 -v
+```
+
+测试数据：100 个用户、300 个角色、500 条材质记录、50 个邀请码、1 个预置 Yggdrasil join 会话。固定并发：200；每个场景窗口：1s；数据库连接池：20。
+
+| 场景 | 成功 req/s | 失败率 | P95 |
+| --- | ---: | ---: | ---: |
+| Public settings | 26105.8 | 0.00% | 9.1ms |
+| Public carousel | 30420.8 | 0.00% | 8.2ms |
+| Public skin library search | 16894.7 | 0.00% | 17.0ms |
+| Site login | 305.6 | 0.00% | 695.7ms |
+| Yggdrasil metadata | 32938.5 | 0.00% | 7.5ms |
+| Yggdrasil authenticate | 292.1 | 0.00% | 1.04s |
+| Yggdrasil validate | 31803.1 | 0.00% | 7.8ms |
+| Yggdrasil profile | 61355.0 | 0.00% | 5.2ms |
+| Yggdrasil lookup name | 64973.6 | 0.00% | 4.8ms |
+| Yggdrasil hasJoined | 2072.2 | 0.00% | 127.6ms |
+| Me | 20258.1 | 0.00% | 13.6ms |
+| My profiles | 28928.8 | 0.00% | 8.9ms |
+| My textures | 29838.0 | 0.00% | 8.5ms |
+| Texture detail | 29216.8 | 0.00% | 8.6ms |
+| Admin users | 18290.2 | 0.00% | 16.7ms |
+| Admin user detail | 28837.8 | 0.00% | 8.9ms |
+| Admin user profiles | 28739.6 | 0.00% | 9.1ms |
+| Admin profiles | 22630.1 | 0.00% | 13.2ms |
+| Admin textures | 22827.7 | 0.00% | 13.6ms |
+| Admin invites | 24581.6 | 0.00% | 12.1ms |
+| Admin settings/site | 2415.1 | 0.00% | 90.0ms |
+
+完整报告见 [`reports/concurrency-load-test.md`](reports/concurrency-load-test.md)。
 
 ## 📄 许可证
 

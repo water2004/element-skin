@@ -14,16 +14,18 @@ import (
 
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/model"
+	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/testutil"
 )
 
 type loadScenario struct {
-	Area   string
-	Name   string
-	Method string
-	Path   string
-	Body   string
-	Cookie string
+	Area    string
+	Name    string
+	Method  string
+	Path    string
+	Body    string
+	Cookie  string
+	Prepare func(testing.TB)
 }
 
 type scenarioResult struct {
@@ -33,10 +35,15 @@ type scenarioResult struct {
 }
 
 type loadSeed struct {
-	User        model.User
-	Admin       model.User
-	ProfileID   string
-	TextureHash string
+	User           model.User
+	Admin          model.User
+	YggUser        model.User
+	ProfileID      string
+	ProfileName    string
+	TextureHash    string
+	YggAccessToken string
+	YggClientToken string
+	YggServerID    string
 }
 
 func TestRealBackendLoad(t *testing.T) {
@@ -49,12 +56,12 @@ func TestRealBackendLoad(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, handler := testutil.NewTestAppWithMaxConnectionsTB(t, int32(cfg.MaxDBConns))
+	db, handler, redis := testutil.NewTestAppWithMaxConnectionsAndRedisTB(t, int32(cfg.MaxDBConns))
 	cfg.MaxDBConns = int(db.Pool.Stat().MaxConns())
 	if err := db.Settings.Set(context.Background(), "rate_limit_enabled", false); err != nil {
 		t.Fatalf("disable load-test auth rate limit: %v", err)
 	}
-	seed := seedLoadTestData(t, db)
+	seed := seedLoadTestData(t, db, redis)
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 
@@ -69,28 +76,17 @@ func TestRealBackendLoad(t *testing.T) {
 	}
 	loginClient.CloseIdleConnections()
 
-	scenarios := []loadScenario{
-		{Area: "Public home", Name: "public-settings", Method: http.MethodGet, Path: "/public/settings"},
-		{Area: "Public home", Name: "public-carousel", Method: http.MethodGet, Path: "/public/carousel"},
-		{Area: "Public library", Name: "public-library-search", Method: http.MethodGet, Path: "/public/skin-library?limit=20&q=Load"},
-		{Area: "Authentication", Name: "site-login", Method: http.MethodPost, Path: "/site-login", Body: fmt.Sprintf(`{"email":%q,"password":"Password123"}`, seed.User.Email)},
-		{Area: "User center", Name: "me", Method: http.MethodGet, Path: "/me", Cookie: userCookie},
-		{Area: "User center", Name: "my-profiles", Method: http.MethodGet, Path: "/me/profiles?limit=20", Cookie: userCookie},
-		{Area: "User center", Name: "my-textures", Method: http.MethodGet, Path: "/me/textures?limit=20", Cookie: userCookie},
-		{Area: "User center", Name: "texture-detail", Method: http.MethodGet, Path: "/me/textures/" + seed.TextureHash + "/skin", Cookie: userCookie},
-		{Area: "Admin console", Name: "admin-users", Method: http.MethodGet, Path: "/admin/users?limit=20&q=Load", Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-user-detail", Method: http.MethodGet, Path: "/admin/users/" + seed.User.ID, Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-user-profiles", Method: http.MethodGet, Path: "/admin/users/" + seed.User.ID + "/profiles?limit=20", Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-profiles", Method: http.MethodGet, Path: "/admin/profiles?limit=20", Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-textures", Method: http.MethodGet, Path: "/admin/textures?limit=20", Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-invites", Method: http.MethodGet, Path: "/admin/invites?limit=20", Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-settings-site", Method: http.MethodGet, Path: "/admin/settings/site", Cookie: adminCookie},
-	}
+	scenarios := defaultLoadScenarios(seed, userCookie, adminCookie, func(tb testing.TB) {
+		refreshYggLoadSession(tb, redis, seed)
+	})
 	scenarios = filterScenarios(scenarios, os.Getenv("LOADTEST_SCENARIOS"))
 
 	results := make([]scenarioResult, 0, len(scenarios))
 	for _, scenario := range scenarios {
 		t.Run(scenario.Name, func(t *testing.T) {
+			if scenario.Prepare != nil {
+				scenario.Prepare(t)
+			}
 			client := newHTTPClient(concurrency, 5*time.Second, false)
 			target, err := buildURL(server.URL, scenario.Path)
 			if err != nil {
@@ -127,6 +123,32 @@ func TestRealBackendLoad(t *testing.T) {
 	}
 	if err := writeLoadTestReport(reportPath(), cfg, concurrency, results); err != nil {
 		t.Fatalf("write load test report: %v", err)
+	}
+}
+
+func defaultLoadScenarios(seed loadSeed, userCookie, adminCookie string, prepareYggHasJoined func(testing.TB)) []loadScenario {
+	return []loadScenario{
+		{Area: "Public home", Name: "public-settings", Method: http.MethodGet, Path: "/public/settings"},
+		{Area: "Public home", Name: "public-carousel", Method: http.MethodGet, Path: "/public/carousel"},
+		{Area: "Public library", Name: "public-library-search", Method: http.MethodGet, Path: "/public/skin-library?limit=20&q=Load"},
+		{Area: "Authentication", Name: "site-login", Method: http.MethodPost, Path: "/site-login", Body: fmt.Sprintf(`{"email":%q,"password":"Password123"}`, seed.User.Email)},
+		{Area: "Yggdrasil", Name: "ygg-metadata", Method: http.MethodGet, Path: "/"},
+		{Area: "Yggdrasil", Name: "ygg-authenticate", Method: http.MethodPost, Path: "/authserver/authenticate", Body: fmt.Sprintf(`{"username":%q,"password":"Password123","requestUser":true}`, seed.User.Email)},
+		{Area: "Yggdrasil", Name: "ygg-validate", Method: http.MethodPost, Path: "/authserver/validate", Body: fmt.Sprintf(`{"accessToken":%q,"clientToken":%q}`, seed.YggAccessToken, seed.YggClientToken)},
+		{Area: "Yggdrasil", Name: "ygg-profile", Method: http.MethodGet, Path: "/sessionserver/session/minecraft/profile/" + seed.ProfileID},
+		{Area: "Yggdrasil", Name: "ygg-lookup-name", Method: http.MethodGet, Path: "/api/users/profiles/minecraft/" + seed.ProfileName},
+		{Area: "Yggdrasil", Name: "ygg-has-joined", Method: http.MethodGet, Path: "/sessionserver/session/minecraft/hasJoined?username=" + seed.ProfileName + "&serverId=" + seed.YggServerID, Prepare: prepareYggHasJoined},
+		{Area: "User center", Name: "me", Method: http.MethodGet, Path: "/me", Cookie: userCookie},
+		{Area: "User center", Name: "my-profiles", Method: http.MethodGet, Path: "/me/profiles?limit=20", Cookie: userCookie},
+		{Area: "User center", Name: "my-textures", Method: http.MethodGet, Path: "/me/textures?limit=20", Cookie: userCookie},
+		{Area: "User center", Name: "texture-detail", Method: http.MethodGet, Path: "/me/textures/" + seed.TextureHash + "/skin", Cookie: userCookie},
+		{Area: "Admin console", Name: "admin-users", Method: http.MethodGet, Path: "/admin/users?limit=20&q=Load", Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-user-detail", Method: http.MethodGet, Path: "/admin/users/" + seed.User.ID, Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-user-profiles", Method: http.MethodGet, Path: "/admin/users/" + seed.User.ID + "/profiles?limit=20", Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-profiles", Method: http.MethodGet, Path: "/admin/profiles?limit=20", Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-textures", Method: http.MethodGet, Path: "/admin/textures?limit=20", Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-invites", Method: http.MethodGet, Path: "/admin/invites?limit=20", Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-settings-site", Method: http.MethodGet, Path: "/admin/settings/site", Cookie: adminCookie},
 	}
 }
 
@@ -198,7 +220,7 @@ func loadTestMaxDBConns() int {
 	return n
 }
 
-func seedLoadTestData(tb testing.TB, db *database.DB) loadSeed {
+func seedLoadTestData(tb testing.TB, db *database.DB, redis redisstore.Store) loadSeed {
 	tb.Helper()
 	ctx := context.Background()
 	var seed loadSeed
@@ -212,10 +234,14 @@ func seedLoadTestData(tb testing.TB, db *database.DB) loadSeed {
 		if i == 1 {
 			seed.User = user
 		}
+		if i == 2 {
+			seed.YggUser = user
+		}
 		for p := 0; p < 3; p++ {
 			profile := testutil.CreateProfile(tb, db, user.ID, "", fmt.Sprintf("LoadProfile%03d_%d", i, p))
-			if i == 1 && p == 0 {
+			if i == 2 && p == 0 {
 				seed.ProfileID = profile.ID
+				seed.ProfileName = profile.Name
 			}
 		}
 		for n := 0; n < 5; n++ {
@@ -237,12 +263,34 @@ func seedLoadTestData(tb testing.TB, db *database.DB) loadSeed {
 			}
 		}
 	}
+	if seed.ProfileID == "" {
+		tb.Fatal("load seed profile was not initialized")
+	}
+	if seed.YggUser.ID == "" {
+		tb.Fatal("load seed ygg user was not initialized")
+	}
+	seed.YggAccessToken = "load_ygg_access_token"
+	seed.YggClientToken = "load_ygg_client_token"
+	seed.YggServerID = "load_ygg_server"
+	now := database.NowMS()
+	if err := redis.SetYggToken(ctx, model.Token{AccessToken: seed.YggAccessToken, ClientToken: seed.YggClientToken, UserID: seed.YggUser.ID, ProfileID: &seed.ProfileID, CreatedAt: now}, 10*time.Minute); err != nil {
+		tb.Fatalf("seed ygg token: %v", err)
+	}
+	refreshYggLoadSession(tb, redis, seed)
 	for i := 0; i < 50; i++ {
 		if err := db.Invites.Create(ctx, fmt.Sprintf("LOAD_INVITE_%03d", i), 10, "Load invite"); err != nil {
 			tb.Fatalf("seed invite: %v", err)
 		}
 	}
 	return seed
+}
+
+func refreshYggLoadSession(tb testing.TB, redis redisstore.Store, seed loadSeed) {
+	tb.Helper()
+	ip := "127.0.0.1"
+	if err := redis.SetYggSession(context.Background(), model.Session{ServerID: seed.YggServerID, AccessToken: seed.YggAccessToken, IP: &ip, CreatedAt: database.NowMS()}, time.Minute); err != nil {
+		tb.Fatalf("seed ygg session: %v", err)
+	}
 }
 
 func reportPath() string {
@@ -261,11 +309,11 @@ func writeLoadTestReport(path string, cfg loadTestConfigValue, concurrency int, 
 	fmt.Fprintf(&b, "# Backend Concurrency Load Test Report\n\n")
 	fmt.Fprintf(&b, "- Generated at: `%s`\n", now)
 	fmt.Fprintf(&b, "- Harness: `go test ./cmd/loadtest -run TestRealBackendLoad -count=1 -v`\n")
-	fmt.Fprintf(&b, "- Data set: 100 users, 300 profiles, 500 texture rows, 50 invites\n")
+	fmt.Fprintf(&b, "- Data set: 100 users, 300 profiles, 500 texture rows, 50 invites, 1 pre-joined Yggdrasil session\n")
 	fmt.Fprintf(&b, "- Fixed concurrency: `%d`\n", concurrency)
 	fmt.Fprintf(&b, "- Duration per level: `%s`\n", cfg.Duration)
 	fmt.Fprintf(&b, "- Backend database pool used by harness: `%d` max connections\n", cfg.MaxDBConns)
-	fmt.Fprintf(&b, "- Test database: isolated `elementskin_go_test_*`, dropped by test cleanup\n\n")
+	fmt.Fprintf(&b, "- Test database: isolated `elementskin_go_test_*`, dropped by test cleanup\n")
 	fmt.Fprintf(&b, "- Redis: real test Redis with isolated `elementskin:test:*` key prefix, cleaned by test cleanup\n")
 	fmt.Fprintf(&b, "- Auth rate limiting: disabled for load-test login scenario to measure login throughput instead of 429 policy\n\n")
 	fmt.Fprintf(&b, "## Scenario Coverage\n\n")
@@ -306,7 +354,7 @@ func writeLoadTestReport(path string, cfg loadTestConfigValue, concurrency int, 
 	fmt.Fprintf(&b, "\n## Notes\n\n")
 	fmt.Fprintf(&b, "- Every scenario is measured once at the same fixed concurrency, default `200`, for a one-second window.\n")
 	fmt.Fprintf(&b, "- `Successful req/s` is the useful per-second throughput under that fixed concurrency.\n")
-	fmt.Fprintf(&b, "- This report focuses on realistic frontend page-load endpoints and login; destructive write endpoints are intentionally excluded from high-concurrency runs.\n")
+	fmt.Fprintf(&b, "- This report covers public, site, admin, and common Yggdrasil client endpoints; destructive write endpoints are intentionally excluded from high-concurrency runs.\n")
 	fmt.Fprintf(&b, "- A failure is any request with a transport error or non-2xx/3xx response.\n")
 	fmt.Fprintf(&b, "- The test harness closes the in-process HTTP server and drops the temporary PostgreSQL database during cleanup.\n")
 	return os.WriteFile(path, []byte(b.String()), 0o644)

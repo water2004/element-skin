@@ -69,12 +69,16 @@ func NewTestAppTB(t testing.TB) (*database.DB, http.Handler) {
 }
 
 func NewTestAppWithMaxConnectionsTB(t testing.TB, maxConnections int32) (*database.DB, http.Handler) {
-	db, handler, _ := newTestAppTB(t, func(cfg *config.Config) {
+	db, handler, _ := NewTestAppWithMaxConnectionsAndRedisTB(t, maxConnections)
+	return db, handler
+}
+
+func NewTestAppWithMaxConnectionsAndRedisTB(t testing.TB, maxConnections int32) (*database.DB, http.Handler, redisstore.Store) {
+	return newTestAppTB(t, func(cfg *config.Config) {
 		if maxConnections > 0 {
 			cfg.MaxConnections = maxConnections
 		}
 	})
-	return db, handler
 }
 
 func NewTestAppWithRedisTB(t testing.TB) (*database.DB, http.Handler, redisstore.Store) {
