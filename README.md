@@ -215,27 +215,6 @@ location = /skin/api {
 ```
 ---
 
-## 从1.3.1升级到2.0.0
-2.x版本最大的更新是数据库从 SQLite 切换到 PostgreSQL，因此需要进行数据迁移。在迁移之前，请**确保皮肤站版本已经升级到 v1.3.1**，并且已经备份了数据库文件。迁移步骤如下：
-
-1. 按照上面的 Docker 部署指南，启动皮肤站服务
-2. 按照你的数据库配置，编辑`sqlite_to_postgres.py`文件中的数据库连接字符串。如果使用了上面的 Docker 配置，连接字符串应该是：
-```python
-SQLALCHEMY_DATABASE_URL = "postgresql://elementskin:password123@localhost:5432/elementskin?sslmode=disable"
-```
-3. 按照你原先的数据库文件路径，编辑`sqlite_to_postgres.py`文件中的SQLite数据库路径
-4. 运行迁移脚本：
-```bash
-python sqlite_to_postgres.py
-```
-5. 将原先的`textures`和`carousel`目录中的文件迁移到`./frontend/static/textures`和`./frontend/static/carousel`目录中
-6. 将原先的`public.pem`和`private.pem`文件迁移到`./data/`目录中
-7. 重新启动 Docker 服务：
-```bash
-docker compose restart
-```
----
-
 ## 🛠️ 本地开发环境
 
 ### 本地开发环境
@@ -283,17 +262,17 @@ npm run dev
 ```text
 element-skin/
 ├── element-skin/       # 前端源码 (Vue 3 + Element Plus)
-├── skin-backend/       # 后端源码 (FastAPI)
-│   ├── database_module/# PostgreSQL 异步适配
-│   ├── init.sql        # 自动初始化脚本
-│   └── ...
+├── skin-backend/       # Go 后端源码
+│   ├── cmd/            # 进程入口
+│   ├── internal/       # HTTP、服务、数据库与测试模块
+│   └── config.yaml     # 后端配置文件
 ├── config.yaml         # 配置文件
 ├── pgdata/             # 数据库物理存储 (自动生成)
 ├── docker-compose.yml  
 └── README.md
 ```
 
-## 📋 TODO 
+## 📋 功能状态
 
 ### 核心功能
 - [x] 完整的yggdrasil协议支持
@@ -305,23 +284,23 @@ element-skin/
 - [x] Mojang服务fallback机制
 - [x] 用户封禁与解封
 - [x] 公共皮肤库
-- [ ] 更好的用户材质管理
+- [x] 用户材质管理
   - [x] 允许用户删除自己上传到公共库的材质
   - [x] 允许用户配置已有的材质信息, 如模型类型等
   - [x] 公共皮肤库添加材质名称
-  - [ ] 公共皮肤库按名称搜索
-  - [ ] 公共皮肤库按上传时间排序,热度排序
+  - [x] 公共皮肤库按名称搜索
+  - [x] 公共皮肤库按上传时间排序
 - [x] 多个fallback服务支持
 - [x] 导入第三方皮肤站的角色和材质数据
 
 ### 安全与性能
-- [x] sqlite数据库模块
+- [x] PostgreSQL 数据库模块
 - [x] JWT认证机制
 - [x] API速率限制
 - [x] 数据库内存缓存与连接池
 - [x] 管理员设置细粒度API
 - [x] 数据库性能优化
-- [x] 多数据库支持（PostgreSQL、MySQL等）
+- [x] PostgreSQL 连接池
 - [ ] Redis缓存支持
 - [ ] 材质存储优化（如使用云存储或CDN）
 

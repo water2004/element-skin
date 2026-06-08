@@ -1,8 +1,8 @@
 # Element Skin Go Backend
 
 This is the Go implementation of the Element Skin backend. It keeps the public
-HTTP/Yggdrasil surface compatible with the former Python service while moving
-the runtime to a small, explicit Go module.
+HTTP/Yggdrasil surface required by the current frontend while keeping the
+runtime small, explicit, and centered on the Go domain modules.
 
 ## Layout
 
@@ -35,8 +35,8 @@ go build ./cmd/element-skin
 
 The integration tests create isolated PostgreSQL databases through
 `internal/testutil`; they exercise the HTTP router, services, stores, token
-rotation, import flows, fallback dispatch, pagination, and important rollback
-paths.
+rotation, import flows, fallback dispatch, pagination, and important failure
+paths used by the current frontend and Yggdrasil clients.
 
 ## Design Notes
 
