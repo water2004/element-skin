@@ -8,10 +8,10 @@ import (
 	"element-skin/backend/internal/util"
 )
 
-func (h Handler) setSessionCookies(w http.ResponseWriter, access, refresh string) {
+func (h Handler) setSessionCookies(w http.ResponseWriter, access, refresh string, refreshMaxAgeSeconds int) {
 	secure := strings.HasPrefix(h.cfg.SiteURL, "https://")
 	http.SetCookie(w, &http.Cookie{Name: "access_token", Value: access, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: h.cfg.AccessMinutes * 60})
-	http.SetCookie(w, &http.Cookie{Name: "refresh_token", Value: refresh, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: h.cfg.JWTExpireDays * 24 * 3600})
+	http.SetCookie(w, &http.Cookie{Name: "refresh_token", Value: refresh, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteLaxMode, MaxAge: refreshMaxAgeSeconds})
 }
 
 func (h Handler) Login(w http.ResponseWriter, req *http.Request) {
@@ -28,7 +28,7 @@ func (h Handler) Login(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	h.setSessionCookies(w, res["access_token"].(string), res["refresh_token"].(string))
+	h.setSessionCookies(w, res["access_token"].(string), res["refresh_token"].(string), res["refresh_max_age_seconds"].(int))
 	util.JSON(w, 200, map[string]any{"user_id": res["user_id"], "is_admin": res["is_admin"]})
 }
 
@@ -111,6 +111,6 @@ func (h Handler) RefreshToken(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	h.setSessionCookies(w, res["access_token"].(string), res["refresh_token"].(string))
+	h.setSessionCookies(w, res["access_token"].(string), res["refresh_token"].(string), res["refresh_max_age_seconds"].(int))
 	util.JSON(w, 200, map[string]any{"is_admin": res["is_admin"]})
 }

@@ -609,6 +609,9 @@ func TestVerificationCodeRegisterAndResetPasswordHTTP(t *testing.T) {
 	if len(code) != 8 {
 		t.Fatalf("bad verification code code=%q", code)
 	}
+	if _, _, ok, err := db.Verifications.GetCode(ctx, "verify@test.com", "register"); err != nil || ok {
+		t.Fatalf("verification code should not be persisted in db: ok=%v err=%v", ok, err)
+	}
 	for _, ch := range code {
 		if !((ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9')) {
 			t.Fatalf("verification code contains invalid character: %q", code)

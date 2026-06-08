@@ -22,7 +22,12 @@ func (s Site) issueSession(ctx context.Context, userID string, isAdmin bool, ext
 	if err := s.DB.Tokens.AddRefresh(ctx, refreshHash, userID, now+int64(expireDays)*24*3600*1000, now); err != nil {
 		return nil, err
 	}
-	out := map[string]any{"access_token": access, "refresh_token": rawRefresh, "is_admin": isAdmin}
+	out := map[string]any{
+		"access_token":            access,
+		"refresh_token":           rawRefresh,
+		"is_admin":                isAdmin,
+		"refresh_max_age_seconds": expireDays * 24 * 3600,
+	}
 	for k, v := range extra {
 		out[k] = v
 	}

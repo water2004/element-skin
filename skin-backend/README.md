@@ -15,7 +15,7 @@ runtime small, explicit, and centered on the Go domain modules.
 - `internal/httpapi`: HTTP route adapters. Business rules should stay in
   `internal/service` or `internal/database` unless they are purely request/response
   concerns.
-- `internal/redisstore`: Redis-backed cache/verification/rate-limit/auth-store
+- `internal/redisstore`: Redis-backed cache/verification/rate-limit/auth-cache
   abstractions plus the in-memory test implementation.
 - `internal/service`: site, Yggdrasil, fallback, Microsoft/import, settings, and
   texture-storage domain logic.
@@ -100,7 +100,8 @@ paths used by the current frontend and Yggdrasil clients.
 - `/public/settings` and `/public/carousel` are served through Redis caches.
   Cache misses rebuild from PostgreSQL/filesystem, while Redis command failures
   fail the request instead of silently falling back.
-- Verification codes and rate-limit counters live in Redis only.
+- Verification codes, rate-limit counters, and auth snapshots are temporary
+  Redis state. Persistent site data stays in PostgreSQL.
 - Site refresh tokens are one-shot and consumed atomically in PostgreSQL.
 - Registration creates the user and initial profile in one transaction, including
   invite consumption, so profile or invite failures do not leave orphan users.
