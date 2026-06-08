@@ -33,4 +33,11 @@ func TestPublicLibraryAndWardrobeCopyVisibilityRules(t *testing.T) {
 	if err != nil || info["note"] != "Domain Library" || info["is_public"] != 2 {
 		t.Fatalf("wardrobe copy mismatch: info=%#v err=%v", info, err)
 	}
+	if err := store.AddToLibrary(ctx, owner.ID, "domain_private_library_hash", "skin", "Private Library", false, "default"); err != nil {
+		t.Fatal(err)
+	}
+	added, err = store.AddToWardrobe(ctx, other.ID, "domain_private_library_hash")
+	if err != nil || added {
+		t.Fatalf("private library texture should not be wardrobe-addable: added=%v err=%v", added, err)
+	}
 }

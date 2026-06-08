@@ -16,6 +16,9 @@ func TestTestConfigExactDefaults(t *testing.T) {
 		cfg.SiteURL != "http://test" || cfg.APIURL != "http://localhost:8000" {
 		t.Fatalf("TestConfig mismatch: %#v", cfg)
 	}
+	if !strings.HasSuffix(cfg.PrivateKeyPath, "private.pem") || !strings.HasSuffix(cfg.PublicKeyPath, "public.pem") {
+		t.Fatalf("TestConfig should point at Yggdrasil test keys: %#v", cfg)
+	}
 }
 
 func TestNewTestAppCreateHelpersExactState(t *testing.T) {

@@ -14,6 +14,9 @@ jwt:
   secret: "abcdefghijklmnopqrstuvwxyz1234567890"
   expire_days: 11
   access_expire_minutes: 45
+keys:
+  private_key: "keys/private.pem"
+  public_key: "keys/public.pem"
 database:
   dsn: "postgresql://user:pass@localhost:5432/db?sslmode=disable"
   max_connections: 23
@@ -49,6 +52,9 @@ carousel:
 	}
 	if cfg.TexturesDir != "/data/textures" || cfg.CarouselDir != "/data/carousel" {
 		t.Fatalf("storage directories not parsed: %#v", cfg)
+	}
+	if cfg.PrivateKeyPath != filepath.Join(dir, "keys", "private.pem") || cfg.PublicKeyPath != filepath.Join(dir, "keys", "public.pem") {
+		t.Fatalf("key paths should resolve relative to config file: %#v", cfg)
 	}
 }
 

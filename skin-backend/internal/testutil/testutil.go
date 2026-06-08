@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -30,7 +31,24 @@ func TestConfig() config.Config {
 	cfg.JWTSecret = "abcdefghijklmnopqrstuvwxyz123456"
 	cfg.SiteURL = "http://test"
 	cfg.APIURL = "http://localhost:8000"
+	cfg.PrivateKeyPath = filepath.Join(repoRoot(), "private.pem")
+	cfg.PublicKeyPath = filepath.Join(repoRoot(), "public.pem")
 	return cfg
+}
+
+func repoRoot() string {
+	if cwd, err := os.Getwd(); err == nil {
+		for dir := cwd; ; dir = filepath.Dir(dir) {
+			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+		}
+	}
+	return "."
 }
 
 func NewTestApp(t *testing.T) (*database.DB, http.Handler) {
@@ -51,7 +69,11 @@ func NewTestApp(t *testing.T) (*database.DB, http.Handler) {
 		t.Fatalf("reset test schema: %v", err)
 	}
 	t.Cleanup(db.Close)
-	return db, app.NewWithDB(cfg, db).Handler()
+	application, err := app.NewWithDB(cfg, db)
+	if err != nil {
+		t.Fatalf("build test app: %v", err)
+	}
+	return db, application.Handler()
 }
 
 func ensureTestDatabase(t *testing.T, ctx context.Context, dbName string) {

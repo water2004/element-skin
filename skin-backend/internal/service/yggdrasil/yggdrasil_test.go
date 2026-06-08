@@ -2,12 +2,17 @@ package yggdrasil_test
 
 import (
 	"context"
+	"crypto"
+	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
+	"os"
 	"strings"
 	"testing"
 
-	"element-skin/backend/internal/config"
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/service/yggdrasil"
@@ -17,11 +22,20 @@ import (
 func TestYggdrasilProfileJSONExactTexturePayload(t *testing.T) {
 	skin := "skin_hash"
 	cape := "cape_hash"
-	ygg := yggdrasil.Yggdrasil{Cfg: config.Config{SiteURL: "https://skin.example/root/"}}
+	cfg := testutil.TestConfig()
+	cfg.SiteURL = "https://skin.example/root/"
+	cfg.APIURL = "https://api.example/skinapi/"
+	ygg, err := yggdrasil.New(nil, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	signed := ygg.ProfileJSON(model.Profile{
+	signed, err := ygg.ProfileJSON(model.Profile{
 		ID: "profile_id", Name: "SlimPlayer", TextureModel: "slim", SkinHash: &skin, CapeHash: &cape,
 	}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if signed["id"] != "profile_id" || signed["name"] != "SlimPlayer" {
 		t.Fatalf("unexpected profile envelope: %#v", signed)
 	}
@@ -40,16 +54,20 @@ func TestYggdrasilProfileJSONExactTexturePayload(t *testing.T) {
 	}
 	textures := payload["textures"].(map[string]any)
 	skinPayload := textures["SKIN"].(map[string]any)
-	if skinPayload["url"] != "https://skin.example/root/static/textures/skin_hash.png" ||
+	if skinPayload["url"] != "https://api.example/skinapi/static/textures/skin_hash.png" ||
 		skinPayload["metadata"].(map[string]any)["model"] != "slim" ||
-		textures["CAPE"].(map[string]any)["url"] != "https://skin.example/root/static/textures/cape_hash.png" {
+		textures["CAPE"].(map[string]any)["url"] != "https://api.example/skinapi/static/textures/cape_hash.png" {
 		t.Fatalf("unexpected textures payload: %#v", textures)
 	}
+	verifySignature(t, cfg.PublicKeyPath, textureProp["value"].(string), textureProp["signature"].(string))
 	if props[1]["name"] != "uploadableTextures" || props[1]["value"] != "skin,cape" {
 		t.Fatalf("missing uploadableTextures property: %#v", props)
 	}
 
-	unsigned := ygg.ProfileJSON(model.Profile{ID: "p2", Name: "DefaultPlayer", TextureModel: "default", SkinHash: &skin}, false)
+	unsigned, err := ygg.ProfileJSON(model.Profile{ID: "p2", Name: "DefaultPlayer", TextureModel: "default", SkinHash: &skin}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
 	unsignedProp := unsigned["properties"].([]map[string]any)[0]
 	if _, ok := unsignedProp["signature"]; ok {
 		t.Fatalf("unsigned profile should not include signature: %#v", unsignedProp)
@@ -65,6 +83,34 @@ func TestYggdrasilProfileJSONExactTexturePayload(t *testing.T) {
 	defaultSkin := payload["textures"].(map[string]any)["SKIN"].(map[string]any)
 	if _, ok := defaultSkin["metadata"]; ok {
 		t.Fatalf("default model should not include metadata: %#v", defaultSkin)
+	}
+}
+
+func verifySignature(t *testing.T, publicKeyPath, value, signature string) {
+	t.Helper()
+	pemBytes, err := os.ReadFile(publicKeyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	block, _ := pem.Decode(pemBytes)
+	if block == nil {
+		t.Fatal("public key fixture is not PEM")
+	}
+	key, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicKey, ok := key.(*rsa.PublicKey)
+	if !ok {
+		t.Fatal("public key fixture is not RSA")
+	}
+	rawSignature, err := base64.StdEncoding.DecodeString(signature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha1.Sum([]byte(value))
+	if err := rsa.VerifyPKCS1v15(publicKey, crypto.SHA1, digest[:], rawSignature); err != nil {
+		t.Fatalf("signature should verify against metadata public key: %v", err)
 	}
 }
 

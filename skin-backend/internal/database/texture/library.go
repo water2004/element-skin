@@ -76,14 +76,10 @@ func (s Store) AddToWardrobe(ctx context.Context, userID, hash string) (bool, er
 	if err != nil {
 		return false, err
 	}
-	if pub != 1 && uploader != userID {
+	if pub != 1 {
 		return false, nil
 	}
-	dstPub := 2
-	if uploader == userID {
-		dstPub = 1
-	}
-	if _, err := tx.Exec(ctx, `INSERT INTO user_textures (user_id,hash,texture_type,note,model,is_public,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, userID, hash, textureType, name, model, dstPub, time.Now().UnixMilli()); err != nil {
+	if _, err := tx.Exec(ctx, `INSERT INTO user_textures (user_id,hash,texture_type,note,model,is_public,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`, userID, hash, textureType, name, model, 2, time.Now().UnixMilli()); err != nil {
 		return false, err
 	}
 	return true, tx.Commit(ctx)

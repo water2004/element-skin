@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"gopkg.in/yaml.v3"
@@ -21,6 +22,8 @@ type Config struct {
 	ServerPort      string
 	TexturesDir     string
 	CarouselDir     string
+	PrivateKeyPath  string
+	PublicKeyPath   string
 	FallbackDomains []string
 }
 
@@ -34,6 +37,7 @@ func Load(path string) (Config, error) {
 			return cfg, err
 		}
 		cfg.apply(raw)
+		cfg.resolveKeyPaths(filepath.Dir(path))
 	} else if errors.Is(err, os.ErrNotExist) {
 		log.Printf("警告：配置文件 %s 未找到，使用默认配置（JWT secret 为占位值，启动将失败）", path)
 	} else {
@@ -61,6 +65,8 @@ func Defaults() Config {
 		ServerPort:     "8000",
 		TexturesDir:    "textures",
 		CarouselDir:    "carousel",
+		PrivateKeyPath: "private.pem",
+		PublicKeyPath:  "public.pem",
 		FallbackDomains: []string{
 			"textures.minecraft.net",
 		},
@@ -81,6 +87,20 @@ func (c *Config) apply(raw rawConfig) {
 	c.ServerPort = strconv.Itoa(getInt(raw, "server.port", atoiDefault(c.ServerPort, 8000)))
 	c.TexturesDir = getString(raw, "textures.directory", c.TexturesDir)
 	c.CarouselDir = getString(raw, "carousel.directory", c.CarouselDir)
+	c.PrivateKeyPath = getString(raw, "keys.private_key", c.PrivateKeyPath)
+	c.PublicKeyPath = getString(raw, "keys.public_key", c.PublicKeyPath)
+}
+
+func (c *Config) resolveKeyPaths(baseDir string) {
+	c.PrivateKeyPath = resolveRelativePath(baseDir, c.PrivateKeyPath)
+	c.PublicKeyPath = resolveRelativePath(baseDir, c.PublicKeyPath)
+}
+
+func resolveRelativePath(baseDir, path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Clean(filepath.Join(baseDir, path))
 }
 
 func getString(raw rawConfig, dotted string, fallback string) string {

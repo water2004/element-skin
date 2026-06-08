@@ -2,9 +2,7 @@ package yggdrasil
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"strings"
 	"time"
@@ -16,8 +14,17 @@ import (
 )
 
 type Yggdrasil struct {
-	DB  *database.DB
-	Cfg config.Config
+	DB     *database.DB
+	Cfg    config.Config
+	Signer *Signer
+}
+
+func New(db *database.DB, cfg config.Config) (Yggdrasil, error) {
+	signer, err := NewSigner(cfg)
+	if err != nil {
+		return Yggdrasil{}, err
+	}
+	return Yggdrasil{DB: db, Cfg: cfg, Signer: signer}, nil
 }
 
 func yggErr(status int, code, msg string) error {
@@ -25,6 +32,10 @@ func yggErr(status int, code, msg string) error {
 }
 
 func (y Yggdrasil) Metadata(ctx context.Context) (map[string]any, error) {
+	signer, err := y.signer()
+	if err != nil {
+		return nil, err
+	}
 	name, _ := y.DB.Settings.Get(ctx, "site_name", "皮肤站")
 	site := strings.TrimRight(y.Cfg.SiteURL, "/")
 	host := strings.TrimPrefix(strings.TrimPrefix(site, "https://"), "http://")
@@ -38,7 +49,7 @@ func (y Yggdrasil) Metadata(ctx context.Context) (map[string]any, error) {
 			"feature.non_email_login": true,
 		},
 		"skinDomains":        append(y.Cfg.FallbackDomains, host),
-		"signaturePublickey": "element-skin-go-signature-placeholder",
+		"signaturePublickey": signer.PublicKeyPEM(),
 	}, nil
 }
 
@@ -217,7 +228,11 @@ func (y Yggdrasil) HasJoined(ctx context.Context, username, serverID string) (ma
 	} else if banned {
 		return nil, 0, yggErr(403, "ForbiddenOperationException", "Account is banned. Please contact administrator.")
 	}
-	return y.ProfileJSON(*p, true), 200, nil
+	body, err := y.ProfileJSON(*p, true)
+	if err != nil {
+		return nil, 0, err
+	}
+	return body, 200, nil
 }
 
 func (y Yggdrasil) Profile(ctx context.Context, id string, unsigned bool) (map[string]any, int, error) {
@@ -228,11 +243,15 @@ func (y Yggdrasil) Profile(ctx context.Context, id string, unsigned bool) (map[s
 	if p == nil {
 		return nil, 204, nil
 	}
-	return y.ProfileJSON(*p, !unsigned), 200, nil
+	body, err := y.ProfileJSON(*p, !unsigned)
+	if err != nil {
+		return nil, 0, err
+	}
+	return body, 200, nil
 }
 
-func (y Yggdrasil) ProfileJSON(p model.Profile, sign bool) map[string]any {
-	base := strings.TrimRight(y.Cfg.SiteURL, "/") + "/static/textures/"
+func (y Yggdrasil) ProfileJSON(p model.Profile, sign bool) (map[string]any, error) {
+	base := strings.TrimRight(y.publicTextureBaseURL(), "/") + "/static/textures/"
 	textures := map[string]any{}
 	if p.SkinHash != nil {
 		skin := map[string]any{"url": base + *p.SkinHash + ".png"}
@@ -248,10 +267,31 @@ func (y Yggdrasil) ProfileJSON(p model.Profile, sign bool) map[string]any {
 	b, _ := json.Marshal(payload)
 	prop := map[string]any{"name": "textures", "value": base64.StdEncoding.EncodeToString(b)}
 	if sign {
-		sum := sha256.Sum256(b)
-		prop["signature"] = hex.EncodeToString(sum[:])
+		signer, err := y.signer()
+		if err != nil {
+			return nil, err
+		}
+		signature, err := signer.SignPropertyValue(prop["value"].(string))
+		if err != nil {
+			return nil, err
+		}
+		prop["signature"] = signature
 	}
-	return map[string]any{"id": p.ID, "name": p.Name, "properties": []map[string]any{prop, {"name": "uploadableTextures", "value": "skin,cape"}}}
+	return map[string]any{"id": p.ID, "name": p.Name, "properties": []map[string]any{prop, {"name": "uploadableTextures", "value": "skin,cape"}}}, nil
+}
+
+func (y Yggdrasil) signer() (*Signer, error) {
+	if y.Signer != nil {
+		return y.Signer, nil
+	}
+	return NewSigner(y.Cfg)
+}
+
+func (y Yggdrasil) publicTextureBaseURL() string {
+	if y.Cfg.APIURL != "" {
+		return y.Cfg.APIURL
+	}
+	return y.Cfg.SiteURL
 }
 
 func (y Yggdrasil) LookupName(ctx context.Context, name string) (map[string]any, int, error) {

@@ -515,20 +515,11 @@ func TestDatabaseUserProfileTokenAndTextureCRUD(t *testing.T) {
 		t.Fatalf("non-uploader model update should not cascade owner profile, got %#v", updatedModelProfile)
 	}
 
-	legacyHash := "legacyhash"
-	if err := db.Textures.AddToLibrary(ctx, user.ID, legacyHash, "skin", "LegacySkin", false, "default"); err != nil {
+	privateHash := "private-readd-hash"
+	if err := db.Textures.AddToLibrary(ctx, user.ID, privateHash, "skin", "PrivateSkin", false, "default"); err != nil {
 		t.Fatal(err)
 	}
-	if ok, err := db.Textures.DeleteFromLibrary(ctx, user.ID, legacyHash, "skin"); err != nil || !ok {
-		t.Fatalf("delete legacy texture ok=%v err=%v", ok, err)
-	}
-	if _, err := db.Pool.Exec(ctx, `INSERT INTO skin_library (skin_hash,texture_type,is_public,uploader,model,name,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)`, legacyHash, "skin", 0, user.ID, "default", "LegacySkin", int64(1234567890)); err != nil {
-		t.Fatal(err)
-	}
-	if ok, err := db.Textures.AddToWardrobe(ctx, user.ID, legacyHash); err != nil || !ok {
-		t.Fatalf("owner should recover legacy private texture ok=%v err=%v", ok, err)
-	}
-	if info, _ := db.Textures.GetInfo(ctx, user.ID, legacyHash, "skin"); info == nil || info["is_public"].(int) != 1 {
-		t.Fatalf("owner recovered texture should use is_public=1, got %#v", info)
+	if ok, err := db.Textures.AddToWardrobe(ctx, other.ID, privateHash); err != nil || ok {
+		t.Fatalf("private library texture should not be addable through public wardrobe flow ok=%v err=%v", ok, err)
 	}
 }

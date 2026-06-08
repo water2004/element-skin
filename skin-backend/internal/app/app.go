@@ -36,7 +36,11 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		return nil, err
 	}
 	site := sitepkg.Site{DB: db, Cfg: cfg}
-	ygg := yggpkg.Yggdrasil{DB: db, Cfg: cfg}
+	ygg, err := yggpkg.New(db, cfg)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 	cleanupCtx, cancel := context.WithCancel(context.Background())
 	go RunRefreshCleanupLoop(cleanupCtx, db.Tokens, time.Hour)
 	return &App{
@@ -46,10 +50,13 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}, nil
 }
 
-func NewWithDB(cfg config.Config, db *database.DB) *App {
+func NewWithDB(cfg config.Config, db *database.DB) (*App, error) {
 	site := sitepkg.Site{DB: db, Cfg: cfg}
-	ygg := yggpkg.Yggdrasil{DB: db, Cfg: cfg}
-	return &App{db: db, handler: httpapi.NewRouter(cfg, db, site, ygg)}
+	ygg, err := yggpkg.New(db, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return &App{db: db, handler: httpapi.NewRouter(cfg, db, site, ygg)}, nil
 }
 
 func (a *App) Handler() http.Handler {
