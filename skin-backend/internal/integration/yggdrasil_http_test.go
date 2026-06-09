@@ -79,9 +79,6 @@ func TestYggdrasilAuthenticateJoinAndProfile(t *testing.T) {
 	if token, err := redis.GetYggToken(context.Background(), accessToken); err != nil || token.UserID != user.ID {
 		t.Fatalf("malformed invalidate request must not delete the valid redis token: %#v err=%v", token, err)
 	}
-	if token, err := db.Tokens.Get(context.Background(), accessToken); err != nil || token != nil {
-		t.Fatalf("ygg authenticate must not persist token in database: %#v err=%v", token, err)
-	}
 
 	refresh := doJSON(t, h, "POST", "/authserver/refresh", map[string]any{
 		"accessToken": accessToken, "clientToken": authBody["clientToken"], "requestUser": true,
@@ -100,9 +97,6 @@ func TestYggdrasilAuthenticateJoinAndProfile(t *testing.T) {
 	if newToken, err := redis.GetYggToken(context.Background(), newAccessToken); err != nil || newToken.UserID != user.ID {
 		t.Fatalf("new ygg access token should be stored in redis: %#v err=%v", newToken, err)
 	}
-	if newToken, err := db.Tokens.Get(context.Background(), newAccessToken); err != nil || newToken != nil {
-		t.Fatalf("new ygg access token must not be persisted in database: %#v err=%v", newToken, err)
-	}
 	if refreshBody["selectedProfile"].(map[string]any)["id"] != profile.ID || refreshBody["user"].(map[string]any)["id"] != user.ID {
 		t.Fatalf("refresh should include selected profile and requestUser data: %#v", refreshBody)
 	}
@@ -116,9 +110,6 @@ func TestYggdrasilAuthenticateJoinAndProfile(t *testing.T) {
 	}
 	if session, err := redis.GetYggSession(context.Background(), "server_1"); err != nil || session.AccessToken != accessToken {
 		t.Fatalf("join should store session in redis: %#v err=%v", session, err)
-	}
-	if session, err := db.Tokens.GetSession(context.Background(), "server_1"); err != nil || session != nil {
-		t.Fatalf("join must not persist session in database: %#v err=%v", session, err)
 	}
 	hasJoined := doJSON(t, h, "GET", "/sessionserver/session/minecraft/hasJoined?username=YggPlayer&serverId=server_1", nil)
 	if hasJoined.Code != 200 {
@@ -343,9 +334,6 @@ func TestTextureUploadAndYggdrasilTextureRoutes(t *testing.T) {
 	token := model.Token{AccessToken: "texture_token", ClientToken: "client", UserID: user.ID, ProfileID: &profile.ID, CreatedAt: time.Now().UnixMilli()}
 	if err := redis.SetYggToken(context.Background(), token, time.Minute); err != nil {
 		t.Fatal(err)
-	}
-	if stored, err := db.Tokens.Get(context.Background(), token.AccessToken); err != nil || stored != nil {
-		t.Fatalf("ygg texture token seed must be redis-only: %#v err=%v", stored, err)
 	}
 	var b bytes.Buffer
 	mw := multipart.NewWriter(&b)

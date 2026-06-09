@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"element-skin/backend/internal/database/profile"
-	"element-skin/backend/internal/database/token"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/testutil"
 )
@@ -50,15 +49,11 @@ func TestStoreCRUDHelpersSearchAndCascade(t *testing.T) {
 	if err != nil || len(search) != 1 || search[0].TextureModel != "default" || search[0].SkinHash != nil {
 		t.Fatalf("search mismatch: profiles=%#v err=%v", search, err)
 	}
-	ts := token.Store{Pool: db.Pool}
-	if err := ts.Add(ctx, model.Token{AccessToken: "domain_profile_token", ClientToken: "client", UserID: user.ID, ProfileID: &p.ID, CreatedAt: 1}); err != nil {
-		t.Fatal(err)
-	}
 	deleted, err := store.DeleteCascade(ctx, p.ID)
 	if err != nil || !deleted {
 		t.Fatalf("delete cascade mismatch: deleted=%v err=%v", deleted, err)
 	}
-	if tok, err := ts.Get(ctx, "domain_profile_token"); err != nil || tok != nil {
-		t.Fatalf("cascade should remove token: token=%#v err=%v", tok, err)
+	if got, err := store.GetByID(ctx, p.ID); err != nil || got != nil {
+		t.Fatalf("delete cascade should remove profile row: profile=%#v err=%v", got, err)
 	}
 }

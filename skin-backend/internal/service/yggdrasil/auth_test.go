@@ -46,9 +46,6 @@ func TestYggdrasilAuthRefreshAndValidate(t *testing.T) {
 	if token, err := redis.GetYggToken(ctx, access); err != nil || token.UserID != user.ID {
 		t.Fatalf("authenticate should store ygg token in redis: %#v err=%v", token, err)
 	}
-	if token, err := db.Tokens.Get(ctx, access); err != nil || token != nil {
-		t.Fatalf("authenticate must not persist ygg token in database: %#v err=%v", token, err)
-	}
 	if err := ygg.Validate(ctx, access, "client_token"); err != nil {
 		t.Fatalf("fresh token should validate: %v", err)
 	}
@@ -70,10 +67,6 @@ func TestYggdrasilAuthRefreshAndValidate(t *testing.T) {
 	if err := ygg.Validate(ctx, newAccess, "client_token"); err != nil {
 		t.Fatalf("new access token should validate: %v", err)
 	}
-	if token, err := db.Tokens.Get(ctx, newAccess); err != nil || token != nil {
-		t.Fatalf("refresh must not persist new ygg token in database: %#v err=%v", token, err)
-	}
-
 	if err := redis.DeleteYggToken(ctx, newAccess); err != nil {
 		t.Fatal(err)
 	}
@@ -161,9 +154,6 @@ func TestYggdrasilSignoutInvalidateAndTokenLimitUseRedisOnly(t *testing.T) {
 		if _, err := redis.GetYggToken(ctx, access); err != nil {
 			t.Fatalf("newer token %q should remain in redis: %v", access, err)
 		}
-		if token, err := db.Tokens.Get(ctx, access); err != nil || token != nil {
-			t.Fatalf("ygg token %q must not be stored in database: %#v err=%v", access, token, err)
-		}
 	}
 
 	if err := ygg.Invalidate(ctx, accesses[1]); err != nil {
@@ -197,9 +187,6 @@ func TestYggdrasilTokenReadsRedisOnly(t *testing.T) {
 	got, err := ygg.Token(ctx, token.AccessToken)
 	if err != nil || got.AccessToken != token.AccessToken || got.UserID != user.ID || got.ProfileID == nil || *got.ProfileID != profile.ID {
 		t.Fatalf("Token should read redis token: %#v err=%v", got, err)
-	}
-	if dbToken, err := db.Tokens.Get(ctx, token.AccessToken); err != nil || dbToken != nil {
-		t.Fatalf("Token fixture must remain redis-only: %#v err=%v", dbToken, err)
 	}
 	if _, err := ygg.Token(ctx, "missing_access"); err == nil || !strings.Contains(err.Error(), "Invalid token") {
 		t.Fatalf("missing redis token should be unauthorized ygg error, got %v", err)

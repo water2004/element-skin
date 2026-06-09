@@ -24,27 +24,12 @@ CREATE TABLE IF NOT EXISTS profiles (
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
-CREATE TABLE IF NOT EXISTS tokens (
-    access_token TEXT PRIMARY KEY,
-    client_token TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    profile_id TEXT,
-    created_at BIGINT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS site_refresh_tokens (
     token_hash TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,
     expires_at BIGINT NOT NULL,
     created_at BIGINT NOT NULL,
     FOREIGN KEY(user_id) REFERENCES users(id)
-);
-
-CREATE TABLE IF NOT EXISTS sessions (
-    server_id TEXT PRIMARY KEY,
-    access_token TEXT NOT NULL,
-    ip TEXT,
-    created_at BIGINT NOT NULL
 );
  
 CREATE TABLE IF NOT EXISTS invites (
@@ -121,6 +106,8 @@ CREATE TABLE IF NOT EXISTS verification_codes (
 ALTER TABLE skin_library DROP CONSTRAINT IF EXISTS skin_library_pkey;
 ALTER TABLE skin_library ADD CONSTRAINT skin_library_pkey PRIMARY KEY (skin_hash, texture_type);
 ALTER TABLE skin_library ADD COLUMN IF NOT EXISTS usage_count BIGINT NOT NULL DEFAULT 0;
+DROP TABLE IF EXISTS sessions;
+DROP TABLE IF EXISTS tokens;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_super_admin BOOLEAN DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at BIGINT NOT NULL DEFAULT 0;
 UPDATE users SET created_at = 0 WHERE created_at IS NULL;
@@ -152,8 +139,6 @@ UPDATE skin_library sl SET usage_count = CASE sl.texture_type
 END;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles (user_id, id);
-CREATE INDEX IF NOT EXISTS idx_tokens_user_created ON tokens (user_id, created_at);
-CREATE INDEX IF NOT EXISTS idx_tokens_profile_id ON tokens (profile_id);
 CREATE INDEX IF NOT EXISTS idx_site_refresh_user ON site_refresh_tokens (user_id);
 CREATE INDEX IF NOT EXISTS idx_site_refresh_expires ON site_refresh_tokens (expires_at);
 CREATE INDEX IF NOT EXISTS idx_user_textures_user_created_hash ON user_textures (user_id, created_at, hash);

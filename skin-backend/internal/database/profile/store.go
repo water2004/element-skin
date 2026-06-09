@@ -122,9 +122,6 @@ func (s Store) DeleteCascade(ctx context.Context, id string) (bool, error) {
 		return false, err
 	}
 	defer tx.Rollback(ctx)
-	if _, err := tx.Exec(ctx, `DELETE FROM tokens WHERE profile_id=$1`, id); err != nil {
-		return false, err
-	}
 	tag, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id=$1`, id)
 	if err != nil {
 		return false, err

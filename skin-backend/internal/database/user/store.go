@@ -155,7 +155,6 @@ func (s Store) Delete(ctx context.Context, id string) (bool, error) {
 	defer tx.Rollback(ctx)
 	for _, q := range []string{
 		`DELETE FROM profiles WHERE user_id=$1`,
-		`DELETE FROM tokens WHERE user_id=$1`,
 		`DELETE FROM site_refresh_tokens WHERE user_id=$1`,
 		`DELETE FROM user_textures WHERE user_id=$1`,
 	} {

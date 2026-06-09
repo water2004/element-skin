@@ -33,9 +33,6 @@ func TestYggdrasilJoinAndHasJoined(t *testing.T) {
 	if session, err := redis.GetYggSession(ctx, "server_1"); err != nil || session.AccessToken != access {
 		t.Fatalf("join should store session in redis: %#v err=%v", session, err)
 	}
-	if session, err := db.Tokens.GetSession(ctx, "server_1"); err != nil || session != nil {
-		t.Fatalf("join must not persist session in database: %#v err=%v", session, err)
-	}
 	joined, status, err := ygg.HasJoined(ctx, profile.Name, "server_1")
 	if err != nil {
 		t.Fatal(err)

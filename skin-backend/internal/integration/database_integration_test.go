@@ -443,18 +443,8 @@ func TestDatabaseUserProfileTokenAndTextureCRUD(t *testing.T) {
 		t.Fatalf("unexpected profile: %#v", gotProfile)
 	}
 
-	token := model.Token{AccessToken: "acc_token", ClientToken: "cli", UserID: user.ID, ProfileID: &profile.ID, CreatedAt: time.Now().UnixMilli()}
-	if err := db.Tokens.Add(ctx, token); err != nil {
-		t.Fatal(err)
-	}
-	if got, _ := db.Tokens.Get(ctx, "acc_token"); got == nil {
-		t.Fatal("token missing")
-	}
 	if ok, err := db.Profiles.DeleteCascade(ctx, profile.ID); err != nil || !ok {
 		t.Fatalf("DeleteProfileCascade ok=%v err=%v", ok, err)
-	}
-	if got, _ := db.Tokens.Get(ctx, "acc_token"); got != nil {
-		t.Fatal("profile token should be cascaded")
 	}
 
 	if err := db.Textures.AddToLibrary(ctx, user.ID, "texhash", "skin", "MySkin", true, "default"); err != nil {

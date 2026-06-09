@@ -3,7 +3,6 @@ package integration_test
 import (
 	"context"
 	"element-skin/backend/internal/database"
-	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
 	"net/http"
@@ -257,10 +256,6 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	}
 
 	profile := testutil.CreateProfile(t, db, user.ID, "delete_user_profile", "DeleteUserProfile")
-	token := model.Token{AccessToken: "delete-user-token", ClientToken: "client", UserID: user.ID, ProfileID: &profile.ID, CreatedAt: now}
-	if err := db.Tokens.Add(context.Background(), token); err != nil {
-		t.Fatal(err)
-	}
 	if err := db.Textures.AddToLibrary(context.Background(), user.ID, "delete_user_texture", "skin", "DeleteUserTex", true, "default"); err != nil {
 		t.Fatal(err)
 	}
@@ -273,9 +268,6 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	}
 	if p, _ := db.Profiles.GetByID(context.Background(), profile.ID); p != nil {
 		t.Fatal("user profiles should be deleted")
-	}
-	if tok, _ := db.Tokens.Get(context.Background(), "delete-user-token"); tok != nil {
-		t.Fatal("user tokens should be deleted")
 	}
 	if ok, _ := db.Textures.VerifyOwnership(context.Background(), user.ID, "delete_user_texture", "skin"); ok {
 		t.Fatal("user textures should be deleted")

@@ -41,9 +41,6 @@ func TestTextureRoutesRequireBearerAndDeleteClearsProfileSkinExactly(t *testing.
 	if err := redis.SetYggToken(context.Background(), model.Token{AccessToken: "delete_texture_token", ClientToken: "client", UserID: user.ID, ProfileID: &profileID, CreatedAt: time.Now().UnixMilli()}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if token, err := db.Tokens.Get(context.Background(), "delete_texture_token"); err != nil || token != nil {
-		t.Fatalf("texture route seed token must be redis-only: %#v err=%v", token, err)
-	}
 	skin := "skin_before_delete"
 	if err := db.Profiles.UpdateSkin(req.Context(), profile.ID, &skin); err != nil {
 		t.Fatal(err)
@@ -104,9 +101,6 @@ func TestTextureRouteUploadUsesRedisYggToken(t *testing.T) {
 	updated, err := db.Profiles.GetByID(context.Background(), profile.ID)
 	if err != nil || updated == nil || updated.SkinHash == nil || updated.TextureModel != "slim" {
 		t.Fatalf("upload should apply skin/model: profile=%#v err=%v", updated, err)
-	}
-	if dbToken, err := db.Tokens.Get(context.Background(), token.AccessToken); err != nil || dbToken != nil {
-		t.Fatalf("upload token must remain redis-only: %#v err=%v", dbToken, err)
 	}
 }
 
