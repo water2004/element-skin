@@ -58,6 +58,8 @@ type Store interface {
 	TrimYggTokensByUser(context.Context, string, int) error
 	SetYggSession(context.Context, model.Session, time.Duration) error
 	GetYggSession(context.Context, string) (model.Session, error)
+	MarkFallbackRequest(context.Context, string, string, time.Duration) (bool, error)
+	DeleteFallbackRequest(context.Context, string, string) error
 	HitRateLimit(context.Context, string, int, time.Duration) (RateLimitResult, error)
 	GetAuthUser(context.Context, string) (AuthUser, error)
 	SetAuthUser(context.Context, AuthUser, time.Duration) error
@@ -238,6 +240,10 @@ func (s *RedisStore) yggSessionKey(serverID string) string {
 	return s.key("ygg", "session", serverID)
 }
 
+func (s *RedisStore) fallbackRequestKey(endpoint, request string) string {
+	return s.key("fallback", "request", endpoint, request)
+}
+
 func (s *RedisStore) SetYggToken(ctx context.Context, token model.Token, ttl time.Duration) error {
 	value := yggTokenFromModel(token)
 	b, err := json.Marshal(value)
@@ -357,6 +363,14 @@ func (s *RedisStore) GetYggSession(ctx context.Context, serverID string) (model.
 		return model.Session{}, err
 	}
 	return session.model(), nil
+}
+
+func (s *RedisStore) MarkFallbackRequest(ctx context.Context, endpoint, request string, ttl time.Duration) (bool, error) {
+	return s.client.SetNX(ctx, s.fallbackRequestKey(endpoint, request), "1", ttl).Result()
+}
+
+func (s *RedisStore) DeleteFallbackRequest(ctx context.Context, endpoint, request string) error {
+	return s.client.Del(ctx, s.fallbackRequestKey(endpoint, request)).Err()
 }
 
 var rateLimitScript = redis.NewScript(`

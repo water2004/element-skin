@@ -10,5 +10,6 @@ import (
 )
 
 func newFallback(db *database.DB, client *http.Client) fallback.Fallback {
-	return fallback.Fallback{DB: db, Client: client, Settings: settingssvc.Settings{DB: db, Redis: testutil.NewMemoryRedis()}}
+	redis := testutil.NewMemoryRedis()
+	return fallback.Fallback{DB: db, Client: client, Redis: redis, Settings: settingssvc.Settings{DB: db, Redis: redis}}
 }

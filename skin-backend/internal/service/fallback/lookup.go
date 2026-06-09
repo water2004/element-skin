@@ -29,7 +29,7 @@ func (f Fallback) HasJoined(ctx context.Context, username, serverID, ip string) 
 		if ip != "" {
 			q.Set("ip", ip)
 		}
-		return f.get(ctx, u+"?"+q.Encode())
+		return f.get(ctx, ep, u+"?"+q.Encode())
 	}
 	return f.dispatch(ctx, eps, strategy, call)
 }
@@ -46,7 +46,7 @@ func (f Fallback) GetProfile(ctx context.Context, uuid string, unsigned bool) (*
 	call := func(ep map[string]any) (*FallbackResponse, error) {
 		u := strings.TrimRight(ep["session_url"].(string), "/") + "/session/minecraft/profile/" + uuid
 		u += "?unsigned=" + strconv.FormatBool(unsigned)
-		return f.get(ctx, u)
+		return f.get(ctx, ep, u)
 	}
 	return f.dispatch(ctx, eps, strategy, call)
 }
@@ -66,7 +66,7 @@ func (f Fallback) GetProfileByName(ctx context.Context, playerName string) (*Fal
 			return nil, nil
 		}
 		u := accountURL + "/users/profiles/minecraft/" + url.PathEscape(playerName)
-		return f.get(ctx, u)
+		return f.get(ctx, ep, u)
 	}
 	return f.dispatch(ctx, eps, strategy, call)
 }
@@ -86,7 +86,7 @@ func (f Fallback) ServicesLookup(ctx context.Context, playerName string) (*Fallb
 			return nil, nil
 		}
 		u := servicesURL + "/minecraft/profile/lookup/name/" + url.PathEscape(playerName)
-		return f.get(ctx, u)
+		return f.get(ctx, ep, u)
 	}
 	return f.dispatch(ctx, eps, strategy, call)
 }
@@ -105,7 +105,7 @@ func (f Fallback) BulkLookup(ctx context.Context, names []string) ([]map[string]
 		if accountURL == "" {
 			return nil, nil
 		}
-		return f.postJSON(ctx, accountURL+"/profiles/minecraft", names)
+		return f.postJSON(ctx, ep, accountURL+"/profiles/minecraft", names)
 	}
 	resp, err := f.dispatch(ctx, eps, strategy, call)
 	if err != nil || resp == nil {

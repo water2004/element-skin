@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	dbfallback "element-skin/backend/internal/database/fallback"
+	fallbacksvc "element-skin/backend/internal/service/fallback"
 	"element-skin/backend/internal/testutil"
 )
 
@@ -52,6 +53,51 @@ func TestFallbackHasJoinedForwardsAndWhitelist(t *testing.T) {
 	}
 	if seenPath != "/session/minecraft/hasJoined" || seenUsername != "Stranger" {
 		t.Fatalf("unexpected forwarded request path=%q username=%q", seenPath, seenUsername)
+	}
+}
+
+func TestFallbackSkipsEndpointRequestAlreadyInFlight(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	calls := 0
+	var fb fallbacksvc.Fallback
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		resp, err := fb.HasJoined(r.Context(), r.URL.Query().Get("username"), r.URL.Query().Get("serverId"), r.URL.Query().Get("ip"))
+		if err != nil {
+			t.Fatalf("recursive fallback returned error: %v", err)
+		}
+		if resp != nil {
+			t.Fatalf("recursive fallback should be skipped as in-flight duplicate, got %#v", resp)
+		}
+		w.WriteHeader(204)
+	}))
+	defer server.Close()
+
+	if err := db.Fallbacks.SaveEndpoints(ctx, []dbfallback.Endpoint{{
+		Priority: 1, SessionURL: server.URL, AccountURL: server.URL, ServicesURL: server.URL, CacheTTL: 60,
+		EnableProfile: true, EnableHasJoined: true,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	fb = newFallback(db, server.Client())
+
+	resp, err := fb.HasJoined(ctx, "LoopPlayer", "loop-server", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp != nil {
+		t.Fatalf("outer fallback should miss after remote 204, got %#v", resp)
+	}
+	if calls != 1 {
+		t.Fatalf("fallback loop guard should allow exactly one outbound request, got %d", calls)
+	}
+	resp, err = fb.HasJoined(ctx, "LoopPlayer", "loop-server", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp != nil || calls != 2 {
+		t.Fatalf("completed request mark should be released for later attempts: resp=%#v calls=%d", resp, calls)
 	}
 }
 
