@@ -7,6 +7,7 @@ import (
 )
 
 const (
+	TestStateKindOAuth   = stateKindOAuth
 	TestStateKindProfile = stateKindProfile
 	TestStateKindImport  = stateKindImport
 )
