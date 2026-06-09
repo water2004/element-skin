@@ -28,19 +28,15 @@ func (y Yggdrasil) Authenticate(ctx context.Context, username, password, clientT
 	if clientToken == "" {
 		clientToken = access
 	}
-	var profiles []model.Profile
+	profiles, err := y.DB.Profiles.GetByUser(ctx, u.ID, 100)
+	if err != nil {
+		return nil, err
+	}
 	var selected *model.Profile
 	if loginProfile != nil {
-		profiles = []model.Profile{*loginProfile}
 		selected = loginProfile
-	} else {
-		profiles, err = y.DB.Profiles.GetByUser(ctx, u.ID, 100)
-		if err != nil {
-			return nil, err
-		}
-		if len(profiles) == 1 {
-			selected = &profiles[0]
-		}
+	} else if len(profiles) == 1 {
+		selected = &profiles[0]
 	}
 	var pid *string
 	if selected != nil {

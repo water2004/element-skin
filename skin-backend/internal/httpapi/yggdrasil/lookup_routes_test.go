@@ -26,8 +26,15 @@ func TestLookupRoutesNamesReturnExactLocalProfiles(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/profiles/minecraft", strings.NewReader(`["YggLookupProfile","MissingName"]`))
 	rec := httptest.NewRecorder()
 	h.LookupNames(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"id":"`+profile.ID+`"`) || !strings.Contains(rec.Body.String(), `"name":"YggLookupProfile"`) {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("lookup names response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var body []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode lookup names response: %v body=%q", err, rec.Body.String())
+	}
+	if len(body) != 1 || body[0]["id"] != profile.ID || body[0]["name"] != "YggLookupProfile" {
+		t.Fatalf("lookup names should include only existing profiles exactly: %#v", body)
 	}
 }
 

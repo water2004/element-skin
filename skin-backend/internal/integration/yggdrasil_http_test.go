@@ -284,8 +284,8 @@ func TestYggdrasilProfileNameLoginAndLookupMiss(t *testing.T) {
 	if body["selectedProfile"].(map[string]any)["id"] != p1.ID {
 		t.Fatalf("wrong selected profile: %#v", body)
 	}
-	if len(body["availableProfiles"].([]any)) != 1 {
-		t.Fatalf("profile-name login should return one profile: %#v", body)
+	if len(body["availableProfiles"].([]any)) != 2 {
+		t.Fatalf("profile-name login should return every available profile while selecting the named one: %#v", body)
 	}
 
 	byEmail := doJSON(t, h, "POST", "/authserver/authenticate", map[string]any{"username": user.Email, "password": "YggPassword123"})
@@ -358,7 +358,7 @@ func TestTextureUploadAndYggdrasilTextureRoutes(t *testing.T) {
 	yggReq.Header.Set("Authorization", "Bearer texture_token")
 	yggRR := httptest.NewRecorder()
 	h.ServeHTTP(yggRR, yggReq)
-	if yggRR.Code != 200 {
+	if yggRR.Code != 204 || yggRR.Body.Len() != 0 {
 		t.Fatalf("ygg texture upload status=%d body=%s", yggRR.Code, yggRR.Body.String())
 	}
 	p, _ := db.Profiles.GetByID(context.Background(), profile.ID)

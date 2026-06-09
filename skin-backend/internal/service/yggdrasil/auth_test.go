@@ -94,6 +94,50 @@ func TestYggdrasilAuthRefreshAndValidate(t *testing.T) {
 	}
 }
 
+func TestYggdrasilAuthenticateProfileNameBindsSelectedProfileAndMultiProfileEmailDoesNot(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "ygg-profile-login@test.com", "Password123", "YggProfileLogin", false)
+	first := testutil.CreateProfile(t, db, user.ID, "ygg_profile_login_first", "YggLoginFirst")
+	second := testutil.CreateProfile(t, db, user.ID, "ygg_profile_login_second", "YggLoginSecond")
+	redis := testutil.NewMemoryRedis()
+	ygg := yggdrasil.Yggdrasil{DB: db, Cfg: testutil.TestConfig(), Redis: redis}
+
+	byProfileName, err := ygg.Authenticate(ctx, second.Name, "Password123", "client-profile-name", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	selected := byProfileName["selectedProfile"].(map[string]any)
+	if selected["id"] != second.ID || selected["name"] != second.Name {
+		t.Fatalf("profile-name login should bind exactly the named profile: %#v", byProfileName)
+	}
+	if profiles := byProfileName["availableProfiles"].([]map[string]any); len(profiles) != 2 {
+		t.Fatalf("profile-name login should still expose both available profiles: %#v", profiles)
+	}
+	nameAccess := byProfileName["accessToken"].(string)
+	nameToken, err := redis.GetYggToken(ctx, nameAccess)
+	if err != nil || nameToken.ProfileID == nil || *nameToken.ProfileID != second.ID {
+		t.Fatalf("profile-name login token should be bound to selected profile: token=%#v err=%v", nameToken, err)
+	}
+
+	byEmail, err := ygg.Authenticate(ctx, user.Email, "Password123", "client-email", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := byEmail["selectedProfile"]; ok {
+		t.Fatalf("email login with multiple profiles must not auto-select a profile: %#v", byEmail)
+	}
+	emailAccess := byEmail["accessToken"].(string)
+	emailToken, err := redis.GetYggToken(ctx, emailAccess)
+	if err != nil || emailToken.ProfileID != nil {
+		t.Fatalf("multi-profile email login token should remain unbound: token=%#v err=%v", emailToken, err)
+	}
+	profiles := byEmail["availableProfiles"].([]map[string]any)
+	if len(profiles) != 2 || profiles[0]["id"] != first.ID || profiles[1]["id"] != second.ID {
+		t.Fatalf("email login should return both available profiles in store order: %#v", profiles)
+	}
+}
+
 func TestYggdrasilSignoutInvalidateAndTokenLimitUseRedisOnly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()

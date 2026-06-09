@@ -34,6 +34,11 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 403, Detail: "Profile not yours"})
 		return
 	}
+	textureType := strings.ToLower(req.PathValue("texture_type"))
+	if textureType != "skin" && textureType != "cape" {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid texture_type"})
+		return
+	}
 	if err := req.ParseMultipartForm(16 << 20); err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid multipart form"})
 		return
@@ -43,7 +48,6 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	textureType := strings.ToLower(req.PathValue("texture_type"))
 	storage, err := texturesvc.NewTextureStorage(h.cfg.TexturesDir)
 	if err != nil {
 		util.Error(w, err)
@@ -69,11 +73,8 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 			util.Error(w, err)
 			return
 		}
-	} else {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid texture_type"})
-		return
 	}
-	util.JSON(w, 200, map[string]any{"hash": hash})
+	w.WriteHeader(204)
 }
 
 func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
