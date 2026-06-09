@@ -34,7 +34,7 @@ var SettingDefaults = map[string]string{
 	"email_verify_ttl":             "300",
 	"fallback_strategy":            "serial",
 	"fallback_services":            "[]",
-	"easter_eggs_enabled":          `["april-fools"]`,
+	"easter_eggs_enabled":          `["spring-festival","april-fools"]`,
 }
 
 var settingsGroups = map[string][]string{

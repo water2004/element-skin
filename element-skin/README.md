@@ -70,6 +70,28 @@ npm install
 npm run dev
 ```
 
+### 调试节日彩蛋
+
+开发环境下会在浏览器控制台暴露 `window.elementSkinEasterEggs`，可以手动启动、停止或按日期刷新彩蛋：
+
+```js
+await elementSkinEasterEggs.start('spring-festival')
+elementSkinEasterEggs.stop()
+await elementSkinEasterEggs.refreshAt('2026-02-17')
+elementSkinEasterEggs.setDisabled(false)
+elementSkinEasterEggs.list()
+```
+
+当前可用 ID：
+
+- `spring-festival`：春节，农历正月初一
+- `april-fools`：愚人节，4 月 1 日
+- `qingming`：清明，4 月 4 日至 4 月 5 日
+- `children-day`：儿童节，6 月 1 日
+- `christmas`：圣诞节，12 月 24 日至 12 月 25 日
+
+农历彩蛋使用浏览器内置 Chinese calendar 判断日期；如果手动测试发现没有效果，先确认服务端公开设置允许该彩蛋，且个人资料里的“关闭彩蛋”没有开启。
+
 ### Type-Check, Compile and Minify for Production
 
 ```sh

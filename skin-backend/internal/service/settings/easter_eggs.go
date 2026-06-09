@@ -7,6 +7,7 @@ import (
 )
 
 var allowedEasterEggs = map[string]bool{
+	"spring-festival": true,
 	"april-fools":  true,
 	"qingming":     true,
 	"children-day": true,

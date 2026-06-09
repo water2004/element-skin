@@ -22,7 +22,29 @@ export interface EasterEggConfig {
 const EASTER_EGG_DISABLED_KEY = 'disableEasterEgg'
 const LEGACY_EASTER_EGG_DISABLED_KEY = 'disableMeowEasterEgg'
 
+function isChineseCalendarDay(date: Date, month: number, day: number): boolean {
+  try {
+    const parts = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
+      month: 'numeric',
+      day: 'numeric',
+    }).formatToParts(date)
+    const lunarMonth = Number(parts.find((part) => part.type === 'month')?.value)
+    const lunarDay = Number(parts.find((part) => part.type === 'day')?.value)
+    return lunarMonth === month && lunarDay === day
+  } catch {
+    return false
+  }
+}
+
 const definitions: EasterEggDefinition[] = [
+  {
+    id: 'spring-festival',
+    name: '春节',
+    description: '农历正月初一启用春节主题配色、点击火花与背景烟花。',
+    htmlClass: 'easter-egg-spring-festival',
+    active: (date) => isChineseCalendarDay(date, 1, 1),
+    load: () => import('./springFestival'),
+  },
   {
     id: 'april-fools',
     name: '愚人节',
