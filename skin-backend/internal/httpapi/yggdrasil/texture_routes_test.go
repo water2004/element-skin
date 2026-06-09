@@ -110,6 +110,76 @@ func TestTextureRouteUploadUsesRedisYggToken(t *testing.T) {
 	}
 }
 
+func TestTextureRoutesRejectProfileMismatchAndInvalidTypeExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	cfg.TexturesDir = t.TempDir()
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+	user := testutil.CreateUser(t, db, "ygg-texture-rules@test.com", "Password123", "YggTextureRules", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "ygg_texture_rules_profile", "YggTextureRulesProfile")
+	other := testutil.CreateProfile(t, db, user.ID, "ygg_texture_rules_other", "YggTextureRulesOther")
+	token := model.Token{AccessToken: "texture_rules_token", ClientToken: "client", UserID: user.ID, ProfileID: &profile.ID, CreatedAt: time.Now().UnixMilli()}
+	if err := redis.SetYggToken(context.Background(), token, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/user/profile/"+other.ID+"/skin", nil)
+	req.Header.Set("Authorization", "Bearer texture_rules_token")
+	req.SetPathValue("uuid", other.ID)
+	req.SetPathValue("texture_type", "skin")
+	rec := httptest.NewRecorder()
+	h.DeleteTexture(rec, req)
+	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), `"detail":"Invalid token"`) {
+		t.Fatalf("profile mismatch should be generic 401 invalid token: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/api/user/profile/"+profile.ID+"/elytra", nil)
+	req.Header.Set("Authorization", "Bearer texture_rules_token")
+	req.SetPathValue("uuid", profile.ID)
+	req.SetPathValue("texture_type", "elytra")
+	rec = httptest.NewRecorder()
+	h.DeleteTexture(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"Invalid texture_type"`) {
+		t.Fatalf("invalid texture type mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTextureRoutesDeleteCapeClearsOnlyCape(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+	user := testutil.CreateUser(t, db, "ygg-delete-cape@test.com", "Password123", "YggDeleteCape", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "ygg_delete_cape_profile", "YggDeleteCapeProfile")
+	skin := "skin_should_remain"
+	cape := "cape_should_clear"
+	if err := db.Profiles.UpdateSkin(context.Background(), profile.ID, &skin); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Profiles.UpdateCape(context.Background(), profile.ID, &cape); err != nil {
+		t.Fatal(err)
+	}
+	token := model.Token{AccessToken: "delete_cape_token", ClientToken: "client", UserID: user.ID, ProfileID: &profile.ID, CreatedAt: time.Now().UnixMilli()}
+	if err := redis.SetYggToken(context.Background(), token, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/user/profile/"+profile.ID+"/cape", nil)
+	req.Header.Set("Authorization", "Bearer delete_cape_token")
+	req.SetPathValue("uuid", profile.ID)
+	req.SetPathValue("texture_type", "cape")
+	rec := httptest.NewRecorder()
+	h.DeleteTexture(rec, req)
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("delete cape should be exact 204 empty body: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	updated, err := db.Profiles.GetByID(context.Background(), profile.ID)
+	if err != nil || updated == nil || updated.SkinHash == nil || *updated.SkinHash != skin || updated.CapeHash != nil {
+		t.Fatalf("delete cape should clear only cape: profile=%#v err=%v", updated, err)
+	}
+}
+
 func testPNG(t *testing.T, w, h int) []byte {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
