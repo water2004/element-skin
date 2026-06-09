@@ -78,6 +78,14 @@ const definitions: EasterEggDefinition[] = [
     load: () => import('./dragonBoat'),
   },
   {
+    id: 'mid-autumn',
+    name: '中秋节',
+    description: '农历八月十五在深色模式启用月白桂金配色、点击桂花粒子和首页月光按钮。',
+    htmlClass: 'easter-egg-mid-autumn',
+    active: (date) => isChineseCalendarDay(date, 8, 15),
+    load: () => import('./midAutumn'),
+  },
+  {
     id: 'christmas',
     name: '圣诞节',
     description: '12 月 24 日至 12 月 25 日启用飘雪效果。',

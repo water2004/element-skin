@@ -98,7 +98,6 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-spring-festival .el-button--primary,
     html.easter-egg-spring-festival .btn-gradient-primary,
-    html.easter-egg-spring-festival .search-bar-container .el-button,
     html.easter-egg-spring-festival .canvas-glass-button.is-primary,
     html.easter-egg-spring-festival .is-home-layout .header-actions .el-button--primary {
       background-image:
@@ -117,6 +116,33 @@ export function start(): EasterEggCleanup {
       box-shadow:
         0 8px 24px rgba(232, 107, 60, 0.2),
         0 0 0 1px rgba(255, 214, 102, 0.26) !important;
+    }
+
+    html.easter-egg-spring-festival .search-bar-container .el-input-group__append {
+      background-image:
+        linear-gradient(135deg, rgba(255, 214, 102, 0.2), transparent 42%),
+        linear-gradient(135deg, #e86b3c, #f4a62a) !important;
+      border-color: rgba(255, 214, 102, 0.42) !important;
+      color: #fff !important;
+      box-shadow:
+        0 8px 22px rgba(232, 107, 60, 0.14),
+        inset 0 1px 0 rgba(255, 232, 150, 0.32) !important;
+    }
+
+    html.easter-egg-spring-festival .search-bar-container .el-input-group__append:hover {
+      box-shadow:
+        0 8px 24px rgba(232, 107, 60, 0.2),
+        0 0 0 1px rgba(255, 214, 102, 0.26) !important;
+    }
+
+    html.easter-egg-spring-festival .search-bar-container .el-input-group__append .el-button,
+    html.easter-egg-spring-festival .search-bar-container .el-input-group__append .el-button:hover,
+    html.easter-egg-spring-festival .search-bar-container .el-input-group__append .el-button:focus {
+      background: transparent !important;
+      background-image: none !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+      color: inherit !important;
     }
 
     html.easter-egg-spring-festival .canvas-glass-button.is-primary .glass-tint {

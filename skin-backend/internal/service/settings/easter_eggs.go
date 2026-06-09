@@ -12,6 +12,7 @@ var allowedEasterEggs = map[string]bool{
 	"qingming":     true,
 	"children-day": true,
 	"dragon-boat":  true,
+	"mid-autumn":   true,
 	"christmas":    true,
 }
 
