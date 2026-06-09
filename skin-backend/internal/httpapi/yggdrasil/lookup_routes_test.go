@@ -1,6 +1,7 @@
 package yggdrasil_test
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -62,6 +63,78 @@ func TestProfileAndLookupRoutesReturnLocalProfiles(t *testing.T) {
 	}
 }
 
+func TestProfileRouteUnsignedQueryControlsSignatureExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+	user := testutil.CreateUser(t, db, "ygg-profile-sign@test.com", "Password123", "YggProfileSign", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "11111111222233334444555555555555", "YggProfileSignPlayer")
+	dashedID := "11111111-2222-3333-4444-555555555555"
+
+	req := httptest.NewRequest(http.MethodGet, "/sessionserver/session/minecraft/profile/"+dashedID+"?unsigned=false", nil)
+	req.SetPathValue("uuid", dashedID)
+	rec := httptest.NewRecorder()
+	h.Profile(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("signed profile status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	signedTexture := firstTextureProperty(t, rec.Body.Bytes())
+	if signedTexture["signature"] == "" {
+		t.Fatalf("unsigned=false should include a textures signature: %#v", signedTexture)
+	}
+	assertTexturePayloadProfile(t, signedTexture["value"].(string), profile.ID, profile.Name)
+
+	req = httptest.NewRequest(http.MethodGet, "/sessionserver/session/minecraft/profile/"+profile.ID+"?unsigned=true", nil)
+	req.SetPathValue("uuid", profile.ID)
+	rec = httptest.NewRecorder()
+	h.Profile(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unsigned profile status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	unsignedTexture := firstTextureProperty(t, rec.Body.Bytes())
+	if _, ok := unsignedTexture["signature"]; ok {
+		t.Fatalf("unsigned=true should omit textures signature: %#v", unsignedTexture)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/sessionserver/session/minecraft/profile/missing-profile?unsigned=false", nil)
+	req.SetPathValue("uuid", "missing-profile")
+	rec = httptest.NewRecorder()
+	h.Profile(rec, req)
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("missing profile should be exact 204 with empty body: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestLookupRoutesProtocolMissesAndBadBulkBodyExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/profiles/minecraft/MissingPlayer", nil)
+	req.SetPathValue("playerName", "MissingPlayer")
+	rec := httptest.NewRecorder()
+	h.LookupName(rec, req)
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("lookup name miss should be exact 204 with empty body: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/api/profiles/minecraft", strings.NewReader(`{"name":"not-an-array"}`))
+	rec = httptest.NewRecorder()
+	h.LookupNames(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("bad bulk lookup body status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var body map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode bad bulk lookup body: %v body=%q", err, rec.Body.String())
+	}
+	if body["detail"] != "Request body must be an array" {
+		t.Fatalf("bad bulk lookup body mismatch: %#v", body)
+	}
+}
+
 func TestWriteFallbackForTest(t *testing.T) {
 	rec := httptest.NewRecorder()
 	if !yggdrasil.WriteFallbackForTest(rec, &fallbacksvc.FallbackResponse{Status: http.StatusAccepted, Body: []byte(`{"ok":true}`)}) {
@@ -72,5 +145,37 @@ func TestWriteFallbackForTest(t *testing.T) {
 	}
 	if yggdrasil.WriteFallbackForTest(httptest.NewRecorder(), nil) {
 		t.Fatal("nil fallback response should not be written")
+	}
+}
+
+func firstTextureProperty(t *testing.T, body []byte) map[string]any {
+	t.Helper()
+	var profile map[string]any
+	if err := json.Unmarshal(body, &profile); err != nil {
+		t.Fatalf("decode profile response: %v body=%q", err, string(body))
+	}
+	props, ok := profile["properties"].([]any)
+	if !ok || len(props) == 0 {
+		t.Fatalf("profile properties missing: %#v", profile)
+	}
+	texture, ok := props[0].(map[string]any)
+	if !ok || texture["name"] != "textures" || texture["value"] == "" {
+		t.Fatalf("first profile property should be textures: %#v", props[0])
+	}
+	return texture
+}
+
+func assertTexturePayloadProfile(t *testing.T, encoded, id, name string) {
+	t.Helper()
+	decoded, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		t.Fatalf("decode textures payload: %v", err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(decoded, &payload); err != nil {
+		t.Fatalf("unmarshal textures payload: %v payload=%q", err, string(decoded))
+	}
+	if payload["profileId"] != id || payload["profileName"] != name {
+		t.Fatalf("textures payload profile mismatch: got=%#v want id=%q name=%q", payload, id, name)
 	}
 }
