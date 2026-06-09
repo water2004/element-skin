@@ -70,6 +70,14 @@ const definitions: EasterEggDefinition[] = [
     load: () => import('./childrenDay'),
   },
   {
+    id: 'dragon-boat',
+    name: '端午节',
+    description: '农历五月初五启用粽子重力、碰撞和倾斜响应效果。',
+    htmlClass: 'easter-egg-dragon-boat',
+    active: (date) => isChineseCalendarDay(date, 5, 5),
+    load: () => import('./dragonBoat'),
+  },
+  {
     id: 'christmas',
     name: '圣诞节',
     description: '12 月 24 日至 12 月 25 日启用飘雪效果。',

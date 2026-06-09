@@ -80,7 +80,7 @@ func TestSettingsSaveGetRoundTripExactValues(t *testing.T) {
 	}
 
 	if err := settings.SaveGroup(ctx, "easter_eggs", map[string]any{
-		"easter_eggs_enabled": []any{"april-fools", "christmas", "april-fools"},
+		"easter_eggs_enabled": []any{"april-fools", "christmas", "dragon-boat", "april-fools"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestSettingsSaveGetRoundTripExactValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	enabled := easterEggs["easter_eggs_enabled"].([]string)
-	if len(enabled) != 2 || enabled[0] != "april-fools" || enabled[1] != "christmas" {
+	if len(enabled) != 3 || enabled[0] != "april-fools" || enabled[1] != "christmas" || enabled[2] != "dragon-boat" {
 		t.Fatalf("unexpected easter egg settings: %#v", easterEggs)
 	}
 }

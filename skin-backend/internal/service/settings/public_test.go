@@ -31,7 +31,7 @@ func TestSettingsPublicUsesSavedValuesAndPrimaryFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := settings.SaveGroup(ctx, "easter_eggs", map[string]any{
-		"easter_eggs_enabled": []any{"april-fools", "children-day"},
+		"easter_eggs_enabled": []any{"april-fools", "children-day", "dragon-boat"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestSettingsPublicUsesSavedValuesAndPrimaryFallback(t *testing.T) {
 	if public["site_name"] != "Exact Skin" || public["allow_register"] != false ||
 		public["site_url"] != "https://skin.example.com/root" || public["api_url"] != "https://api.example.com/skinapi" ||
 		status["session"] != "https://session.example" || status["account"] != "https://account.example" || status["services"] != "https://services.example" ||
-		len(enabled) != 2 || enabled[0] != "april-fools" || enabled[1] != "children-day" {
+		len(enabled) != 3 || enabled[0] != "april-fools" || enabled[1] != "children-day" || enabled[2] != "dragon-boat" {
 		t.Fatalf("unexpected public settings: %#v", public)
 	}
 }

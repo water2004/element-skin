@@ -88,6 +88,7 @@ elementSkinEasterEggs.list()
 - `april-fools`：愚人节，4 月 1 日
 - `qingming`：清明，4 月 4 日至 4 月 5 日
 - `children-day`：儿童节，6 月 1 日
+- `dragon-boat`：端午节，农历五月初五
 - `christmas`：圣诞节，12 月 24 日至 12 月 25 日
 
 农历彩蛋使用浏览器内置 Chinese calendar 判断日期；如果手动测试发现没有效果，先确认服务端公开设置允许该彩蛋，且个人资料里的“关闭彩蛋”没有开启。
