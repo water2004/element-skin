@@ -7,13 +7,14 @@ import (
 )
 
 var allowedEasterEggs = map[string]bool{
-	"spring-festival": true,
-	"april-fools":  true,
-	"qingming":     true,
-	"children-day": true,
-	"dragon-boat":  true,
-	"mid-autumn":   true,
-	"christmas":    true,
+	"spring-festival":       true,
+	"april-fools":           true,
+	"qingming":              true,
+	"children-day":          true,
+	"dragon-boat":           true,
+	"minecraft-anniversary": true,
+	"mid-autumn":            true,
+	"christmas":             true,
 }
 
 func ValidateEasterEggs(raw any) ([]string, error) {

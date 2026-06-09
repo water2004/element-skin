@@ -78,6 +78,14 @@ const definitions: EasterEggDefinition[] = [
     load: () => import('./dragonBoat'),
   },
   {
+    id: 'minecraft-anniversary',
+    name: 'Minecraft 周年',
+    description: '5 月 17 日在首页启用 Minecraft 风格成就框、像素标题和闪动标语。',
+    htmlClass: 'easter-egg-minecraft-anniversary',
+    active: (date) => date.getMonth() === 4 && date.getDate() === 17,
+    load: () => import('./minecraftAnniversary'),
+  },
+  {
     id: 'mid-autumn',
     name: '中秋节',
     description: '农历八月十五在深色模式启用月白桂金配色、点击桂花粒子和首页月光按钮。',

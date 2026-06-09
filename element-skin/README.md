@@ -89,6 +89,7 @@ elementSkinEasterEggs.list()
 - `qingming`：清明，4 月 4 日至 4 月 5 日
 - `children-day`：儿童节，6 月 1 日
 - `dragon-boat`：端午节，农历五月初五
+- `minecraft-anniversary`：Minecraft 周年，5 月 17 日
 - `mid-autumn`：中秋节，农历八月十五
 - `christmas`：圣诞节，12 月 24 日至 12 月 25 日
 
