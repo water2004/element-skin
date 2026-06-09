@@ -135,6 +135,36 @@ func TestLookupRoutesProtocolMissesAndBadBulkBodyExactly(t *testing.T) {
 	}
 }
 
+func TestLookupRoutesFallbackMissesReturnExactNoContent(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+
+	req := httptest.NewRequest(http.MethodGet, "/sessionserver/session/minecraft/hasJoined?username=MissingPlayer&serverId=missing-server", nil)
+	rec := httptest.NewRecorder()
+	h.HasJoined(rec, req)
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("hasJoined local+fallback miss should be exact 204 empty body: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/sessionserver/session/minecraft/profile/missing-profile?unsigned=false", nil)
+	req.SetPathValue("uuid", "missing-profile")
+	rec = httptest.NewRecorder()
+	h.Profile(rec, req)
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("profile local+fallback miss should be exact 204 empty body: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/minecraft/profile/lookup/name/MissingServices", nil)
+	req.SetPathValue("playerName", "MissingServices")
+	rec = httptest.NewRecorder()
+	h.LookupName(rec, req)
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("services lookup local+fallback miss should be exact 204 empty body: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestWriteFallbackForTest(t *testing.T) {
 	rec := httptest.NewRecorder()
 	if !yggdrasil.WriteFallbackForTest(rec, &fallbacksvc.FallbackResponse{Status: http.StatusAccepted, Body: []byte(`{"ok":true}`)}) {

@@ -145,6 +145,98 @@ func TestTextureRoutesRejectProfileMismatchAndInvalidTypeExactly(t *testing.T) {
 	}
 }
 
+func TestTextureUploadRejectsUnboundTokenAndBadMultipartExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	cfg.TexturesDir = t.TempDir()
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+	user := testutil.CreateUser(t, db, "ygg-upload-rules@test.com", "Password123", "YggUploadRules", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "ygg_upload_rules_profile", "YggUploadRulesProfile")
+	if err := redis.SetYggToken(context.Background(), model.Token{AccessToken: "unbound_upload_token", ClientToken: "client", UserID: user.ID, CreatedAt: time.Now().UnixMilli()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/api/user/profile/"+profile.ID+"/skin", strings.NewReader(""))
+	req.Header.Set("Authorization", "Bearer unbound_upload_token")
+	req.SetPathValue("uuid", profile.ID)
+	req.SetPathValue("texture_type", "skin")
+	rec := httptest.NewRecorder()
+	h.UploadTexture(rec, req)
+	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), `"detail":"Invalid token"`) {
+		t.Fatalf("unbound upload token mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	if err := redis.SetYggToken(context.Background(), model.Token{AccessToken: "bound_upload_token", ClientToken: "client", UserID: user.ID, ProfileID: &profile.ID, CreatedAt: time.Now().UnixMilli()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPut, "/api/user/profile/"+profile.ID+"/skin", strings.NewReader("not multipart"))
+	req.Header.Set("Authorization", "Bearer bound_upload_token")
+	req.SetPathValue("uuid", profile.ID)
+	req.SetPathValue("texture_type", "skin")
+	rec = httptest.NewRecorder()
+	h.UploadTexture(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid multipart form"`) {
+		t.Fatalf("bad multipart upload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTextureUploadRejectsMissingFileAndNonPNGExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	cfg.TexturesDir = t.TempDir()
+	redis := testutil.NewMemoryRedis()
+	h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+	user := testutil.CreateUser(t, db, "ygg-upload-file@test.com", "Password123", "YggUploadFile", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "ygg_upload_file_profile", "YggUploadFileProfile")
+	token := model.Token{AccessToken: "upload_file_token", ClientToken: "client", UserID: user.ID, ProfileID: &profile.ID, CreatedAt: time.Now().UnixMilli()}
+	if err := redis.SetYggToken(context.Background(), token, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+
+	var missingBody bytes.Buffer
+	missingWriter := multipart.NewWriter(&missingBody)
+	if err := missingWriter.WriteField("model", "slim"); err != nil {
+		t.Fatal(err)
+	}
+	if err := missingWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPut, "/api/user/profile/"+profile.ID+"/skin", &missingBody)
+	req.Header.Set("Authorization", "Bearer upload_file_token")
+	req.Header.Set("Content-Type", missingWriter.FormDataContentType())
+	req.SetPathValue("uuid", profile.ID)
+	req.SetPathValue("texture_type", "skin")
+	rec := httptest.NewRecorder()
+	h.UploadTexture(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"file is required"`) {
+		t.Fatalf("missing file upload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	var nonPNGBody bytes.Buffer
+	nonPNGWriter := multipart.NewWriter(&nonPNGBody)
+	part, err := nonPNGWriter.CreateFormFile("file", "skin.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("not a png")); err != nil {
+		t.Fatal(err)
+	}
+	if err := nonPNGWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req = httptest.NewRequest(http.MethodPut, "/api/user/profile/"+profile.ID+"/skin", &nonPNGBody)
+	req.Header.Set("Authorization", "Bearer upload_file_token")
+	req.Header.Set("Content-Type", nonPNGWriter.FormDataContentType())
+	req.SetPathValue("uuid", profile.ID)
+	req.SetPathValue("texture_type", "skin")
+	rec = httptest.NewRecorder()
+	h.UploadTexture(rec, req)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"Image must be PNG format"`) {
+		t.Fatalf("non-PNG upload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
 func TestTextureRoutesDeleteCapeClearsOnlyCape(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
