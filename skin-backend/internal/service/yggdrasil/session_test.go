@@ -85,6 +85,63 @@ func TestYggdrasilJoinRejectsUnboundOrMismatchedProfile(t *testing.T) {
 	}
 }
 
+func TestYggdrasilJoinRejectsMissingAccessTokenWithoutSession(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "ygg-join-missing@test.com", "Password123", "YggJoinMissing", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "ygg_join_missing_profile", "YggJoinMissingProfile")
+	redis := testutil.NewMemoryRedis()
+	ygg := yggdrasil.Yggdrasil{DB: db, Cfg: testutil.TestConfig(), Redis: redis}
+
+	if err := ygg.Join(ctx, "missing_access", profile.ID, "server_missing_access", "127.0.0.1"); err == nil || !strings.Contains(err.Error(), "Invalid token") {
+		t.Fatalf("missing access token should be rejected exactly, got %v", err)
+	}
+	if _, err := redis.GetYggSession(ctx, "server_missing_access"); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("failed missing-token join must not create a session, got %v", err)
+	}
+}
+
+func TestYggdrasilHasJoinedMissesExpiredUnboundAndDeletedProfile(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "ygg-hasjoined-miss@test.com", "Password123", "YggHasJoinedMiss", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "ygg_hasjoined_miss_profile", "YggHasJoinedMissProfile")
+	redis := testutil.NewMemoryRedis()
+	ygg := yggdrasil.Yggdrasil{DB: db, Cfg: testutil.TestConfig(), Redis: redis}
+	profileID := profile.ID
+
+	if err := redis.SetYggToken(ctx, model.Token{AccessToken: "expired_session_access", ClientToken: "client", UserID: user.ID, ProfileID: &profileID, CreatedAt: database.NowMS()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetYggSession(ctx, model.Session{ServerID: "server_expired", AccessToken: "expired_session_access", CreatedAt: database.NowMS() - int64(31*time.Second/time.Millisecond)}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if body, status, err := ygg.HasJoined(ctx, profile.Name, "server_expired"); err != nil || status != 204 || body != nil {
+		t.Fatalf("expired join session should miss: status=%d body=%#v err=%v", status, body, err)
+	}
+
+	if err := redis.SetYggToken(ctx, model.Token{AccessToken: "unbound_session_access", ClientToken: "client", UserID: user.ID, CreatedAt: database.NowMS()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetYggSession(ctx, model.Session{ServerID: "server_unbound_token", AccessToken: "unbound_session_access", CreatedAt: database.NowMS()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if body, status, err := ygg.HasJoined(ctx, profile.Name, "server_unbound_token"); err != nil || status != 204 || body != nil {
+		t.Fatalf("unbound token in join session should miss: status=%d body=%#v err=%v", status, body, err)
+	}
+
+	missingProfileID := "missing_profile_for_hasjoined"
+	if err := redis.SetYggToken(ctx, model.Token{AccessToken: "deleted_profile_access", ClientToken: "client", UserID: user.ID, ProfileID: &missingProfileID, CreatedAt: database.NowMS()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := redis.SetYggSession(ctx, model.Session{ServerID: "server_deleted_profile", AccessToken: "deleted_profile_access", CreatedAt: database.NowMS()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if body, status, err := ygg.HasJoined(ctx, profile.Name, "server_deleted_profile"); err != nil || status != 204 || body != nil {
+		t.Fatalf("deleted profile in join session should miss: status=%d body=%#v err=%v", status, body, err)
+	}
+}
+
 func TestYggdrasilHasJoinedRejectsBannedUserExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()

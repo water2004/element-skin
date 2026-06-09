@@ -192,3 +192,53 @@ func TestYggdrasilTokenReadsRedisOnly(t *testing.T) {
 		t.Fatalf("missing redis token should be unauthorized ygg error, got %v", err)
 	}
 }
+
+func TestYggdrasilValidateRefreshSignoutAndInvalidateEdgeCases(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "ygg-edge@test.com", "Password123", "YggEdge", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "ygg_edge_profile", "YggEdgeProfile")
+	otherUser := testutil.CreateUser(t, db, "ygg-edge-other@test.com", "Password123", "YggEdgeOther", false)
+	otherProfile := testutil.CreateProfile(t, db, otherUser.ID, "ygg_edge_other_profile", "YggEdgeOtherProfile")
+	redis := testutil.NewMemoryRedis()
+	ygg := yggdrasil.Yggdrasil{DB: db, Cfg: testutil.TestConfig(), Redis: redis}
+	profileID := profile.ID
+
+	if err := redis.SetYggToken(ctx, model.Token{AccessToken: "bound_edge_access", ClientToken: "client", UserID: user.ID, ProfileID: &profileID, CreatedAt: database.NowMS()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := ygg.Invalidate(ctx, ""); err != nil {
+		t.Fatalf("empty invalidate should be a no-op: %v", err)
+	}
+	if token, err := redis.GetYggToken(ctx, "bound_edge_access"); err != nil || token.AccessToken != "bound_edge_access" {
+		t.Fatalf("empty invalidate must not delete existing tokens: token=%#v err=%v", token, err)
+	}
+	if err := ygg.Validate(ctx, "bound_edge_access", "wrong-client"); err == nil || !strings.Contains(err.Error(), "Invalid token") {
+		t.Fatalf("validate should reject wrong client token, got %v", err)
+	}
+	if _, err := ygg.Refresh(ctx, "bound_edge_access", "client", profile.ID, false); err == nil || !strings.Contains(err.Error(), "Access token already has a profile assigned") {
+		t.Fatalf("refresh should reject selecting a profile on already-bound token, got %v", err)
+	}
+
+	oldProfileID := profile.ID
+	if err := redis.SetYggToken(ctx, model.Token{AccessToken: "expired_edge_access", ClientToken: "client", UserID: user.ID, ProfileID: &oldProfileID, CreatedAt: database.NowMS() - int64(16*24*time.Hour/time.Millisecond)}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if err := ygg.Validate(ctx, "expired_edge_access", "client"); err == nil || !strings.Contains(err.Error(), "Invalid token") {
+		t.Fatalf("validate should reject expired token by created_at even if redis key exists, got %v", err)
+	}
+
+	if err := redis.SetYggToken(ctx, model.Token{AccessToken: "unbound_edge_access", ClientToken: "client", UserID: user.ID, CreatedAt: database.NowMS()}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ygg.Refresh(ctx, "unbound_edge_access", "wrong-client", "", false); err == nil || !strings.Contains(err.Error(), "Invalid token") {
+		t.Fatalf("refresh should reject wrong client token, got %v", err)
+	}
+	if _, err := ygg.Refresh(ctx, "unbound_edge_access", "client", otherProfile.ID, false); err == nil || !strings.Contains(err.Error(), "Invalid profile") {
+		t.Fatalf("refresh should reject selecting a foreign profile, got %v", err)
+	}
+
+	if err := ygg.Signout(ctx, user.Email, "wrong-password"); err == nil || !strings.Contains(err.Error(), "Invalid credentials") {
+		t.Fatalf("signout should reject bad credentials, got %v", err)
+	}
+}
