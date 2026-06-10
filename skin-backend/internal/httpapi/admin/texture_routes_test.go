@@ -107,3 +107,80 @@ func TestTextureRoutesListUpdateAndDeleteExactState(t *testing.T) {
 		t.Fatalf("texture should be removed from user library: info=%#v err=%v", info, err)
 	}
 }
+
+func TestTextureRoutesRejectMalformedAndInvalidModelWithoutMutation(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	h := admin.New(testutil.TestConfig(), db, nil)
+	user := testutil.CreateUser(t, db, "admin-texture-model@test.com", "Password123", "AdminTextureModel", false)
+	if err := db.Textures.AddToLibrary(t.Context(), user.ID, "admin_model_hash", "skin", "Original Note", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/textures?cursor=not-base64", nil)
+	rec := httptest.NewRecorder()
+	h.Textures(rec, req)
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+		t.Fatalf("texture list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPatch, "/admin/textures/admin_model_hash", strings.NewReader(`{`))
+	req.SetPathValue("hash", "admin_model_hash")
+	rec = httptest.NewRecorder()
+	h.UpdateTexture(rec, req)
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+		t.Fatalf("texture malformed patch mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPatch, "/admin/textures/admin_model_hash?type=skin", strings.NewReader(`{"model":"wide"}`))
+	req.SetPathValue("hash", "admin_model_hash")
+	rec = httptest.NewRecorder()
+	h.UpdateTexture(rec, req)
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid model\"}\n" {
+		t.Fatalf("invalid texture model mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	info, err := db.Textures.GetInfo(t.Context(), user.ID, "admin_model_hash", "skin")
+	if err != nil || info == nil || info["note"] != "Original Note" || info["model"] != "default" || info["is_public"] != 1 {
+		t.Fatalf("rejected patches must preserve texture state: info=%#v err=%v", info, err)
+	}
+
+	req = httptest.NewRequest(http.MethodDelete, "/admin/textures/missing_hash?type=skin&force=true", nil)
+	req.SetPathValue("hash", "missing_hash")
+	rec = httptest.NewRecorder()
+	h.DeleteTexture(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"success\":true}\n" {
+		t.Fatalf("force delete should be idempotent for a missing texture: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestTextureRoutesQueryTypeOverridesBodyTypeExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	h := admin.New(testutil.TestConfig(), db, nil)
+	user := testutil.CreateUser(t, db, "admin-texture-type@test.com", "Password123", "AdminTextureType", false)
+	if err := db.Textures.AddToLibrary(t.Context(), user.ID, "admin_shared_hash", "skin", "Skin Note", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Textures.AddToLibrary(t.Context(), user.ID, "admin_shared_hash", "cape", "Cape Note", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/admin/textures/admin_shared_hash?type=cape", strings.NewReader(`{"type":"skin","note":"Updated Cape"}`))
+	req.SetPathValue("hash", "admin_shared_hash")
+	rec := httptest.NewRecorder()
+	h.UpdateTexture(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+		t.Fatalf("query-selected texture update mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	skin, err := db.Textures.GetInfo(t.Context(), user.ID, "admin_shared_hash", "skin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cape, err := db.Textures.GetInfo(t.Context(), user.ID, "admin_shared_hash", "cape")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if skin == nil || skin["note"] != "Skin Note" || cape == nil || cape["note"] != "Updated Cape" {
+		t.Fatalf("query type must override body type: skin=%#v cape=%#v", skin, cape)
+	}
+}

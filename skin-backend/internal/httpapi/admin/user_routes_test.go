@@ -402,6 +402,60 @@ func TestUserRoutesProtectSuperAdminFromPlainAdminExactly(t *testing.T) {
 	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"detail":"cannot modify super admin"`) {
 		t.Fatalf("plain admin banning super admin mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
+
+	req = httptest.NewRequest(http.MethodPost, "/admin/users/"+superAdmin.ID+"/unban", nil)
+	req.SetPathValue("user_id", superAdmin.ID)
+	req = req.WithContext(shared.WithUser(req.Context(), plainAdmin.ID, true))
+	rec = httptest.NewRecorder()
+	h.UnbanUser(rec, req)
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"cannot modify super admin\"}\n" {
+		t.Fatalf("plain admin unbanning super admin mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	h := admin.New(cfg, db, nil)
+	superAdmin := testutil.CreateUser(t, db, "admin-missing-super@test.com", "Password123", "AdminMissingSuper", true, true)
+	target := testutil.CreateUser(t, db, "admin-reset-unchanged@test.com", "Password123", "AdminResetUnchanged", false)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/users?cursor=not-base64", nil)
+	rec := httptest.NewRecorder()
+	h.Users(rec, req)
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+		t.Fatalf("user list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/admin/users/missing-user", nil)
+	req.SetPathValue("user_id", "missing-user")
+	rec = httptest.NewRecorder()
+	h.User(rec, req)
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+		t.Fatalf("missing user detail mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/admin/users/missing-user/toggle-admin", nil)
+	req.SetPathValue("user_id", "missing-user")
+	req = req.WithContext(shared.WithUser(req.Context(), superAdmin.ID, true, true))
+	rec = httptest.NewRecorder()
+	h.ToggleUserAdmin(rec, req)
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+		t.Fatalf("missing admin toggle target mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodPost, "/admin/users/reset-password", strings.NewReader(`{`))
+	req = req.WithContext(shared.WithUser(req.Context(), superAdmin.ID, true, true))
+	rec = httptest.NewRecorder()
+	h.ResetUserPassword(rec, req)
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+		t.Fatalf("malformed reset payload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	unchanged, err := db.Users.GetByID(t.Context(), target.ID)
+	if err != nil || unchanged == nil || !util.VerifyPassword("Password123", unchanged.Password) {
+		t.Fatalf("rejected reset must preserve password: user=%#v err=%v", unchanged, err)
+	}
 }
 
 func strconvI64(v int64) string {
