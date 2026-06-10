@@ -141,6 +141,46 @@ func TestSessionRoutesRefreshRotatesAndLogoutRevokesExactly(t *testing.T) {
 	}
 }
 
+func TestSessionRoutesLogoutReportsRevokeFailureWithoutClearingCookies(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	h := site.New(cfg, db, sitesvc.Site{DB: db, Cfg: cfg}, nil)
+	user := testutil.CreateUser(t, db, "logout-failure@test.com", "Password123", "LogoutFailure", false)
+
+	const rawRefresh = "logout-failure-refresh"
+	refreshHash := util.HashRefreshToken(rawRefresh)
+	now := time.Now().UnixMilli()
+	if err := db.Tokens.AddRefresh(t.Context(), refreshHash, user.ID, now+int64(time.Hour/time.Millisecond), now); err != nil {
+		t.Fatalf("add refresh: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: rawRefresh})
+	ctx, cancel := context.WithCancel(req.Context())
+	cancel()
+	req = req.WithContext(ctx)
+	rec := httptest.NewRecorder()
+
+	h.Logout(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("logout status = %d, want %d; body = %q", rec.Code, http.StatusInternalServerError, rec.Body.String())
+	}
+	if got, want := rec.Body.String(), "{\"detail\":\"Internal server error\"}\n"; got != want {
+		t.Fatalf("logout body = %q, want %q", got, want)
+	}
+	if cookies := rec.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("logout failure cookies = %#v, want none", cookies)
+	}
+	stored, err := db.Tokens.GetRefresh(t.Context(), refreshHash)
+	if err != nil {
+		t.Fatalf("get refresh after failed logout: %v", err)
+	}
+	if stored == nil || stored["user_id"] != user.ID {
+		t.Fatalf("refresh after failed logout = %#v, want token for %q", stored, user.ID)
+	}
+}
+
 func TestSessionRoutesRegisterCreatesFirstAdminAndProfileExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()

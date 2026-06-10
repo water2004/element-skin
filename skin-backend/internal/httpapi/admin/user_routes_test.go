@@ -138,6 +138,40 @@ func TestSuperAdminRoleControlsRejectExactInvalidTargets(t *testing.T) {
 	}
 }
 
+func TestTransferSuperAdminPreservesRolesWhenTargetCacheInvalidationFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	cache := &authInvalidateFailRedis{
+		Store:  testutil.NewMemoryRedis(),
+		failAt: 2,
+	}
+	h := admin.NewWithRedis(cfg, db, cache, nil)
+	superAdmin := testutil.CreateUser(t, db, "transfer-cache-super@test.com", "Password123", "TransferCacheSuper", true, true)
+	target := testutil.CreateUser(t, db, "transfer-cache-target@test.com", "Password123", "TransferCacheTarget", false)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/transfer-super-admin", nil)
+	req.SetPathValue("user_id", target.ID)
+	req = req.WithContext(shared.WithUser(req.Context(), superAdmin.ID, true, true))
+	rec := httptest.NewRecorder()
+
+	h.TransferSuperAdmin(rec, req)
+
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		t.Fatalf("transfer cache failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if len(cache.userIDs) != 2 || cache.userIDs[0] != superAdmin.ID || cache.userIDs[1] != target.ID {
+		t.Fatalf("cache invalidations = %#v, want [%q %q]", cache.userIDs, superAdmin.ID, target.ID)
+	}
+	unchangedSuper, err := db.Users.GetByID(t.Context(), superAdmin.ID)
+	if err != nil || unchangedSuper == nil || !unchangedSuper.IsAdmin || !unchangedSuper.IsSuperAdmin {
+		t.Fatalf("failed transfer must preserve current super admin: user=%#v err=%v", unchangedSuper, err)
+	}
+	unchangedTarget, err := db.Users.GetByID(t.Context(), target.ID)
+	if err != nil || unchangedTarget == nil || unchangedTarget.IsAdmin || unchangedTarget.IsSuperAdmin {
+		t.Fatalf("failed transfer must preserve target roles: user=%#v err=%v", unchangedTarget, err)
+	}
+}
+
 func TestAdminAuthWrapperRequiresAdmin(t *testing.T) {
 	var requireAdmin bool
 	h := admin.New(testutil.TestConfig(), nil, func(next http.HandlerFunc, require bool) http.HandlerFunc {
@@ -469,6 +503,62 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	if err != nil || unchanged == nil || !util.VerifyPassword("Password123", unchanged.Password) {
 		t.Fatalf("rejected reset must preserve password: user=%#v err=%v", unchanged, err)
 	}
+}
+
+func TestAdminResetPasswordPreservesCredentialsAndRefreshWhenYggRevocationFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	baseCache := testutil.NewMemoryRedis()
+	cache := &deleteYggFailRedis{Store: baseCache}
+	h := admin.NewWithRedis(cfg, db, cache, nil)
+	adminUser := testutil.CreateUser(t, db, "admin-reset-ygg-fail@test.com", "Password123", "AdminResetYggFail", true)
+	target := testutil.CreateUser(t, db, "target-reset-ygg-fail@test.com", "Password123", "TargetResetYggFail", false)
+	const refreshHash = "admin_reset_ygg_fail_refresh"
+	if err := db.Tokens.AddRefresh(t.Context(), refreshHash, target.ID, time.Now().Add(time.Hour).UnixMilli(), time.Now().UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/reset-password", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
+	req = req.WithContext(shared.WithUser(req.Context(), adminUser.ID, true))
+	rec := httptest.NewRecorder()
+	h.ResetUserPassword(rec, req)
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		t.Fatalf("admin reset ygg failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	unchanged, err := db.Users.GetByID(t.Context(), target.ID)
+	if err != nil || unchanged == nil || !util.VerifyPassword("Password123", unchanged.Password) || util.VerifyPassword("AdminNewPassword123", unchanged.Password) {
+		t.Fatalf("failed admin reset must preserve old password: user=%#v err=%v", unchanged, err)
+	}
+	if refresh, err := db.Tokens.GetRefresh(t.Context(), refreshHash); err != nil || refresh == nil || refresh["user_id"] != target.ID {
+		t.Fatalf("failed admin reset must preserve refresh token: refresh=%#v err=%v", refresh, err)
+	}
+	if cache.deleteCalls != 1 {
+		t.Fatalf("admin reset should attempt one ygg revocation, calls=%d", cache.deleteCalls)
+	}
+}
+
+type deleteYggFailRedis struct {
+	redisstore.Store
+	deleteCalls int
+}
+
+func (r *deleteYggFailRedis) DeleteYggTokensByUser(context.Context, string) error {
+	r.deleteCalls++
+	return errors.New("ygg token revocation failed")
+}
+
+type authInvalidateFailRedis struct {
+	redisstore.Store
+	failAt  int
+	userIDs []string
+}
+
+func (r *authInvalidateFailRedis) InvalidateAuthUser(ctx context.Context, userID string) error {
+	r.userIDs = append(r.userIDs, userID)
+	if len(r.userIDs) == r.failAt {
+		return errors.New("auth cache invalidation failed")
+	}
+	return r.Store.InvalidateAuthUser(ctx, userID)
 }
 
 func strconvI64(v int64) string {

@@ -76,11 +76,15 @@ func (s Site) ChangePassword(ctx context.Context, userID, oldPassword, newPasswo
 	if err != nil {
 		return err
 	}
-	if err := s.DB.Users.UpdatePassword(ctx, userID, hash); err != nil {
+	if err := s.Redis.DeleteYggTokensByUser(ctx, userID); err != nil {
 		return err
 	}
-	if err := s.DB.Tokens.DeleteRefreshByUser(ctx, userID); err != nil {
+	updated, err := s.DB.Users.UpdatePasswordAndRevokeRefresh(ctx, userID, hash)
+	if err != nil {
 		return err
 	}
-	return s.Redis.DeleteYggTokensByUser(ctx, userID)
+	if !updated {
+		return util.HTTPError{Status: 404, Detail: "用户不存在"}
+	}
+	return nil
 }

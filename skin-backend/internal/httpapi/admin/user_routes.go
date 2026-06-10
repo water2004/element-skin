@@ -89,19 +89,19 @@ func (h Handler) TransferSuperAdmin(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
 		return
 	}
-	if err := h.db.Users.TransferSuperAdmin(req.Context(), shared.CurrentUserID(req), targetID); err != nil {
-		if database.IsNoRows(err) {
-			util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
-			return
-		}
-		util.Error(w, err)
-		return
-	}
 	if err := h.redis.InvalidateAuthUser(req.Context(), shared.CurrentUserID(req)); err != nil {
 		util.Error(w, err)
 		return
 	}
 	if err := h.redis.InvalidateAuthUser(req.Context(), targetID); err != nil {
+		util.Error(w, err)
+		return
+	}
+	if err := h.db.Users.TransferSuperAdmin(req.Context(), shared.CurrentUserID(req), targetID); err != nil {
+		if database.IsNoRows(err) {
+			util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
+			return
+		}
 		util.Error(w, err)
 		return
 	}
@@ -218,6 +218,10 @@ func (h Handler) ResetUserPassword(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
+	if err := h.redis.DeleteYggTokensByUser(req.Context(), userID); err != nil {
+		util.Error(w, err)
+		return
+	}
 	ok, err := h.db.Users.UpdatePasswordAndRevokeRefresh(req.Context(), userID, hash)
 	if err != nil {
 		util.Error(w, err)
@@ -225,10 +229,6 @@ func (h Handler) ResetUserPassword(w http.ResponseWriter, req *http.Request) {
 	}
 	if !ok {
 		util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
-		return
-	}
-	if err := h.redis.DeleteYggTokensByUser(req.Context(), userID); err != nil {
-		util.Error(w, err)
 		return
 	}
 	if err := h.redis.InvalidateAuthUser(req.Context(), userID); err != nil {

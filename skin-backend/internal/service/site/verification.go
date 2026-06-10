@@ -107,15 +107,15 @@ func (s Site) ResetPassword(ctx context.Context, email, newPassword, code string
 	if err != nil {
 		return err
 	}
+	if err := s.Redis.DeleteYggTokensByUser(ctx, user.ID); err != nil {
+		return err
+	}
 	updated, err := s.DB.Users.UpdatePasswordAndRevokeRefresh(ctx, user.ID, hash)
 	if err != nil {
 		return err
 	}
 	if !updated {
 		return util.HTTPError{Status: 404, Detail: "User not found"}
-	}
-	if err := s.Redis.DeleteYggTokensByUser(ctx, user.ID); err != nil {
-		return err
 	}
 	return s.Redis.DeleteVerificationCode(ctx, email, "reset")
 }

@@ -4,7 +4,12 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
+	"element-skin/backend/internal/database"
+	"element-skin/backend/internal/redisstore"
+	settingssvc "element-skin/backend/internal/service/settings"
+	"element-skin/backend/internal/service/site"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
 )
@@ -71,4 +76,46 @@ func TestAccountRejectsInvalidUpdatesAndWrongPasswordExactly(t *testing.T) {
 	if !errors.As(err, &httpErr) || httpErr.Status != 404 || httpErr.Detail != "用户不存在" {
 		t.Fatalf("missing user password change should reject exactly, got %#v", err)
 	}
+}
+
+func TestChangePasswordPreservesPasswordAndRefreshWhenYggRevocationFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "change-password-ygg-fail@test.com", "Password123", "ChangePasswordYggFail", false)
+	const refreshHash = "change_password_ygg_fail_refresh"
+	if err := db.Tokens.AddRefresh(ctx, refreshHash, user.ID, database.NowMS()+int64(time.Hour/time.Millisecond), database.NowMS()); err != nil {
+		t.Fatal(err)
+	}
+	cache := &deleteYggFailStore{Store: testutil.NewMemoryRedis()}
+	svc := site.Site{
+		DB:       db,
+		Cfg:      testutil.TestConfig(),
+		Redis:    cache,
+		Settings: settingssvc.Settings{DB: db, Redis: cache},
+	}
+
+	err := svc.ChangePassword(ctx, user.ID, "Password123", "NewPassword123")
+	if err == nil || err.Error() != "ygg token revocation failed" {
+		t.Fatalf("ygg revocation failure should be returned exactly, got %v", err)
+	}
+	unchanged, err := db.Users.GetByID(ctx, user.ID)
+	if err != nil || unchanged == nil || !util.VerifyPassword("Password123", unchanged.Password) || util.VerifyPassword("NewPassword123", unchanged.Password) {
+		t.Fatalf("failed password change must preserve old hash: user=%#v err=%v", unchanged, err)
+	}
+	if refresh, err := db.Tokens.GetRefresh(ctx, refreshHash); err != nil || refresh == nil || refresh["user_id"] != user.ID {
+		t.Fatalf("failed password change must preserve refresh token: refresh=%#v err=%v", refresh, err)
+	}
+	if cache.deleteCalls != 1 {
+		t.Fatalf("password change should attempt one ygg revocation, calls=%d", cache.deleteCalls)
+	}
+}
+
+type deleteYggFailStore struct {
+	redisstore.Store
+	deleteCalls int
+}
+
+func (s *deleteYggFailStore) DeleteYggTokensByUser(context.Context, string) error {
+	s.deleteCalls++
+	return errors.New("ygg token revocation failed")
 }

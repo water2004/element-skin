@@ -5,8 +5,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/redisstore"
+	settingssvc "element-skin/backend/internal/service/settings"
+	"element-skin/backend/internal/service/site"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
 )
@@ -147,5 +151,44 @@ func TestResetPasswordMissingAccountPreservesVerificationCode(t *testing.T) {
 	stored, err := svc.Redis.GetVerificationCode(ctx, email, "reset")
 	if err != nil || stored != code {
 		t.Fatalf("failed reset must preserve code for its remaining TTL: code=%q err=%v", stored, err)
+	}
+}
+
+func TestResetPasswordPreservesCredentialsRefreshAndCodeWhenYggRevocationFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "reset-ygg-fail@test.com", "Password123", "ResetYggFail", false)
+	if err := db.Settings.Set(ctx, "email_verify_enabled", "true"); err != nil {
+		t.Fatal(err)
+	}
+	const code = "RESETYGG"
+	const refreshHash = "reset_ygg_fail_refresh"
+	cache := &deleteYggFailStore{Store: testutil.NewMemoryRedis()}
+	svc := site.Site{
+		DB:       db,
+		Cfg:      testutil.TestConfig(),
+		Redis:    cache,
+		Settings: settingssvc.Settings{DB: db, Redis: cache},
+	}
+	if err := cache.SetVerificationCode(ctx, user.Email, "reset", code, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Tokens.AddRefresh(ctx, refreshHash, user.ID, database.NowMS()+int64(time.Hour/time.Millisecond), database.NowMS()); err != nil {
+		t.Fatal(err)
+	}
+
+	err := svc.ResetPassword(ctx, user.Email, "NewPassword123", code)
+	if err == nil || err.Error() != "ygg token revocation failed" {
+		t.Fatalf("ygg revocation failure should be returned exactly, got %v", err)
+	}
+	unchanged, err := db.Users.GetByID(ctx, user.ID)
+	if err != nil || unchanged == nil || !util.VerifyPassword("Password123", unchanged.Password) || util.VerifyPassword("NewPassword123", unchanged.Password) {
+		t.Fatalf("failed reset must preserve old password: user=%#v err=%v", unchanged, err)
+	}
+	if refresh, err := db.Tokens.GetRefresh(ctx, refreshHash); err != nil || refresh == nil || refresh["user_id"] != user.ID {
+		t.Fatalf("failed reset must preserve refresh token: refresh=%#v err=%v", refresh, err)
+	}
+	if stored, err := cache.GetVerificationCode(ctx, user.Email, "reset"); err != nil || stored != code {
+		t.Fatalf("failed reset must preserve verification code: code=%q err=%v", stored, err)
 	}
 }

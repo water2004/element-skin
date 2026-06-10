@@ -34,7 +34,10 @@ func (h Handler) Login(w http.ResponseWriter, req *http.Request) {
 
 func (h Handler) Logout(w http.ResponseWriter, req *http.Request) {
 	if c, err := req.Cookie("refresh_token"); err == nil {
-		_ = h.site.RevokeRefresh(req.Context(), c.Value)
+		if err := h.site.RevokeRefresh(req.Context(), c.Value); err != nil {
+			util.Error(w, err)
+			return
+		}
 	}
 	http.SetCookie(w, &http.Cookie{Name: "access_token", Path: "/", MaxAge: -1})
 	http.SetCookie(w, &http.Cookie{Name: "refresh_token", Path: "/", MaxAge: -1})
