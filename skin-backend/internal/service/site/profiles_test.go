@@ -81,6 +81,12 @@ func TestProfilesRejectInvalidProfileAndLibraryInputsExactly(t *testing.T) {
 		{"invalid clear texture type", func() error {
 			return svc.ClearProfileTexture(ctx, user.ID, target.ID, "elytra")
 		}, 400, "Invalid texture_type"},
+		{"foreign clear texture", func() error {
+			return svc.ClearProfileTexture(ctx, user.ID, foreign.ID, "skin")
+		}, 403, "not allowed"},
+		{"missing clear texture", func() error {
+			return svc.ClearProfileTexture(ctx, user.ID, "missing-profile", "skin")
+		}, 404, "profile not found"},
 		{"missing wardrobe add", func() error {
 			return svc.AddTextureToWardrobe(ctx, user.ID, "missing_texture_hash", "skin")
 		}, 404, "Texture not found in library"},

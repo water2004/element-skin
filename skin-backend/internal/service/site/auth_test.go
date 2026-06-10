@@ -111,3 +111,49 @@ func TestAuthRegisterConsumesVerificationAndInviteExactly(t *testing.T) {
 		t.Fatalf("exhausted invite must not create user: user=%#v err=%v", user, err)
 	}
 }
+
+func TestAuthRejectsInvalidCredentialsAndRegistrationIdentityConflicts(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	existing := testutil.CreateUser(t, db, "auth-existing@test.com", "Password123", "AuthExisting", false)
+
+	for _, tc := range []struct {
+		name     string
+		email    string
+		password string
+	}{
+		{name: "missing account", email: "missing-auth@test.com", password: "Password123"},
+		{name: "wrong password", email: existing.Email, password: "WrongPassword"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := svc.Login(ctx, tc.email, tc.password)
+			if !httpError(err, 401, "Invalid credentials") || res != nil {
+				t.Fatalf("Login(%s) should reject exactly: res=%#v err=%#v", tc.name, res, err)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name     string
+		email    string
+		username string
+		want     string
+	}{
+		{name: "missing username", email: "missing-name@test.com", username: "   ", want: "Username is required"},
+		{name: "invalid email", email: "not-an-email", username: "ValidName", want: "Invalid email format"},
+		{name: "duplicate username", email: "new-email@test.com", username: existing.DisplayName, want: "Username already exists"},
+		{name: "duplicate email", email: existing.Email, username: "DifferentName", want: "Email already registered"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id, err := svc.Register(ctx, tc.email, "Password123", tc.username, "", "")
+			if !httpError(err, 400, tc.want) || id != "" {
+				t.Fatalf("Register(%s) should reject exactly: id=%q err=%#v", tc.name, id, err)
+			}
+		})
+	}
+
+	if count, err := db.Users.Count(ctx); err != nil || count != 1 {
+		t.Fatalf("rejected auth attempts must not create users: count=%d err=%v", count, err)
+	}
+}

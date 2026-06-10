@@ -123,3 +123,29 @@ func TestResetPasswordRejectsDisabledWeakAndBadCodesExactly(t *testing.T) {
 		t.Fatalf("bad reset code should reject exactly, got %#v", err)
 	}
 }
+
+func TestResetPasswordMissingAccountPreservesVerificationCode(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	if err := db.Settings.Set(ctx, "email_verify_enabled", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Settings.InvalidateCache(ctx); err != nil {
+		t.Fatal(err)
+	}
+	const email = "missing-reset-account@test.com"
+	const code = "RESET404"
+	if err := svc.Redis.SetVerificationCode(ctx, email, "reset", code, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	err := svc.ResetPassword(ctx, email, "NewPassword123", code)
+	if !httpError(err, 404, "User not found") {
+		t.Fatalf("missing reset account should reject exactly, got %#v", err)
+	}
+	stored, err := svc.Redis.GetVerificationCode(ctx, email, "reset")
+	if err != nil || stored != code {
+		t.Fatalf("failed reset must preserve code for its remaining TTL: code=%q err=%v", stored, err)
+	}
+}

@@ -173,6 +173,70 @@ func TestDeleteMissingWardrobeTextureReturnsNotFoundAndKeepsAppliedHash(t *testi
 	}
 }
 
+func TestTextureServiceMapsMissingUpdatesAndDetailToExactNotFound(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "site-texture-missing-update@test.com", "Password123", "TextureMissingUpdate", false)
+
+	for _, tc := range []struct {
+		name string
+		call func() error
+	}{
+		{name: "detail", call: func() error {
+			_, err := svc.TextureDetail(ctx, user.ID, "missing_texture", "skin")
+			return err
+		}},
+		{name: "note update", call: func() error {
+			_, err := svc.UpdateTexture(ctx, user.ID, "missing_texture", "skin", map[string]any{"note": "No row"})
+			return err
+		}},
+		{name: "model update", call: func() error {
+			_, err := svc.UpdateTexture(ctx, user.ID, "missing_texture", "skin", map[string]any{"model": "slim"})
+			return err
+		}},
+		{name: "visibility update", call: func() error {
+			_, err := svc.UpdateTexture(ctx, user.ID, "missing_texture", "skin", map[string]any{"is_public": true})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if !httpError(err, 404, "Texture not found") {
+				t.Fatalf("%s should map to exact not-found error, got %#v", tc.name, err)
+			}
+		})
+	}
+	if count, err := db.Textures.CountForUser(ctx, user.ID); err != nil || count != 0 {
+		t.Fatalf("missing texture operations must not create rows: count=%d err=%v", count, err)
+	}
+}
+
+func TestTextureServiceAppliesCapeWithoutChangingSkinOrModel(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "site-texture-cape@test.com", "Password123", "TextureCape", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "site_texture_cape_profile", "TextureCapeProfile")
+	skin := "existing_skin_hash"
+	if err := db.Profiles.UpdateSkin(ctx, profile.ID, &skin); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Textures.AddToLibrary(ctx, user.ID, "texture_service_cape", "cape", "Texture Service Cape", true, "slim"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.ApplyTextureToProfile(ctx, user.ID, profile.ID, "texture_service_cape", "cape"); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := db.Profiles.GetByID(ctx, profile.ID)
+	if err != nil || updated == nil || updated.SkinHash == nil || *updated.SkinHash != skin ||
+		updated.CapeHash == nil || *updated.CapeHash != "texture_service_cape" ||
+		updated.TextureModel != profile.TextureModel {
+		t.Fatalf("cape apply must change only cape hash: profile=%#v err=%v", updated, err)
+	}
+}
+
 func ptrString(s string) *string {
 	return &s
 }
