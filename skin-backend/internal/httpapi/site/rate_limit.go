@@ -1,6 +1,7 @@
 package site
 
 import (
+	"math"
 	"net"
 	"net/http"
 	"strconv"
@@ -61,7 +62,7 @@ func retryAfterSeconds(d time.Duration) string {
 	if d <= 0 {
 		return "1"
 	}
-	seconds := int(d.Round(time.Second).Seconds())
+	seconds := int(math.Ceil(d.Seconds()))
 	if seconds < 1 {
 		seconds = 1
 	}
