@@ -31,6 +31,29 @@ func (s Store) ConsumeRefresh(ctx context.Context, hash string) (map[string]any,
 	return map[string]any{"token_hash": tokenHash, "user_id": userID, "expires_at": expiresAt, "created_at": createdAt}, nil
 }
 
+func (s Store) RotateRefresh(ctx context.Context, oldHash, newHash, userID string, expiresAt, createdAt int64) (bool, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+	tag, err := tx.Exec(ctx, `DELETE FROM site_refresh_tokens WHERE token_hash=$1 AND user_id=$2`, oldHash, userID)
+	if err != nil {
+		return false, err
+	}
+	if tag.RowsAffected() == 0 {
+		return false, nil
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO site_refresh_tokens (token_hash,user_id,expires_at,created_at) VALUES ($1,$2,$3,$4)`,
+		newHash, userID, expiresAt, createdAt); err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (s Store) DeleteRefresh(ctx context.Context, hash string) error {
 	_, err := s.Pool.Exec(ctx, `DELETE FROM site_refresh_tokens WHERE token_hash=$1`, hash)
 	return err

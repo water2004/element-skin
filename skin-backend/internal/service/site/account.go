@@ -15,8 +15,14 @@ func (s Site) Me(ctx context.Context, userID string) (map[string]any, error) {
 	if u == nil {
 		return nil, util.HTTPError{Status: 404, Detail: "user not found"}
 	}
-	pc, _ := s.DB.Profiles.CountByUser(ctx, userID)
-	tc, _ := s.DB.Textures.CountForUser(ctx, userID)
+	pc, err := s.DB.Profiles.CountByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	tc, err := s.DB.Textures.CountForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
 		"id": u.ID, "email": u.Email, "lang": u.PreferredLanguage, "display_name": u.DisplayName,
 		"is_admin": u.IsAdmin, "is_super_admin": u.IsSuperAdmin, "banned_until": u.BannedUntil, "avatar_hash": u.AvatarHash,

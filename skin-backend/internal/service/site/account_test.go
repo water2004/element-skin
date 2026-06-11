@@ -12,6 +12,8 @@ import (
 	"element-skin/backend/internal/service/site"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestAccountMeReturnsCountsAndUpdateMePersistsExactFields(t *testing.T) {
@@ -30,6 +32,31 @@ func TestAccountMeReturnsCountsAndUpdateMePersistsExactFields(t *testing.T) {
 	if me["email"] != "updated-account@test.com" || me["display_name"] != "UpdatedAccount" || me["lang"] != "en_US" ||
 		me["profile_count"] != 0 || me["texture_count"] != 0 {
 		t.Fatalf("Me response mismatch: %#v", me)
+	}
+}
+
+func TestAccountMeReturnsDatabaseErrorsInsteadOfZeroCounts(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		table string
+	}{
+		{name: "profile count", table: "profiles"},
+		{name: "texture count", table: "user_textures"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := testutil.NewTestApp(t)
+			ctx := context.Background()
+			svc := newSiteService(db, testutil.TestConfig())
+			user := testutil.CreateUser(t, db, tc.name+"@test.com", "Password123", "AccountMeFailure", false)
+			if _, err := db.Pool.Exec(ctx, `ALTER TABLE `+tc.table+` RENAME TO unavailable_`+tc.table); err != nil {
+				t.Fatal(err)
+			}
+			result, err := svc.Me(ctx, user.ID)
+			var pgErr *pgconn.PgError
+			if result != nil || !errors.As(err, &pgErr) || pgErr.Code != "42P01" {
+				t.Fatalf("Me result=%#v err=%#v; want nil and PostgreSQL 42P01", result, err)
+			}
+		})
 	}
 }
 

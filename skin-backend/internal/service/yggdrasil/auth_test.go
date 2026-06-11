@@ -12,6 +12,8 @@ import (
 	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/yggdrasil"
 	"element-skin/backend/internal/testutil"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestYggdrasilAuthRefreshAndValidate(t *testing.T) {
@@ -282,4 +284,76 @@ func TestYggdrasilRejectsBoundTokenAfterProfileIDIsReassigned(t *testing.T) {
 	if _, err := ygg.Refresh(ctx, token.AccessToken, token.ClientToken, "", false); err == nil || !strings.Contains(err.Error(), "Invalid token") {
 		t.Fatalf("refresh must reject reassigned profile ownership, got %v", err)
 	}
+}
+
+func TestYggdrasilAuthenticateRevokesNewTokenWhenLimitTrimFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "ygg-trim-fail@test.com", "Password123", "YggTrimFail", false)
+	testutil.CreateProfile(t, db, user.ID, "ygg_trim_fail_profile", "YggTrimFailProfile")
+	cache := &trimFailStore{Store: testutil.NewMemoryRedis()}
+	ygg := yggdrasil.Yggdrasil{DB: db, Cfg: testutil.TestConfig(), Redis: cache}
+
+	response, err := ygg.Authenticate(ctx, user.Email, "Password123", "trim-fail-client", false)
+	if response != nil || err == nil || err.Error() != "token limit trim failed" {
+		t.Fatalf("trim failure response=%#v err=%v, want nil and exact dependency error", response, err)
+	}
+	if cache.setCalls != 1 || cache.trimCalls != 1 || cache.lastToken.AccessToken == "" || cache.lastToken.UserID != user.ID {
+		t.Fatalf("token operations mismatch: set=%d trim=%d token=%#v", cache.setCalls, cache.trimCalls, cache.lastToken)
+	}
+	if _, err := cache.Store.GetYggToken(ctx, cache.lastToken.AccessToken); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("trim failure must revoke newly-created token, got %v", err)
+	}
+}
+
+func TestYggdrasilRefreshPreservesOldTokenWhenResponseUserLookupFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "ygg-refresh-user-fail@test.com", "Password123", "YggRefreshUserFail", false)
+	cache := testutil.NewMemoryRedis()
+	old := model.Token{
+		AccessToken: "refresh_user_lookup_old_access",
+		ClientToken: "refresh_user_lookup_client",
+		UserID:      user.ID,
+		CreatedAt:   database.NowMS(),
+	}
+	if err := cache.SetYggToken(ctx, old, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `ALTER TABLE users RENAME TO users_unavailable`); err != nil {
+		t.Fatal(err)
+	}
+	ygg := yggdrasil.Yggdrasil{DB: db, Cfg: testutil.TestConfig(), Redis: cache}
+	response, err := ygg.Refresh(ctx, old.AccessToken, old.ClientToken, "", true)
+	var pgErr *pgconn.PgError
+	if response != nil || !errors.As(err, &pgErr) || pgErr.Code != "42P01" {
+		t.Fatalf("Refresh response=%#v err=%#v; want nil and PostgreSQL 42P01", response, err)
+	}
+	got, err := cache.GetYggToken(ctx, old.AccessToken)
+	if err != nil ||
+		got.AccessToken != old.AccessToken ||
+		got.ClientToken != old.ClientToken ||
+		got.UserID != old.UserID ||
+		got.ProfileID != nil ||
+		got.CreatedAt != old.CreatedAt {
+		t.Fatalf("failed refresh changed old token: token=%#v err=%v want=%#v", got, err, old)
+	}
+}
+
+type trimFailStore struct {
+	redisstore.Store
+	setCalls  int
+	trimCalls int
+	lastToken model.Token
+}
+
+func (s *trimFailStore) SetYggToken(ctx context.Context, token model.Token, ttl time.Duration) error {
+	s.setCalls++
+	s.lastToken = token
+	return s.Store.SetYggToken(ctx, token, ttl)
+}
+
+func (s *trimFailStore) TrimYggTokensByUser(context.Context, string, int) error {
+	s.trimCalls++
+	return errors.New("token limit trim failed")
 }

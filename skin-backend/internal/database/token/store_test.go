@@ -67,3 +67,66 @@ func TestStoreRefreshDeletionPaths(t *testing.T) {
 		t.Fatalf("DeleteRefreshByUser should remove user refresh tokens: refresh=%#v err=%v", got, err)
 	}
 }
+
+func TestStoreRotateRefreshIsAtomicAndSingleUse(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	store := token.Store{Pool: db.Pool}
+	user := testutil.CreateUser(t, db, "domain-refresh-rotate@test.com", "Password123", "DomainRefreshRotate", false)
+	if err := store.AddRefresh(ctx, "rotate_old", user.ID, 1000, 10); err != nil {
+		t.Fatal(err)
+	}
+
+	rotated, err := store.RotateRefresh(ctx, "rotate_old", "rotate_new", user.ID, 2000, 20)
+	if err != nil || !rotated {
+		t.Fatalf("rotate refresh = %v, %v; want true, nil", rotated, err)
+	}
+	if old, err := store.GetRefresh(ctx, "rotate_old"); err != nil || old != nil {
+		t.Fatalf("successful rotation must remove old token: old=%#v err=%v", old, err)
+	}
+	newToken, err := store.GetRefresh(ctx, "rotate_new")
+	if err != nil || newToken == nil ||
+		newToken["user_id"] != user.ID ||
+		newToken["expires_at"] != int64(2000) ||
+		newToken["created_at"] != int64(20) {
+		t.Fatalf("successful rotation stored unexpected token: token=%#v err=%v", newToken, err)
+	}
+	rotated, err = store.RotateRefresh(ctx, "rotate_old", "rotate_second", user.ID, 3000, 30)
+	if err != nil || rotated {
+		t.Fatalf("consumed token rotation = %v, %v; want false, nil", rotated, err)
+	}
+	if second, err := store.GetRefresh(ctx, "rotate_second"); err != nil || second != nil {
+		t.Fatalf("single-use rotation must not insert another token: token=%#v err=%v", second, err)
+	}
+}
+
+func TestStoreRotateRefreshRollsBackOldTokenWhenInsertFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	store := token.Store{Pool: db.Pool}
+	user := testutil.CreateUser(t, db, "domain-refresh-rollback@test.com", "Password123", "DomainRefreshRollback", false)
+	if err := store.AddRefresh(ctx, "rollback_old", user.ID, 1000, 10); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddRefresh(ctx, "rollback_collision", user.ID, 1500, 15); err != nil {
+		t.Fatal(err)
+	}
+
+	rotated, err := store.RotateRefresh(ctx, "rollback_old", "rollback_collision", user.ID, 2000, 20)
+	if err == nil || rotated {
+		t.Fatalf("colliding rotation = %v, %v; want false and insert error", rotated, err)
+	}
+	old, err := store.GetRefresh(ctx, "rollback_old")
+	if err != nil || old == nil ||
+		old["user_id"] != user.ID ||
+		old["expires_at"] != int64(1000) ||
+		old["created_at"] != int64(10) {
+		t.Fatalf("failed rotation must restore exact old token: token=%#v err=%v", old, err)
+	}
+	collision, err := store.GetRefresh(ctx, "rollback_collision")
+	if err != nil || collision == nil ||
+		collision["expires_at"] != int64(1500) ||
+		collision["created_at"] != int64(15) {
+		t.Fatalf("failed rotation must preserve existing colliding token: token=%#v err=%v", collision, err)
+	}
+}

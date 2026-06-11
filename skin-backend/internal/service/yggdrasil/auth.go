@@ -47,6 +47,7 @@ func (y Yggdrasil) Authenticate(ctx context.Context, username, password, clientT
 		return nil, err
 	}
 	if err := y.Redis.TrimYggTokensByUser(ctx, u.ID, 5); err != nil {
+		_ = y.Redis.DeleteYggToken(ctx, access)
 		return nil, err
 	}
 	available := make([]map[string]any, 0, len(profiles))
@@ -120,9 +121,23 @@ func (y Yggdrasil) Refresh(ctx context.Context, accessToken, clientToken, select
 		newProfile = &selectedID
 	}
 	if newProfile != nil {
-		p, _ := y.DB.Profiles.GetByID(ctx, *newProfile)
-		if p != nil {
-			selected = map[string]any{"id": p.ID, "name": p.Name}
+		p, err := y.DB.Profiles.GetByID(ctx, *newProfile)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return nil, yggErr(403, "ForbiddenOperationException", "Invalid token.")
+		}
+		selected = map[string]any{"id": p.ID, "name": p.Name}
+	}
+	var responseUser *model.User
+	if requestUser {
+		responseUser, err = y.DB.Users.GetByID(ctx, t.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if responseUser == nil {
+			return nil, yggErr(403, "ForbiddenOperationException", "Invalid token.")
 		}
 	}
 	newAccess, err := util.GenerateUUIDNoDash()
@@ -141,11 +156,8 @@ func (y Yggdrasil) Refresh(ctx context.Context, accessToken, clientToken, select
 	if selected != nil {
 		resp["selectedProfile"] = selected
 	}
-	if requestUser {
-		u, _ := y.DB.Users.GetByID(ctx, t.UserID)
-		if u != nil {
-			resp["user"] = yggUserPayload(*u)
-		}
+	if responseUser != nil {
+		resp["user"] = yggUserPayload(*responseUser)
 	}
 	return resp, nil
 }
