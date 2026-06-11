@@ -12,7 +12,8 @@ import (
 )
 
 func (h Handler) Users(w http.ResponseWriter, req *http.Request) {
-	cursor, err := util.DecodeCursor(req.URL.Query().Get("cursor"))
+	rawCursor := req.URL.Query().Get("cursor")
+	cursor, err := util.DecodeCursor(rawCursor)
 	if err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid cursor"})
 		return
@@ -20,6 +21,10 @@ func (h Handler) Users(w http.ResponseWriter, req *http.Request) {
 	last := ""
 	if cursor != nil {
 		last, _ = cursor["last_id"].(string)
+	}
+	if rawCursor != "" && last == "" {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid cursor"})
+		return
 	}
 	res, err := h.db.Users.List(req.Context(), util.ClampLimit(req.URL.Query().Get("limit"), 15), last, strings.TrimSpace(req.URL.Query().Get("q")))
 	if err != nil {
@@ -89,15 +94,12 @@ func (h Handler) TransferSuperAdmin(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
 		return
 	}
-	if err := h.redis.InvalidateAuthUser(req.Context(), shared.CurrentUserID(req)); err != nil {
+	currentID := shared.CurrentUserID(req)
+	if err := h.invalidateAuthUsers(req, currentID, targetID); err != nil {
 		util.Error(w, err)
 		return
 	}
-	if err := h.redis.InvalidateAuthUser(req.Context(), targetID); err != nil {
-		util.Error(w, err)
-		return
-	}
-	if err := h.db.Users.TransferSuperAdmin(req.Context(), shared.CurrentUserID(req), targetID); err != nil {
+	if err := h.db.Users.TransferSuperAdmin(req.Context(), currentID, targetID); err != nil {
 		if database.IsNoRows(err) {
 			util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
 			return
@@ -105,7 +107,21 @@ func (h Handler) TransferSuperAdmin(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
+	if err := h.invalidateAuthUsers(req, currentID, targetID); err != nil {
+		util.Error(w, err)
+		return
+	}
 	util.JSON(w, 200, map[string]any{"ok": true})
+}
+
+func (h Handler) invalidateAuthUsers(req *http.Request, userIDs ...string) error {
+	var firstErr error
+	for _, userID := range userIDs {
+		if err := h.redis.InvalidateAuthUser(req.Context(), userID); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
 }
 
 func (h Handler) DeleteUser(w http.ResponseWriter, req *http.Request) {
@@ -135,7 +151,21 @@ func (h Handler) DeleteUser(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) UserProfiles(w http.ResponseWriter, req *http.Request) {
-	res, err := h.db.Profiles.ListByUser(req.Context(), req.PathValue("user_id"), util.ClampLimit(req.URL.Query().Get("limit")), req.URL.Query().Get("cursor"))
+	rawCursor := req.URL.Query().Get("cursor")
+	cursor, err := util.DecodeCursor(rawCursor)
+	if err != nil {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid cursor"})
+		return
+	}
+	lastID := ""
+	if cursor != nil {
+		lastID, _ = cursor["last_id"].(string)
+	}
+	if rawCursor != "" && lastID == "" {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid cursor"})
+		return
+	}
+	res, err := h.db.Profiles.ListByUser(req.Context(), req.PathValue("user_id"), util.ClampLimit(req.URL.Query().Get("limit")), lastID)
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -162,6 +192,10 @@ func (h Handler) BanUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if err := h.db.Users.Ban(req.Context(), userID, until); err != nil {
+		if database.IsNoRows(err) {
+			util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
+			return
+		}
 		util.Error(w, err)
 		return
 	}
@@ -187,6 +221,10 @@ func (h Handler) UnbanUser(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if err := h.db.Users.Unban(req.Context(), user.ID); err != nil {
+		if database.IsNoRows(err) {
+			util.Error(w, util.HTTPError{Status: 404, Detail: "user not found"})
+			return
+		}
 		util.Error(w, err)
 		return
 	}

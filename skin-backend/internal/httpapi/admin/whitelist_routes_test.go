@@ -91,4 +91,14 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"endpoint_id is required"`) {
 		t.Fatalf("missing endpoint id remove mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
+
+	req = httptest.NewRequest(http.MethodPost, "/admin/official-whitelist", strings.NewReader(`{"username":"Alex","endpoint_id":999}`))
+	rec = httptest.NewRecorder()
+	h.AddOfficialWhitelist(rec, req)
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"fallback endpoint not found\"}\n" {
+		t.Fatalf("missing endpoint add mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if ok, err := db.Fallbacks.IsUserInWhitelist(req.Context(), "Alex", 999); err != nil || ok {
+		t.Fatalf("failed whitelist add must not create row: ok=%v err=%v", ok, err)
+	}
 }

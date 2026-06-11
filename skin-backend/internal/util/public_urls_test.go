@@ -19,6 +19,18 @@ func TestPublicURLAndProfileNameHelpersExactValues(t *testing.T) {
 	if err != nil || name != "Role_2" {
 		t.Fatalf("GenerateUniqueProfileName mismatch: name=%q err=%v", name, err)
 	}
+	full := "1234567890ABCDEF"
+	if got := ProfileNameCandidate(full, 0); got != full {
+		t.Fatalf("full-length first candidate = %q; want %q", got, full)
+	}
+	if got := ProfileNameCandidate(full, 1); got != "1234567890ABCD_1" {
+		t.Fatalf("full-length suffixed candidate = %q; want 1234567890ABCD_1", got)
+	}
+	fullTaken := map[string]bool{full: true, "1234567890ABCD_1": true}
+	name, err = GenerateUniqueProfileName(full, func(s string) bool { return fullTaken[s] }, 3)
+	if err != nil || name != "1234567890ABCD_2" {
+		t.Fatalf("full-length unique name = %q, %v; want 1234567890ABCD_2, nil", name, err)
+	}
 	if _, err := GenerateUniqueProfileName("Role", func(string) bool { return true }, 2); err == nil {
 		t.Fatal("GenerateUniqueProfileName should fail after max attempts")
 	}

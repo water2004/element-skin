@@ -174,6 +174,16 @@ func TestCursorCreatedHashParsesExactKeys(t *testing.T) {
 	if _, _, err := shared.CursorCreatedHash("not-base64", "last_skin_hash"); err == nil {
 		t.Fatal("invalid cursor should return an error")
 	}
+	for _, payload := range []map[string]any{
+		{"last_created_at": 1.5, "last_skin_hash": "abc"},
+		{"last_created_at": -1, "last_skin_hash": "abc"},
+		{"last_created_at": 1, "last_skin_hash": ""},
+		{"last_created_at": 1},
+	} {
+		if _, _, err := shared.CursorCreatedHash(util.EncodeCursor(payload), "last_skin_hash"); err == nil {
+			t.Fatalf("malformed cursor payload should reject: %#v", payload)
+		}
+	}
 }
 
 func TestParseImportProfilesValidatesShapeAndTrimsValues(t *testing.T) {

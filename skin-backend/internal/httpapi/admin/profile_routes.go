@@ -10,7 +10,8 @@ import (
 )
 
 func (h Handler) Profiles(w http.ResponseWriter, req *http.Request) {
-	cursor, err := util.DecodeCursor(req.URL.Query().Get("cursor"))
+	rawCursor := req.URL.Query().Get("cursor")
+	cursor, err := util.DecodeCursor(rawCursor)
 	if err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid cursor"})
 		return
@@ -18,6 +19,10 @@ func (h Handler) Profiles(w http.ResponseWriter, req *http.Request) {
 	last := ""
 	if cursor != nil {
 		last, _ = cursor["last_id"].(string)
+	}
+	if rawCursor != "" && last == "" {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid cursor"})
+		return
 	}
 	res, err := h.db.Profiles.ListAll(req.Context(), util.ClampLimit(req.URL.Query().Get("limit")), last, strings.TrimSpace(req.URL.Query().Get("q")))
 	if err != nil {

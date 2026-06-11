@@ -9,6 +9,7 @@ import (
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/testutil"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -35,6 +36,21 @@ func TestStoreCRUDHelpersSearchAndCascade(t *testing.T) {
 	}
 	if err := store.Create(ctx, model.Profile{ID: "domain_profile_dup", UserID: user.ID, Name: p.Name, TextureModel: "default"}); !profile.IsNameConflict(err) {
 		t.Fatalf("duplicate profile name should be detected as conflict, got %v", err)
+	}
+	if profile.IsNameConflict(&pgconn.PgError{Code: "23505", ConstraintName: "profiles_pkey"}) {
+		t.Fatal("profile primary-key conflict must not be reported as a name conflict")
+	}
+	if profile.IsNameConflict(&pgconn.PgError{Code: "23514", ConstraintName: "profiles_name_key"}) {
+		t.Fatal("non-unique profile error must not be reported as a name conflict")
+	}
+	if !profile.IsIDConflict(&pgconn.PgError{Code: "23505", ConstraintName: "profiles_pkey"}) {
+		t.Fatal("profile primary-key conflict should be detected as an ID conflict")
+	}
+	if profile.IsIDConflict(&pgconn.PgError{Code: "23505", ConstraintName: "profiles_name_key"}) {
+		t.Fatal("profile name conflict must not be reported as an ID conflict")
+	}
+	if profile.IsIDConflict(&pgconn.PgError{Code: "23514", ConstraintName: "profiles_pkey"}) {
+		t.Fatal("non-unique profile error must not be reported as an ID conflict")
 	}
 	got, err := store.GetByName(ctx, "DomainProfileA")
 	if err != nil || got == nil || got.ID != p.ID {
@@ -67,6 +83,16 @@ func TestStoreCRUDHelpersSearchAndCascade(t *testing.T) {
 	}
 	if err := store.UpdateModel(ctx, p.ID, "default"); err != nil {
 		t.Fatal(err)
+	}
+	for name, err := range map[string]error{
+		"skin":           store.UpdateSkin(ctx, "missing_profile", nil),
+		"skin and model": store.UpdateSkinAndModel(ctx, "missing_profile", nil, "default"),
+		"cape":           store.UpdateCape(ctx, "missing_profile", nil),
+		"model":          store.UpdateModel(ctx, "missing_profile", "default"),
+	} {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatalf("missing profile %s update error = %v; want pgx.ErrNoRows", name, err)
+		}
 	}
 	search, err := store.SearchByNames(ctx, []string{"DomainProfileRenamed"}, 5)
 	if err != nil || len(search) != 1 || search[0].TextureModel != "default" || search[0].SkinHash != nil {

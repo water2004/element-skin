@@ -2,12 +2,15 @@ package site
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"strings"
 
 	"element-skin/backend/internal/config"
 	"element-skin/backend/internal/database"
 	invitestore "element-skin/backend/internal/database/invite"
+	profilestore "element-skin/backend/internal/database/profile"
+	userstore "element-skin/backend/internal/database/user"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/redisstore"
 	settingssvc "element-skin/backend/internal/service/settings"
@@ -127,22 +130,6 @@ func (s Site) Register(ctx context.Context, email, password, username, invite, c
 	if base == "" {
 		base = "Player"
 	}
-	profileName, err := s.uniqueProfileName(ctx, base)
-	if err != nil {
-		return "", err
-	}
-	profileID, err := util.GenerateUUIDNoDash()
-	if err != nil {
-		return "", err
-	}
-	if mode == "offline" {
-		profileID = util.OfflineUUIDNoDash(profileName)
-	}
-	if p, err := s.DB.Profiles.GetByID(ctx, profileID); err != nil {
-		return "", err
-	} else if p != nil {
-		return "", util.HTTPError{Status: 400, Detail: "角色 UUID 冲突，无法新建角色"}
-	}
 	hash, err := util.HashPassword(password)
 	if err != nil {
 		return "", err
@@ -153,35 +140,49 @@ func (s Site) Register(ctx context.Context, email, password, username, invite, c
 	}
 	firstUser := count == 0
 	u := model.User{ID: userID, Email: email, Password: hash, IsAdmin: firstUser, IsSuperAdmin: firstUser, DisplayName: username}
-	p := model.Profile{ID: profileID, UserID: userID, Name: profileName, TextureModel: "default"}
-	if err := s.DB.Users.CreateWithProfile(ctx, u, p, inviteCode, email); err != nil {
-		if err == invitestore.ErrExhausted {
-			return "", util.HTTPError{Status: 400, Detail: "invite code has no remaining uses"}
+	for attempt := 0; attempt < 100; attempt++ {
+		profileName := util.ProfileNameCandidate(base, attempt)
+		if existing, err := s.DB.Profiles.GetByName(ctx, profileName); err != nil {
+			return "", err
+		} else if existing != nil {
+			continue
 		}
-		return "", err
-	}
-	if verifiedEmail {
-		_ = s.Redis.DeleteVerificationCode(ctx, email, "register")
-	}
-	return userID, nil
-}
-
-func (s Site) uniqueProfileName(ctx context.Context, base string) (string, error) {
-	for i := 0; i < 100; i++ {
-		name := base
-		if i > 0 {
-			name = base + "_" + strconvI(i)
-		}
-		if len(name) > 16 {
-			name = name[:16]
-		}
-		p, err := s.DB.Profiles.GetByName(ctx, name)
+		profileID, err := util.GenerateUUIDNoDash()
 		if err != nil {
 			return "", err
 		}
-		if p == nil {
-			return name, nil
+		if mode == "offline" {
+			profileID = util.OfflineUUIDNoDash(profileName)
 		}
+		if existing, err := s.DB.Profiles.GetByID(ctx, profileID); err != nil {
+			return "", err
+		} else if existing != nil {
+			return "", util.HTTPError{Status: 400, Detail: "角色 UUID 冲突，无法新建角色"}
+		}
+		p := model.Profile{ID: profileID, UserID: userID, Name: profileName, TextureModel: "default"}
+		err = s.DB.Users.CreateWithProfile(ctx, u, p, inviteCode, email)
+		if profilestore.IsNameConflict(err) || (mode == "offline" && profilestore.IsIDConflict(err)) {
+			continue
+		}
+		if err == nil {
+			if verifiedEmail {
+				_ = s.Redis.DeleteVerificationCode(ctx, email, "register")
+			}
+			return userID, nil
+		}
+		if err == invitestore.ErrExhausted {
+			return "", util.HTTPError{Status: 400, Detail: "invite code has no remaining uses"}
+		}
+		if errors.Is(err, userstore.ErrDisplayNameConflict) {
+			return "", util.HTTPError{Status: 400, Detail: "Username already exists"}
+		}
+		if userstore.IsEmailConflict(err) {
+			return "", util.HTTPError{Status: 400, Detail: "Email already registered"}
+		}
+		if profilestore.IsIDConflict(err) {
+			return "", util.HTTPError{Status: 400, Detail: "角色 UUID 冲突，无法新建角色"}
+		}
+		return "", err
 	}
 	return "", util.HTTPError{Status: 500, Detail: "无法生成唯一角色名"}
 }

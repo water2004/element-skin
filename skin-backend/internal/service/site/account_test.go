@@ -3,6 +3,7 @@ package site_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -102,6 +103,144 @@ func TestAccountRejectsInvalidUpdatesAndWrongPasswordExactly(t *testing.T) {
 	err = svc.ChangePassword(ctx, "missing-user", "Password123", "NewPassword123")
 	if !errors.As(err, &httpErr) || httpErr.Status != 404 || httpErr.Detail != "用户不存在" {
 		t.Fatalf("missing user password change should reject exactly, got %#v", err)
+	}
+	err = svc.UpdateMe(ctx, "missing-user", map[string]any{"preferred_language": "en_US"})
+	if !errors.As(err, &httpErr) || httpErr.Status != 404 || httpErr.Detail != "user not found" {
+		t.Fatalf("missing user account update should reject exactly, got %#v", err)
+	}
+}
+
+func TestConcurrentEmailUpdatesReturnExactBusinessConflict(t *testing.T) {
+	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 8)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	first := testutil.CreateUser(t, db, "email-race-first@test.com", "Password123", "EmailRaceFirst", false)
+	second := testutil.CreateUser(t, db, "email-race-second@test.com", "Password123", "EmailRaceSecond", false)
+	if _, err := db.Pool.Exec(ctx, `
+		CREATE FUNCTION delay_user_email_write() RETURNS trigger AS $$
+		BEGIN
+			PERFORM pg_sleep(0.2);
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER delay_user_email_update
+		BEFORE UPDATE OF email ON users
+		FOR EACH ROW EXECUTE FUNCTION delay_user_email_write();
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	const targetEmail = "email-race-target@test.com"
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wg sync.WaitGroup
+	for _, userID := range []string{first.ID, second.ID} {
+		userID := userID
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			results <- svc.UpdateMe(context.Background(), userID, map[string]any{"email": targetEmail})
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	conflicts := 0
+	for err := range results {
+		switch {
+		case err == nil:
+			successes++
+		case httpError(err, 400, "Email already in use"):
+			conflicts++
+		default:
+			t.Fatalf("unexpected concurrent email result: %#v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent email updates: successes=%d conflicts=%d; want 1 and 1", successes, conflicts)
+	}
+	var targetCount, originalCount int
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE email=$1),
+			COUNT(*) FILTER (WHERE email IN ($2,$3))
+		FROM users
+		WHERE id = ANY($4)
+	`, targetEmail, first.Email, second.Email, []string{first.ID, second.ID}).Scan(&targetCount, &originalCount); err != nil {
+		t.Fatal(err)
+	}
+	if targetCount != 1 || originalCount != 1 {
+		t.Fatalf("concurrent email state: target=%d original=%d; want 1 and 1", targetCount, originalCount)
+	}
+}
+
+func TestConcurrentDisplayNameUpdatesKeepNameUnique(t *testing.T) {
+	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 8)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	first := testutil.CreateUser(t, db, "name-race-first@test.com", "Password123", "NameRaceFirst", false)
+	second := testutil.CreateUser(t, db, "name-race-second@test.com", "Password123", "NameRaceSecond", false)
+	if _, err := db.Pool.Exec(ctx, `
+		CREATE FUNCTION delay_user_display_name_write() RETURNS trigger AS $$
+		BEGIN
+			PERFORM pg_sleep(0.2);
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER delay_user_display_name_update
+		BEFORE UPDATE OF display_name ON users
+		FOR EACH ROW EXECUTE FUNCTION delay_user_display_name_write();
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	const targetName = "SharedDisplayName"
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var wg sync.WaitGroup
+	for _, userID := range []string{first.ID, second.ID} {
+		userID := userID
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			results <- svc.UpdateMe(context.Background(), userID, map[string]any{"display_name": targetName})
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	conflicts := 0
+	for err := range results {
+		switch {
+		case err == nil:
+			successes++
+		case httpError(err, 400, "Username already exists"):
+			conflicts++
+		default:
+			t.Fatalf("unexpected concurrent display-name result: %#v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent display-name updates: successes=%d conflicts=%d; want 1 and 1", successes, conflicts)
+	}
+	var targetCount, originalCount int
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE display_name=$1),
+			COUNT(*) FILTER (WHERE display_name IN ($2,$3))
+		FROM users
+		WHERE id = ANY($4)
+	`, targetName, first.DisplayName, second.DisplayName, []string{first.ID, second.ID}).Scan(&targetCount, &originalCount); err != nil {
+		t.Fatal(err)
+	}
+	if targetCount != 1 || originalCount != 1 {
+		t.Fatalf("concurrent display-name state: target=%d original=%d; want 1 and 1", targetCount, originalCount)
 	}
 }
 

@@ -3,7 +3,6 @@ package profile
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"element-skin/backend/internal/model"
 
@@ -36,10 +35,16 @@ func ModelKey(item map[string]any) map[string]any {
 
 func IsNameConflict(err error) bool {
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return true
-	}
-	return err != nil && strings.Contains(err.Error(), "duplicate key")
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == "23505" &&
+		pgErr.ConstraintName == "profiles_name_key"
+}
+
+func IsIDConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == "23505" &&
+		pgErr.ConstraintName == "profiles_pkey"
 }
 
 func (s Store) Create(ctx context.Context, p model.Profile) error {
@@ -102,22 +107,34 @@ func (s Store) UpdateName(ctx context.Context, id, name string) (bool, error) {
 }
 
 func (s Store) UpdateSkin(ctx context.Context, id string, hash *string) error {
-	_, err := s.Pool.Exec(ctx, `UPDATE profiles SET skin_hash=$1 WHERE id=$2`, hash, id)
+	tag, err := s.Pool.Exec(ctx, `UPDATE profiles SET skin_hash=$1 WHERE id=$2`, hash, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 
 func (s Store) UpdateSkinAndModel(ctx context.Context, id string, hash *string, model string) error {
-	_, err := s.Pool.Exec(ctx, `UPDATE profiles SET skin_hash=$1,texture_model=$2 WHERE id=$3`, hash, model, id)
+	tag, err := s.Pool.Exec(ctx, `UPDATE profiles SET skin_hash=$1,texture_model=$2 WHERE id=$3`, hash, model, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 
 func (s Store) UpdateCape(ctx context.Context, id string, hash *string) error {
-	_, err := s.Pool.Exec(ctx, `UPDATE profiles SET cape_hash=$1 WHERE id=$2`, hash, id)
+	tag, err := s.Pool.Exec(ctx, `UPDATE profiles SET cape_hash=$1 WHERE id=$2`, hash, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 
 func (s Store) UpdateModel(ctx context.Context, id, model string) error {
-	_, err := s.Pool.Exec(ctx, `UPDATE profiles SET texture_model=$1 WHERE id=$2`, model, id)
+	tag, err := s.Pool.Exec(ctx, `UPDATE profiles SET texture_model=$1 WHERE id=$2`, model, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 

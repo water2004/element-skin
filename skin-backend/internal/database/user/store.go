@@ -9,13 +9,24 @@ import (
 	"element-skin/backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const firstSuperAdminLockID int64 = 0x454C454D454E54
+const displayNameLockSeed int64 = 0x444953504C4159
+
+var ErrDisplayNameConflict = errors.New("display name already exists")
 
 type Store struct {
 	Pool *pgxpool.Pool
+}
+
+func IsEmailConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) &&
+		pgErr.Code == "23505" &&
+		pgErr.ConstraintName == "users_email_key"
 }
 
 func (s Store) GetByEmail(ctx context.Context, email string) (*model.User, error) {
@@ -65,6 +76,9 @@ func (s Store) CreateWithProfile(ctx context.Context, u model.User, p model.Prof
 			u.IsSuperAdmin = false
 		}
 	}
+	if err := lockDisplayName(ctx, tx, u.DisplayName, ""); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `INSERT INTO users (id,email,password,is_admin,is_super_admin,display_name,avatar_hash,created_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
 		u.ID, u.Email, u.Password, u.IsAdmin, u.IsSuperAdmin, u.DisplayName, u.AvatarHash, u.CreatedAt); err != nil {
 		return err
@@ -111,29 +125,83 @@ func (s Store) IsDisplayNameTaken(ctx context.Context, name string, exclude stri
 }
 
 func (s Store) Update(ctx context.Context, id string, fields map[string]any) error {
-	for k, v := range fields {
+	attempted := false
+	for _, key := range []string{"email", "display_name", "preferred_language", "avatar_hash"} {
+		if _, ok := fields[key]; ok {
+			attempted = true
+			break
+		}
+	}
+	if !attempted {
+		return nil
+	}
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var one int
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM users WHERE id=$1 FOR UPDATE`, id).Scan(&one); err != nil {
+		return err
+	}
+	if displayName, ok := fields["display_name"].(string); ok {
+		if err := lockDisplayName(ctx, tx, displayName, id); err != nil {
+			return err
+		}
+	}
+	updated := false
+	for _, k := range []string{"email", "display_name", "preferred_language", "avatar_hash"} {
+		v, ok := fields[k]
+		if !ok {
+			continue
+		}
+		var tag pgconn.CommandTag
 		switch k {
 		case "email":
-			_, err := s.Pool.Exec(ctx, `UPDATE users SET email=$1 WHERE id=$2`, v, id)
+			tag, err = tx.Exec(ctx, `UPDATE users SET email=$1 WHERE id=$2`, v, id)
 			if err != nil {
 				return err
 			}
 		case "display_name":
-			_, err := s.Pool.Exec(ctx, `UPDATE users SET display_name=$1 WHERE id=$2`, v, id)
+			tag, err = tx.Exec(ctx, `UPDATE users SET display_name=$1 WHERE id=$2`, v, id)
 			if err != nil {
 				return err
 			}
 		case "preferred_language":
-			_, err := s.Pool.Exec(ctx, `UPDATE users SET preferred_language=$1 WHERE id=$2`, v, id)
+			tag, err = tx.Exec(ctx, `UPDATE users SET preferred_language=$1 WHERE id=$2`, v, id)
 			if err != nil {
 				return err
 			}
 		case "avatar_hash":
-			_, err := s.Pool.Exec(ctx, `UPDATE users SET avatar_hash=$1 WHERE id=$2`, v, id)
+			tag, err = tx.Exec(ctx, `UPDATE users SET avatar_hash=$1 WHERE id=$2`, v, id)
 			if err != nil {
 				return err
 			}
 		}
+		updated = updated || tag.RowsAffected() > 0
+	}
+	if !updated {
+		return pgx.ErrNoRows
+	}
+	return tx.Commit(ctx)
+}
+
+func lockDisplayName(ctx context.Context, tx pgx.Tx, name, excludeID string) error {
+	if name == "" {
+		return nil
+	}
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1,$2))`, name, displayNameLockSeed); err != nil {
+		return err
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM users WHERE display_name=$1 AND id<>$2)`,
+		name, excludeID,
+	).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return ErrDisplayNameConflict
 	}
 	return nil
 }
@@ -168,6 +236,41 @@ func (s Store) Delete(ctx context.Context, id string) (bool, error) {
 		return false, err
 	}
 	defer tx.Rollback(ctx)
+	type textureKey struct {
+		hash        string
+		textureType string
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT sl.skin_hash, sl.texture_type
+		FROM skin_library sl
+		WHERE sl.uploader=$1
+		   OR EXISTS (
+				SELECT 1
+				FROM user_textures ut
+				WHERE ut.user_id=$1
+				  AND ut.hash=sl.skin_hash
+				  AND ut.texture_type=sl.texture_type
+		   )
+		ORDER BY sl.skin_hash, sl.texture_type
+		FOR UPDATE
+	`, id)
+	if err != nil {
+		return false, err
+	}
+	var affectedTextures []textureKey
+	for rows.Next() {
+		var key textureKey
+		if err := rows.Scan(&key.hash, &key.textureType); err != nil {
+			rows.Close()
+			return false, err
+		}
+		affectedTextures = append(affectedTextures, key)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return false, err
+	}
+	rows.Close()
 	var one int
 	err = tx.QueryRow(ctx, `SELECT 1 FROM users WHERE id=$1 FOR UPDATE`, id).Scan(&one)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -190,14 +293,18 @@ func (s Store) Delete(ctx context.Context, id string) (bool, error) {
 			return false, err
 		}
 	}
-	if _, err := tx.Exec(ctx, `
-		UPDATE skin_library sl
-		SET usage_count=(
-			SELECT COUNT(*) FROM user_textures ut
-			WHERE ut.hash=sl.skin_hash AND ut.texture_type=sl.texture_type
-		)
-	`); err != nil {
-		return false, err
+	for _, key := range affectedTextures {
+		if _, err := tx.Exec(ctx, `
+			UPDATE skin_library
+			SET usage_count=(
+				SELECT COUNT(*)
+				FROM user_textures
+				WHERE hash=$1 AND texture_type=$2
+			)
+			WHERE skin_hash=$1 AND texture_type=$2
+		`, key.hash, key.textureType); err != nil {
+			return false, err
+		}
 	}
 	tag, err := tx.Exec(ctx, `DELETE FROM users WHERE id=$1`, id)
 	if err != nil {

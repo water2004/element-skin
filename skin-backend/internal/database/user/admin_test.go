@@ -3,6 +3,7 @@ package user_test
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 
 	"element-skin/backend/internal/database/user"
@@ -31,6 +32,12 @@ func TestAdminTogglesBanAndUnban(t *testing.T) {
 	}
 	if banned, err := store.IsBanned(ctx, u.ID); err != nil || banned {
 		t.Fatalf("user should be unbanned: banned=%v err=%v", banned, err)
+	}
+	if err := store.Ban(ctx, "missing-user", 9_999_999_999_999); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("missing user ban error = %v; want pgx.ErrNoRows", err)
+	}
+	if err := store.Unban(ctx, "missing-user"); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("missing user unban error = %v; want pgx.ErrNoRows", err)
 	}
 }
 
@@ -78,5 +85,66 @@ func TestTransferSuperAdminRollsBackWhenTargetDoesNotExist(t *testing.T) {
 	unchanged, err := store.GetByID(ctx, superAdmin.ID)
 	if err != nil || unchanged == nil || !unchanged.IsAdmin || !unchanged.IsSuperAdmin {
 		t.Fatalf("failed transfer must roll back source demotion: user=%#v err=%v", unchanged, err)
+	}
+}
+
+func TestConcurrentAdminTogglesApplyEveryToggle(t *testing.T) {
+	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 8)
+	ctx := context.Background()
+	store := user.Store{Pool: db.Pool}
+	target := testutil.CreateUser(t, db, "domain-toggle-race@test.com", "Password123", "ToggleRace", false)
+	if _, err := db.Pool.Exec(ctx, `
+		CREATE FUNCTION delay_admin_toggle() RETURNS trigger AS $$
+		BEGIN
+			PERFORM pg_sleep(0.2);
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER delay_admin_toggle
+		BEFORE UPDATE OF is_admin ON users
+		FOR EACH ROW EXECUTE FUNCTION delay_admin_toggle();
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	start := make(chan struct{})
+	results := make(chan bool, 2)
+	errs := make(chan error, 2)
+	var wg sync.WaitGroup
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			next, err := store.ToggleAdmin(context.Background(), target.ID)
+			results <- next
+			errs <- err
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	trueResults := 0
+	falseResults := 0
+	for next := range results {
+		if next {
+			trueResults++
+		} else {
+			falseResults++
+		}
+	}
+	for err := range errs {
+		if err != nil {
+			t.Fatalf("concurrent toggle failed: %v", err)
+		}
+	}
+	if trueResults != 1 || falseResults != 1 {
+		t.Fatalf("concurrent toggle results: true=%d false=%d; want one of each", trueResults, falseResults)
+	}
+	updated, err := store.GetByID(ctx, target.ID)
+	if err != nil || updated == nil || updated.IsAdmin {
+		t.Fatalf("two toggles must restore non-admin state: user=%#v err=%v", updated, err)
 	}
 }

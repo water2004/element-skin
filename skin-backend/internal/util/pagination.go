@@ -3,6 +3,8 @@ package util
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"math"
 	"strconv"
 )
 
@@ -58,5 +60,24 @@ func DecodeCursor(cursor string) (map[string]any, error) {
 	if err := json.Unmarshal(b, &out); err != nil {
 		return nil, err
 	}
+	if out == nil {
+		return nil, errors.New("cursor must be a JSON object")
+	}
 	return out, nil
+}
+
+func CursorInt64(value any) (int64, bool) {
+	switch v := value.(type) {
+	case int64:
+		return v, v >= 0
+	case int:
+		return int64(v), v >= 0
+	case float64:
+		if v < 0 || v > math.MaxInt64 || math.Trunc(v) != v {
+			return 0, false
+		}
+		return int64(v), true
+	default:
+		return 0, false
+	}
 }

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"element-skin/backend/internal/database/fallback"
 	"element-skin/backend/internal/httpapi/shared"
 	"element-skin/backend/internal/util"
 )
@@ -43,6 +44,10 @@ func (h Handler) AddOfficialWhitelist(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	if err := h.db.Fallbacks.AddWhitelistUser(req.Context(), username, endpointID); err != nil {
+		if fallback.IsEndpointNotFound(err) {
+			util.Error(w, util.HTTPError{Status: 404, Detail: "fallback endpoint not found"})
+			return
+		}
 		util.Error(w, err)
 		return
 	}

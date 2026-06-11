@@ -2,9 +2,13 @@ package site
 
 import (
 	"context"
+	"errors"
 	"strings"
 
+	userstore "element-skin/backend/internal/database/user"
 	"element-skin/backend/internal/util"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func (s Site) Me(ctx context.Context, userID string) (map[string]any, error) {
@@ -64,7 +68,19 @@ func (s Site) UpdateMe(ctx context.Context, userID string, body map[string]any) 
 	if v, ok := body["avatar_hash"]; ok {
 		fields["avatar_hash"] = v
 	}
-	return s.DB.Users.Update(ctx, userID, fields)
+	if err := s.DB.Users.Update(ctx, userID, fields); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return util.HTTPError{Status: 404, Detail: "user not found"}
+		}
+		if userstore.IsEmailConflict(err) {
+			return util.HTTPError{Status: 400, Detail: "Email already in use"}
+		}
+		if errors.Is(err, userstore.ErrDisplayNameConflict) {
+			return util.HTTPError{Status: 400, Detail: "Username already exists"}
+		}
+		return err
+	}
+	return nil
 }
 
 func (s Site) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {

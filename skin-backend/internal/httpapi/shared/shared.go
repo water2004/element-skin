@@ -3,6 +3,7 @@ package shared
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -55,15 +56,12 @@ func CursorCreatedHash(cursor, hashKey string) (*int64, string, error) {
 	if err != nil || m == nil {
 		return nil, "", err
 	}
-	var created *int64
-	switch v := m["last_created_at"].(type) {
-	case float64:
-		x := int64(v)
-		created = &x
-	case int64:
-		created = &v
+	value, ok := util.CursorInt64(m["last_created_at"])
+	hash, hashOK := m[hashKey].(string)
+	if !ok || !hashOK || hash == "" {
+		return nil, "", errors.New("invalid cursor")
 	}
-	hash, _ := m[hashKey].(string)
+	created := &value
 	return created, hash, nil
 }
 

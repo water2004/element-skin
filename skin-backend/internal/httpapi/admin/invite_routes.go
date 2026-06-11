@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"math"
 	"net/http"
 
 	"element-skin/backend/internal/httpapi/shared"
@@ -43,7 +44,12 @@ func (h Handler) CreateInvite(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	total := 1
-	if v, ok := body["total_uses"].(float64); ok {
+	if value, exists := body["total_uses"]; exists {
+		v, ok := value.(float64)
+		if !ok || v < 1 || v != math.Trunc(v) || v > float64(math.MaxInt32) {
+			util.Error(w, util.HTTPError{Status: 400, Detail: "total_uses must be a positive integer"})
+			return
+		}
 		total = int(v)
 	}
 	note, _ := body["note"].(string)

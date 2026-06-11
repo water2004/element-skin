@@ -9,6 +9,7 @@ import (
 
 	"element-skin/backend/internal/httpapi/admin"
 	"element-skin/backend/internal/testutil"
+	"element-skin/backend/internal/util"
 )
 
 func TestProfileRoutesUpdateProfilePersistsName(t *testing.T) {
@@ -92,6 +93,14 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	h.Profiles(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
 		t.Fatalf("profile list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	incompleteCursor := util.EncodeCursor(map[string]any{"unexpected": "value"})
+	req = httptest.NewRequest(http.MethodGet, "/admin/profiles?cursor="+incompleteCursor, nil)
+	rec = httptest.NewRecorder()
+	h.Profiles(rec, req)
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+		t.Fatalf("profile list incomplete cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodPatch, "/admin/profiles/"+target.ID, strings.NewReader(`{`))

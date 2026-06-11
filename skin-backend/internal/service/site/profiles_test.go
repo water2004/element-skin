@@ -2,10 +2,14 @@ package site_test
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestProfilesCreateListAndClearTextureExactState(t *testing.T) {
@@ -106,6 +110,250 @@ func TestProfilesRejectInvalidProfileAndLibraryInputsExactly(t *testing.T) {
 	foreignAfter, err := db.Profiles.GetByID(ctx, foreign.ID)
 	if err != nil || foreignAfter == nil || foreignAfter.Name != foreign.Name {
 		t.Fatalf("foreign profile should remain unchanged: profile=%#v err=%v", foreignAfter, err)
+	}
+}
+
+func TestConcurrentProfileNameWritesReturnExactBusinessConflict(t *testing.T) {
+	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 8)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "profile-name-race@test.com", "Password123", "ProfileNameRace", false)
+	if _, err := db.Pool.Exec(ctx, `
+		CREATE FUNCTION delay_profile_name_write() RETURNS trigger AS $$
+		BEGIN
+			PERFORM pg_sleep(0.2);
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER delay_profile_name_insert
+		BEFORE INSERT ON profiles
+		FOR EACH ROW EXECUTE FUNCTION delay_profile_name_write();
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	createErrors := runConcurrentProfileWrites(2, func() error {
+		_, err := svc.CreateProfile(context.Background(), user.ID, "ConcurrentCreate", "default")
+		return err
+	})
+	assertOneProfileWriteConflict(t, createErrors, "角色名已被占用，请换一个名称")
+	var createCount int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM profiles WHERE name='ConcurrentCreate'`).Scan(&createCount); err != nil {
+		t.Fatal(err)
+	}
+	if createCount != 1 {
+		t.Fatalf("concurrent create stored %d target names; want exactly 1", createCount)
+	}
+
+	if _, err := db.Pool.Exec(ctx, `
+		DROP TRIGGER delay_profile_name_insert ON profiles;
+		CREATE TRIGGER delay_profile_name_update
+		BEFORE UPDATE OF name ON profiles
+		FOR EACH ROW EXECUTE FUNCTION delay_profile_name_write();
+	`); err != nil {
+		t.Fatal(err)
+	}
+	first := testutil.CreateProfile(t, db, user.ID, "profile_name_race_first", "RaceFirst")
+	second := testutil.CreateProfile(t, db, user.ID, "profile_name_race_second", "RaceSecond")
+	profileIDs := []string{first.ID, second.ID}
+	var index int
+	var mu sync.Mutex
+	renameErrors := runConcurrentProfileWrites(2, func() error {
+		mu.Lock()
+		profileID := profileIDs[index]
+		index++
+		mu.Unlock()
+		return svc.UpdateProfile(context.Background(), user.ID, profileID, "ConcurrentRename")
+	})
+	assertOneProfileWriteConflict(t, renameErrors, "角色名已被占用")
+	var renamedCount, originalCount int
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE name='ConcurrentRename'),
+			COUNT(*) FILTER (WHERE name IN ('RaceFirst','RaceSecond'))
+		FROM profiles
+		WHERE id = ANY($1)
+	`, profileIDs).Scan(&renamedCount, &originalCount); err != nil {
+		t.Fatal(err)
+	}
+	if renamedCount != 1 || originalCount != 1 {
+		t.Fatalf("concurrent rename state: renamed=%d original=%d; want 1 and 1", renamedCount, originalCount)
+	}
+}
+
+func TestCreateProfileMapsDatabaseIDConflictExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "profile-id-conflict@test.com", "Password123", "ProfileIDConflict", false)
+	existing := testutil.CreateProfile(t, db, user.ID, "forced_profile_id_conflict", "ExistingID")
+	if _, err := db.Pool.Exec(ctx, `
+		CREATE FUNCTION force_profile_id_conflict() RETURNS trigger AS $$
+		BEGIN
+			IF NEW.name = 'ForcedUUID' THEN
+				NEW.id := 'forced_profile_id_conflict';
+			END IF;
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER force_profile_id_conflict
+		BEFORE INSERT ON profiles
+		FOR EACH ROW EXECUTE FUNCTION force_profile_id_conflict();
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.CreateProfile(ctx, user.ID, "ForcedUUID", "slim")
+	if result != nil || !httpError(err, 400, "角色 UUID 冲突，无法新建角色") {
+		t.Fatalf("forced profile ID conflict result=%#v err=%#v; want nil and exact 400", result, err)
+	}
+	if stored, err := db.Profiles.GetByName(ctx, "ForcedUUID"); err != nil || stored != nil {
+		t.Fatalf("forced UUID conflict persisted target name: profile=%#v err=%v", stored, err)
+	}
+	unchanged, err := db.Profiles.GetByID(ctx, existing.ID)
+	if err != nil || unchanged == nil || unchanged.Name != "ExistingID" || unchanged.TextureModel != "default" {
+		t.Fatalf("forced UUID conflict changed existing profile: profile=%#v err=%v", unchanged, err)
+	}
+}
+
+func TestUpdateProfileReturnsNotFoundWhenProfileIsDeletedAfterRead(t *testing.T) {
+	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 8)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "profile-update-delete-race@test.com", "Password123", "ProfileUpdateDeleteRace", false)
+	target := testutil.CreateProfile(t, db, user.ID, "profile_update_delete_race", "DeleteRace")
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	var one, lockHolderPID int
+	if err := tx.QueryRow(ctx, `SELECT 1, pg_backend_pid() FROM profiles WHERE id=$1 FOR UPDATE`, target.ID).Scan(&one, &lockHolderPID); err != nil {
+		t.Fatal(err)
+	}
+
+	result := make(chan error, 1)
+	go func() {
+		result <- svc.UpdateProfile(context.Background(), user.ID, target.ID, target.Name)
+	}()
+	waitForBlockedDatabaseOperation(t, db.Pool, lockHolderPID, result)
+	if _, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id=$1`, target.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; !httpError(err, 404, "profile not found") {
+		t.Fatalf("profile deleted after read should return exact not found error, got %#v", err)
+	}
+}
+
+func TestClearProfileTextureReturnsNotFoundWhenProfileIsDeletedAfterRead(t *testing.T) {
+	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 8)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "profile-clear-delete-race@test.com", "Password123", "ProfileClearRace", false)
+	target := testutil.CreateProfile(t, db, user.ID, "profile_clear_delete_race", "ClearRace")
+	skin := "clear_race_skin"
+	if err := db.Profiles.UpdateSkin(ctx, target.ID, &skin); err != nil {
+		t.Fatal(err)
+	}
+
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(ctx)
+	var one, lockHolderPID int
+	if err := tx.QueryRow(ctx, `SELECT 1, pg_backend_pid() FROM profiles WHERE id=$1 FOR UPDATE`, target.ID).Scan(&one, &lockHolderPID); err != nil {
+		t.Fatal(err)
+	}
+
+	result := make(chan error, 1)
+	go func() {
+		result <- svc.ClearProfileTexture(context.Background(), user.ID, target.ID, "skin")
+	}()
+	waitForBlockedDatabaseOperation(t, db.Pool, lockHolderPID, result)
+	if _, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id=$1`, target.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-result; !httpError(err, 404, "profile not found") {
+		t.Fatalf("profile deleted before texture update should return exact not found error, got %#v", err)
+	}
+}
+
+func waitForBlockedDatabaseOperation(t *testing.T, db interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, lockHolderPID int, result <-chan error) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		select {
+		case err := <-result:
+			t.Fatalf("database operation completed before row-lock release: %#v", err)
+		default:
+		}
+		var waiting bool
+		if err := db.QueryRow(context.Background(), `
+			SELECT EXISTS (
+				SELECT 1 FROM pg_stat_activity
+				WHERE $1 = ANY(pg_blocking_pids(pid))
+			)
+		`, lockHolderPID).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("database operation did not reach the expected row-lock wait")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func runConcurrentProfileWrites(count int, write func() error) []error {
+	start := make(chan struct{})
+	results := make(chan error, count)
+	var wg sync.WaitGroup
+	for range count {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			results <- write()
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(results)
+	out := make([]error, 0, count)
+	for err := range results {
+		out = append(out, err)
+	}
+	return out
+}
+
+func assertOneProfileWriteConflict(t *testing.T, results []error, detail string) {
+	t.Helper()
+	successes := 0
+	conflicts := 0
+	for _, err := range results {
+		switch {
+		case err == nil:
+			successes++
+		case httpError(err, 400, detail):
+			conflicts++
+		default:
+			t.Fatalf("unexpected concurrent profile result: %#v", err)
+		}
+	}
+	if successes != 1 || conflicts != 1 {
+		t.Fatalf("concurrent profile writes: successes=%d conflicts=%d; want 1 and 1", successes, conflicts)
 	}
 }
 
@@ -269,6 +517,31 @@ func TestPublicLibraryRejectsIncompleteAndCrossSortCursors(t *testing.T) {
 			}),
 			sort: "most_used",
 		},
+		{
+			name: "fractional timestamp",
+			cursor: util.EncodeCursor(map[string]any{
+				"last_created_at": 1.5,
+				"last_skin_hash":  "cursor_hash",
+			}),
+			sort: "latest",
+		},
+		{
+			name: "negative timestamp",
+			cursor: util.EncodeCursor(map[string]any{
+				"last_created_at": -1,
+				"last_skin_hash":  "cursor_hash",
+			}),
+			sort: "latest",
+		},
+		{
+			name: "fractional usage",
+			cursor: util.EncodeCursor(map[string]any{
+				"last_created_at":  1,
+				"last_skin_hash":   "cursor_hash",
+				"last_usage_count": 2.5,
+			}),
+			sort: "most_used",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := svc.PublicLibrary(ctx, tc.cursor, 10, "skin", "", tc.sort)
@@ -276,6 +549,35 @@ func TestPublicLibraryRejectsIncompleteAndCrossSortCursors(t *testing.T) {
 				t.Fatalf("PublicLibrary result=%#v err=%#v; want nil and exact invalid cursor", result, err)
 			}
 		})
+	}
+}
+
+func TestPrivateListsRejectIncompleteCursors(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "private-cursor@test.com", "Password123", "PrivateCursor", false)
+
+	profileResult, err := svc.ListMyProfiles(ctx, user.ID, util.EncodeCursor(map[string]any{
+		"unexpected": "value",
+	}), 10)
+	if profileResult != nil || !httpError(err, 400, "Invalid cursor") {
+		t.Fatalf("ListMyProfiles result=%#v err=%#v; want nil and exact invalid cursor", profileResult, err)
+	}
+
+	textureResult, err := svc.ListMyTextures(ctx, user.ID, util.EncodeCursor(map[string]any{
+		"last_created_at": int64(1234),
+	}), 10, "skin")
+	if textureResult != nil || !httpError(err, 400, "Invalid cursor") {
+		t.Fatalf("ListMyTextures result=%#v err=%#v; want nil and exact invalid cursor", textureResult, err)
+	}
+
+	textureResult, err = svc.ListMyTextures(ctx, user.ID, util.EncodeCursor(map[string]any{
+		"last_created_at": 1.5,
+		"last_hash":       "cursor_hash",
+	}), 10, "skin")
+	if textureResult != nil || !httpError(err, 400, "Invalid cursor") {
+		t.Fatalf("ListMyTextures fractional cursor result=%#v err=%#v; want nil and exact invalid cursor", textureResult, err)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"sync"
 	"testing"
+	"time"
 
 	"element-skin/backend/internal/database/invite"
 	"element-skin/backend/internal/database/user"
@@ -13,6 +14,7 @@ import (
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -75,6 +77,12 @@ func TestStoreCreateUpdateDeleteAndInviteExhaustion(t *testing.T) {
 	}
 	if updated, err := store.UpdatePasswordAndRevokeRefresh(ctx, "missing-user", newHash); err != nil || updated {
 		t.Fatalf("password update missing user should return false: updated=%v err=%v", updated, err)
+	}
+	if err := store.Update(ctx, "missing-user", map[string]any{"preferred_language": "en_US"}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("missing user update error = %v; want pgx.ErrNoRows", err)
+	}
+	if err := store.Update(ctx, "missing-user", map[string]any{"display_name": got.DisplayName}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("missing user with taken display name error = %v; want pgx.ErrNoRows", err)
 	}
 	deleted, err := store.Delete(ctx, u.ID)
 	if err != nil || !deleted {
@@ -164,6 +172,47 @@ func TestPublicUserDoesNotExposePassword(t *testing.T) {
 	}
 }
 
+func TestUpdateRollsBackAllUserFieldsWhenOneFieldFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	store := user.Store{Pool: db.Pool}
+	target := testutil.CreateUser(t, db, "user-update-atomic@test.com", "Password123", "UserUpdateAtomic", false)
+	if _, err := db.Pool.Exec(ctx, `
+		ALTER TABLE users
+		ADD CONSTRAINT preferred_language_zh_only CHECK (preferred_language = 'zh_CN')
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	err := store.Update(ctx, target.ID, map[string]any{
+		"email":              "changed-update-atomic@test.com",
+		"display_name":       "ChangedUpdateAtomic",
+		"preferred_language": "en_US",
+	})
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+		t.Fatalf("Update error = %#v; want PostgreSQL 23514", err)
+	}
+	got, err := store.GetByID(ctx, target.ID)
+	if err != nil || got == nil ||
+		got.Email != target.Email ||
+		got.DisplayName != target.DisplayName ||
+		got.PreferredLanguage != target.PreferredLanguage {
+		t.Fatalf("failed update changed user: user=%#v err=%v want=%#v", got, err, target)
+	}
+}
+
+func TestIsEmailConflictMatchesOnlyUsersEmailConstraint(t *testing.T) {
+	emailConflict := &pgconn.PgError{Code: "23505", ConstraintName: "users_email_key"}
+	otherConflict := &pgconn.PgError{Code: "23505", ConstraintName: "profiles_name_key"}
+	if !user.IsEmailConflict(emailConflict) {
+		t.Fatal("users_email_key 23505 should be recognized as an email conflict")
+	}
+	if user.IsEmailConflict(otherConflict) || user.IsEmailConflict(errors.New("duplicate key")) || user.IsEmailConflict(nil) {
+		t.Fatal("non-email errors must not be recognized as email conflicts")
+	}
+}
+
 func TestDeleteRollsBackProfilesTokensAndTexturesWhenUserDeleteFails(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
@@ -240,6 +289,73 @@ func TestDeleteRollsBackProfilesTokensAndTexturesWhenUserDeleteFails(t *testing.
 	}
 }
 
+func TestDeleteRemovesOwnedTexturesAndRecountsOnlySharedTextures(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	store := user.Store{Pool: db.Pool}
+	target := testutil.CreateUser(t, db, "domain-delete-state@test.com", "Password123", "DomainDeleteState", false)
+	owner := testutil.CreateUser(t, db, "domain-delete-state-owner@test.com", "Password123", "DomainDeleteStateOwner", false)
+	collector := testutil.CreateUser(t, db, "domain-delete-state-collector@test.com", "Password123", "DomainDeleteStateCollector", false)
+
+	if err := db.Textures.AddToLibrary(ctx, target.ID, "delete_state_owned", "skin", "Owned", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if added, err := db.Textures.AddToWardrobe(ctx, collector.ID, "delete_state_owned", "skin"); err != nil || !added {
+		t.Fatalf("collector add owned texture: added=%v err=%v", added, err)
+	}
+	if err := db.Textures.AddToLibrary(ctx, owner.ID, "delete_state_shared", "skin", "Shared", true, "slim"); err != nil {
+		t.Fatal(err)
+	}
+	if added, err := db.Textures.AddToWardrobe(ctx, target.ID, "delete_state_shared", "skin"); err != nil || !added {
+		t.Fatalf("target add shared texture: added=%v err=%v", added, err)
+	}
+	if err := db.Textures.AddToLibrary(ctx, owner.ID, "delete_state_unrelated", "cape", "Unrelated", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if added, err := db.Textures.AddToWardrobe(ctx, collector.ID, "delete_state_unrelated", "cape"); err != nil || !added {
+		t.Fatalf("collector add unrelated texture: added=%v err=%v", added, err)
+	}
+
+	deleted, err := store.Delete(ctx, target.ID)
+	if err != nil || !deleted {
+		t.Fatalf("Delete = %v, %v; want true, nil", deleted, err)
+	}
+	if exists, err := db.Textures.Exists(ctx, "delete_state_owned", "skin"); err != nil || exists {
+		t.Fatalf("owned texture exists=%v err=%v; want false, nil", exists, err)
+	}
+	for _, userID := range []string{target.ID, collector.ID} {
+		if info, err := db.Textures.GetInfo(ctx, userID, "delete_state_owned", "skin"); err != nil || info != nil {
+			t.Fatalf("owned texture reference for %q=%#v err=%v; want nil, nil", userID, info, err)
+		}
+	}
+	if info, err := db.Textures.GetInfo(ctx, target.ID, "delete_state_shared", "skin"); err != nil || info != nil {
+		t.Fatalf("deleted user's shared texture reference=%#v err=%v; want nil, nil", info, err)
+	}
+	if info, err := db.Textures.GetInfo(ctx, owner.ID, "delete_state_shared", "skin"); err != nil || info == nil {
+		t.Fatalf("shared texture owner reference=%#v err=%v; want existing row", info, err)
+	}
+	for _, check := range []struct {
+		hash        string
+		textureType string
+		wantUsage   int64
+	}{
+		{"delete_state_shared", "skin", 1},
+		{"delete_state_unrelated", "cape", 2},
+	} {
+		var usage int64
+		if err := db.Pool.QueryRow(ctx, `
+			SELECT usage_count
+			FROM skin_library
+			WHERE skin_hash=$1 AND texture_type=$2
+		`, check.hash, check.textureType).Scan(&usage); err != nil {
+			t.Fatal(err)
+		}
+		if usage != check.wantUsage {
+			t.Fatalf("%s/%s usage_count=%d; want %d", check.hash, check.textureType, usage, check.wantUsage)
+		}
+	}
+}
+
 func TestDeleteMissingUserDoesNotRemoveOrphanedLibraryTexture(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
@@ -268,5 +384,139 @@ func TestDeleteMissingUserDoesNotRemoveOrphanedLibraryTexture(t *testing.T) {
 	if uploader != missingUserID || name != "Orphaned" || createdAt != 1234 || usageCount != 0 {
 		t.Fatalf("orphaned library row changed: uploader=%q name=%q created_at=%d usage_count=%d",
 			uploader, name, createdAt, usageCount)
+	}
+}
+
+func TestDeleteDoesNotDeadlockWithConcurrentTextureReupload(t *testing.T) {
+	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 8)
+	ctx := context.Background()
+	store := user.Store{Pool: db.Pool}
+	target := testutil.CreateUser(t, db, "delete-reupload-race@test.com", "Password123", "DeleteReuploadRace", false)
+	const hash = "delete_reupload_race"
+	if err := db.Textures.AddToLibrary(ctx, target.ID, hash, "skin", "Original", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		DELETE FROM user_textures
+		WHERE user_id=$1 AND hash=$2 AND texture_type='skin'
+	`, target.ID, hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		UPDATE skin_library
+		SET usage_count=0
+		WHERE skin_hash=$1 AND texture_type='skin'
+	`, hash); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		CREATE FUNCTION pause_delete_reupload_insert() RETURNS trigger AS $$
+		BEGIN
+			PERFORM pg_advisory_xact_lock(74628391);
+			RETURN NEW;
+		END;
+		$$ LANGUAGE plpgsql;
+		CREATE TRIGGER pause_delete_reupload_insert
+		BEFORE INSERT ON user_textures
+		FOR EACH ROW
+		WHEN (NEW.hash = 'delete_reupload_race')
+		EXECUTE FUNCTION pause_delete_reupload_insert();
+	`); err != nil {
+		t.Fatal(err)
+	}
+
+	blocker, err := db.Pool.Begin(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer blocker.Rollback(ctx)
+	if _, err := blocker.Exec(ctx, `SELECT pg_advisory_xact_lock(74628391)`); err != nil {
+		t.Fatal(err)
+	}
+	var blockerPID int
+	if err := blocker.QueryRow(ctx, `SELECT pg_backend_pid()`).Scan(&blockerPID); err != nil {
+		t.Fatal(err)
+	}
+
+	reuploadResult := make(chan error, 1)
+	go func() {
+		reuploadResult <- db.Textures.AddToLibrary(
+			context.Background(),
+			target.ID,
+			hash,
+			"skin",
+			"Reuploaded",
+			false,
+			"slim",
+		)
+	}()
+	reuploadPID := waitForBlockedBackend(t, db.Pool, blockerPID, reuploadResult)
+
+	type deleteResult struct {
+		deleted bool
+		err     error
+	}
+	deleteResults := make(chan deleteResult, 1)
+	go func() {
+		deleted, err := store.Delete(context.Background(), target.ID)
+		deleteResults <- deleteResult{deleted: deleted, err: err}
+	}()
+	_ = waitForBlockedBackend(t, db.Pool, reuploadPID, deleteResults)
+
+	if err := blocker.Commit(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-reuploadResult; err != nil {
+		t.Fatalf("concurrent reupload failed: %v", err)
+	}
+	deleted := <-deleteResults
+	if deleted.err != nil || !deleted.deleted {
+		t.Fatalf("concurrent delete=%v, %v; want true, nil", deleted.deleted, deleted.err)
+	}
+	if got, err := store.GetByID(ctx, target.ID); err != nil || got != nil {
+		t.Fatalf("deleted user still exists: user=%#v err=%v", got, err)
+	}
+	if exists, err := db.Textures.Exists(ctx, hash, "skin"); err != nil || exists {
+		t.Fatalf("deleted user's library texture exists=%v err=%v; want false, nil", exists, err)
+	}
+	if owned, err := db.Textures.VerifyOwnership(ctx, target.ID, hash, "skin"); err != nil || owned {
+		t.Fatalf("deleted user's texture ownership exists=%v err=%v; want false, nil", owned, err)
+	}
+}
+
+func waitForBlockedBackend[T any](
+	t *testing.T,
+	db interface {
+		QueryRow(context.Context, string, ...any) pgx.Row
+	},
+	blockerPID int,
+	result <-chan T,
+) int {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		select {
+		case <-result:
+			t.Fatal("database operation completed before the expected lock was released")
+		default:
+		}
+		var blockedPID int
+		err := db.QueryRow(t.Context(), `
+			SELECT pid
+			FROM pg_stat_activity
+			WHERE $1 = ANY(pg_blocking_pids(pid))
+			ORDER BY pid
+			LIMIT 1
+		`, blockerPID).Scan(&blockedPID)
+		if err == nil {
+			return blockedPID
+		}
+		if !errors.Is(err, pgx.ErrNoRows) {
+			t.Fatal(err)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for a backend to block on pid %d", blockerPID)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

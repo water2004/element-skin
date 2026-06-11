@@ -1,6 +1,9 @@
 package util
 
-import "testing"
+import (
+	"encoding/base64"
+	"testing"
+)
 
 func TestClampLimit(t *testing.T) {
 	cases := []struct {
@@ -32,6 +35,31 @@ func TestCursorRoundTrip(t *testing.T) {
 	}
 	if got["last_id"] != "abc" {
 		t.Fatalf("unexpected cursor payload: %#v", got)
+	}
+	nullCursor := base64.RawURLEncoding.EncodeToString([]byte("null"))
+	if decoded, err := DecodeCursor(nullCursor); err == nil || decoded != nil {
+		t.Fatalf("non-empty null cursor decoded=%#v err=%v; want nil and an error", decoded, err)
+	}
+}
+
+func TestCursorInt64AcceptsOnlyExactNonNegativeIntegers(t *testing.T) {
+	for _, tc := range []struct {
+		value any
+		want  int64
+	}{
+		{value: int64(0), want: 0},
+		{value: int(42), want: 42},
+		{value: float64(12345), want: 12345},
+	} {
+		got, ok := CursorInt64(tc.value)
+		if !ok || got != tc.want {
+			t.Fatalf("CursorInt64(%#v)=(%d,%v); want (%d,true)", tc.value, got, ok, tc.want)
+		}
+	}
+	for _, value := range []any{float64(1.5), float64(-1), float64(1e30), int64(-1), -1, "1", nil} {
+		if got, ok := CursorInt64(value); ok {
+			t.Fatalf("CursorInt64(%#v)=(%d,true); want rejection", value, got)
+		}
 	}
 }
 

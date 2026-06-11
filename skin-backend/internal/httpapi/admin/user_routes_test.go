@@ -2,6 +2,7 @@ package admin_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +17,8 @@ import (
 	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestUserRoutesListAndProtectCurrentUserExactly(t *testing.T) {
@@ -172,6 +175,54 @@ func TestTransferSuperAdminPreservesRolesWhenTargetCacheInvalidationFails(t *tes
 	}
 }
 
+func TestTransferSuperAdminInvalidatesCachesAgainAfterCommit(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	baseCache := testutil.NewMemoryRedis()
+	superAdmin := testutil.CreateUser(t, db, "transfer-recache-super@test.com", "Password123", "TransferRecacheSuper", true, true)
+	target := testutil.CreateUser(t, db, "transfer-recache-target@test.com", "Password123", "TransferRecacheTarget", false)
+	cache := &repopulateDuringTransferRedis{
+		Store: baseCache,
+		oldUsers: map[string]redisstore.AuthUser{
+			superAdmin.ID: redisstore.AuthUserFromModel(superAdmin),
+			target.ID:     redisstore.AuthUserFromModel(target),
+		},
+	}
+	h := admin.NewWithRedis(cfg, db, cache, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/transfer-super-admin", nil)
+	req.SetPathValue("user_id", target.ID)
+	req = req.WithContext(shared.WithUser(req.Context(), superAdmin.ID, true, true))
+	rec := httptest.NewRecorder()
+	h.TransferSuperAdmin(rec, req)
+
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+		t.Fatalf("transfer response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	wantInvalidations := []string{superAdmin.ID, target.ID, superAdmin.ID, target.ID}
+	if len(cache.userIDs) != len(wantInvalidations) {
+		t.Fatalf("cache invalidations=%#v, want %#v", cache.userIDs, wantInvalidations)
+	}
+	for i, userID := range wantInvalidations {
+		if cache.userIDs[i] != userID {
+			t.Fatalf("cache invalidations=%#v, want %#v", cache.userIDs, wantInvalidations)
+		}
+	}
+	for _, userID := range []string{superAdmin.ID, target.ID} {
+		if _, err := baseCache.GetAuthUser(t.Context(), userID); !errors.Is(err, redisstore.ErrCacheMiss) {
+			t.Fatalf("post-commit cache for %q must be invalidated, got %v", userID, err)
+		}
+	}
+	oldSuper, err := db.Users.GetByID(t.Context(), superAdmin.ID)
+	if err != nil || oldSuper == nil || oldSuper.IsSuperAdmin || !oldSuper.IsAdmin {
+		t.Fatalf("source role mismatch after transfer: user=%#v err=%v", oldSuper, err)
+	}
+	newSuper, err := db.Users.GetByID(t.Context(), target.ID)
+	if err != nil || newSuper == nil || !newSuper.IsSuperAdmin || !newSuper.IsAdmin {
+		t.Fatalf("target role mismatch after transfer: user=%#v err=%v", newSuper, err)
+	}
+}
+
 func TestAdminAuthWrapperRequiresAdmin(t *testing.T) {
 	var requireAdmin bool
 	h := admin.New(testutil.TestConfig(), nil, func(next http.HandlerFunc, require bool) http.HandlerFunc {
@@ -249,6 +300,68 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 	updated, err := db.Users.GetByID(req.Context(), target.ID)
 	if err != nil || updated == nil || !util.VerifyPassword("AdminNewPassword123", updated.Password) {
 		t.Fatalf("reset password should persist new hash: user=%#v err=%v", updated, err)
+	}
+}
+
+func TestUserProfilesPaginatesEncodedCursorWithoutRepeatingRows(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	h := admin.New(testutil.TestConfig(), db, nil)
+	adminUser := testutil.CreateUser(t, db, "admin-user-profile-page@test.com", "Password123", "AdminUserProfilePage", true)
+	target := testutil.CreateUser(t, db, "target-user-profile-page@test.com", "Password123", "TargetUserProfilePage", false)
+	firstProfile := testutil.CreateProfile(t, db, target.ID, "admin_user_profile_page_a", "ProfilePageA")
+	secondProfile := testutil.CreateProfile(t, db, target.ID, "admin_user_profile_page_b", "ProfilePageB")
+
+	requestPage := func(cursor string) *httptest.ResponseRecorder {
+		targetURL := "/admin/users/" + target.ID + "/profiles?limit=1"
+		if cursor != "" {
+			targetURL += "&cursor=" + cursor
+		}
+		req := httptest.NewRequest(http.MethodGet, targetURL, nil)
+		req.SetPathValue("user_id", target.ID)
+		req = req.WithContext(shared.WithUser(req.Context(), adminUser.ID, true))
+		rec := httptest.NewRecorder()
+		h.UserProfiles(rec, req)
+		return rec
+	}
+	decodePage := func(rec *httptest.ResponseRecorder) map[string]any {
+		t.Helper()
+		var page map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+			t.Fatal(err)
+		}
+		return page
+	}
+
+	firstRec := requestPage("")
+	if firstRec.Code != http.StatusOK {
+		t.Fatalf("first user profile page status=%d body=%q", firstRec.Code, firstRec.Body.String())
+	}
+	first := decodePage(firstRec)
+	firstItems := first["items"].([]any)
+	cursor, _ := first["next_cursor"].(string)
+	if len(firstItems) != 1 || firstItems[0].(map[string]any)["id"] != firstProfile.ID || first["has_next"] != true || cursor == "" {
+		t.Fatalf("first user profile page mismatch: %#v", first)
+	}
+
+	secondRec := requestPage(cursor)
+	if secondRec.Code != http.StatusOK {
+		t.Fatalf("second user profile page status=%d body=%q", secondRec.Code, secondRec.Body.String())
+	}
+	second := decodePage(secondRec)
+	secondItems := second["items"].([]any)
+	if len(secondItems) != 1 || secondItems[0].(map[string]any)["id"] != secondProfile.ID ||
+		second["has_next"] != false || second["next_cursor"] != "" {
+		t.Fatalf("second user profile page mismatch: %#v", second)
+	}
+
+	for _, malformed := range []string{
+		"not-base64",
+		util.EncodeCursor(map[string]any{"unexpected": "value"}),
+	} {
+		rec := requestPage(malformed)
+		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+			t.Fatalf("malformed user profile cursor status=%d body=%q", rec.Code, rec.Body.String())
+		}
 	}
 }
 
@@ -379,6 +492,80 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	}
 }
 
+func TestUnbanReturnsNotFoundWhenUserIsDeletedAfterAuthorizationCheck(t *testing.T) {
+	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 8)
+	cfg := testutil.TestConfig()
+	h := admin.New(cfg, db, nil)
+	adminUser := testutil.CreateUser(t, db, "admin-unban-delete-race@test.com", "Password123", "AdminUnbanRace", true)
+	target := testutil.CreateUser(t, db, "target-unban-delete-race@test.com", "Password123", "TargetUnbanRace", false)
+
+	tx, err := db.Pool.Begin(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback(t.Context())
+	var one, lockHolderPID int
+	if err := tx.QueryRow(t.Context(), `SELECT 1, pg_backend_pid() FROM users WHERE id=$1 FOR UPDATE`, target.ID).Scan(&one, &lockHolderPID); err != nil {
+		t.Fatal(err)
+	}
+
+	result := make(chan *httptest.ResponseRecorder, 1)
+	go func() {
+		req := httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/unban", nil)
+		req.SetPathValue("user_id", target.ID)
+		req = req.WithContext(shared.WithUser(req.Context(), adminUser.ID, true))
+		rec := httptest.NewRecorder()
+		h.UnbanUser(rec, req)
+		result <- rec
+	}()
+	waitForBlockedAdminMutation(t, db.Pool, lockHolderPID, result)
+	if _, err := tx.Exec(t.Context(), `DELETE FROM users WHERE id=$1`, target.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	rec := <-result
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+		t.Fatalf("user deleted before unban should return exact not found: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func waitForBlockedAdminMutation(
+	t *testing.T,
+	db interface {
+		QueryRow(context.Context, string, ...any) pgx.Row
+	},
+	lockHolderPID int,
+	result <-chan *httptest.ResponseRecorder,
+) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		select {
+		case rec := <-result:
+			t.Fatalf("admin mutation completed before row-lock release: status=%d body=%q", rec.Code, rec.Body.String())
+		default:
+		}
+		var waiting bool
+		if err := db.QueryRow(t.Context(), `
+			SELECT EXISTS (
+				SELECT 1 FROM pg_stat_activity
+				WHERE $1 = ANY(pg_blocking_pids(pid))
+			)
+		`, lockHolderPID).Scan(&waiting); err != nil {
+			t.Fatal(err)
+		}
+		if waiting {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("admin mutation did not reach the expected row-lock wait")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestUserRoutesDeleteUserAndInvalidateAuthCacheExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
@@ -474,6 +661,14 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("user list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
+	incompleteCursor := util.EncodeCursor(map[string]any{"unexpected": "value"})
+	req = httptest.NewRequest(http.MethodGet, "/admin/users?cursor="+incompleteCursor, nil)
+	rec = httptest.NewRecorder()
+	h.Users(rec, req)
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+		t.Fatalf("user list incomplete cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
 	req = httptest.NewRequest(http.MethodGet, "/admin/users/missing-user", nil)
 	req.SetPathValue("user_id", "missing-user")
 	rec = httptest.NewRecorder()
@@ -551,6 +746,27 @@ type authInvalidateFailRedis struct {
 	redisstore.Store
 	failAt  int
 	userIDs []string
+}
+
+type repopulateDuringTransferRedis struct {
+	redisstore.Store
+	oldUsers map[string]redisstore.AuthUser
+	userIDs  []string
+}
+
+func (r *repopulateDuringTransferRedis) InvalidateAuthUser(ctx context.Context, userID string) error {
+	r.userIDs = append(r.userIDs, userID)
+	if err := r.Store.InvalidateAuthUser(ctx, userID); err != nil {
+		return err
+	}
+	if len(r.userIDs) == 2 {
+		for _, oldUser := range r.oldUsers {
+			if err := r.Store.SetAuthUser(ctx, oldUser, time.Minute); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (r *authInvalidateFailRedis) InvalidateAuthUser(ctx context.Context, userID string) error {

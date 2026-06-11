@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/database/texture"
 	"element-skin/backend/internal/model"
@@ -41,6 +42,12 @@ func (s Site) CreateProfile(ctx context.Context, userID, name, mdl string) (map[
 	}
 	mdl = profile.NormalizeModel(mdl)
 	if err := s.DB.Profiles.Create(ctx, model.Profile{ID: id, UserID: userID, Name: name, TextureModel: mdl}); err != nil {
+		if profile.IsNameConflict(err) {
+			return nil, util.HTTPError{Status: 400, Detail: "角色名已被占用，请换一个名称"}
+		}
+		if profile.IsIDConflict(err) {
+			return nil, util.HTTPError{Status: 400, Detail: "角色 UUID 冲突，无法新建角色"}
+		}
 		return nil, err
 	}
 	return map[string]any{"id": id, "name": name, "model": mdl}, nil
@@ -83,6 +90,9 @@ func (s Site) ListMyProfiles(ctx context.Context, userID, cursor string, limit i
 	if m != nil {
 		last, _ = m["last_id"].(string)
 	}
+	if cursor != "" && last == "" {
+		return nil, util.HTTPError{Status: 400, Detail: "Invalid cursor"}
+	}
 	res, err := s.DB.Profiles.ListByUser(ctx, userID, limit, last)
 	if err != nil {
 		return nil, err
@@ -95,6 +105,9 @@ func (s Site) ListMyProfiles(ctx context.Context, userID, cursor string, limit i
 func (s Site) ListMyTextures(ctx context.Context, userID, cursor string, limit int, typ string) (map[string]any, error) {
 	lastCreated, lastHash, err := textureCursor(cursor, "last_hash")
 	if err != nil {
+		return nil, util.HTTPError{Status: 400, Detail: "Invalid cursor"}
+	}
+	if cursor != "" && (lastCreated == nil || lastHash == "") {
 		return nil, util.HTTPError{Status: 400, Detail: "Invalid cursor"}
 	}
 	return s.DB.Textures.ListForUser(ctx, userID, typ, limit, lastCreated, lastHash)
@@ -137,8 +150,17 @@ func (s Site) UpdateProfile(ctx context.Context, userID, profileID, name string)
 			return util.HTTPError{Status: 400, Detail: "角色名已被占用"}
 		}
 	}
-	_, err = s.DB.Profiles.UpdateName(ctx, profileID, name)
-	return err
+	updated, err := s.DB.Profiles.UpdateName(ctx, profileID, name)
+	if profile.IsNameConflict(err) {
+		return util.HTTPError{Status: 400, Detail: "角色名已被占用"}
+	}
+	if err != nil {
+		return err
+	}
+	if !updated {
+		return util.HTTPError{Status: 404, Detail: "profile not found"}
+	}
+	return nil
 }
 
 func (s Site) DeleteProfile(ctx context.Context, userID, profileID string) error {
@@ -183,14 +205,14 @@ func (s Site) SetProfileTexture(ctx context.Context, profileID, textureType stri
 			return nil
 		}
 		if err := s.DB.Profiles.UpdateSkin(ctx, profileID, hash); err != nil {
-			return err
+			return profileUpdateError(err)
 		}
 	case "cape":
 		if sameHash(p.CapeHash, hash) {
 			return nil
 		}
 		if err := s.DB.Profiles.UpdateCape(ctx, profileID, hash); err != nil {
-			return err
+			return profileUpdateError(err)
 		}
 	default:
 		return util.HTTPError{Status: 400, Detail: "Invalid texture_type"}
@@ -232,4 +254,11 @@ func sameHash(a, b *string) bool {
 		return a == b
 	}
 	return *a == *b
+}
+
+func profileUpdateError(err error) error {
+	if database.IsNoRows(err) {
+		return util.HTTPError{Status: 404, Detail: "profile not found"}
+	}
+	return err
 }

@@ -7,15 +7,13 @@ import (
 )
 
 func (s Store) ToggleAdmin(ctx context.Context, id string) (bool, error) {
-	var cur, super bool
-	if err := s.Pool.QueryRow(ctx, `SELECT is_admin,is_super_admin FROM users WHERE id=$1`, id).Scan(&cur, &super); err != nil {
-		return false, err
-	}
-	if super {
-		return true, nil
-	}
-	next := !cur
-	_, err := s.Pool.Exec(ctx, `UPDATE users SET is_admin=$1 WHERE id=$2`, next, id)
+	var next bool
+	err := s.Pool.QueryRow(ctx, `
+		UPDATE users
+		SET is_admin=CASE WHEN is_super_admin THEN TRUE ELSE NOT is_admin END
+		WHERE id=$1
+		RETURNING is_admin
+	`, id).Scan(&next)
 	return next, err
 }
 
@@ -43,11 +41,17 @@ func (s Store) TransferSuperAdmin(ctx context.Context, fromID, toID string) erro
 }
 
 func (s Store) Ban(ctx context.Context, id string, until int64) error {
-	_, err := s.Pool.Exec(ctx, `UPDATE users SET banned_until=$1 WHERE id=$2`, until, id)
+	tag, err := s.Pool.Exec(ctx, `UPDATE users SET banned_until=$1 WHERE id=$2`, until, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
 
 func (s Store) Unban(ctx context.Context, id string) error {
-	_, err := s.Pool.Exec(ctx, `UPDATE users SET banned_until=NULL WHERE id=$1`, id)
+	tag, err := s.Pool.Exec(ctx, `UPDATE users SET banned_until=NULL WHERE id=$1`, id)
+	if err == nil && tag.RowsAffected() == 0 {
+		return pgx.ErrNoRows
+	}
 	return err
 }
