@@ -34,11 +34,8 @@ func (s Site) ApplyTextureToProfile(ctx context.Context, userID, profileID, hash
 	}
 	switch strings.ToLower(textureType) {
 	case "skin":
-		if err := s.SetProfileTexture(ctx, profileID, "skin", &hash); err != nil {
-			return err
-		}
 		model, _ := info["model"].(string)
-		return s.DB.Profiles.UpdateModel(ctx, profileID, profile.NormalizeModel(model))
+		return s.DB.Profiles.UpdateSkinAndModel(ctx, profileID, &hash, profile.NormalizeModel(model))
 	case "cape":
 		return s.SetProfileTexture(ctx, profileID, "cape", &hash)
 	default:
@@ -58,27 +55,31 @@ func (s Site) TextureDetail(ctx context.Context, userID, hash, textureType strin
 }
 
 func (s Site) UpdateTexture(ctx context.Context, userID, hash, textureType string, body map[string]any) (map[string]any, error) {
-	if v, ok := body["note"].(string); ok {
-		if err := s.DB.Textures.UpdateNote(ctx, userID, hash, textureType, v); err != nil {
-			return nil, textureNotFoundError(err)
-		}
+	var patch texture.Patch
+	if model, ok := body["model"].(string); ok && model != "default" && model != "slim" {
+		return nil, util.HTTPError{Status: 400, Detail: "invalid model"}
+	} else if ok {
+		patch.Model = &model
 	}
-	if v, ok := body["model"].(string); ok {
-		if err := s.DB.Textures.UpdateModel(ctx, userID, hash, textureType, v); err != nil {
-			return nil, textureNotFoundError(err)
-		}
+	if note, ok := body["note"].(string); ok {
+		patch.Note = &note
 	}
-	if v, ok := body["is_public"]; ok {
-		pub := false
-		switch x := v.(type) {
+	if value, ok := body["is_public"]; ok {
+		parsed := false
+		switch x := value.(type) {
 		case bool:
-			pub = x
+			parsed = x
 		case float64:
-			pub = x != 0
+			parsed = x != 0
 		case int:
-			pub = x != 0
+			parsed = x != 0
+		default:
+			return nil, util.HTTPError{Status: 400, Detail: "invalid is_public"}
 		}
-		if err := s.DB.Textures.UpdatePublic(ctx, userID, hash, textureType, pub); err != nil {
+		patch.IsPublic = &parsed
+	}
+	if patch.Note != nil || patch.Model != nil || patch.IsPublic != nil {
+		if err := s.DB.Textures.UpdateForUser(ctx, userID, hash, textureType, patch); err != nil {
 			return nil, textureNotFoundError(err)
 		}
 	}

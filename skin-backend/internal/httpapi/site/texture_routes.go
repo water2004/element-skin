@@ -50,7 +50,7 @@ func (h Handler) UploadMyTexture(w http.ResponseWriter, req *http.Request) {
 	}
 	if err := h.db.Textures.AddToLibrary(req.Context(), shared.CurrentUserID(req), hash, textureType, req.FormValue("note"), shared.FormBool(req.FormValue("is_public")), profile.NormalizeModel(req.FormValue("model"))); err != nil {
 		if created {
-			if inUse, checkErr := h.db.Textures.Exists(req.Context(), hash, textureType); checkErr == nil && !inUse {
+			if inUse, checkErr := h.db.Textures.ExistsHash(req.Context(), hash); checkErr == nil && !inUse {
 				_ = storage.DeleteFile(hash)
 			}
 		}
@@ -93,7 +93,7 @@ func (h Handler) UploadAndApplyTexture(w http.ResponseWriter, req *http.Request)
 	model := profile.NormalizeModel(req.FormValue("model"))
 	if err := h.db.Textures.AddToLibrary(req.Context(), shared.CurrentUserID(req), hash, textureType, "", shared.FormBool(req.FormValue("is_public")), model); err != nil {
 		if created {
-			if inUse, checkErr := h.db.Textures.Exists(req.Context(), hash, textureType); checkErr == nil && !inUse {
+			if inUse, checkErr := h.db.Textures.ExistsHash(req.Context(), hash); checkErr == nil && !inUse {
 				_ = storage.DeleteFile(hash)
 			}
 		}

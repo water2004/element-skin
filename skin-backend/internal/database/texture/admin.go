@@ -137,6 +137,15 @@ func (s Store) Exists(ctx context.Context, hash, textureType string) (bool, erro
 	return err == nil, err
 }
 
+func (s Store) ExistsHash(ctx context.Context, hash string) (bool, error) {
+	var one int
+	err := s.Pool.QueryRow(ctx, `SELECT 1 FROM skin_library WHERE skin_hash=$1 LIMIT 1`, hash).Scan(&one)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
+	return err == nil, err
+}
+
 func (s Store) AdminDelete(ctx context.Context, hash, textureType, userID string, force bool) error {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {

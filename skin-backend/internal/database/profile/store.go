@@ -106,6 +106,11 @@ func (s Store) UpdateSkin(ctx context.Context, id string, hash *string) error {
 	return err
 }
 
+func (s Store) UpdateSkinAndModel(ctx context.Context, id string, hash *string, model string) error {
+	_, err := s.Pool.Exec(ctx, `UPDATE profiles SET skin_hash=$1,texture_model=$2 WHERE id=$3`, hash, model, id)
+	return err
+}
+
 func (s Store) UpdateCape(ctx context.Context, id string, hash *string) error {
 	_, err := s.Pool.Exec(ctx, `UPDATE profiles SET cape_hash=$1 WHERE id=$2`, hash, id)
 	return err

@@ -131,7 +131,7 @@ func TestTextureRoutesRejectMalformedAndInvalidModelWithoutMutation(t *testing.T
 		t.Fatalf("texture malformed patch mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/admin/textures/admin_model_hash?type=skin", strings.NewReader(`{"model":"wide"}`))
+	req = httptest.NewRequest(http.MethodPatch, "/admin/textures/admin_model_hash?type=skin", strings.NewReader(`{"note":"Must Not Persist","model":"wide"}`))
 	req.SetPathValue("hash", "admin_model_hash")
 	rec = httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
@@ -182,5 +182,35 @@ func TestTextureRoutesQueryTypeOverridesBodyTypeExactly(t *testing.T) {
 	}
 	if skin == nil || skin["note"] != "Skin Note" || cape == nil || cape["note"] != "Updated Cape" {
 		t.Fatalf("query type must override body type: skin=%#v cape=%#v", skin, cape)
+	}
+}
+
+func TestAdminTexturePatchRollsBackAllFieldsOnDatabaseFailure(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	h := admin.New(testutil.TestConfig(), db, nil)
+	user := testutil.CreateUser(t, db, "admin-texture-rollback@test.com", "Password123", "AdminTextureRollback", false)
+	if err := db.Textures.AddToLibrary(t.Context(), user.ID, "admin_patch_rollback", "skin", "Original", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(t.Context(),
+		`ALTER TABLE user_textures ADD CONSTRAINT reject_admin_slim_model CHECK (model <> 'slim')`,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodPatch, "/admin/textures/admin_patch_rollback?type=skin",
+		strings.NewReader(`{"note":"Changed","model":"slim","is_public":false}`))
+	req.SetPathValue("hash", "admin_patch_rollback")
+	rec := httptest.NewRecorder()
+	h.UpdateTexture(rec, req)
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		t.Fatalf("admin atomic patch failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	info, err := db.Textures.GetInfo(t.Context(), user.ID, "admin_patch_rollback", "skin")
+	if err != nil || info == nil ||
+		info["note"] != "Original" ||
+		info["model"] != "default" ||
+		info["is_public"] != 1 {
+		t.Fatalf("failed admin patch changed texture: info=%#v err=%v", info, err)
 	}
 }

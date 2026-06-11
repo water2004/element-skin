@@ -91,6 +91,12 @@ func TestAdminTextureUpdatesAreScopedByTextureType(t *testing.T) {
 	if exists, err := store.Exists(ctx, "same_hash", "cape"); err != nil || exists {
 		t.Fatalf("cape should be deleted only: exists=%v err=%v", exists, err)
 	}
+	if exists, err := store.ExistsHash(ctx, "same_hash"); err != nil || !exists {
+		t.Fatalf("same hash should still exist through skin row: exists=%v err=%v", exists, err)
+	}
+	if exists, err := store.ExistsHash(ctx, "missing_hash"); err != nil || exists {
+		t.Fatalf("missing hash should not exist: exists=%v err=%v", exists, err)
+	}
 }
 
 func TestAdminPerUserDeleteUpdatesUsageCount(t *testing.T) {

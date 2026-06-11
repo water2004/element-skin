@@ -1,6 +1,7 @@
 package util
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -18,11 +19,25 @@ func DownloadTexture(client *http.Client, rawURL string, maxBytes int64) ([]byte
 	if client == nil {
 		client = http.DefaultClient
 	}
+	redirectClient := *client
+	previousCheckRedirect := client.CheckRedirect
+	redirectClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if err := ValidateOutboundURL(req.URL.String()); err != nil {
+			return err
+		}
+		if previousCheckRedirect != nil {
+			return previousCheckRedirect(req, via)
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.Do(req)
+	resp, err := redirectClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -2,11 +2,14 @@ package profile_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/testutil"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestStoreCRUDHelpersSearchAndCascade(t *testing.T) {
@@ -78,5 +81,47 @@ func TestStoreCRUDHelpersSearchAndCascade(t *testing.T) {
 	}
 	if got, err := store.GetByID(ctx, p.ID); err != nil || got != nil {
 		t.Fatalf("delete cascade should remove profile row: profile=%#v err=%v", got, err)
+	}
+}
+
+func TestUpdateSkinAndModelIsAtomic(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	store := profile.Store{Pool: db.Pool}
+	user := testutil.CreateUser(t, db, "profile-skin-model@test.com", "Password123", "ProfileSkinModel", false)
+	oldHash := "old_profile_skin"
+	item := model.Profile{
+		ID:           "profile_skin_model",
+		UserID:       user.ID,
+		Name:         "ProfileSkinModel",
+		TextureModel: "default",
+		SkinHash:     &oldHash,
+	}
+	if err := store.Create(ctx, item); err != nil {
+		t.Fatal(err)
+	}
+	newHash := "new_profile_skin"
+	if err := store.UpdateSkinAndModel(ctx, item.ID, &newHash, "slim"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetByID(ctx, item.ID)
+	if err != nil || got == nil || got.SkinHash == nil || *got.SkinHash != newHash || got.TextureModel != "slim" {
+		t.Fatalf("successful update = %#v, %v; want hash=%q model=slim", got, err, newHash)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		ALTER TABLE profiles
+		ADD CONSTRAINT profile_default_model_only CHECK (texture_model = 'slim')
+	`); err != nil {
+		t.Fatal(err)
+	}
+	rejectedHash := "rejected_profile_skin"
+	err = store.UpdateSkinAndModel(ctx, item.ID, &rejectedHash, "default")
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+		t.Fatalf("failed update error = %#v; want PostgreSQL 23514", err)
+	}
+	got, err = store.GetByID(ctx, item.ID)
+	if err != nil || got == nil || got.SkinHash == nil || *got.SkinHash != newHash || got.TextureModel != "slim" {
+		t.Fatalf("failed update changed profile: profile=%#v err=%v", got, err)
 	}
 }

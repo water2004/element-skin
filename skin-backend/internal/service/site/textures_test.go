@@ -7,6 +7,8 @@ import (
 
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestTexturesApplyUpdateAndDeleteExactState(t *testing.T) {
@@ -170,6 +172,99 @@ func TestDeleteMissingWardrobeTextureReturnsNotFoundAndKeepsAppliedHash(t *testi
 	afterDelete, err := db.Profiles.GetByID(ctx, profile.ID)
 	if err != nil || afterDelete == nil || afterDelete.SkinHash == nil || *afterDelete.SkinHash != "texture_service_missing_delete" {
 		t.Fatalf("missing wardrobe delete must not clear applied profile hash: profile=%#v err=%v", afterDelete, err)
+	}
+}
+
+func TestApplySkinRollsBackHashWhenModelUpdateFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "site-apply-atomic@test.com", "Password123", "ApplyAtomic", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "site_apply_atomic", "SiteApplyAtomic")
+	if err := db.Textures.AddToLibrary(ctx, user.ID, "site_apply_atomic_skin", "skin", "Atomic Skin", false, "slim"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx,
+		`ALTER TABLE profiles ADD CONSTRAINT reject_slim_model CHECK (texture_model <> 'slim')`,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	err := svc.ApplyTextureToProfile(ctx, user.ID, profile.ID, "site_apply_atomic_skin", "skin")
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+		t.Fatalf("apply skin failure = %#v, want PostgreSQL 23514", err)
+	}
+	unchanged, err := db.Profiles.GetByID(ctx, profile.ID)
+	if err != nil || unchanged == nil ||
+		unchanged.SkinHash != nil ||
+		unchanged.TextureModel != "default" {
+		t.Fatalf("failed skin apply must preserve hash and model: profile=%#v err=%v", unchanged, err)
+	}
+}
+
+func TestUpdateTextureRejectsInvalidFieldsBeforeMutation(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "site-texture-validate@test.com", "Password123", "TextureValidate", false)
+	if err := db.Textures.AddToLibrary(ctx, user.ID, "site_texture_validate", "skin", "Original", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, test := range []struct {
+		name   string
+		body   map[string]any
+		detail string
+	}{
+		{"invalid model", map[string]any{"note": "Changed", "model": "wide"}, "invalid model"},
+		{"invalid public", map[string]any{"note": "Changed", "is_public": "yes"}, "invalid is_public"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := svc.UpdateTexture(ctx, user.ID, "site_texture_validate", "skin", test.body)
+			if result != nil || !httpError(err, 400, test.detail) {
+				t.Fatalf("invalid update result=%#v err=%#v, want exact 400 %q", result, err, test.detail)
+			}
+			info, err := db.Textures.GetInfo(ctx, user.ID, "site_texture_validate", "skin")
+			if err != nil || info == nil ||
+				info["note"] != "Original" ||
+				info["model"] != "default" ||
+				info["is_public"] != 1 {
+				t.Fatalf("invalid update changed texture: info=%#v err=%v", info, err)
+			}
+		})
+	}
+}
+
+func TestUpdateTextureRollsBackAllFieldsWhenLibraryModelUpdateFails(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "site-texture-patch-rollback@test.com", "Password123", "TexturePatchRollback", false)
+	if err := db.Textures.AddToLibrary(ctx, user.ID, "site_texture_patch_rollback", "skin", "Original", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx,
+		`ALTER TABLE skin_library ADD CONSTRAINT reject_slim_library_model CHECK (model <> 'slim')`,
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.UpdateTexture(ctx, user.ID, "site_texture_patch_rollback", "skin", map[string]any{
+		"note":      "Changed",
+		"model":     "slim",
+		"is_public": false,
+	})
+	var pgErr *pgconn.PgError
+	if result != nil || !errors.As(err, &pgErr) || pgErr.Code != "23514" {
+		t.Fatalf("atomic user patch result=%#v err=%#v, want nil and PostgreSQL 23514", result, err)
+	}
+	info, err := db.Textures.GetInfo(ctx, user.ID, "site_texture_patch_rollback", "skin")
+	if err != nil || info == nil ||
+		info["note"] != "Original" ||
+		info["model"] != "default" ||
+		info["is_public"] != 1 {
+		t.Fatalf("failed user patch changed texture: info=%#v err=%v", info, err)
 	}
 }
 

@@ -38,51 +38,35 @@ func (h Handler) UpdateTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid texture_type"})
 		return
 	}
-	updated := false
+	if v, ok := body["model"].(string); ok && v != "default" && v != "slim" {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid model"})
+		return
+	}
+	if v, ok := body["is_public"]; ok && !shared.ValidPublicValue(v) {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid is_public"})
+		return
+	}
+	var patch texture.Patch
 	if v, ok := body["note"].(string); ok {
-		if err := h.db.Textures.AdminUpdateNote(req.Context(), hash, textureType, v); err != nil {
-			if err == texture.ErrNotFound {
-				util.Error(w, util.HTTPError{Status: 404, Detail: "Texture not found"})
-				return
-			}
-			util.Error(w, err)
-			return
-		}
-		updated = true
+		patch.Note = &v
 	}
 	if v, ok := body["model"].(string); ok {
-		if v != "default" && v != "slim" {
-			util.Error(w, util.HTTPError{Status: 400, Detail: "invalid model"})
-			return
-		}
-		if err := h.db.Textures.AdminUpdateModel(req.Context(), hash, textureType, v); err != nil {
-			if err == texture.ErrNotFound {
-				util.Error(w, util.HTTPError{Status: 404, Detail: "Texture not found"})
-				return
-			}
-			util.Error(w, err)
-			return
-		}
-		updated = true
+		patch.Model = &v
 	}
 	if v, ok := body["is_public"]; ok {
-		if !shared.ValidPublicValue(v) {
-			util.Error(w, util.HTTPError{Status: 400, Detail: "invalid is_public"})
-			return
-		}
 		pub := shared.PublicBool(v)
-		if err := h.db.Textures.AdminUpdatePublic(req.Context(), hash, textureType, pub); err != nil {
-			if err == texture.ErrNotFound {
-				util.Error(w, util.HTTPError{Status: 404, Detail: "Texture not found"})
-				return
-			}
-			util.Error(w, err)
+		patch.IsPublic = &pub
+	}
+	if patch.Note == nil && patch.Model == nil && patch.IsPublic == nil {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "至少需要一个更新字段: model, note, is_public"})
+		return
+	}
+	if err := h.db.Textures.AdminPatch(req.Context(), hash, textureType, patch); err != nil {
+		if err == texture.ErrNotFound {
+			util.Error(w, util.HTTPError{Status: 404, Detail: "Texture not found"})
 			return
 		}
-		updated = true
-	}
-	if !updated {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "至少需要一个更新字段: model, note, is_public"})
+		util.Error(w, err)
 		return
 	}
 	util.JSON(w, 200, map[string]any{"ok": true})

@@ -375,7 +375,7 @@ func TestTextureUploadRemovesNewFileWhenDatabaseInsertFails(t *testing.T) {
 	}
 }
 
-func TestTextureUploadKeepsNewFileWhenAnotherDatabaseReferenceExists(t *testing.T) {
+func TestTextureUploadKeepsNewFileWhenAnotherTextureTypeReferencesHash(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
 	cfg.TexturesDir = t.TempDir()
@@ -388,7 +388,7 @@ func TestTextureUploadKeepsNewFileWhenAnotherDatabaseReferenceExists(t *testing.
 		t.Fatal(err)
 	}
 	hash := texturesvc.TexturePixelHash(img)
-	if err := db.Textures.AddToLibrary(t.Context(), owner.ID, hash, "skin", "Existing Reference", false, "default"); err != nil {
+	if err := db.Textures.AddToLibrary(t.Context(), owner.ID, hash, "cape", "Existing Cape Reference", false, "default"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(t.Context(), `ALTER TABLE user_textures ADD CONSTRAINT reject_test_duplicate_upload CHECK (FALSE) NOT VALID`); err != nil {
@@ -407,8 +407,8 @@ func TestTextureUploadKeepsNewFileWhenAnotherDatabaseReferenceExists(t *testing.
 	if _, err := os.Stat(filepath.Join(cfg.TexturesDir, hash+".png")); err != nil {
 		t.Fatalf("failed upload must keep a file referenced by another library row: %v", err)
 	}
-	if info, err := db.Textures.GetInfo(t.Context(), owner.ID, hash, "skin"); err != nil || info == nil {
-		t.Fatalf("existing texture reference must remain: info=%#v err=%v", info, err)
+	if info, err := db.Textures.GetInfo(t.Context(), owner.ID, hash, "cape"); err != nil || info == nil {
+		t.Fatalf("existing cross-type texture reference must remain: info=%#v err=%v", info, err)
 	}
 	if count, err := db.Textures.CountForUser(t.Context(), uploader.ID); err != nil || count != 0 {
 		t.Fatalf("failed uploader must gain no texture row: count=%d err=%v", count, err)
