@@ -1,7 +1,24 @@
 """密码哈希和验证工具"""
 
+import asyncio
 import bcrypt
+import os
 import re
+
+
+def _password_worker_limit() -> int:
+    raw = os.getenv("PASSWORD_HASH_WORKERS", "")
+    if raw:
+        try:
+            value = int(raw)
+            if value > 0:
+                return value
+        except ValueError:
+            pass
+    return min(os.cpu_count() or 1, 8)
+
+
+_password_semaphore = asyncio.Semaphore(_password_worker_limit())
 
 def hash_password(password: str) -> str:
     """
@@ -14,6 +31,12 @@ def hash_password(password: str) -> str:
         str: 哈希后的密码字符串
     """
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+async def hash_password_async(password: str) -> str:
+    """在线程池中执行 bcrypt 哈希，避免阻塞 asyncio 事件循环。"""
+    async with _password_semaphore:
+        return await asyncio.to_thread(hash_password, password)
 
 
 def verify_password(password: str, hashed: str) -> bool:
@@ -35,6 +58,14 @@ def verify_password(password: str, hashed: str) -> bool:
             return False
     # 兼容旧的明文密码
     return hashed == password
+
+
+async def verify_password_async(password: str, hashed: str) -> bool:
+    """在线程池中执行 bcrypt 校验，避免阻塞 asyncio 事件循环。"""
+    if not hashed.startswith("$2"):
+        return verify_password(password, hashed)
+    async with _password_semaphore:
+        return await asyncio.to_thread(verify_password, password, hashed)
 
 
 def needs_rehash(hashed: str) -> bool:

@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from utils.typing import InviteCode, serialize_profile_summary
 from utils.pagination import decode_cursor, encode_next
 from utils.profile_naming import is_valid_profile_name
+from utils.password_utils import hash_password_async
 from database_module import Database
 from config_loader import Config
 
@@ -148,12 +149,11 @@ class AdminBackend:
         return {"ok": True}
 
     async def reset_user_password(self, user_id: str, new_password: str):
-        from utils.password_utils import hash_password
         user_row = await self.db.user.get_by_id(user_id)
         if not user_row:
             raise HTTPException(status_code=404, detail="user not found")
         
-        password_hash = hash_password(new_password)
+        password_hash = await hash_password_async(new_password)
         # 先撤销外部令牌；任何失败都不应改变密码
         await self.db.user.delete_tokens_by_user(user_id)
         await self.db.user.delete_refresh_tokens_by_user(user_id)

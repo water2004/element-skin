@@ -8,7 +8,7 @@ import string
 import asyncpg
 from fastapi import HTTPException
 
-from utils.password_utils import hash_password, verify_password, needs_rehash
+from utils.password_utils import hash_password, hash_password_async, verify_password_async, needs_rehash
 from utils.password_utils import validate_strong_password
 from utils.jwt_utils import create_access_token, generate_refresh_token, hash_refresh_token
 from utils.email_utils import EmailSender
@@ -280,7 +280,7 @@ class SiteBackend:
         if not user_row:
             # 对不存在的用户也执行一次等价的 bcrypt 校验，使响应耗时与
             # "用户存在但密码错误"相近，避免通过计时差异枚举注册邮箱。
-            verify_password(password, _DUMMY_PASSWORD_HASH)
+            await verify_password_async(password, _DUMMY_PASSWORD_HASH)
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         user_id, email, password_hash, is_admin = (
@@ -290,11 +290,11 @@ class SiteBackend:
             user_row.is_admin,
         )
 
-        if not verify_password(password, password_hash):
+        if not await verify_password_async(password, password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if needs_rehash(password_hash):
-            new_hash = hash_password(password)
+            new_hash = await hash_password_async(password)
             await self.db.user.update_password(user_id, new_hash)
 
         return await self._issue_session(user_id, bool(is_admin), extra={"user_id": user_id})
@@ -390,7 +390,7 @@ class SiteBackend:
 
         user_count = await self.db.user.count()
         is_first_user = user_count == 0
-        password_hash = hash_password(password)
+        password_hash = await hash_password_async(password)
         user_id = generate_random_uuid()
 
         new_user = User(user_id, email, password_hash, is_first_user)
@@ -553,7 +553,7 @@ class SiteBackend:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        new_hash = hash_password(new_password)
+        new_hash = await hash_password_async(new_password)
         # 先吊销外部凭证，任何失败都不应改变密码
         await self.db.user.delete_tokens_by_user(user.id)
         await self.db.user.delete_refresh_tokens_by_user(user.id)
@@ -575,10 +575,10 @@ class SiteBackend:
         if not user_row:
             raise HTTPException(status_code=404, detail="用户不存在")
 
-        if not verify_password(old_password, user_row.password):
+        if not await verify_password_async(old_password, user_row.password):
             raise HTTPException(status_code=403, detail="旧密码错误")
 
-        new_hash = hash_password(new_password)
+        new_hash = await hash_password_async(new_password)
         # 先撤销外部凭证；若任一步失败应保留旧密码
         await self.db.user.delete_tokens_by_user(user_id)
         await self.db.user.delete_refresh_tokens_by_user(user_id)

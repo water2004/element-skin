@@ -8,7 +8,7 @@ from typing import Dict, Optional, Tuple
 from utils.crypto import CryptoUtils
 from utils.typing import User, PlayerProfile, Token, Session, normalize_texture_model
 from utils.uuid_utils import generate_random_uuid
-from utils.password_utils import hash_password, verify_password
+from utils.password_utils import hash_password_async, verify_password_async
 from utils.public_urls import public_site_url
 from database_module import Database
 from services import TextureStorage, assert_texture_size
@@ -156,9 +156,9 @@ class YggdrasilBackend:
         if not user:
             return None, None
 
-        if verify_password(password, user.password):
+        if await verify_password_async(password, user.password):
             if not user.password.startswith("$2"):
-                new_hash = hash_password(password)
+                new_hash = await hash_password_async(password)
                 await self.db.user.update_password(user.id, new_hash)
             return user, login_profile
 
