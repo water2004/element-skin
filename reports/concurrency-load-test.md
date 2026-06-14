@@ -2,6 +2,7 @@
 
 - Generated at: `2026-06-09T03:51:56+08:00`
 - Harness: `go test ./cmd/loadtest -run TestRealBackendLoad -count=1 -v`
+- Python baseline: `dev:reports/python-concurrency-load-test.md`
 - Data set: 100 users, 300 profiles, 500 texture rows, 50 invites, 1 pre-joined Yggdrasil session
 - Fixed concurrency: `200`
 - Duration per level: `1s`
@@ -62,10 +63,38 @@
 | Admin console | `admin-invites` | 200 | 24721 | 24721 | 0 | 0.00 | 24581.6 | 24581.6 | 8.0ms | 7.9ms | 12.1ms | 14.3ms | `200:24721` | `` |
 | Admin console | `admin-settings-site` | 200 | 2600 | 2600 | 0 | 0.00 | 2415.1 | 2415.1 | 82.5ms | 81.4ms | 90.0ms | 91.9ms | `200:2600` | `` |
 
+## Python Comparison
+
+The same harness shape was run in Python on `dev:reports/python-concurrency-load-test.md` after the bcrypt offload fix. Python finished cleanly with `0.00%` failures, but Go still leads by a wide margin on the read-heavy paths.
+
+| Scenario | Go successful req/s | Python successful req/s | Go uplift | Go p95 | Python p95 | Python fail % |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `public-settings` | 26105.8 | 1913.7 | 13.6x | 9.1ms | 200.3ms | 0.00 |
+| `public-carousel` | 30420.8 | 2138.0 | 14.2x | 8.2ms | 113.4ms | 0.00 |
+| `public-library-search` | 16894.7 | 777.9 | 21.7x | 17.0ms | 552.6ms | 0.00 |
+| `site-login` | 305.6 | 42.1 | 7.3x | 695.7ms | 4.58s | 0.00 |
+| `ygg-metadata` | 32938.5 | 2694.4 | 12.2x | 7.5ms | 110.9ms | 0.00 |
+| `ygg-authenticate` | 292.1 | 42.6 | 6.9x | 1.04s | 4.54s | 0.00 |
+| `ygg-validate` | 31803.1 | 1126.3 | 28.2x | 7.8ms | 422.1ms | 0.00 |
+| `ygg-profile` | 61355.0 | 1782.7 | 34.4x | 5.2ms | 151.1ms | 0.00 |
+| `ygg-lookup-name` | 64973.6 | 1827.5 | 35.6x | 4.8ms | 164.2ms | 0.00 |
+| `ygg-has-joined` | 2072.2 | 250.8 | 8.3x | 127.6ms | 1.36s | 0.00 |
+| `me` | 20258.1 | 984.3 | 20.6x | 13.6ms | 384.1ms | 0.00 |
+| `my-profiles` | 28928.8 | 891.2 | 32.5x | 8.9ms | 469.3ms | 0.00 |
+| `my-textures` | 29838.0 | 1125.8 | 26.5x | 8.5ms | 361.6ms | 0.00 |
+| `texture-detail` | 29216.8 | 1101.1 | 26.5x | 8.6ms | 360.5ms | 0.00 |
+| `admin-users` | 18290.2 | 672.9 | 27.2x | 16.7ms | 780.4ms | 0.00 |
+| `admin-user-detail` | 28837.8 | 822.2 | 35.1x | 8.9ms | 510.3ms | 0.00 |
+| `admin-user-profiles` | 28739.6 | 1032.5 | 27.8x | 9.1ms | 689.5ms | 0.00 |
+| `admin-profiles` | 22630.1 | 809.2 | 28.0x | 13.2ms | 822.5ms | 0.00 |
+| `admin-textures` | 22827.7 | 793.0 | 28.8x | 13.6ms | 659.7ms | 0.00 |
+| `admin-invites` | 24581.6 | 915.9 | 26.8x | 12.1ms | 371.8ms | 0.00 |
+| `admin-settings-site` | 2415.1 | 1318.3 | 1.8x | 90.0ms | 890.1ms | 0.00 |
+
 ## Notes
 
 - Every scenario is measured once at the same fixed concurrency, default `200`, for a one-second window.
 - `Successful req/s` is the useful per-second throughput under that fixed concurrency.
 - This report covers public, site, admin, and common Yggdrasil client endpoints; destructive write endpoints are intentionally excluded from high-concurrency runs.
 - A failure is any request with a transport error or non-2xx/3xx response.
-- The test harness closes the in-process HTTP server and drops the temporary PostgreSQL database during cleanup.
+- The Go harness closes the in-process HTTP server and drops the temporary PostgreSQL database during cleanup.

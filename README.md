@@ -388,31 +388,31 @@ LOADTEST_ENABLE=1 LOADTEST_CONCURRENCY=200 LOADTEST_DURATION=1s go test ./cmd/lo
 
 测试数据：100 个用户、300 个角色、500 条材质记录、50 个邀请码、1 个预置 Yggdrasil join 会话。固定并发：200；每个场景窗口：1s；数据库连接池：20。
 
-| 场景 | 成功 req/s | 失败率 | P95 |
-| --- | ---: | ---: | ---: |
-| Public settings | 26105.8 | 0.00% | 9.1ms |
-| Public carousel | 30420.8 | 0.00% | 8.2ms |
-| Public skin library search | 16894.7 | 0.00% | 17.0ms |
-| Site login | 305.6 | 0.00% | 695.7ms |
-| Yggdrasil metadata | 32938.5 | 0.00% | 7.5ms |
-| Yggdrasil authenticate | 292.1 | 0.00% | 1.04s |
-| Yggdrasil validate | 31803.1 | 0.00% | 7.8ms |
-| Yggdrasil profile | 61355.0 | 0.00% | 5.2ms |
-| Yggdrasil lookup name | 64973.6 | 0.00% | 4.8ms |
-| Yggdrasil hasJoined | 2072.2 | 0.00% | 127.6ms |
-| Me | 20258.1 | 0.00% | 13.6ms |
-| My profiles | 28928.8 | 0.00% | 8.9ms |
-| My textures | 29838.0 | 0.00% | 8.5ms |
-| Texture detail | 29216.8 | 0.00% | 8.6ms |
-| Admin users | 18290.2 | 0.00% | 16.7ms |
-| Admin user detail | 28837.8 | 0.00% | 8.9ms |
-| Admin user profiles | 28739.6 | 0.00% | 9.1ms |
-| Admin profiles | 22630.1 | 0.00% | 13.2ms |
-| Admin textures | 22827.7 | 0.00% | 13.6ms |
-| Admin invites | 24581.6 | 0.00% | 12.1ms |
-| Admin settings/site | 2415.1 | 0.00% | 90.0ms |
+| 场景 | Go 成功 req/s | Python 成功 req/s | 提升 | Go P95 | Python P95 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Public settings | 26105.8 | 1913.7 | 13.6x | 9.1ms | 200.3ms |
+| Public carousel | 30420.8 | 2138.0 | 14.2x | 8.2ms | 113.4ms |
+| Public skin library search | 16894.7 | 777.9 | 21.7x | 17.0ms | 552.6ms |
+| Site login | 305.6 | 42.1 | 7.3x | 695.7ms | 4.58s |
+| Yggdrasil metadata | 32938.5 | 2694.4 | 12.2x | 7.5ms | 110.9ms |
+| Yggdrasil authenticate | 292.1 | 42.6 | 6.9x | 1.04s | 4.54s |
+| Yggdrasil validate | 31803.1 | 1126.3 | 28.2x | 7.8ms | 422.1ms |
+| Yggdrasil profile | 61355.0 | 1782.7 | 34.4x | 5.2ms | 151.1ms |
+| Yggdrasil lookup name | 64973.6 | 1827.5 | 35.6x | 4.8ms | 164.2ms |
+| Yggdrasil hasJoined | 2072.2 | 250.8 | 8.3x | 127.6ms | 1.36s |
+| Me | 20258.1 | 984.3 | 20.6x | 13.6ms | 384.1ms |
+| My profiles | 28928.8 | 891.2 | 32.5x | 8.9ms | 469.3ms |
+| My textures | 29838.0 | 1125.8 | 26.5x | 8.5ms | 361.6ms |
+| Texture detail | 29216.8 | 1101.1 | 26.5x | 8.6ms | 360.5ms |
+| Admin users | 18290.2 | 672.9 | 27.2x | 16.7ms | 780.4ms |
+| Admin user detail | 28837.8 | 822.2 | 35.1x | 8.9ms | 510.3ms |
+| Admin user profiles | 28739.6 | 1032.5 | 27.8x | 9.1ms | 689.5ms |
+| Admin profiles | 22630.1 | 809.2 | 28.0x | 13.2ms | 822.5ms |
+| Admin textures | 22827.7 | 793.0 | 28.8x | 13.6ms | 659.7ms |
+| Admin invites | 24581.6 | 915.9 | 26.8x | 12.1ms | 371.8ms |
+| Admin settings/site | 2415.1 | 1318.3 | 1.8x | 90.0ms | 890.1ms |
 
-完整报告见 [`reports/concurrency-load-test.md`](reports/concurrency-load-test.md)。
+完整报告见 [`reports/concurrency-load-test.md`](reports/concurrency-load-test.md)，Python 对照基线为 `dev:reports/python-concurrency-load-test.md`。
 
 ## 📄 许可证
 
