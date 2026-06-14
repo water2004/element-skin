@@ -1,6 +1,7 @@
 import pytest
 import asyncio
 import os
+import re
 import shutil
 import tempfile
 import asyncpg
@@ -39,6 +40,29 @@ async def ensure_test_database():
     finally:
         await conn.close()
 
+def _quote_ident(name: str) -> str:
+    if not re.fullmatch(r"[A-Za-z0-9_]+", name):
+        raise ValueError(f"unsafe database name: {name!r}")
+    return '"' + name.replace('"', '""') + '"'
+
+async def drop_test_database(test_db_name: str = "elementskin_test"):
+    """关闭残留连接并删除测试数据库。"""
+    admin_dsn = os.getenv("ADMIN_DATABASE_DSN", "postgresql://postgres:12345678@localhost:5432/postgres?sslmode=disable")
+
+    conn = await asyncpg.connect(admin_dsn)
+    try:
+        await conn.execute(
+            """
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = $1 AND pid <> pg_backend_pid()
+            """,
+            test_db_name,
+        )
+        await conn.execute(f"DROP DATABASE IF EXISTS {_quote_ident(test_db_name)}")
+    finally:
+        await conn.close()
+
 @pytest.fixture(scope="session")
 def test_env_setup_data():
     """Session 级别的静态数据准备"""
@@ -69,6 +93,7 @@ async def db_session(test_env_setup_data):
     
     test_dsn = test_env_setup_data["dsn"]
     original_dsn = db.dsn
+    original_textures_dir = texture_storage.textures_dir
     db.dsn = test_dsn
     config._data["database"]["dsn"] = test_dsn
     texture_storage.textures_dir = test_env_setup_data["textures_dir"]
@@ -80,9 +105,14 @@ async def db_session(test_env_setup_data):
         await conn.execute("GRANT ALL ON SCHEMA public TO postgres;")
 
     await db.init()
-    yield db
-    await db.close()
-    db.dsn = original_dsn
+    try:
+        yield db
+    finally:
+        await db.close()
+        db.dsn = original_dsn
+        config._data["database"]["dsn"] = original_dsn
+        texture_storage.textures_dir = original_textures_dir
+        await drop_test_database()
 
 @pytest.fixture(scope="function")
 async def client(db_session) -> AsyncGenerator[AsyncClient, None]:
