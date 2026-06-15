@@ -23,6 +23,7 @@ const canvasRef = ref<HTMLCanvasElement | null>(null)
 let resizeObserver: ResizeObserver | null = null
 let unsubscribe: (() => void) | null = null
 let rafId = 0
+let scrollTimer = 0
 let disposed = false
 let lastSceneDraw = 0
 
@@ -49,6 +50,12 @@ function requestSceneDraw() {
   if (now - lastSceneDraw < 33) return
   lastSceneDraw = now
   drawGlass()
+}
+
+function requestScrollDraw() {
+  if (disposed) return
+  window.clearTimeout(scrollTimer)
+  scrollTimer = window.setTimeout(requestDraw, 120)
 }
 
 function drawFallback(ctx: CanvasRenderingContext2D, width: number, height: number) {
@@ -105,7 +112,7 @@ onMounted(() => {
   unsubscribe = scene?.subscribe(requestSceneDraw) ?? null
   // Debounce button-local triggers (move / resize) via rAF.
   window.addEventListener('resize', requestDraw)
-  window.addEventListener('scroll', requestDraw, { passive: true })
+  window.addEventListener('scroll', requestScrollDraw, { passive: true })
   if (window.ResizeObserver && rootRef.value) {
     resizeObserver = new ResizeObserver(requestDraw)
     resizeObserver.observe(rootRef.value)
@@ -115,9 +122,10 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true
   cancelAnimationFrame(rafId)
+  window.clearTimeout(scrollTimer)
   unsubscribe?.()
   window.removeEventListener('resize', requestDraw)
-  window.removeEventListener('scroll', requestDraw)
+  window.removeEventListener('scroll', requestScrollDraw)
   resizeObserver?.disconnect()
 })
 </script>
