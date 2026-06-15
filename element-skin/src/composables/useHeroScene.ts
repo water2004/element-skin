@@ -83,25 +83,17 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
   })
   const panoramaMesh = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), panoramaMaterial)
   scene.add(panoramaMesh)
-  const overlayCanvas = document.createElement('canvas')
-  overlayCanvas.width = 2
-  overlayCanvas.height = 2
-  const overlayCtx = overlayCanvas.getContext('2d')
-  if (overlayCtx) {
-    overlayCtx.fillStyle = '#000'
-    overlayCtx.fillRect(0, 0, 2, 2)
-  }
-  const overlayTexture = new THREE.CanvasTexture(overlayCanvas)
   const overlayScene = new THREE.Scene()
+  const overlayMaterial = new THREE.MeshBasicMaterial({
+    color: 0x000000,
+    transparent: true,
+    opacity: 0.45,
+    depthTest: false,
+    depthWrite: false,
+  })
   const overlayMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(2, 2),
-    new THREE.MeshBasicMaterial({
-      map: overlayTexture,
-      transparent: true,
-      opacity: 0.45,
-      depthTest: false,
-      depthWrite: false,
-    }),
+    overlayMaterial,
   )
   overlayScene.add(overlayMesh)
 
@@ -173,7 +165,6 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
       camera.rotation.set(pitch, yaw, 0, 'YXZ')
       panoramaUniforms.envMap.value = entry.texture
       panoramaUniforms.opacity.value = alpha
-      panoramaMaterial.needsUpdate = true
       renderer.render(scene, camera)
     } else {
       camera.rotation.set(0, 0, 0)
@@ -231,8 +222,7 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
       }
     }
 
-    const overlayMaterial = overlayMesh.material as THREE.MeshBasicMaterial
-    overlayMaterial.opacity = currentItem ? numberConfig(currentItem, 'overlay_opacity', 0.45) : 0.45
+    overlayMaterial.opacity = overlayOpacity(currentItem, transitioning ? media[next] : undefined, transitioning ? now : undefined)
     renderer.autoClear = false
     renderer.render(overlayScene, quadCamera)
     renderer.autoClear = true
@@ -243,6 +233,14 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     if (!renderer) return
     renderer.setClearColor(0x1a1a1a, 1)
     renderer.clear()
+  }
+
+  function overlayOpacity(currentItem?: HomepageMedia, nextItem?: HomepageMedia, now?: number) {
+    const from = currentItem ? numberConfig(currentItem, 'overlay_opacity', 0.45) : 0.45
+    if (!transitioning || !nextItem || now === undefined) return from
+    const to = numberConfig(nextItem, 'overlay_opacity', 0.45)
+    const progress = easeInOut(Math.min((now - transStart) / transition, 1))
+    return lerp(from, to, progress)
   }
 
   function loop() {
@@ -316,6 +314,10 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
 function numberConfig(item: HomepageMedia, key: string, fallback: number) {
   const value = item.config?.[key]
   return typeof value === 'number' ? value : fallback
+}
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t
 }
 
 function easeInOut(t: number) {
