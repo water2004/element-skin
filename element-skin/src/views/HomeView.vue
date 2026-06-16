@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { getPublicSettings, getPublicHomepageMedia } from '@/api/public'
 import { getMe } from '@/api/me'
 import { createHeroScene } from '@/composables/useHeroScene'
+import { User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
@@ -75,6 +76,7 @@ function goRegister() {
       class="home-fixed-button home-fixed-primary home-fixed-single probe-fade-in"
       @click="goDashboard"
     >
+      <el-icon class="home-fixed-icon"><User /></el-icon>
       <span class="home-fixed-label">进入个人面板</span>
     </button>
     <button
@@ -137,15 +139,19 @@ function goRegister() {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
   color: #fff;
   font-size: 16px;
   font-weight: 600;
   border-radius: 14px;
   border: none;
   background: var(--home-action-bg, rgba(255, 255, 255, 0.08));
-  backdrop-filter: blur(18px) saturate(180%);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
-  box-shadow: inset 0 0 0 1px var(--home-action-ring, rgba(255, 255, 255, 0.38));
+  backdrop-filter: blur(9px) saturate(180%);
+  -webkit-backdrop-filter: blur(9px) saturate(180%);
+  box-shadow:
+    0 14px 28px rgba(0, 0, 0, 0),
+    inset 0 0 0 1px var(--home-action-ring, rgba(255, 255, 255, 0.38)),
+    inset 0 1px 0 rgba(255, 255, 255, 0);
   transition:
     top 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -155,9 +161,15 @@ function goRegister() {
   -webkit-appearance: none;
 }
 
+.home-fixed-icon,
 .home-fixed-label {
   position: relative;
   z-index: 1;
+}
+
+.home-fixed-icon {
+  flex: 0 0 auto;
+  font-size: 20px;
 }
 
 .home-fixed-button:hover {
@@ -175,7 +187,8 @@ function goRegister() {
 }
 
 .home-fixed-single {
-  left: calc(50vw - 74px);
+  left: calc(50vw - 97px);
+  width: 194px;
 }
 
 .home-fixed-secondary {
