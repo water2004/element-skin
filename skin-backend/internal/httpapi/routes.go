@@ -43,6 +43,7 @@ func (r *Router) routes() {
 	r.handle("GET /public/skin-library", siteRoutes.PublicLibrary)
 	r.handle("GET /public/settings", siteRoutes.PublicSettings)
 	r.handle("GET /public/homepage-media", siteRoutes.PublicHomepageMedia)
+	r.handle("GET /public/fallback-status", siteRoutes.PublicFallbackStatus)
 
 	r.handle("POST /authserver/authenticate", yggRoutes.Authenticate)
 	r.handle("POST /authserver/refresh", yggRoutes.Refresh)

@@ -2,6 +2,7 @@ package site_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"element-skin/backend/internal/httpapi/site"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/redisstore"
+	"element-skin/backend/internal/service/settings"
 	sitesvc "element-skin/backend/internal/service/site"
 	"element-skin/backend/internal/testutil"
 )
@@ -163,4 +165,109 @@ func (r *writeFailRedis) SetPublicSettings(context.Context, map[string]any, time
 
 func (r *writeFailRedis) SetPublicHomepageMedia(context.Context, []model.HomepageMedia, time.Duration) error {
 	return errors.New("redis write failed")
+}
+
+func TestPublicFallbackStatusReturnsEndpointHistoryAndCurrent(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	cache := redisstore.NewMemoryStore()
+	ctx := context.Background()
+
+	svc := settings.Settings{DB: db, Redis: cache}
+	if err := svc.SaveGroup(ctx, "fallback", map[string]any{
+		"fallbacks": []any{
+			map[string]any{
+				"priority":     1,
+				"session_url":  "https://session.example",
+				"account_url":  "https://account.example",
+				"services_url": "https://services.example",
+				"note":         "primary",
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	endpoints, err := db.Fallbacks.ListEndpoints(ctx)
+	if err != nil || len(endpoints) != 1 {
+		t.Fatalf("seed endpoints: %v %#v", err, endpoints)
+	}
+	endpointID, _ := endpoints[0]["id"].(int)
+
+	now := time.Now()
+	older := redisstore.ProbeSample{EndpointID: endpointID, Note: "primary", CheckedAt: now.Add(-30 * time.Minute).UnixMilli(), Session: "down", Account: "up", Services: "up"}
+	newest := redisstore.ProbeSample{EndpointID: endpointID, Note: "primary", CheckedAt: now.UnixMilli(), Session: "up", Account: "up", Services: "up"}
+	if err := cache.AppendProbeSamples(ctx, []redisstore.ProbeSample{older, newest}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+
+	h := site.NewWithRedis(cfg, db, cache, sitesvc.Site{DB: db, Cfg: cfg, Redis: cache}, nil)
+	rec := httptest.NewRecorder()
+	h.PublicFallbackStatus(rec, httptest.NewRequest(http.MethodGet, "/public/fallback-status", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	var body struct {
+		Endpoints []struct {
+			ID          int    `json:"id"`
+			Note        string `json:"note"`
+			SessionURL  string `json:"session_url"`
+			AccountURL  string `json:"account_url"`
+			ServicesURL string `json:"services_url"`
+			Latest      *struct {
+				Session string `json:"session"`
+				Account string `json:"account"`
+			} `json:"latest"`
+			History []struct {
+				Session string `json:"session"`
+				Account string `json:"account"`
+			} `json:"history"`
+		} `json:"endpoints"`
+		RetentionMS int64 `json:"retention_ms"`
+		GeneratedAt int64 `json:"generated_at"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v body=%s", err, rec.Body.String())
+	}
+	if len(body.Endpoints) != 1 {
+		t.Fatalf("expected one endpoint in payload, got %d: %s", len(body.Endpoints), rec.Body.String())
+	}
+	ep := body.Endpoints[0]
+	if ep.Note != "primary" || ep.SessionURL != "https://session.example" || ep.AccountURL != "https://account.example" || ep.ServicesURL != "https://services.example" {
+		t.Fatalf("endpoint metadata mismatch: %#v", ep)
+	}
+	if len(ep.History) != 2 || ep.History[0].Session != "down" || ep.History[1].Session != "up" {
+		t.Fatalf("history should be ordered oldest→newest: %#v", ep.History)
+	}
+	if ep.Latest == nil || ep.Latest.Session != "up" || ep.Latest.Account != "up" {
+		t.Fatalf("latest should reflect the newest sample: %#v", ep.Latest)
+	}
+	if body.RetentionMS != int64(redisstore.ProbeHistoryRetention.Milliseconds()) {
+		t.Fatalf("retention_ms should match constant: got %d", body.RetentionMS)
+	}
+}
+
+func TestPublicFallbackStatusReturnsEmptyWhenNoConfig(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	cache := redisstore.NewMemoryStore()
+	h := site.NewWithRedis(cfg, db, cache, sitesvc.Site{DB: db, Cfg: cfg, Redis: cache}, nil)
+	rec := httptest.NewRecorder()
+	h.PublicFallbackStatus(rec, httptest.NewRequest(http.MethodGet, "/public/fallback-status", nil))
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"endpoints":[]`) {
+		t.Fatalf("expected empty endpoints array: status=%d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestPublicFallbackStatusFailsWhenRedisErrors(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	cache := redisstore.NewMemoryStore()
+	cache.Err = errors.New("redis down")
+	h := site.NewWithRedis(cfg, db, cache, sitesvc.Site{DB: db, Cfg: cfg, Redis: cache}, nil)
+	rec := httptest.NewRecorder()
+	h.PublicFallbackStatus(rec, httptest.NewRequest(http.MethodGet, "/public/fallback-status", nil))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("redis error should yield 500, got %d body=%s", rec.Code, rec.Body.String())
+	}
 }

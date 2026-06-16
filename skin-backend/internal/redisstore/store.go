@@ -67,6 +67,9 @@ type Store interface {
 	GetAuthUser(context.Context, string) (AuthUser, error)
 	SetAuthUser(context.Context, AuthUser, time.Duration) error
 	InvalidateAuthUser(context.Context, string) error
+	AppendProbeSamples(context.Context, []ProbeSample, time.Duration) error
+	GetProbeHistory(context.Context, time.Time) ([]ProbeSample, error)
+	InvalidateProbeHistory(context.Context) error
 	DeleteByPrefix(context.Context, string) error
 }
 

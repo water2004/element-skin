@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/database/fallback"
@@ -66,6 +67,13 @@ func (s Settings) SaveGroup(ctx context.Context, group string, body map[string]a
 				return err
 			}
 			value = string(b)
+		}
+		if key == "fallback_probe_interval" {
+			n, err := strconv.Atoi(fmt.Sprint(value))
+			if err != nil || n < 60 || n > 86400 {
+				return util.HTTPError{Status: 400, Detail: "fallback_probe_interval must be between 60 and 86400 seconds"}
+			}
+			value = strconv.Itoa(n)
 		}
 		if key == "easter_eggs_enabled" {
 			normalized, err := ValidateEasterEggs(value)

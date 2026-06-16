@@ -227,3 +227,51 @@ func TestSettingsFallbackDatabaseFailureRollsBackStrategyAndEndpoints(t *testing
 		t.Fatalf("failed transaction changed endpoints: %#v", endpoints)
 	}
 }
+
+func TestSettingsFallbackProbeIntervalValidationAndPersistence(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	redis := testutil.NewMemoryRedis()
+	svc := settings.Settings{DB: db, Redis: redis}
+
+	defaults, err := svc.GetGroup(ctx, "fallback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaults["fallback_probe_interval"] != 600 {
+		t.Fatalf("default probe interval should be 600 seconds, got %#v", defaults["fallback_probe_interval"])
+	}
+
+	if err := svc.SaveGroup(ctx, "fallback", map[string]any{"fallback_probe_interval": 1800}); err != nil {
+		t.Fatalf("valid probe interval should persist: %v", err)
+	}
+	if err := redis.InvalidateSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := svc.GetGroup(ctx, "fallback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated["fallback_probe_interval"] != 1800 {
+		t.Fatalf("probe interval did not persist: %#v", updated["fallback_probe_interval"])
+	}
+
+	cases := []any{59, 86401, "abc", -10}
+	for _, value := range cases {
+		err := svc.SaveGroup(ctx, "fallback", map[string]any{"fallback_probe_interval": value})
+		httpErr, ok := err.(util.HTTPError)
+		if !ok || httpErr.Status != 400 {
+			t.Fatalf("invalid probe interval %v should return HTTP 400, got %#v", value, err)
+		}
+	}
+	if err := redis.InvalidateSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	preserved, err := svc.GetGroup(ctx, "fallback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preserved["fallback_probe_interval"] != 1800 {
+		t.Fatalf("invalid attempts changed persisted interval: %#v", preserved["fallback_probe_interval"])
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/httpapi"
 	"element-skin/backend/internal/redisstore"
+	probesvc "element-skin/backend/internal/service/probe"
 	settingssvc "element-skin/backend/internal/service/settings"
 	sitepkg "element-skin/backend/internal/service/site"
 	yggpkg "element-skin/backend/internal/service/yggdrasil"
@@ -53,6 +54,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	}
 	cleanupCtx, cancel := context.WithCancel(context.Background())
 	go RunRefreshCleanupLoop(cleanupCtx, db.Tokens, time.Hour)
+	go probesvc.RunLoop(cleanupCtx, db, redis, settings)
 	return &App{
 		db:       db,
 		redis:    redis,

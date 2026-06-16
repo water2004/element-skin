@@ -140,3 +140,27 @@ export interface HomepageMedia {
   created_at: number
   updated_at: number
 }
+
+export interface FallbackStatusTick {
+  checked_at: number
+  session: 'up' | 'down'
+  account: 'up' | 'down'
+  services: 'up' | 'down'
+}
+
+export interface FallbackStatusEntry {
+  id: number
+  priority: number
+  note: string
+  session_url: string
+  account_url: string
+  services_url: string
+  latest: FallbackStatusTick | null
+  history: FallbackStatusTick[]
+}
+
+export interface FallbackStatusResponse {
+  endpoints: FallbackStatusEntry[]
+  retention_ms: number
+  generated_at: number
+}

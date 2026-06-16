@@ -42,6 +42,20 @@
             系统将同时向所有启用的端点发起并发请求，并采用最快返回的有效响应，适用于追求高性能的场景。
           </p>
         </div>
+        <div class="probe-interval-row">
+          <div class="probe-interval-label">
+            <span class="probe-interval-title">健康探测周期</span>
+            <span class="probe-interval-desc">后台每隔此秒数对所有端点发起一次探测，结果保留 24 小时</span>
+          </div>
+          <el-input-number
+            v-model="settings.fallback_probe_interval"
+            :min="60"
+            :max="86400"
+            :step="60"
+            controls-position="right"
+            class="probe-interval-input"
+          />
+        </div>
       </div>
     </el-card>
 
@@ -241,8 +255,9 @@ interface FallbackRow {
   _loaded: boolean
 }
 
-const settings = ref<{ fallback_strategy: string }>({
-  fallback_strategy: 'serial'
+const settings = ref<{ fallback_strategy: string; fallback_probe_interval: number }>({
+  fallback_strategy: 'serial',
+  fallback_probe_interval: 600
 })
 const fallbacks = ref<FallbackRow[]>([])
 const saving = ref(false)
@@ -251,6 +266,8 @@ async function fetchSettings() {
   try {
     const res = await getAdminSettingsGroup('fallback')
     settings.value.fallback_strategy = (res.data.fallback_strategy as string) || 'serial'
+    const interval = Number(res.data.fallback_probe_interval ?? 600)
+    settings.value.fallback_probe_interval = Number.isFinite(interval) && interval >= 60 ? interval : 600
 
     const raw = Array.isArray(res.data.fallbacks) ? (res.data.fallbacks as any[]) : []
 
@@ -283,6 +300,7 @@ async function saveSettings() {
   try {
     const payload = {
       fallback_strategy: settings.value.fallback_strategy,
+      fallback_probe_interval: settings.value.fallback_probe_interval,
       fallbacks: fallbacks.value.map(item => ({
         id: item.id,
         priority: item.priority,
@@ -472,6 +490,19 @@ onMounted(fetchSettings)
   border-radius: 8px;
   border-left: 4px solid var(--el-color-primary);
 }
+.probe-interval-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  background: var(--color-background-soft);
+  border-radius: 8px;
+}
+.probe-interval-label { display: flex; flex-direction: column; gap: 4px; }
+.probe-interval-title { font-weight: 600; color: var(--color-heading); font-size: 14px; }
+.probe-interval-desc { font-size: 12px; color: var(--color-text-light); }
+.probe-interval-input { width: 200px; }
 
 /* Note Column */
 .note-container { display: flex; align-items: center; gap: 10px; }
