@@ -2,20 +2,22 @@
 import { injectEasterEggStyle } from './domEffects'
 
 export function start(): EasterEggCleanup {
-  const style = injectEasterEggStyle('halloween', `
+  const style = injectEasterEggStyle(
+    'halloween',
+    `
     html.easter-egg-halloween {
       --halloween-pumpkin-face: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 38'%3E%3Cpath fill='%236f2b08' d='M7 8h16L15 22zM41 8h16l-8 14zM28 17h8l-4 8zM6 27l9-5 8 6 8-6 8 6 8-6 11 5-2 8-9-4-8 5-8-5-8 5-8-5-9 4z'/%3E%3C/svg%3E");
     }
 
     html.easter-egg-halloween .el-button,
     html.easter-egg-halloween .btn-gradient,
-    html.easter-egg-halloween .btn-glass,
     html.easter-egg-halloween .btn-outline,
-    html.easter-egg-halloween .canvas-glass-button {
+    html.easter-egg-halloween .home-fixed-button {
       position: relative;
       isolation: isolate;
       overflow: hidden;
       transition:
+        top 0.25s cubic-bezier(0.4, 0, 0.2, 1),
         transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
         border-color 0.25s ease,
         box-shadow 0.25s ease,
@@ -24,9 +26,8 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-halloween .el-button::before,
     html.easter-egg-halloween .btn-gradient::before,
-    html.easter-egg-halloween .btn-glass::before,
     html.easter-egg-halloween .btn-outline::before,
-    html.easter-egg-halloween .canvas-glass-button::before {
+    html.easter-egg-halloween .home-fixed-button::before {
       content: "";
       position: absolute;
       inset: 0;
@@ -42,9 +43,8 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-halloween .el-button::after,
     html.easter-egg-halloween .btn-gradient::after,
-    html.easter-egg-halloween .btn-glass::after,
     html.easter-egg-halloween .btn-outline::after,
-    html.easter-egg-halloween .canvas-glass-button::after {
+    html.easter-egg-halloween .home-fixed-button::after {
       content: "";
       position: absolute;
       left: 50%;
@@ -66,10 +66,9 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-halloween .el-button:not(.btn-icon-swap) > span,
     html.easter-egg-halloween .el-button .el-button__text,
-    html.easter-egg-halloween .btn-gradient:not(.btn-icon-swap) > *:not(canvas):not(.glass-tint),
-    html.easter-egg-halloween .btn-glass:not(.btn-icon-swap) > *,
+    html.easter-egg-halloween .btn-gradient:not(.btn-icon-swap) > *,
     html.easter-egg-halloween .btn-outline:not(.btn-icon-swap) > *,
-    html.easter-egg-halloween .canvas-glass-button > .glass-content {
+    html.easter-egg-halloween .home-fixed-button > .home-fixed-label {
       position: relative;
       z-index: 2;
     }
@@ -80,9 +79,8 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-halloween .el-button:hover:not(:disabled),
     html.easter-egg-halloween .btn-gradient:hover:not(:disabled),
-    html.easter-egg-halloween .btn-glass:hover:not(:disabled),
     html.easter-egg-halloween .btn-outline:hover:not(:disabled),
-    html.easter-egg-halloween .canvas-glass-button:hover:not(:disabled) {
+    html.easter-egg-halloween .home-fixed-button:hover:not(:disabled) {
       border-color: rgba(255, 145, 35, 0.58) !important;
       color: #fff !important;
       box-shadow:
@@ -91,33 +89,25 @@ export function start(): EasterEggCleanup {
         0 0 18px rgba(255, 122, 24, 0.14) !important;
     }
 
-    html.easter-egg-halloween .canvas-glass-button:hover:not(:disabled) .glass-tint {
-      background: rgba(225, 96, 18, 0.22);
-    }
-
     html.easter-egg-halloween .el-button:hover:not(:disabled)::before,
     html.easter-egg-halloween .btn-gradient:hover:not(:disabled)::before,
-    html.easter-egg-halloween .btn-glass:hover:not(:disabled)::before,
     html.easter-egg-halloween .btn-outline:hover:not(:disabled)::before,
-    html.easter-egg-halloween .canvas-glass-button:hover:not(:disabled)::before,
+    html.easter-egg-halloween .home-fixed-button:hover:not(:disabled)::before,
     html.easter-egg-halloween .el-button:focus-visible::before,
     html.easter-egg-halloween .btn-gradient:focus-visible::before,
-    html.easter-egg-halloween .btn-glass:focus-visible::before,
     html.easter-egg-halloween .btn-outline:focus-visible::before,
-    html.easter-egg-halloween .canvas-glass-button:focus-visible::before {
+    html.easter-egg-halloween .home-fixed-button:focus-visible::before {
       opacity: 1;
     }
 
     html.easter-egg-halloween .el-button:hover:not(:disabled)::after,
     html.easter-egg-halloween .btn-gradient:hover:not(:disabled)::after,
-    html.easter-egg-halloween .btn-glass:hover:not(:disabled)::after,
     html.easter-egg-halloween .btn-outline:hover:not(:disabled)::after,
-    html.easter-egg-halloween .canvas-glass-button:hover:not(:disabled)::after,
+    html.easter-egg-halloween .home-fixed-button:hover:not(:disabled)::after,
     html.easter-egg-halloween .el-button:focus-visible::after,
     html.easter-egg-halloween .btn-gradient:focus-visible::after,
-    html.easter-egg-halloween .btn-glass:focus-visible::after,
     html.easter-egg-halloween .btn-outline:focus-visible::after,
-    html.easter-egg-halloween .canvas-glass-button:focus-visible::after {
+    html.easter-egg-halloween .home-fixed-button:focus-visible::after {
       opacity: 0.58;
       transform: translate(-50%, -50%) scale(1);
     }
@@ -228,18 +218,13 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-halloween .is-home-layout .home-fixed-button {
       color: #fff !important;
-      --home-action-ring: rgba(255, 145, 35, 0.58);
-      --home-action-bg: rgba(225, 96, 18, 0.18);
       box-shadow:
-        inset 0 0 0 1px var(--home-action-ring),
-        inset 0 1px 0 rgba(255, 199, 101, 0.16) !important;
-    }
-
-    html.easter-egg-halloween .is-home-layout .home-fixed-button.home-fixed-primary {
-      --home-action-bg: rgba(225, 96, 18, 0.24);
+        inset 0 0 0 1px var(--home-action-ring, rgba(255, 255, 255, 0.38)),
+        inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
     }
 
     html.easter-egg-halloween .is-home-layout .home-fixed-button:hover {
+      --home-action-ring: rgba(255, 145, 35, 0.58);
       box-shadow:
         0 0 0 3px rgba(255, 145, 35, 0.12),
         0 14px 28px rgba(89, 42, 10, 0.22),
@@ -247,7 +232,8 @@ export function start(): EasterEggCleanup {
         inset 0 0 0 1px var(--home-action-ring),
         inset 0 1px 0 rgba(255, 199, 101, 0.18) !important;
     }
-  `)
+  `,
+  )
 
   return () => style.remove()
 }

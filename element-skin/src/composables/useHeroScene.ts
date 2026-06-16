@@ -1,19 +1,13 @@
-import type { InjectionKey } from 'vue'
 import * as THREE from 'three'
 import type { HomepageMedia } from '@/api/types'
 
 export interface HeroSceneController {
   setTarget(canvas: HTMLCanvasElement | null): void
   setMedia(items: HomepageMedia[]): void
-  subscribe(fn: () => void): () => void
-  getCanvas(): HTMLCanvasElement | null
-  getDpr(): number
   start(): void
   stop(): void
   destroy(): void
 }
-
-export const heroSceneKey: InjectionKey<HeroSceneController> = Symbol('heroScene')
 
 export interface HeroSceneOptions {
   transition?: number
@@ -140,10 +134,7 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     depthTest: false,
     depthWrite: false,
   })
-  compositeScene.add(new THREE.Mesh(
-    new THREE.PlaneGeometry(2, 2),
-    compositeMaterial,
-  ))
+  compositeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), compositeMaterial))
 
   let media: HomepageMedia[] = []
   const prepared = new Map<string, PreparedMedia>()
@@ -161,7 +152,6 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
   let lastFrameAt = 0
   let running = false
   let listenersBound = false
-  const consumers = new Set<() => void>()
 
   function mediaUrl(item: HomepageMedia, face?: string) {
     const base = import.meta.env.BASE_URL
@@ -217,7 +207,13 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     compositeUniforms.viewportAspect.value = cssW / cssH
   }
 
-  function renderPrepared(currentEntry: PreparedMedia, nextEntry: PreparedMedia, now: number, progress: number, overlay: number) {
+  function renderPrepared(
+    currentEntry: PreparedMedia,
+    nextEntry: PreparedMedia,
+    now: number,
+    progress: number,
+    overlay: number,
+  ) {
     if (!renderer) return
     setMediaUniforms('current', currentEntry, now, itemStart)
     setMediaUniforms('next', nextEntry, now, transStart)
@@ -235,7 +231,12 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     if (media.length > 0) {
       const active = media[current]
       const duration = Math.max(active?.duration_ms || 6000, 1000)
-      if (media.length > 1 && !transitioning && now - itemStart >= duration && candidateNextEntry?.ready) {
+      if (
+        media.length > 1 &&
+        !transitioning &&
+        now - itemStart >= duration &&
+        candidateNextEntry?.ready
+      ) {
         next = candidateNext
         transitioning = true
         transStart = now
@@ -257,15 +258,23 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     const nextEntry = transitioning && nextItem ? prepared.get(nextItem.id) : currentEntry
 
     if (currentEntry?.ready && nextEntry?.ready) {
-      const overlay = overlayOpacity(currentItem, transitioning ? nextItem : undefined, transitionAlpha)
+      const overlay = overlayOpacity(
+        currentItem,
+        transitioning ? nextItem : undefined,
+        transitionAlpha,
+      )
       renderPrepared(currentEntry, nextEntry, now, transitionAlpha, overlay)
     } else {
       renderFallback()
     }
-    for (const fn of consumers) fn()
   }
 
-  function setMediaUniforms(slot: 'current' | 'next', entry: PreparedMedia, now: number, startedAt: number) {
+  function setMediaUniforms(
+    slot: 'current' | 'next',
+    entry: PreparedMedia,
+    now: number,
+    startedAt: number,
+  ) {
     const prefix = slot === 'current' ? 'current' : 'next'
     compositeUniforms[`${prefix}Kind`].value = entry.kind === 'panorama' ? 1 : 0
     compositeUniforms[`${prefix}Aspect`].value = imageAspect(entry)
@@ -286,7 +295,12 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     return iw / ih
   }
 
-  function setPanoramaRotation(item: HomepageMedia, now: number, startedAt: number, target: THREE.Matrix3) {
+  function setPanoramaRotation(
+    item: HomepageMedia,
+    now: number,
+    startedAt: number,
+    target: THREE.Matrix3,
+  ) {
     const startYaw = numberConfig(item, 'start_yaw', 0)
     const startPitch = numberConfig(item, 'start_pitch', 0)
     const yawSpeed = numberConfig(item, 'yaw_speed_dps', 4)
@@ -354,12 +368,6 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
       transitioning = false
       itemStart = performance.now()
     },
-    subscribe(fn) {
-      consumers.add(fn)
-      return () => consumers.delete(fn)
-    },
-    getCanvas: () => target,
-    getDpr: () => dpr,
     start() {
       if (running) return
       running = true
@@ -375,7 +383,6 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     destroy() {
       this.stop()
       unbindListeners()
-      consumers.clear()
       for (const entry of prepared.values()) entry.texture.dispose()
       prepared.clear()
       fallbackTexture.dispose()

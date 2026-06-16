@@ -35,13 +35,9 @@ const snowTargetSelector = [
   '.texture-card',
   '.role-card',
   '.home-fixed-button',
-  '.canvas-glass-button',
 ].join(',')
 
-const floatingSnowTargetSelector = [
-  '.home-fixed-button',
-  '.canvas-glass-button',
-].join(',')
+const floatingSnowTargetSelector = '.home-fixed-button'
 
 export function start(): EasterEggCleanup {
   const style = document.createElement('style')
@@ -282,7 +278,9 @@ export function start(): EasterEggCleanup {
       .filter((el) => !targetOverlayIsLeaving(el))
       .filter((el) => {
         const rect = el.getBoundingClientRect()
-        return rect.width >= 120 && rect.height >= 34 && rect.bottom > 0 && rect.top < window.innerHeight
+        return (
+          rect.width >= 120 && rect.height >= 34 && rect.bottom > 0 && rect.top < window.innerHeight
+        )
       })
       .slice(0, 48)
   }
@@ -308,7 +306,10 @@ export function start(): EasterEggCleanup {
       for (const spec of specsForTarget(target, rect)) {
         const cap = document.createElement('span')
         const capWidth = Math.min(rect.width * spec.capWidthRatio, spec.maxWidth)
-        const relativeLeft = Math.min(Math.max(10, spec.xRatio * rect.width), Math.max(10, rect.width - capWidth - 10))
+        const relativeLeft = Math.min(
+          Math.max(10, spec.xRatio * rect.width),
+          Math.max(10, rect.width - capWidth - 10),
+        )
         cap.className = spec.className
         cap.style.setProperty('--snow-width', `${capWidth}px`)
         for (const [key, value] of Object.entries(spec.vars)) {
@@ -381,7 +382,12 @@ export function start(): EasterEggCleanup {
         binding.fading = true
         fadeOverlayCap(binding.cap)
       }
-      if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= window.innerHeight) {
+      if (
+        rect.width <= 0 ||
+        rect.height <= 0 ||
+        rect.bottom <= 0 ||
+        rect.top >= window.innerHeight
+      ) {
         if (binding.mode === 'floating') {
           binding.fading = true
           fadeOverlayCap(binding.cap)
@@ -394,7 +400,10 @@ export function start(): EasterEggCleanup {
       binding.cap.style.display = ''
       if (binding.mode === 'floating' && binding.spec) {
         const capWidth = Math.min(rect.width * binding.spec.capWidthRatio, binding.spec.maxWidth)
-        const relativeLeft = Math.min(Math.max(10, binding.spec.xRatio * rect.width), Math.max(10, rect.width - capWidth - 10))
+        const relativeLeft = Math.min(
+          Math.max(10, binding.spec.xRatio * rect.width),
+          Math.max(10, rect.width - capWidth - 10),
+        )
         binding.cap.style.setProperty('--snow-width', `${capWidth}px`)
         binding.cap.style.transform = `translate3d(${rect.left + relativeLeft}px, ${rect.top - binding.spec.height + 1}px, 0)`
       }

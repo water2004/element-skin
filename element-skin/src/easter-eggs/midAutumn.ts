@@ -2,7 +2,9 @@ import type { EasterEggCleanup } from './index'
 import { combineCleanups, injectEasterEggStyle, randomBetween } from './domEffects'
 
 export function start(): EasterEggCleanup {
-  const style = injectEasterEggStyle('mid-autumn', `
+  const style = injectEasterEggStyle(
+    'mid-autumn',
+    `
     html.dark.easter-egg-mid-autumn {
       --mid-autumn-primary: #e5c468;
       --mid-autumn-primary-soft: #fff0b9;
@@ -200,6 +202,7 @@ export function start(): EasterEggCleanup {
 
     html.dark.easter-egg-mid-autumn .el-button--primary,
     html.dark.easter-egg-mid-autumn .btn-gradient-primary,
+    html.dark.easter-egg-mid-autumn .is-home-layout .home-fixed-button.home-fixed-primary,
     html.dark.easter-egg-mid-autumn .is-home-layout .header-actions .el-button--primary {
       background-image:
         linear-gradient(135deg, rgba(255, 250, 226, 0.34), transparent 44%),
@@ -212,7 +215,8 @@ export function start(): EasterEggCleanup {
     }
 
     html.dark.easter-egg-mid-autumn .el-button--primary:hover,
-    html.dark.easter-egg-mid-autumn .btn-gradient-primary:hover:not(:disabled) {
+    html.dark.easter-egg-mid-autumn .btn-gradient-primary:hover:not(:disabled),
+    html.dark.easter-egg-mid-autumn .is-home-layout .home-fixed-button.home-fixed-primary:hover {
       border-color: rgba(255, 239, 183, 0.78) !important;
       box-shadow:
         0 10px 26px var(--mid-autumn-glow),
@@ -291,7 +295,7 @@ export function start(): EasterEggCleanup {
       color: var(--mid-autumn-primary) !important;
     }
 
-    html.dark.easter-egg-mid-autumn .is-home-layout .canvas-glass-button {
+    html.dark.easter-egg-mid-autumn .is-home-layout .home-fixed-button {
       box-shadow:
         0 0 0 1px rgba(255, 239, 183, 0.2),
         0 0 34px rgba(255, 241, 196, 0.18),
@@ -299,7 +303,7 @@ export function start(): EasterEggCleanup {
         inset 0 1px 0 rgba(255, 255, 238, 0.26);
     }
 
-    html.dark.easter-egg-mid-autumn .is-home-layout .canvas-glass-button::after {
+    html.dark.easter-egg-mid-autumn .is-home-layout .home-fixed-button::after {
       content: '';
       position: absolute;
       inset: 0;
@@ -311,24 +315,16 @@ export function start(): EasterEggCleanup {
       opacity: 0.74;
     }
 
-    html.dark.easter-egg-mid-autumn .canvas-glass-button.is-primary {
+    html.dark.easter-egg-mid-autumn .is-home-layout .home-fixed-button.home-fixed-primary {
       border-color: var(--mid-autumn-line);
       background: rgba(229, 196, 104, 0.18);
     }
 
-    html.dark.easter-egg-mid-autumn .canvas-glass-button.is-primary .glass-tint {
-      background: rgba(255, 240, 185, 0.22);
-    }
-
-    html.dark.easter-egg-mid-autumn .canvas-glass-button.is-secondary,
+    html.dark.easter-egg-mid-autumn .is-home-layout .home-fixed-button.home-fixed-secondary,
     html.dark.easter-egg-mid-autumn .hero-register-btn {
       border-color: rgba(255, 232, 164, 0.36) !important;
       background: rgba(255, 240, 185, 0.13) !important;
       color: #fff !important;
-    }
-
-    html.dark.easter-egg-mid-autumn .canvas-glass-button.is-secondary .glass-tint {
-      background: rgba(255, 248, 218, 0.14);
     }
 
     html.dark.easter-egg-mid-autumn .group-title,
@@ -346,7 +342,8 @@ export function start(): EasterEggCleanup {
         linear-gradient(135deg, rgba(229, 196, 104, 0.05), transparent 42%),
         var(--festival-preview-background, none);
     }
-  `)
+  `,
+  )
 
   const osmanthus = startDarkOnlyOsmanthus()
 

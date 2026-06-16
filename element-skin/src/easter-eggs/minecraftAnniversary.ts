@@ -12,7 +12,9 @@ const splashes = [
 ]
 
 export function start(): EasterEggCleanup {
-  const style = injectEasterEggStyle('minecraft-anniversary', `
+  const style = injectEasterEggStyle(
+    'minecraft-anniversary',
+    `
     @font-face {
       font-family: "ElementSkin Minecraft Pixel";
       src: url("${cjkPixelFontUrl}") format("woff2");
@@ -25,7 +27,7 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-minecraft-anniversary .is-home-layout .hero-title,
     html.easter-egg-minecraft-anniversary .is-home-layout .hero-subtitle,
-    html.easter-egg-minecraft-anniversary .is-home-layout .canvas-glass-button {
+    html.easter-egg-minecraft-anniversary .is-home-layout .home-fixed-button {
       image-rendering: pixelated;
       font-family: "ElementSkin Minecraft Pixel", "Courier New", Consolas, monospace;
       text-shadow:
@@ -251,7 +253,8 @@ export function start(): EasterEggCleanup {
         right: 16px;
       }
     }
-  `)
+  `,
+  )
 
   const home = startHomeEffects()
   return combineCleanups(home, () => style.remove())

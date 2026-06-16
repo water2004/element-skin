@@ -1,19 +1,20 @@
 <script setup lang="ts">
-import { provide, ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { getPublicSettings, getPublicHomepageMedia } from '@/api/public'
 import { getMe } from '@/api/me'
-import { createHeroScene, heroSceneKey } from '@/composables/useHeroScene'
+import { createHeroScene } from '@/composables/useHeroScene'
 
 const router = useRouter()
 const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
-const siteSubtitle = ref(localStorage.getItem('site_subtitle_cache') || '简洁、高效、现代的 Minecraft 皮肤 management 站')
+const siteSubtitle = ref(
+  localStorage.getItem('site_subtitle_cache') || '简洁、高效、现代的 Minecraft 皮肤 management 站',
+)
 const isLogged = ref(false)
 const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 
 // Single source-of-truth renderer for the fixed hero background.
 const scene = createHeroScene()
-provide(heroSceneKey, scene)
 
 onMounted(async () => {
   scene.setTarget(bgCanvasRef.value)
@@ -53,10 +54,15 @@ onBeforeUnmount(() => {
   scene.destroy()
 })
 
-function goDashboard() { router.push('/dashboard') }
-function goLogin() { router.push('/login') }
-function goRegister() { router.push('/register') }
-
+function goDashboard() {
+  router.push('/dashboard')
+}
+function goLogin() {
+  router.push('/login')
+}
+function goRegister() {
+  router.push('/register')
+}
 </script>
 
 <template>
@@ -69,13 +75,23 @@ function goRegister() { router.push('/register') }
       class="home-fixed-button home-fixed-primary home-fixed-single probe-fade-in"
       @click="goDashboard"
     >
-      进入个人面板
+      <span class="home-fixed-label">进入个人面板</span>
     </button>
-    <button v-else type="button" class="home-fixed-button home-fixed-primary probe-fade-in" @click="goLogin">
-      登录账号
+    <button
+      v-else
+      type="button"
+      class="home-fixed-button home-fixed-primary probe-fade-in"
+      @click="goLogin"
+    >
+      <span class="home-fixed-label">登录账号</span>
     </button>
-    <button v-if="!isLogged" type="button" class="home-fixed-button home-fixed-secondary probe-fade-in" @click="goRegister">
-      即刻注册
+    <button
+      v-if="!isLogged"
+      type="button"
+      class="home-fixed-button home-fixed-secondary probe-fade-in"
+      @click="goRegister"
+    >
+      <span class="home-fixed-label">即刻注册</span>
     </button>
     <!-- Main Content -->
     <div class="hero-section">
@@ -101,8 +117,11 @@ function goRegister() { router.push('/register') }
 
 /* FIXED Background logic — single canvas, drawn by the hero scene */
 .hero-bg-fixed {
-  position: fixed; top: 0; left: 0;
-  width: 100vw; height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
   z-index: 0;
   display: block;
 }
@@ -111,6 +130,8 @@ function goRegister() { router.push('/register') }
   position: fixed;
   top: calc(50vh + 44px);
   z-index: 10;
+  isolation: isolate;
+  overflow: hidden;
   width: 148px;
   height: 52px;
   display: inline-flex;
@@ -125,11 +146,18 @@ function goRegister() { router.push('/register') }
   backdrop-filter: blur(18px) saturate(180%);
   -webkit-backdrop-filter: blur(18px) saturate(180%);
   box-shadow: inset 0 0 0 1px var(--home-action-ring, rgba(255, 255, 255, 0.38));
-  transition: top 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    top 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   font: inherit;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.home-fixed-label {
+  position: relative;
+  z-index: 1;
 }
 
 .home-fixed-button:hover {
@@ -195,22 +223,47 @@ function goRegister() { router.push('/register') }
   transform: translateX(-50%);
   text-align: center;
 }
-.hero-title { font-size: 56px; font-weight: 800; margin: 0 0 16px 0; letter-spacing: -1.5px; text-shadow: 0 2px 10px rgba(0,0,0,0.3); }
-.hero-subtitle { font-size: 20px; margin: 0 0 32px 0; opacity: 0.95; font-weight: 400; }
+.hero-title {
+  font-size: 56px;
+  font-weight: 800;
+  margin: 0 0 16px 0;
+  letter-spacing: -1.5px;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.hero-subtitle {
+  font-size: 20px;
+  margin: 0 0 32px 0;
+  opacity: 0.95;
+  font-weight: 400;
+}
 
-.hero-actions { display: none; }
+.hero-actions {
+  display: none;
+}
 
 @media (max-width: 768px) {
-  .hero-title { font-size: 36px; }
+  .hero-title {
+    font-size: 36px;
+  }
   .home-fixed-button {
     left: 32px;
     right: 32px;
     width: auto;
   }
-  .home-fixed-primary { top: calc(50vh + 36px); }
-  .home-fixed-single { left: 32px; }
-  .home-fixed-secondary { top: calc(50vh + 100px); }
-  .home-fixed-primary:hover { top: calc(50vh + 32px); }
-  .home-fixed-secondary:hover { top: calc(50vh + 96px); }
+  .home-fixed-primary {
+    top: calc(50vh + 36px);
+  }
+  .home-fixed-single {
+    left: 32px;
+  }
+  .home-fixed-secondary {
+    top: calc(50vh + 100px);
+  }
+  .home-fixed-primary:hover {
+    top: calc(50vh + 32px);
+  }
+  .home-fixed-secondary:hover {
+    top: calc(50vh + 96px);
+  }
 }
 </style>

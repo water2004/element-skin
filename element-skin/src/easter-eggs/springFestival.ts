@@ -20,7 +20,9 @@ interface Firework {
 const fireworkColors: [string, ...string[]] = ['#fff1a8', '#ffd166', '#ffb347', '#ff8f70']
 
 export function start(): EasterEggCleanup {
-  const style = injectEasterEggStyle('spring-festival', `
+  const style = injectEasterEggStyle(
+    'spring-festival',
+    `
     html.easter-egg-spring-festival {
       --el-color-primary: #e86b3c;
       --el-color-primary-light-3: #f08a5c;
@@ -98,7 +100,7 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-spring-festival .el-button--primary,
     html.easter-egg-spring-festival .btn-gradient-primary,
-    html.easter-egg-spring-festival .canvas-glass-button.is-primary,
+    html.easter-egg-spring-festival .is-home-layout .home-fixed-button.home-fixed-primary,
     html.easter-egg-spring-festival .is-home-layout .header-actions .el-button--primary {
       background-image:
         linear-gradient(135deg, rgba(255, 214, 102, 0.2), transparent 42%),
@@ -112,7 +114,7 @@ export function start(): EasterEggCleanup {
 
     html.easter-egg-spring-festival .btn-gradient-primary:hover:not(:disabled),
     html.easter-egg-spring-festival .el-button--primary:hover,
-    html.easter-egg-spring-festival .canvas-glass-button.is-primary:hover {
+    html.easter-egg-spring-festival .is-home-layout .home-fixed-button.home-fixed-primary:hover {
       box-shadow:
         0 8px 24px rgba(232, 107, 60, 0.2),
         0 0 0 1px rgba(255, 214, 102, 0.26) !important;
@@ -145,19 +147,11 @@ export function start(): EasterEggCleanup {
       color: inherit !important;
     }
 
-    html.easter-egg-spring-festival .canvas-glass-button.is-primary .glass-tint {
-      background: rgba(232, 107, 60, 0.24);
-    }
-
-    html.easter-egg-spring-festival .canvas-glass-button.is-secondary,
+    html.easter-egg-spring-festival .is-home-layout .home-fixed-button.home-fixed-secondary,
     html.easter-egg-spring-festival .hero-register-btn {
       border-color: rgba(255, 214, 102, 0.34) !important;
       background: rgba(232, 107, 60, 0.14) !important;
       color: #fff !important;
-    }
-
-    html.easter-egg-spring-festival .canvas-glass-button.is-secondary .glass-tint {
-      background: rgba(232, 107, 60, 0.12);
     }
 
     html.easter-egg-spring-festival .capsule-radio .el-radio-button.is-active .el-radio-button__inner,
@@ -184,7 +178,8 @@ export function start(): EasterEggCleanup {
         repeating-linear-gradient(135deg, transparent 0 18px, rgba(232, 107, 60, 0.045) 19px 20px, transparent 21px 38px),
         var(--festival-preview-background, none);
     }
-  `)
+  `,
+  )
 
   const bursts = startClickBurst({
     className: 'spring-festival-burst-layer',
@@ -255,7 +250,8 @@ function startFireworks(): EasterEggCleanup {
         vy: Math.sin(angle) * speed,
         life: 0,
         maxLife: randomBetween(72, 102),
-        color: fireworkColors[Math.floor(Math.random() * fireworkColors.length)] || fireworkColors[0],
+        color:
+          fireworkColors[Math.floor(Math.random() * fireworkColors.length)] || fireworkColors[0],
       })
     }
     fireworks.push({ particles })
