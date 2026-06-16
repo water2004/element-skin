@@ -1,83 +1,80 @@
 <template>
   <div class="dashboard-home animate-fade-in">
-    <!-- Stats Section -->
-    <div class="stats-section">
-      <el-row :gutter="20">
-        <el-col :xs="24" :sm="12">
-          <el-card shadow="hover" class="surface-card">
-            <div class="stats-card-content">
-              <div class="stats-card-icon bg-gradient-blue">
-                <el-icon><Box /></el-icon>
-              </div>
-              <div class="stats-card-info">
-                <div class="stats-card-label">材质数量</div>
-                <div class="stats-card-value">{{ textureCount }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-        <el-col :xs="24" :sm="12">
-          <el-card shadow="hover" class="surface-card">
-            <div class="stats-card-content">
-              <div class="stats-card-icon bg-gradient-purple">
-                <el-icon><User /></el-icon>
-              </div>
-              <div class="stats-card-info">
-                <div class="stats-card-label">角色数量</div>
-                <div class="stats-card-value">{{ profileCount }}</div>
-              </div>
-            </div>
-          </el-card>
-        </el-col>
-      </el-row>
+    <div class="page-header">
+      <div class="page-header-content">
+        <h1>我的主页</h1>
+        <p>这里汇总了您的资源数量、启动器接入入口与备用服务的健康状态</p>
+      </div>
     </div>
 
-    <!-- Quick Config Section -->
-    <div class="config-section">
-      <el-card shadow="hover" class="surface-card config-card">
-        <template #header>
-          <div class="card-header">
-            <span>快速配置启动器</span>
+    <section class="dashboard-section stats-section">
+      <div class="stats-grid">
+        <el-card shadow="hover" class="surface-card">
+          <div class="stats-card-content">
+            <div class="stats-card-icon bg-gradient-blue">
+              <el-icon><Box /></el-icon>
+            </div>
+            <div class="stats-card-info">
+              <div class="stats-card-label">材质数量</div>
+              <div class="stats-card-value">{{ textureCount }}</div>
+            </div>
           </div>
-        </template>
+        </el-card>
+        <el-card shadow="hover" class="surface-card">
+          <div class="stats-card-content">
+            <div class="stats-card-icon bg-gradient-purple">
+              <el-icon><User /></el-icon>
+            </div>
+            <div class="stats-card-info">
+              <div class="stats-card-label">角色数量</div>
+              <div class="stats-card-value">{{ profileCount }}</div>
+            </div>
+          </div>
+        </el-card>
+      </div>
+    </section>
+
+    <section class="dashboard-section">
+      <div class="section-header">
+        <h2>快速接入启动器</h2>
+      </div>
+      <el-card shadow="hover" class="surface-card">
         <div class="config-content">
           <p class="config-desc">
-            将下方的 API 地址复制到您的启动器，或直接拖动“添加到启动器”按钮到支持 authlib-injector 的启动器窗口中。
+            将下方的 API 地址复制到您的启动器，或直接拖动下方按钮到支持 authlib-injector 的启动器窗口中。
           </p>
-          <div class="api-url-box">
-            <el-input v-model="apiUrl" readonly>
+          <div class="config-actions">
+            <el-input v-model="apiUrl" readonly class="api-url-input">
               <template #append>
                 <el-button @click="copyApiUrl">
-                  <el-icon><CopyDocument /></el-icon> 复制
+                  <el-icon><CopyDocument /></el-icon>
+                  <span>复制</span>
                 </el-button>
               </template>
             </el-input>
-          </div>
-          <div class="drag-action">
-            <a 
-              class="el-button el-button--primary is-round drag-btn" 
+            <a
+              class="el-button el-button--primary drag-btn"
               :href="`authlib-injector:yggdrasil-server:${encodeURIComponent(apiUrl)}`"
               title="拖动我到启动器"
             >
               <el-icon><Pointer /></el-icon>
-              <span>拖拽添加到启动器</span>
+              <span>拖到启动器</span>
             </a>
           </div>
         </div>
       </el-card>
-    </div>
+    </section>
 
-    <!-- Fallback Service Status Section -->
-    <div v-if="fallbackEntries.length" class="mojang-status-section">
+    <section v-if="fallbackEntries.length" class="dashboard-section">
       <div class="section-header">
-        <h2>Fallback 服务状态</h2>
-        <el-button @click="loadFallbackStatus" :loading="isChecking" size="small">
+        <h2>备用服务状态</h2>
+        <el-button @click="loadFallbackStatus" :loading="isChecking" size="small" text>
           <el-icon><Refresh /></el-icon>
-          刷新
+          <span>刷新</span>
         </el-button>
       </div>
 
-      <div class="status-container">
+      <div class="fallback-list">
         <el-card
           v-for="entry in fallbackEntries"
           :key="entry.id"
@@ -112,7 +109,7 @@
 
           <div class="fallback-history">
             <div class="fallback-history-header">
-              <span>近 24 小时探测</span>
+              <span>近 24 小时</span>
               <span class="fallback-history-meta">{{ historyMeta(entry) }}</span>
             </div>
             <div class="fallback-history-grid">
@@ -124,20 +121,23 @@
                 <span class="fallback-history-row-label">{{ api.label }}</span>
                 <div class="fallback-history-track">
                   <span
-                    v-for="(tick, idx) in entry.history"
+                    v-for="(bucket, idx) in hourlyBuckets(entry, api.key)"
                     :key="idx"
-                    class="fallback-history-dot"
-                    :class="dotClass(tick[api.key])"
-                    :title="tickTitle(tick, api.key)"
+                    class="fallback-history-cell"
+                    :class="bucketClass(bucket)"
+                    :title="bucketTitle(bucket)"
                   />
-                  <span v-if="!entry.history.length" class="fallback-history-empty">暂无历史数据</span>
                 </div>
               </div>
+            </div>
+            <div class="fallback-history-axis">
+              <span>24h 前</span>
+              <span>现在</span>
             </div>
           </div>
         </el-card>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
@@ -150,7 +150,7 @@ import {
   Check, Loading, Warning, Refresh, CircleClose
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import type { FallbackStatusEntry, FallbackStatusTick } from '@/api/types'
+import type { FallbackStatusEntry } from '@/api/types'
 
 // --- Stats & Config ---
 const textureCount = ref(0)
@@ -244,13 +244,53 @@ function overallText(entry: FallbackStatusEntry) {
   }
 }
 
-function dotClass(state: string) {
-  return state === 'up' ? 'dot-up' : state === 'down' ? 'dot-down' : 'dot-unknown'
+interface HourBucket {
+  hourLabel: string
+  total: number
+  up: number
+  down: number
 }
 
-function tickTitle(tick: FallbackStatusTick, key: ApiKey) {
-  const status = tick[key] === 'up' ? '在线' : '离线'
-  return `${new Date(tick.checked_at).toLocaleString()} · ${status}`
+function hourlyBuckets(entry: FallbackStatusEntry, key: ApiKey): HourBucket[] {
+  const now = Date.now()
+  const buckets: HourBucket[] = []
+  for (let i = 23; i >= 0; i--) {
+    const start = new Date(now - i * 3600_000)
+    start.setMinutes(0, 0, 0)
+    buckets.push({
+      hourLabel: `${start.getHours().toString().padStart(2, '0')}:00`,
+      total: 0,
+      up: 0,
+      down: 0,
+    })
+  }
+  const baseHour = new Date(now)
+  baseHour.setMinutes(0, 0, 0)
+  const baseMs = baseHour.getTime() - 23 * 3600_000
+  for (const tick of entry.history) {
+    const t = new Date(tick.checked_at).getTime()
+    const idx = Math.floor((t - baseMs) / 3600_000)
+    if (idx < 0 || idx >= 24) continue
+    const bucket = buckets[idx]
+    if (!bucket) continue
+    const value = tick[key]
+    bucket.total++
+    if (value === 'up') bucket.up++
+    else if (value === 'down') bucket.down++
+  }
+  return buckets
+}
+
+function bucketClass(bucket: HourBucket) {
+  if (bucket.total === 0) return 'cell-empty'
+  if (bucket.down === 0) return 'cell-up'
+  if (bucket.up === 0) return 'cell-down'
+  return 'cell-mixed'
+}
+
+function bucketTitle(bucket: HourBucket) {
+  if (bucket.total === 0) return `${bucket.hourLabel} · 暂无探测`
+  return `${bucket.hourLabel} · ${bucket.total} 次探测 · 在线 ${bucket.up} / 离线 ${bucket.down}`
 }
 
 function historyMeta(entry: FallbackStatusEntry) {
@@ -299,73 +339,87 @@ onMounted(async () => {
 .dashboard-home {
   display: flex;
   flex-direction: column;
-  gap: 24px;
 }
 
-/* Config Section Specifics */
-.card-header {
-  font-weight: 600;
+.dashboard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.dashboard-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.section-header h2 {
+  margin: 0;
   font-size: 18px;
+  font-weight: 600;
   color: var(--color-heading);
 }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: 1fr; }
+}
+
+/* Quick Config */
 .config-content {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  align-items: center;
-  padding: 10px 0;
+  padding: 4px 0;
 }
 .config-desc {
   font-size: 14px;
-  color: var(--color-text);
-  text-align: center;
+  color: var(--color-text-light);
   margin: 0;
+  line-height: 1.6;
 }
-.api-url-box {
-  width: 100%;
-  max-width: 500px;
+.config-actions {
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  flex-wrap: wrap;
 }
-.drag-action {
-  margin-top: 8px;
+.api-url-input {
+  flex: 1 1 320px;
+  min-width: 0;
 }
 .drag-btn {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 20px;
+  gap: 6px;
+  height: auto;
+  padding: 0 16px;
   font-weight: 500;
+  white-space: nowrap;
   transition: transform 0.2s;
 }
 .drag-btn:hover {
-  transform: translateY(-2px);
+  transform: translateY(-1px);
   color: white;
 }
-.drag-btn:active {
-  transform: translateY(0);
-}
 
-/* Mojang Status Section Specifics */
-.mojang-status-section {
-    margin-top: 12px;
-}
-.section-header {
+/* Fallback list */
+.fallback-list {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
+  flex-direction: column;
+  gap: 16px;
 }
-.section-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-  color: var(--color-heading);
-}
-
-/* Fallback Status Cards */
-.fallback-status-card {
-  margin-bottom: 16px;
+.fallback-status-card :deep(.el-card__body) {
+  padding: 20px;
 }
 .fallback-card-header {
   display: flex;
@@ -378,6 +432,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 .fallback-priority {
   background: var(--el-color-primary);
@@ -386,11 +441,15 @@ onMounted(async () => {
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 .fallback-note {
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--color-heading);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .fallback-overall {
   display: inline-flex;
@@ -400,6 +459,7 @@ onMounted(async () => {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
+  flex-shrink: 0;
 }
 .overall-online { background: rgba(103, 194, 58, 0.15); color: var(--el-color-success); }
 .overall-partial { background: rgba(230, 162, 60, 0.15); color: var(--el-color-warning); }
@@ -409,26 +469,30 @@ onMounted(async () => {
 .fallback-current {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 18px;
 }
 .fallback-current-cell {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid var(--color-border);
   background: var(--color-background-soft);
 }
 .fallback-current-label { font-size: 12px; color: var(--color-text-light); font-weight: 600; }
-.fallback-current-status { font-size: 15px; font-weight: 600; }
+.fallback-current-status { font-size: 14px; font-weight: 600; }
 .status-up { border-color: var(--el-color-success-light-5); }
 .status-up .fallback-current-status { color: var(--el-color-success); }
 .status-down { border-color: var(--el-color-danger-light-5); }
 .status-down .fallback-current-status { color: var(--el-color-danger); }
 .status-unknown .fallback-current-status { color: var(--el-color-info); }
 
+.fallback-history {
+  border-top: 1px solid var(--color-border);
+  padding-top: 14px;
+}
 .fallback-history-header {
   display: flex;
   justify-content: space-between;
@@ -436,18 +500,22 @@ onMounted(async () => {
   font-size: 13px;
   color: var(--color-text-light);
   margin-bottom: 10px;
+  font-weight: 600;
 }
-.fallback-history-meta { font-size: 12px; }
+.fallback-history-meta {
+  font-size: 12px;
+  font-weight: 500;
+}
 .fallback-history-grid {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .fallback-history-row {
   display: grid;
-  grid-template-columns: 80px 1fr;
+  grid-template-columns: 70px 1fr;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 .fallback-history-row-label {
   font-size: 12px;
@@ -455,25 +523,33 @@ onMounted(async () => {
   font-weight: 600;
 }
 .fallback-history-track {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-  align-items: center;
-  min-height: 14px;
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 2px;
 }
-.fallback-history-dot {
-  width: 10px;
-  height: 10px;
+.fallback-history-cell {
+  height: 14px;
   border-radius: 3px;
-  display: inline-block;
+  background: var(--color-background-soft);
+  border: 1px solid var(--color-border);
 }
-.dot-up { background: var(--el-color-success); }
-.dot-down { background: var(--el-color-danger); }
-.dot-unknown { background: var(--el-color-info-light-5); }
-.fallback-history-empty { font-size: 12px; color: var(--color-text-light); }
+.cell-up { background: var(--el-color-success); border-color: var(--el-color-success); }
+.cell-down { background: var(--el-color-danger); border-color: var(--el-color-danger); }
+.cell-mixed { background: var(--el-color-warning); border-color: var(--el-color-warning); }
+.cell-empty { background: transparent; }
+
+.fallback-history-axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-light);
+  margin-top: 6px;
+  padding-left: 80px;
+}
 
 @media (max-width: 768px) {
   .fallback-current { grid-template-columns: 1fr; }
-  .fallback-history-row { grid-template-columns: 70px 1fr; }
+  .fallback-history-row { grid-template-columns: 60px 1fr; }
+  .fallback-history-axis { padding-left: 70px; }
 }
 </style>
