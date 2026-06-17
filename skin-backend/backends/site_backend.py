@@ -1,4 +1,5 @@
 from typing import Dict, List, Any
+import asyncio
 import re
 import time
 import os
@@ -7,7 +8,7 @@ import string
 import asyncpg
 from fastapi import HTTPException
 
-from utils.password_utils import hash_password, verify_password, needs_rehash
+from utils.password_utils import hash_password, hash_password_async, verify_password_async, needs_rehash
 from utils.password_utils import validate_strong_password
 from utils.jwt_utils import create_access_token, generate_refresh_token, hash_refresh_token
 from utils.email_utils import EmailSender
@@ -16,7 +17,7 @@ from utils.profile_naming import is_valid_profile_name, generate_unique_profile_
 from utils.pagination import decode_cursor, encode_next
 from utils.typing import User, PlayerProfile, normalize_texture_model, serialize_profile_summary
 from database_module import Database
-from database_module.modules.user import InviteExhaustedError
+from database_module.modules.user import InviteExhaustedError, DisplayNameConflictError
 from config_loader import Config
 from services import TextureStorage, assert_texture_size
 
@@ -59,10 +60,21 @@ class SiteBackend:
     ) -> tuple[str, str]:
         """处理材质（落盘）并记录到用户库，返回 (hash, type)。校验失败抛 ValueError。"""
         await assert_texture_size(self.db, file_bytes)
-        texture_hash = await self.texture_storage.process_and_save_async(file_bytes, texture_type)
-        await self.db.texture.add_to_library(
-            user_id, texture_hash, texture_type, note, is_public, model
+        texture_hash, created = await self.texture_storage.process_and_save_async_tracked(
+            file_bytes, texture_type
         )
+        try:
+            await self.db.texture.add_to_library(
+                user_id, texture_hash, texture_type, note, is_public, model
+            )
+        except Exception:
+            if created:
+                try:
+                    if not await self.db.texture.exists(texture_hash, texture_type):
+                        await asyncio.to_thread(self.texture_storage.delete_file, texture_hash)
+                except Exception:
+                    pass
+            raise
         return texture_hash, texture_type
 
     async def upload_and_apply_texture(
@@ -135,12 +147,29 @@ class SiteBackend:
     async def update_my_texture(
         self, user_id: str, texture_hash: str, texture_type: str, data: Dict[str, Any]
     ) -> dict:
-        if "note" in data:
-            await self.db.texture.update_note(user_id, texture_hash, texture_type, data["note"])
+        note = data.get("note") if "note" in data else None
+        model = None
         if "model" in data:
-            await self.db.texture.update_model(user_id, texture_hash, texture_type, data["model"])
+            m = str(data["model"])
+            if m not in ("default", "slim"):
+                raise HTTPException(status_code=400, detail="invalid model")
+            model = m
+        is_public = None
         if "is_public" in data:
-            await self.db.texture.update_is_public(user_id, texture_hash, texture_type, data["is_public"])
+            v = data["is_public"]
+            if isinstance(v, bool):
+                is_public = v
+            elif isinstance(v, (int, float)):
+                is_public = bool(v)
+            else:
+                raise HTTPException(status_code=400, detail="invalid is_public")
+
+        ok = await self.db.texture.patch_for_user(
+            user_id, texture_hash, texture_type,
+            note=note, model=model, is_public=is_public,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="Texture not found")
 
         info = await self.db.texture.get_texture_info(user_id, texture_hash, texture_type)
         return {"ok": True, **info}
@@ -251,7 +280,7 @@ class SiteBackend:
         if not user_row:
             # 对不存在的用户也执行一次等价的 bcrypt 校验，使响应耗时与
             # "用户存在但密码错误"相近，避免通过计时差异枚举注册邮箱。
-            verify_password(password, _DUMMY_PASSWORD_HASH)
+            await verify_password_async(password, _DUMMY_PASSWORD_HASH)
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         user_id, email, password_hash, is_admin = (
@@ -261,11 +290,11 @@ class SiteBackend:
             user_row.is_admin,
         )
 
-        if not verify_password(password, password_hash):
+        if not await verify_password_async(password, password_hash):
             raise HTTPException(status_code=401, detail="Invalid credentials")
 
         if needs_rehash(password_hash):
-            new_hash = hash_password(password)
+            new_hash = await hash_password_async(password)
             await self.db.user.update_password(user_id, new_hash)
 
         return await self._issue_session(user_id, bool(is_admin), extra={"user_id": user_id})
@@ -318,16 +347,16 @@ class SiteBackend:
 
         # Email Verification Check
         email_verify_enabled = await self.db.setting.get("email_verify_enabled", "false") == "true"
+        verified_email = False
         if email_verify_enabled:
             if not verification_code:
                 raise HTTPException(status_code=400, detail="Verification code required")
-            
+
             is_valid = await self.verify_code(email, verification_code, "register")
             if not is_valid:
                 raise HTTPException(status_code=400, detail="Invalid or expired verification code")
-            
-            # Delete code after usage
-            await self.db.verification.delete_code(email, "register")
+
+            verified_email = True
 
         require_invite = await self.db.setting.get("require_invite", "false")
         if require_invite == "true":
@@ -361,7 +390,7 @@ class SiteBackend:
 
         user_count = await self.db.user.count()
         is_first_user = user_count == 0
-        password_hash = hash_password(password)
+        password_hash = await hash_password_async(password)
         user_id = generate_random_uuid()
 
         new_user = User(user_id, email, password_hash, is_first_user)
@@ -376,8 +405,16 @@ class SiteBackend:
             )
         except asyncpg.UniqueViolationError:
             raise HTTPException(status_code=400, detail="Email already registered")
+        except DisplayNameConflictError:
+            raise HTTPException(status_code=400, detail="Username already exists")
         except InviteExhaustedError:
             raise HTTPException(status_code=400, detail="invite code has no remaining uses")
+
+        if verified_email:
+            try:
+                await self.db.verification.delete_code(email, "register")
+            except Exception:
+                pass
 
         return user_id
 
@@ -402,30 +439,44 @@ class SiteBackend:
         }
 
     async def rotate_refresh_token(self, raw_refresh: str) -> Dict[str, Any]:
-        """原子轮换 refresh：DELETE...RETURNING 取出旧行（单赢者），校验后签发新对。
+        """原子轮换 refresh：删除旧 token 与写入新 token 在同一事务内完成。
 
-        Postgres 对同一行的并发 DELETE 串行化，只有一个事务能 RETURNING 出该行——
-        「拿到行」即「唯一赢家」。并发的另一方/已消费 token 的重放方均拿到 None，
-        统一 401，杜绝一条 refresh 裂变成两条会话链。
-        校验失败（缺失/未知/过期/用户已删）一律抛 401。
+        若新 token 写入失败（数据库异常）则旧 token 不会被删除，调用方仍可继续使用
+        原 refresh，避免单步失败导致用户被强制登出。
+        校验失败（缺失/未知/过期/用户已删/被并发消费）一律抛 401。
         """
-        token_hash = hash_refresh_token(raw_refresh)
+        old_hash = hash_refresh_token(raw_refresh)
 
-        # 原子删并取：只有真正删到行的请求继续，并发/重放的另一方拿到 None。
-        row = await self.db.user.consume_refresh_token(token_hash)
+        row = await self.db.user.get_refresh_token(old_hash)
         if not row:
             raise HTTPException(status_code=401, detail="invalid refresh token")
 
         user_id = row["user_id"]
         if int(time.time() * 1000) >= row["expires_at"]:
+            await self.db.user.delete_refresh_token(old_hash)
             raise HTTPException(status_code=401, detail="refresh token expired")
 
         user_row = await self.db.user.get_by_id(user_id)
         if not user_row:
             raise HTTPException(status_code=401, detail="invalid refresh token")
 
-        # 旧 refresh 已被原子取出（删除），直接签发新的一对。
-        return await self._issue_session(user_id, bool(user_row.is_admin))
+        expire_days = int(await self.db.setting.get("jwt_expire_days", "7"))
+        now_ms = int(time.time() * 1000)
+        expires_at = now_ms + expire_days * 24 * 3600 * 1000
+        access_token = create_access_token(user_id, bool(user_row.is_admin))
+        new_raw, new_hash = generate_refresh_token()
+
+        rotated = await self.db.user.rotate_refresh_token(
+            old_hash, new_hash, user_id, expires_at, now_ms
+        )
+        if not rotated:
+            raise HTTPException(status_code=401, detail="invalid refresh token")
+
+        return {
+            "access_token": access_token,
+            "refresh_token": new_raw,
+            "is_admin": bool(user_row.is_admin),
+        }
 
     async def revoke_refresh_token(self, raw_refresh: str):
         """撤销单个 refresh token（登出用）。找不到也无所谓。"""
@@ -448,16 +499,13 @@ class SiteBackend:
             new_name = data["display_name"].strip()
             if not new_name:
                 raise HTTPException(status_code=400, detail="Username cannot be empty")
-            
-            # Check for uniqueness if changed
-            user_row = await self.db.user.get_by_id(user_id)
-            if user_row and user_row.display_name != new_name:
-                if await self.db.user.is_display_name_taken(
-                    new_name, exclude_user_id=user_id
-                ):
-                    raise HTTPException(status_code=400, detail="Username already exists")
-            
-            await self.db.user.update_display_name(user_id, new_name)
+
+            try:
+                ok = await self.db.user.update_display_name_safely(user_id, new_name)
+            except DisplayNameConflictError:
+                raise HTTPException(status_code=400, detail="Username already exists")
+            if not ok:
+                raise HTTPException(status_code=404, detail="user not found")
 
         if "preferred_language" in data and data["preferred_language"]:
             await self.db.user.update_preferred_language(
@@ -505,11 +553,11 @@ class SiteBackend:
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
-        new_hash = hash_password(new_password)
-        await self.db.user.update_password(user.id, new_hash)
-
-        # 改密使该用户其它所有会话失效（强制重新登录）
+        new_hash = await hash_password_async(new_password)
+        # 先吊销外部凭证，任何失败都不应改变密码
+        await self.db.user.delete_tokens_by_user(user.id)
         await self.db.user.delete_refresh_tokens_by_user(user.id)
+        await self.db.user.update_password(user.id, new_hash)
 
         await self.db.verification.delete_code(email, "reset")
         return True
@@ -527,14 +575,14 @@ class SiteBackend:
         if not user_row:
             raise HTTPException(status_code=404, detail="用户不存在")
 
-        if not verify_password(old_password, user_row.password):
+        if not await verify_password_async(old_password, user_row.password):
             raise HTTPException(status_code=403, detail="旧密码错误")
 
-        new_hash = hash_password(new_password)
-        await self.db.user.update_password(user_id, new_hash)
-
-        # 改密使该用户其它所有会话失效（强制重新登录）
+        new_hash = await hash_password_async(new_password)
+        # 先撤销外部凭证；若任一步失败应保留旧密码
+        await self.db.user.delete_tokens_by_user(user_id)
         await self.db.user.delete_refresh_tokens_by_user(user_id)
+        await self.db.user.update_password(user_id, new_hash)
         return True
 
     # ========== Profile ==========
@@ -622,9 +670,9 @@ class SiteBackend:
             raise ValueError("Texture info not found")
 
         if texture_type.lower() == "skin":
-            await self.db.user.update_profile_skin(profile_id, texture_hash)
-            # Also update profile's model to match skin's model
-            await self.db.user.update_profile_texture_model(profile_id, tex_info.get("model", "default"))
+            await self.db.user.update_profile_skin_and_model(
+                profile_id, texture_hash, tex_info.get("model", "default")
+            )
         elif texture_type.lower() == "cape":
             await self.db.user.update_profile_cape(profile_id, texture_hash)
         else:

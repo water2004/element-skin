@@ -3,6 +3,21 @@ import time
 from typing import Optional
 
 
+async def _lock_library_texture(conn, texture_hash: str, texture_type: str) -> bool:
+    """事务内对 skin_library(skin_hash, texture_type) 行取 FOR UPDATE 锁。
+
+    用于把所有触及该条库材质的并发突变（add/delete/patch）串行化，避免
+    skin_library 与 user_textures 之间出现读改写竞争产生的脏写或漏写。
+
+    返回该库行是否存在；不存在不报错（add_to_library 在初次创建时也会调用本函数）。
+    """
+    val = await conn.fetchval(
+        "SELECT 1 FROM skin_library WHERE skin_hash=$1 AND texture_type=$2 FOR UPDATE",
+        texture_hash, texture_type,
+    )
+    return val is not None
+
+
 class TextureModule:
     def __init__(self, db: BaseDB):
         self.db = db
@@ -10,15 +25,18 @@ class TextureModule:
     async def add_to_library(self, user_id: str, texture_hash: str, texture_type: str, note: str = "", is_public: bool = False, model: str = "default") -> bool:
         async with self.db.get_conn() as conn:
             async with conn.transaction():
+                # 锁定库行（如果存在）；不存在也无所谓，下面的 INSERT 会创建。
+                # 关键作用：与 delete/patch 等突变在同一行上串行化。
+                await _lock_library_texture(conn, texture_hash, texture_type)
                 created_at = int(time.time() * 1000)
                 is_public_val = 1 if is_public else 0
-                
+
                 # 记录用户材质
                 await conn.execute(
                     "INSERT INTO user_textures (user_id, hash, texture_type, note, model, is_public, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
                     user_id, texture_hash, texture_type, note, model, is_public_val, created_at,
                 )
-                
+
                 # 记录到全局皮肤库
                 await conn.execute(
                     "INSERT INTO skin_library (skin_hash, texture_type, is_public, uploader, model, name, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
@@ -29,19 +47,29 @@ class TextureModule:
     async def delete_from_library(self, user_id: str, texture_hash: str, texture_type: str) -> bool:
         async with self.db.get_conn() as conn:
             async with conn.transaction():
-                val = await conn.fetchval(
-                    "SELECT 1 FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
-                    user_id, texture_hash, texture_type,
-                )
-                if val is None:
-                    return False
+                if not await _lock_library_texture(conn, texture_hash, texture_type):
+                    # 库行不存在：要么从未上传过，要么已被并发清理；
+                    # 既然没有库行，user_textures 里残留也只能由 user_id 自查
+                    val = await conn.fetchval(
+                        "SELECT 1 FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
+                        user_id, texture_hash, texture_type,
+                    )
+                    if val is None:
+                        return False
+                else:
+                    val = await conn.fetchval(
+                        "SELECT 1 FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
+                        user_id, texture_hash, texture_type,
+                    )
+                    if val is None:
+                        return False
 
                 # Delete from user wardrobe
                 await conn.execute(
                     "DELETE FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
                     user_id, texture_hash, texture_type,
                 )
-                
+
                 # If this user was the uploader, also remove from global skin library
                 await conn.execute(
                     "DELETE FROM skin_library WHERE uploader=$1 AND skin_hash=$2",
@@ -108,6 +136,24 @@ class TextureModule:
         )
         return val is not None
 
+    async def exists(self, texture_hash: str, texture_type: str) -> bool:
+        """判断给定 hash+type 是否仍被任何 user_textures 或 skin_library 行引用。
+
+        用于上传失败回滚时判断材质文件是否仍有他处引用：仍被引用则保留文件，
+        无引用则可安全删除新写入的文件。
+        """
+        val = await self.db.fetchval(
+            """
+            SELECT 1 WHERE EXISTS(
+                SELECT 1 FROM user_textures WHERE hash=$1 AND texture_type=$2
+            ) OR EXISTS(
+                SELECT 1 FROM skin_library WHERE skin_hash=$1 AND texture_type=$2
+            )
+            """,
+            texture_hash, texture_type,
+        )
+        return val is not None
+
     async def get_texture_info(self, user_id: str, texture_hash: str, texture_type: str) -> Optional[dict]:
         row = await self.db.fetchrow(
             "SELECT hash, texture_type, note, model, created_at, is_public FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
@@ -127,6 +173,7 @@ class TextureModule:
     async def update_note(self, user_id: str, texture_hash: str, texture_type: str, note: str):
         async with self.db.get_conn() as conn:
             async with conn.transaction():
+                await _lock_library_texture(conn, texture_hash, texture_type)
                 await conn.execute(
                     "UPDATE user_textures SET note=$1 WHERE user_id=$2 AND hash=$3 AND texture_type=$4",
                     note, user_id, texture_hash, texture_type,
@@ -140,6 +187,7 @@ class TextureModule:
     async def update_model(self, user_id: str, texture_hash: str, texture_type: str, model: str):
         async with self.db.get_conn() as conn:
             async with conn.transaction():
+                await _lock_library_texture(conn, texture_hash, texture_type)
                 # Update user's wardrobe entry
                 await conn.execute(
                     "UPDATE user_textures SET model=$1 WHERE user_id=$2 AND hash=$3 AND texture_type=$4",
@@ -160,6 +208,7 @@ class TextureModule:
     async def update_is_public(self, user_id: str, texture_hash: str, texture_type: str, is_public: bool):
         async with self.db.get_conn() as conn:
             async with conn.transaction():
+                await _lock_library_texture(conn, texture_hash, texture_type)
                 is_public_val = 1 if is_public else 0
                 # 只有上传者才能修改公开状态 (is_public != 2)
                 await conn.execute(
@@ -171,6 +220,115 @@ class TextureModule:
                     "UPDATE skin_library SET is_public=$1 WHERE skin_hash=$2 AND uploader=$3",
                     is_public_val, texture_hash, user_id,
                 )
+
+    async def patch_for_user(
+        self,
+        user_id: str,
+        texture_hash: str,
+        texture_type: str,
+        note: str | None = None,
+        model: str | None = None,
+        is_public: bool | None = None,
+    ) -> bool:
+        """事务内原子地更新单用户的衣柜行 + skin_library + 关联 profiles。
+
+        以 user_textures 行存在为前提：未匹配返回 False（404）。任何 None 字段表示不更新。
+        所有写在同一事务，避免历史上分别调用 update_note/update_model/update_is_public
+        在中间步骤失败时留下 user_textures、skin_library、profiles 三处状态错配的旧版本。
+        """
+        if note is None and model is None and is_public is None:
+            return True
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                # 取库行写锁；不存在也不阻塞 user_textures 的更新（用户行可独立存在）
+                await _lock_library_texture(conn, texture_hash, texture_type)
+                tag = await conn.execute(
+                    """
+                    UPDATE user_textures SET
+                        note     = CASE WHEN $1 THEN $2 ELSE note END,
+                        model    = CASE WHEN $3 THEN $4 ELSE model END,
+                        is_public= CASE WHEN $5 AND is_public != 2 THEN $6 ELSE is_public END
+                    WHERE user_id=$7 AND hash=$8 AND texture_type=$9
+                    """,
+                    note is not None, note or "",
+                    model is not None, model or "",
+                    is_public is not None, 1 if is_public else 0,
+                    user_id, texture_hash, texture_type,
+                )
+                if int(tag.split()[-1] or 0) == 0:
+                    return False
+                if note is not None:
+                    await conn.execute(
+                        "UPDATE skin_library SET name=$1 WHERE skin_hash=$2 AND uploader=$3 AND texture_type=$4",
+                        note, texture_hash, user_id, texture_type,
+                    )
+                if model is not None:
+                    await conn.execute(
+                        "UPDATE skin_library SET model=$1 WHERE skin_hash=$2 AND uploader=$3 AND texture_type=$4",
+                        model, texture_hash, user_id, texture_type,
+                    )
+                    if texture_type.lower() == "skin":
+                        await conn.execute(
+                            "UPDATE profiles SET texture_model=$1 WHERE skin_hash=$2 AND user_id=$3",
+                            model, texture_hash, user_id,
+                        )
+                if is_public is not None:
+                    await conn.execute(
+                        "UPDATE skin_library SET is_public=$1 WHERE skin_hash=$2 AND uploader=$3 AND texture_type=$4",
+                        1 if is_public else 0, texture_hash, user_id, texture_type,
+                    )
+        return True
+
+    async def admin_patch(
+        self,
+        texture_hash: str,
+        texture_type: str,
+        note: str | None = None,
+        model: str | None = None,
+        is_public: bool | None = None,
+    ) -> bool:
+        """管理员侧：在事务内同时更新 skin_library、user_textures、关联 profiles。
+
+        skin_library 行不存在返回 False（404）。任何 None 字段表示不更新。
+        """
+        if note is None and model is None and is_public is None:
+            return True
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                if not await _lock_library_texture(conn, texture_hash, texture_type):
+                    return False
+                await conn.execute(
+                    """
+                    UPDATE skin_library SET
+                        name      = CASE WHEN $1 THEN $2 ELSE name END,
+                        model     = CASE WHEN $3 THEN $4 ELSE model END,
+                        is_public = CASE WHEN $5 THEN $6 ELSE is_public END
+                    WHERE skin_hash=$7 AND texture_type=$8
+                    """,
+                    note is not None, note or "",
+                    model is not None, model or "",
+                    is_public is not None, 1 if is_public else 0,
+                    texture_hash, texture_type,
+                )
+                await conn.execute(
+                    """
+                    UPDATE user_textures SET
+                        note     = CASE WHEN $1 THEN $2 ELSE note END,
+                        model    = CASE WHEN $3 THEN $4 ELSE model END,
+                        is_public= CASE WHEN $5 AND is_public != 2 THEN $6 ELSE is_public END
+                    WHERE hash=$7 AND texture_type=$8
+                    """,
+                    note is not None, note or "",
+                    model is not None, model or "",
+                    is_public is not None, 1 if is_public else 0,
+                    texture_hash, texture_type,
+                )
+                if model is not None and texture_type.lower() == "skin":
+                    await conn.execute(
+                        "UPDATE profiles SET texture_model=$1 WHERE skin_hash=$2",
+                        model, texture_hash,
+                    )
+        return True
 
     async def get_from_library_cursor(
         self,
@@ -359,9 +517,10 @@ class TextureModule:
         """
         async with self.db.get_conn() as conn:
             async with conn.transaction():
-                # 获取材质信息
+                # 取库行的写锁，避免与并发删除/改 is_public 竞争
                 row = await conn.fetchrow(
-                    "SELECT texture_type, model, uploader, name, is_public FROM skin_library WHERE skin_hash = $1", texture_hash
+                    "SELECT texture_type, model, uploader, name, is_public FROM skin_library WHERE skin_hash = $1 FOR UPDATE",
+                    texture_hash,
                 )
                 if not row:
                     return False
@@ -380,7 +539,7 @@ class TextureModule:
 
                 # 如果用户是上传者，则恢复为公开状态(1)，否则为收藏状态(2)
                 is_public = 1 if uploader == user_id else 2
-                
+
                 await conn.execute(
                     "INSERT INTO user_textures (user_id, hash, texture_type, note, model, is_public, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING",
                     user_id, texture_hash, texture_type, name, model, is_public, created_at,
@@ -398,15 +557,17 @@ class TextureModule:
 
     async def delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False):
         """删除材质记录（事务安全）。
-        
+
         force=True: 删除所有用户引用 + 皮肤库记录
         force=False + user_id: 删除单个用户引用，若剩余为0则物理删除皮肤库记录
         """
         if not force and not user_id:
             raise ValueError("per-user deletion requires user_id")
-        
+
         async with self.db.get_conn() as conn:
             async with conn.transaction():
+                # 锁定库行，避免与上传/收藏/补丁等并发操作产生脏写
+                exists = await _lock_library_texture(conn, texture_hash, texture_type)
                 if force:
                     await conn.execute(
                         "DELETE FROM user_textures WHERE hash=$1 AND texture_type=$2",
@@ -417,6 +578,8 @@ class TextureModule:
                         texture_hash,
                     )
                 else:
+                    if not exists:
+                        return
                     await conn.execute(
                         "DELETE FROM user_textures WHERE user_id=$1 AND hash=$2 AND texture_type=$3",
                         user_id, texture_hash, texture_type,

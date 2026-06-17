@@ -9,6 +9,16 @@ class InviteExhaustedError(Exception):
     pass
 
 
+class DisplayNameConflictError(Exception):
+    """display_name 唯一性争用：在持有 advisory 锁的事务内仍发现冲突。"""
+    pass
+
+
+# 与 go 实现保持一致的常量种子，保证不同进程对同一 display_name
+# 取出同一把 advisory 锁。
+_DISPLAY_NAME_LOCK_SEED = 0x444953504C4159
+
+
 class UserModule:
     def __init__(self, db: BaseDB):
         self.db = db
@@ -54,6 +64,37 @@ class UserModule:
             new_display_name, user_id,
         )
 
+    async def update_display_name_safely(self, user_id: str, new_display_name: str) -> bool:
+        """事务内通过 advisory 锁串行同名 display_name 检查与写入，避免 TOCTOU 重名。
+
+        同名争用抛 DisplayNameConflictError；用户不存在返回 False。
+        """
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                # 取出 user 行的写锁，避免与 delete/update 互相竞争
+                exists = await conn.fetchval(
+                    "SELECT 1 FROM users WHERE id=$1 FOR UPDATE", user_id
+                )
+                if not exists:
+                    return False
+                if new_display_name:
+                    # advisory 锁仅在事务期间有效，覆盖所有同 display_name 的并发写入
+                    await conn.execute(
+                        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
+                        new_display_name, _DISPLAY_NAME_LOCK_SEED,
+                    )
+                    conflict = await conn.fetchval(
+                        "SELECT 1 FROM users WHERE display_name=$1 AND id<>$2",
+                        new_display_name, user_id,
+                    )
+                    if conflict:
+                        raise DisplayNameConflictError()
+                await conn.execute(
+                    "UPDATE users SET display_name=$1 WHERE id=$2",
+                    new_display_name, user_id,
+                )
+        return True
+
     async def update_preferred_language(self, user_id: str, preferred_language: str):
         await self.db.execute(
             "UPDATE users SET preferred_language=$1 WHERE id=$2",
@@ -80,11 +121,33 @@ class UserModule:
     async def delete(self, user_id: str):
         async with self.db.get_conn() as conn:
             async with conn.transaction():
+                # Lock the user row first; bail out cleanly if it has already been deleted.
+                exists = await conn.fetchval(
+                    "SELECT 1 FROM users WHERE id=$1 FOR UPDATE", user_id
+                )
+                if not exists:
+                    return False
                 await conn.execute("DELETE FROM profiles WHERE user_id=$1", user_id)
                 await conn.execute("DELETE FROM tokens WHERE user_id=$1", user_id)
                 await conn.execute("DELETE FROM site_refresh_tokens WHERE user_id=$1", user_id)
+                # 删除该用户上传的库材质所对应的所有用户衣柜引用
+                await conn.execute(
+                    """
+                    DELETE FROM user_textures
+                    WHERE (hash, texture_type) IN (
+                        SELECT skin_hash, texture_type FROM skin_library WHERE uploader=$1
+                    )
+                    """,
+                    user_id,
+                )
+                # 再删该用户上传到全局库的记录
+                await conn.execute(
+                    "DELETE FROM skin_library WHERE uploader=$1", user_id
+                )
+                # 最后删除该用户自己的衣柜行（如有剩余）
                 await conn.execute("DELETE FROM user_textures WHERE user_id=$1", user_id)
                 await conn.execute("DELETE FROM users WHERE id=$1", user_id)
+                return True
 
     async def count(self) -> int:
         return await self.db.fetchval("SELECT COUNT(*) FROM users") or 0
@@ -187,14 +250,19 @@ class UserModule:
         }
 
     async def toggle_admin(self, user_id: str) -> int:
-        async with self.db.get_conn() as conn:
-            async with conn.transaction():
-                is_admin = await conn.fetchval("SELECT is_admin FROM users WHERE id=$1", user_id)
-                if is_admin is None:
-                    return -1
-                new_status = not is_admin
-                await conn.execute("UPDATE users SET is_admin=$1 WHERE id=$2", new_status, user_id)
-                return 1 if new_status else 0
+        # 单条原子语句，避免读改写之间被并发请求抢占。
+        row = await self.db.fetchrow(
+            """
+            UPDATE users
+            SET is_admin = NOT is_admin
+            WHERE id = $1
+            RETURNING is_admin
+            """,
+            user_id,
+        )
+        if row is None:
+            return -1
+        return 1 if row[0] else 0
             
     async def ban(self, user_id: str, banned_until: int):
         await self.db.execute(
@@ -353,12 +421,24 @@ class UserModule:
         """事务内创建 user + profile（可选核销邀请），任一步失败整体回滚。
 
         - 邮箱/角色名唯一冲突抛 asyncpg.UniqueViolationError，由上层转 400。
+        - display_name 通过事务级 advisory 锁串行化重名校验，避免并发注册产生重复昵称。
         - invite_code 给定时，在同一事务内条件核销；无剩余次数抛
           InviteExhaustedError 触发回滚，杜绝「建号成功但邀请超额」。
         返回 True。
         """
         async with self.db.get_conn() as conn:
             async with conn.transaction():
+                if user.display_name:
+                    await conn.execute(
+                        "SELECT pg_advisory_xact_lock(hashtextextended($1, $2))",
+                        user.display_name, _DISPLAY_NAME_LOCK_SEED,
+                    )
+                    conflict = await conn.fetchval(
+                        "SELECT 1 FROM users WHERE display_name=$1",
+                        user.display_name,
+                    )
+                    if conflict:
+                        raise DisplayNameConflictError()
                 await conn.execute(
                     "INSERT INTO users (id, email, password, is_admin, display_name, avatar_hash) VALUES ($1, $2, $3, $4, $5, $6)",
                     user.id, user.email, user.password, user.is_admin, user.display_name, user.avatar_hash,
@@ -403,6 +483,15 @@ class UserModule:
     async def update_profile_skin(self, profile_id: str, skin_hash: str | None = None):
         await self.db.execute(
             "UPDATE profiles SET skin_hash=$1 WHERE id=$2", skin_hash, profile_id
+        )
+
+    async def update_profile_skin_and_model(
+        self, profile_id: str, skin_hash: str | None, texture_model: str
+    ):
+        """同事务内同时更新 skin_hash 与 texture_model，避免两步写之间出现错配。"""
+        await self.db.execute(
+            "UPDATE profiles SET skin_hash=$1, texture_model=$2 WHERE id=$3",
+            skin_hash, texture_model, profile_id,
         )
 
     async def update_profile_cape(self, profile_id: str, cape_hash: str | None = None):
@@ -467,6 +556,25 @@ class UserModule:
     async def delete_token(self, access_token: str):
         await self.db.execute("DELETE FROM tokens WHERE access_token=$1", access_token)
 
+    async def rotate_token(self, old_access: str, new_token: Token) -> bool:
+        """事务内删除旧 yggdrasil token 并写入新 token；旧 token 不存在或被并发消费返回 False。
+
+        将删除与写入合并为单事务，避免任意单步失败导致用户的 yggdrasil 会话被强制销毁。
+        """
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                tag = await conn.execute(
+                    "DELETE FROM tokens WHERE access_token=$1", old_access
+                )
+                deleted = int(tag.split()[-1] or 0)
+                if deleted == 0:
+                    return False
+                await conn.execute(
+                    "INSERT INTO tokens (access_token, client_token, user_id, profile_id, created_at) VALUES ($1, $2, $3, $4, $5)",
+                    new_token.access_token, new_token.client_token, new_token.user_id, new_token.profile_id, new_token.created_at,
+                )
+                return True
+
     async def delete_tokens_by_user(self, user_id: str):
         await self.db.execute("DELETE FROM tokens WHERE user_id=$1", user_id)
 
@@ -524,6 +632,34 @@ class UserModule:
             "RETURNING token_hash, user_id, expires_at, created_at",
             token_hash,
         )
+
+    async def rotate_refresh_token(
+        self,
+        old_hash: str,
+        new_hash: str,
+        user_id: str,
+        expires_at: int,
+        created_at: int,
+    ) -> bool:
+        """事务内原子轮换 refresh：删除旧 + 插入新一并提交，避免单步失败导致用户登出。
+
+        返回 True 表示旧行被本次调用删除并已写入新行；False 表示旧行不存在/已被并发
+        请求消费——调用方应据此返回 401。期间任意 SQL 错误抛出。
+        """
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                tag = await conn.execute(
+                    "DELETE FROM site_refresh_tokens WHERE token_hash=$1 AND user_id=$2",
+                    old_hash, user_id,
+                )
+                deleted = int(tag.split()[-1] or 0)
+                if deleted == 0:
+                    return False
+                await conn.execute(
+                    "INSERT INTO site_refresh_tokens (token_hash, user_id, expires_at, created_at) VALUES ($1, $2, $3, $4)",
+                    new_hash, user_id, expires_at, created_at,
+                )
+                return True
 
     async def delete_refresh_tokens_by_user(self, user_id: str):
         await self.db.execute("DELETE FROM site_refresh_tokens WHERE user_id=$1", user_id)

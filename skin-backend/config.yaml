@@ -4,7 +4,7 @@
 
 # JWT 认证配置
 jwt:
-  secret: "dev-secret-please-change-to-a-very-long-string-in-production"  # 生产环境务必修改！
+  secret: "dev-secret-please-change-to-a-very-long-string-in-production-dev"  # 生产环境务必修改！
 
 # RSA 密钥配置
 keys:

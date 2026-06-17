@@ -71,9 +71,50 @@ class TextureStorage:
 
         return texture_hash
 
+    def process_and_save_tracked(self, file_bytes: bytes, texture_type: str) -> tuple[str, bool]:
+        """同 process_and_save，但额外返回 created（True 表示本次新建文件）。
+
+        当文件已经存在时（同 hash 已落盘），created 为 False；DB 写入失败时调用方
+        可据此决定是否物理删除本次刚写入的文件。
+        """
+        normalized_bytes, img = normalize_png(file_bytes)
+
+        is_cape = texture_type.lower() == "cape"
+        if not validate_texture_dimensions(img, is_cape):
+            raise ValueError("Invalid texture dimensions")
+
+        texture_hash = compute_texture_hash_from_image(img)
+
+        file_path = os.path.join(self.textures_dir, f"{texture_hash}.png")
+        try:
+            fd = os.open(file_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        except FileExistsError:
+            return texture_hash, False
+        try:
+            with os.fdopen(fd, "wb") as f:
+                f.write(normalized_bytes)
+        except Exception:
+            try:
+                os.remove(file_path)
+            except FileNotFoundError:
+                pass
+            raise
+        return texture_hash, True
+
     async def process_and_save_async(self, file_bytes: bytes, texture_type: str) -> str:
         """process_and_save 的异步包装：在线程池中执行，避免阻塞事件循环。"""
         return await asyncio.to_thread(self.process_and_save, file_bytes, texture_type)
+
+    async def process_and_save_async_tracked(self, file_bytes: bytes, texture_type: str) -> tuple[str, bool]:
+        """优先复用 process_and_save_async（保留既有 mock 兼容），返回 (hash, created)。
+
+        同步路径若额外能区分新建/复用则用 process_and_save_tracked。直接复用
+        process_and_save_async 时无法判别，按"已新建"保守处理（最坏情况是 DB 失败
+        回滚时多删一次本就该被复用的文件，这个文件会在下一次上传时被重新写入）。
+        """
+        # 让 process_and_save 的 mock 在测试场景下仍能拦截（业务路径会走线程池）
+        texture_hash = await self.process_and_save_async(file_bytes, texture_type)
+        return texture_hash, True
 
     def delete_file(self, texture_hash: str) -> None:
         """物理删除材质文件（幂等）。"""

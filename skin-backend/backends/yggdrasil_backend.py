@@ -1,3 +1,4 @@
+import asyncio
 import time
 import json
 import base64
@@ -7,7 +8,7 @@ from typing import Dict, Optional, Tuple
 from utils.crypto import CryptoUtils
 from utils.typing import User, PlayerProfile, Token, Session, normalize_texture_model
 from utils.uuid_utils import generate_random_uuid
-from utils.password_utils import hash_password, verify_password
+from utils.password_utils import hash_password_async, verify_password_async
 from utils.public_urls import public_site_url
 from database_module import Database
 from services import TextureStorage, assert_texture_size
@@ -155,9 +156,9 @@ class YggdrasilBackend:
         if not user:
             return None, None
 
-        if verify_password(password, user.password):
+        if await verify_password_async(password, user.password):
             if not user.password.startswith("$2"):
-                new_hash = hash_password(password)
+                new_hash = await hash_password_async(password)
                 await self.db.user.update_password(user.id, new_hash)
             return user, login_profile
 
@@ -197,6 +198,14 @@ class YggdrasilBackend:
 
         return access_token, avail_players, selected_profile, user_id
 
+    async def _ensure_token_profile_owned(self, token_data: Token) -> None:
+        if not token_data.profile_id:
+            return
+        if not await self.db.user.verify_profile_ownership(
+            token_data.user_id, token_data.profile_id
+        ):
+            raise ForbiddenOperationException("Invalid token.")
+
     async def refresh(
         self, accessToken, clientToken, selectedProfile_uuid, requestUser=False
     ) -> Dict:
@@ -208,8 +217,7 @@ class YggdrasilBackend:
             raise ForbiddenOperationException("Invalid token.")
         if clientToken and clientToken != token_data.client_token:
             raise ForbiddenOperationException("Invalid token.")
-
-        await self.db.user.delete_token(accessToken)
+        await self._ensure_token_profile_owned(token_data)
 
         new_profile_id = token_data.profile_id
         selected_profile_resp = None
@@ -226,38 +234,47 @@ class YggdrasilBackend:
                 raise ForbiddenOperationException("Invalid profile.")
             new_profile_id = selectedProfile_uuid
             p_obj = await self.db.user.get_profile_by_id(selectedProfile_uuid)
-            if p_obj:
-                selected_profile_resp = {"id": p_obj.id, "name": p_obj.name}
+            if not p_obj:
+                raise ForbiddenOperationException("Invalid profile.")
+            selected_profile_resp = {"id": p_obj.id, "name": p_obj.name}
         elif token_data.profile_id:
             p_obj = await self.db.user.get_profile_by_id(token_data.profile_id)
-            if p_obj:
-                selected_profile_resp = {"id": p_obj.id, "name": p_obj.name}
+            if not p_obj:
+                raise ForbiddenOperationException("Invalid token.")
+            selected_profile_resp = {"id": p_obj.id, "name": p_obj.name}
+
+        response_user = None
+        if requestUser:
+            response_user = await self.db.user.get_by_id(token_data.user_id)
+            if not response_user:
+                raise ForbiddenOperationException("Invalid token.")
 
         new_access_token = generate_random_uuid()
         created_at = int(time.time() * 1000)
-        await self.db.user.add_token(
+        rotated = await self.db.user.rotate_token(
+            accessToken,
             Token(
                 new_access_token,
                 token_data.client_token,
                 token_data.user_id,
                 new_profile_id,
                 created_at,
-            )
+            ),
         )
+        if not rotated:
+            raise ForbiddenOperationException("Invalid token.")
         await self._cleanup_tokens(token_data.user_id)
 
         resp = {"accessToken": new_access_token, "clientToken": token_data.client_token}
         if selected_profile_resp:
             resp["selectedProfile"] = selected_profile_resp
-        if requestUser:
-            user = await self.db.user.get_by_id(token_data.user_id)
-            if user:
-                resp["user"] = {
-                    "id": user.id,
-                    "properties": [
-                        {"name": "preferredLanguage", "value": user.preferred_language}
-                    ],
-                }
+        if response_user:
+            resp["user"] = {
+                "id": response_user.id,
+                "properties": [
+                    {"name": "preferredLanguage", "value": response_user.preferred_language}
+                ],
+            }
         return resp
 
     async def validate(self, req: Dict):
@@ -268,6 +285,7 @@ class YggdrasilBackend:
             raise ForbiddenOperationException("Invalid token.")
         if (int(time.time() * 1000) - token_data.created_at) > self.TOKEN_TTL:
             raise ForbiddenOperationException("Invalid token.")
+        await self._ensure_token_profile_owned(token_data)
 
     async def invalidate(self, access_token: str):
         await self.db.user.delete_token(access_token)
@@ -285,6 +303,10 @@ class YggdrasilBackend:
         if not token_data:
             raise ForbiddenOperationException("Invalid token.")
         if token_data.profile_id != selected_profile_id:
+            raise ForbiddenOperationException("Invalid token.")
+        if not await self.db.user.verify_profile_ownership(
+            token_data.user_id, selected_profile_id
+        ):
             raise ForbiddenOperationException("Invalid token.")
         await self.db.user.delete_session(server_id)
         await self.db.user.add_session(
@@ -305,7 +327,7 @@ class YggdrasilBackend:
             return None
 
         profile = await self.db.user.get_profile_by_id(token_data.profile_id)
-        if not profile or profile.name != username:
+        if not profile or profile.user_id != token_data.user_id or profile.name != username:
             return None
 
         if await self.db.user.is_banned(profile.user_id):
@@ -349,12 +371,22 @@ class YggdrasilBackend:
 
         try:
             await assert_texture_size(self.db, file_bytes)
-            texture_hash = await self.texture_storage.process_and_save_async(file_bytes, texture_type)
-            await self.db.texture.add_to_library(token_data.user_id, texture_hash, texture_type)
+            texture_hash, created = await self.texture_storage.process_and_save_async_tracked(
+                file_bytes, texture_type
+            )
+            try:
+                await self.db.texture.add_to_library(token_data.user_id, texture_hash, texture_type)
+            except Exception:
+                if created:
+                    try:
+                        if not await self.db.texture.exists(texture_hash, texture_type):
+                            await asyncio.to_thread(self.texture_storage.delete_file, texture_hash)
+                    except Exception:
+                        pass
+                raise
             if texture_type.lower() == "skin":
                 m_val = normalize_texture_model(model)
-                await self.db.user.update_profile_skin(uuid, texture_hash)
-                await self.db.user.update_profile_texture_model(uuid, m_val)
+                await self.db.user.update_profile_skin_and_model(uuid, texture_hash, m_val)
             else:
                 await self.db.user.update_profile_cape(uuid, texture_hash)
         except ValueError as e:

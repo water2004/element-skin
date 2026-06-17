@@ -166,6 +166,7 @@ class SettingsBackend:
         if group not in allowed_keys:
             raise HTTPException(status_code=400, detail="Invalid settings group")
 
+        pending: dict[str, str] = {}
         for key in allowed_keys[group]:
             if key in body:
                 val = body[key]
@@ -179,11 +180,21 @@ class SettingsBackend:
                     continue
 
                 value = "true" if isinstance(val, bool) and val else ("false" if isinstance(val, bool) else str(val))
-                await self.db.setting.set(key, value)
+                pending[key] = value
 
-        if group == "fallback" and "fallbacks" in body:
-            fallbacks = self._validate_fallback_services(body.get("fallbacks"))
-            await self.db.fallback.save_endpoints(fallbacks)
+        save_fallbacks = group == "fallback" and "fallbacks" in body
+        fallbacks = self._validate_fallback_services(body.get("fallbacks")) if save_fallbacks else []
+
+        async with self.db.get_conn() as conn:
+            async with conn.transaction():
+                if pending:
+                    await self.db.setting.set_many(conn, pending)
+                if save_fallbacks:
+                    await self.db.fallback._save_endpoints_in_tx(conn, fallbacks)
+        if pending:
+            self.db.setting.apply_cache_updates(pending)
+        if save_fallbacks:
+            await self.db.fallback.refresh_endpoints_cache()
 
     def _validate_fallback_services(self, services: Any) -> list[dict]:
         if not isinstance(services, list):

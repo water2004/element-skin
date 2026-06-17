@@ -4,6 +4,7 @@
 """
 
 import aiohttp
+import asyncio
 import logging
 import urllib.parse
 from typing import Optional, Dict, Tuple
@@ -350,8 +351,19 @@ class MicrosoftBackend:
             max_bytes = await resolve_max_texture_bytes(self.db)
             data = await download_texture(url, max_bytes=max_bytes)
             await assert_texture_size(self.db, data)
-            texture_hash = await self.texture_storage.process_and_save_async(data, texture_type)
-            await self.db.texture.add_to_library(user_id, texture_hash, texture_type, note)
+            texture_hash, created = await self.texture_storage.process_and_save_async_tracked(
+                data, texture_type
+            )
+            try:
+                await self.db.texture.add_to_library(user_id, texture_hash, texture_type, note)
+            except Exception:
+                if created:
+                    try:
+                        if not await self.db.texture.exists(texture_hash, texture_type):
+                            await asyncio.to_thread(self.texture_storage.delete_file, texture_hash)
+                    except Exception:
+                        pass
+                raise
             return texture_hash
         except Exception as e:
             logger.warning("Failed to download %s: %s", texture_type, e)

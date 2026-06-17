@@ -1,5 +1,6 @@
 """远程 Yggdrasil 角色导入后端"""
 
+import asyncio
 import logging
 from typing import Dict, List
 
@@ -23,10 +24,21 @@ class ProfileImportBackend:
         self, user_id: str, texture_bytes: bytes, texture_type: str, note: str, model: str = "default"
     ) -> str:
         await assert_texture_size(self.db, texture_bytes)
-        texture_hash = await self.texture_storage.process_and_save_async(texture_bytes, texture_type)
-        await self.db.texture.add_to_library(
-            user_id, texture_hash, texture_type, note, is_public=False, model=model
+        texture_hash, created = await self.texture_storage.process_and_save_async_tracked(
+            texture_bytes, texture_type
         )
+        try:
+            await self.db.texture.add_to_library(
+                user_id, texture_hash, texture_type, note, is_public=False, model=model
+            )
+        except Exception:
+            if created:
+                try:
+                    if not await self.db.texture.exists(texture_hash, texture_type):
+                        await asyncio.to_thread(self.texture_storage.delete_file, texture_hash)
+                except Exception:
+                    pass
+            raise
         return texture_hash
 
     async def get_ygg_profiles(self, api_url: str, username: str, password: str):

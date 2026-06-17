@@ -217,21 +217,7 @@ def setup_routes(admin_backend, settings_backend):
         payload: dict = Depends(admin_required),
         body: dict = Body(...)
     ):
-        updated = False
-        if "model" in body:
-            await admin_backend.update_texture_model(hash, body["model"])
-            updated = True
-        if "note" in body:
-            await admin_backend.update_texture_note(hash, body["note"])
-            updated = True
-        if "is_public" in body:
-            await admin_backend.update_texture_public(hash, body["is_public"])
-            updated = True
-
-        if not updated:
-            raise HTTPException(status_code=400, detail="至少需要一个更新字段: model, note, is_public")
-
-        return {"ok": True}
+        return await admin_backend.patch_texture(hash, body)
 
     @router.delete("/admin/textures/{hash}")
     async def delete_admin_texture(

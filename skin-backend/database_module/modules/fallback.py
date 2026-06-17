@@ -68,56 +68,58 @@ class FallbackModule:
     async def save_endpoints(self, fallbacks: list[dict]):
         async with self.db.get_conn() as conn:
             async with conn.transaction():
-                # 获取现有 ID
-                existing_rows = await conn.fetch("SELECT id FROM fallback_endpoints")
-                existing_ids = {row[0] for row in existing_rows}
-
-                incoming_ids = {
-                    entry["id"] for entry in fallbacks if entry.get("id") is not None
-                }
-                
-                # 删除不在传入列表中的端点
-                for endpoint_id in existing_ids - incoming_ids:
-                    await conn.execute(
-                        "DELETE FROM fallback_endpoints WHERE id=$1", endpoint_id
-                    )
-
-                for idx, entry in enumerate(fallbacks, start=1):
-                    priority = idx
-                    session_url = entry["session_url"]
-                    account_url = entry["account_url"]
-                    services_url = entry["services_url"]
-                    cache_ttl = entry["cache_ttl"]
-                    skin_domains = entry.get("skin_domains", "")
-                    enable_profile = bool(entry.get("enable_profile"))
-                    enable_hasjoined = bool(entry.get("enable_hasjoined"))
-                    enable_whitelist = bool(entry.get("enable_whitelist"))
-                    note = entry.get("note", "")
-
-                    if entry.get("id") is not None:
-                        await conn.execute(
-                            """
-                            UPDATE fallback_endpoints
-                            SET priority=$1, session_url=$2, account_url=$3, services_url=$4, cache_ttl=$5, skin_domains=$6,
-                                enable_profile=$7, enable_hasjoined=$8, enable_whitelist=$9, note=$10
-                            WHERE id=$11
-                            """,
-                            priority, session_url, account_url, services_url, cache_ttl, skin_domains,
-                            enable_profile, enable_hasjoined, enable_whitelist, note, entry["id"],
-                        )
-                    else:
-                        await conn.execute(
-                            """
-                            INSERT INTO fallback_endpoints (
-                                priority, session_url, account_url, services_url, cache_ttl, skin_domains,
-                                enable_profile, enable_hasjoined, enable_whitelist, note
-                            )
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                            """,
-                            priority, session_url, account_url, services_url, cache_ttl, skin_domains,
-                            enable_profile, enable_hasjoined, enable_whitelist, note,
-                        )
+                await self._save_endpoints_in_tx(conn, fallbacks)
         await self.refresh_endpoints_cache()
+
+    async def _save_endpoints_in_tx(self, conn, fallbacks: list[dict]):
+        """事务内执行端点写入，调用方负责提交与缓存刷新。"""
+        existing_rows = await conn.fetch("SELECT id FROM fallback_endpoints")
+        existing_ids = {row[0] for row in existing_rows}
+
+        incoming_ids = {
+            entry["id"] for entry in fallbacks if entry.get("id") is not None
+        }
+
+        for endpoint_id in existing_ids - incoming_ids:
+            await conn.execute(
+                "DELETE FROM fallback_endpoints WHERE id=$1", endpoint_id
+            )
+
+        for idx, entry in enumerate(fallbacks, start=1):
+            priority = idx
+            session_url = entry["session_url"]
+            account_url = entry["account_url"]
+            services_url = entry["services_url"]
+            cache_ttl = entry["cache_ttl"]
+            skin_domains = entry.get("skin_domains", "")
+            enable_profile = bool(entry.get("enable_profile"))
+            enable_hasjoined = bool(entry.get("enable_hasjoined"))
+            enable_whitelist = bool(entry.get("enable_whitelist"))
+            note = entry.get("note", "")
+
+            if entry.get("id") is not None:
+                await conn.execute(
+                    """
+                    UPDATE fallback_endpoints
+                    SET priority=$1, session_url=$2, account_url=$3, services_url=$4, cache_ttl=$5, skin_domains=$6,
+                        enable_profile=$7, enable_hasjoined=$8, enable_whitelist=$9, note=$10
+                    WHERE id=$11
+                    """,
+                    priority, session_url, account_url, services_url, cache_ttl, skin_domains,
+                    enable_profile, enable_hasjoined, enable_whitelist, note, entry["id"],
+                )
+            else:
+                await conn.execute(
+                    """
+                    INSERT INTO fallback_endpoints (
+                        priority, session_url, account_url, services_url, cache_ttl, skin_domains,
+                        enable_profile, enable_hasjoined, enable_whitelist, note
+                    )
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    """,
+                    priority, session_url, account_url, services_url, cache_ttl, skin_domains,
+                    enable_profile, enable_hasjoined, enable_whitelist, note,
+                )
             
     async def collect_skin_domains(self) -> list[str]:
         return self._domains_cache

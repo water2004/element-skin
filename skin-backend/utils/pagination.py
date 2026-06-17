@@ -69,7 +69,7 @@ def decode_cursor(cursor: Optional[str], required_keys: tuple[str, ...]) -> Opti
     if not cursor:
         return None
     data = CursorEncoder.decode(cursor)
-    if not data or any(k not in data for k in required_keys):
+    if not isinstance(data, dict) or any(k not in data for k in required_keys):
         raise ValueError("Invalid cursor")
     return data
 

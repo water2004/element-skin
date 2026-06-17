@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from utils.typing import InviteCode, serialize_profile_summary
 from utils.pagination import decode_cursor, encode_next
 from utils.profile_naming import is_valid_profile_name
+from utils.password_utils import hash_password_async
 from database_module import Database
 from config_loader import Config
 
@@ -148,15 +149,15 @@ class AdminBackend:
         return {"ok": True}
 
     async def reset_user_password(self, user_id: str, new_password: str):
-        from utils.password_utils import hash_password
         user_row = await self.db.user.get_by_id(user_id)
         if not user_row:
             raise HTTPException(status_code=404, detail="user not found")
         
-        password_hash = hash_password(new_password)
-        await self.db.user.update_password(user_id, password_hash)
-        # 管理员重置后强制该用户全部会话失效（与自助改密一致）
+        password_hash = await hash_password_async(new_password)
+        # 先撤销外部令牌；任何失败都不应改变密码
+        await self.db.user.delete_tokens_by_user(user_id)
         await self.db.user.delete_refresh_tokens_by_user(user_id)
+        await self.db.user.update_password(user_id, password_hash)
         return {"ok": True}
 
     async def list_invites(self, cursor: str | None, limit: int) -> dict:
@@ -276,6 +277,42 @@ class AdminBackend:
         uploader = await self._get_uploader_or_404(texture_hash)
         await self.db.texture.update_note(uploader, texture_hash, "skin", note)
         return {"success": True}
+
+    async def patch_texture(self, texture_hash: str, body: dict) -> dict:
+        """事务内同时更新 skin_library/user_textures/profiles，避免分步写入产生错配。
+
+        默认作用于 skin 类型；body 可显式带 texture_type 覆盖。
+        """
+        note = None
+        model = None
+        is_public = None
+        if "note" in body:
+            note = str(body["note"])
+        if "model" in body:
+            m = str(body["model"])
+            if m not in ("default", "slim"):
+                raise HTTPException(status_code=400, detail="model must be 'default' or 'slim'")
+            model = m
+        if "is_public" in body:
+            v = body["is_public"]
+            if isinstance(v, bool):
+                is_public = v
+            elif isinstance(v, (int, float)):
+                if int(v) not in (0, 1):
+                    raise HTTPException(status_code=400, detail="is_public must be 0 or 1")
+                is_public = bool(v)
+            else:
+                raise HTTPException(status_code=400, detail="invalid is_public")
+        if note is None and model is None and is_public is None:
+            raise HTTPException(status_code=400, detail="至少需要一个更新字段: model, note, is_public")
+        texture_type = str(body.get("texture_type", "skin"))
+        ok = await self.db.texture.admin_patch(
+            texture_hash, texture_type,
+            note=note, model=model, is_public=is_public,
+        )
+        if not ok:
+            raise HTTPException(status_code=404, detail="材质不存在")
+        return {"ok": True}
 
     async def delete_texture(self, texture_hash: str, texture_type: str, user_id: str | None = None, force: bool = False) -> dict:
         if not force and not user_id:
