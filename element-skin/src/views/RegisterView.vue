@@ -1,9 +1,11 @@
 <template>
-  <div class="register-container">
-    <div class="register-card">
-      <div class="register-header">
-        <h1>注册账号</h1>
-        <p>创建一个新账号来开始使用</p>
+  <div class="flex items-center justify-center min-h-screen p-5 bg-screen-gradient transition-bg">
+    <div
+      class="w-full max-w-440 bg-card rounded-3xl p-10 shadow-lg-soft animate-slide-up border transition-colors"
+    >
+      <div class="text-center mb-8">
+        <h1 class="m-0 mb-2 text-28 font-semibold text-heading">注册账号</h1>
+        <p class="m-0 text-sm text-light">创建一个新账号来开始使用</p>
       </div>
 
       <el-form :model="form" :rules="rules" ref="formRef" label-position="top" size="large">
@@ -26,20 +28,20 @@
         </el-form-item>
 
         <el-form-item v-if="emailVerifyEnabled" label="验证码" prop="code">
-          <div class="verification-code-row">
+          <div class="flex gap-3 w-full">
             <el-input
               v-model="form.code"
               placeholder="请输入验证码"
               :prefix-icon="Ticket"
               @keyup.enter="register"
             />
-            <el-button 
+            <el-button
               type="primary"
               plain
-              :disabled="countdown > 0" 
+              :disabled="countdown > 0"
               :loading="codeLoading"
               @click="sendCode"
-              class="code-btn"
+              class="h-12 min-w-120"
             >
               {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
             </el-button>
@@ -78,23 +80,16 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            @click="register"
-            :loading="loading"
-            style="width: 100%"
-          >
+          <el-button type="primary" @click="register" :loading="loading" class="w-full">
             <el-icon v-if="!loading"><UserFilled /></el-icon>
             {{ loading ? '注册中...' : '注册' }}
           </el-button>
         </el-form-item>
       </el-form>
 
-      <div class="register-footer">
+      <div class="text-center mt-6 text-body text-sm transition-colors">
         <span>已有账号？</span>
-        <el-button link type="primary" @click="$router.push('/login')">
-          立即登录
-        </el-button>
+        <el-button link type="primary" @click="$router.push('/login')"> 立即登录 </el-button>
       </div>
     </div>
   </div>
@@ -118,7 +113,7 @@ const form = reactive({
   password: '',
   confirmPassword: '',
   invite: '',
-  code: ''
+  code: '',
 })
 
 const emailVerifyEnabled = ref(false)
@@ -131,18 +126,20 @@ const rules: FormRules = {
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 3, message: '用户名至少需要3个字符', trigger: 'blur' },
     { max: 20, message: '用户名长度不能超过20个字符', trigger: 'blur' },
-    { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '用户名仅支持中英文、数字和下划线', trigger: 'blur' }
+    {
+      pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/,
+      message: '用户名仅支持中英文、数字和下划线',
+      trigger: 'blur',
+    },
   ],
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
+    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' },
   ],
-  code: [
-    { required: true, message: '请输入验证码' }
-  ],
+  code: [{ required: true, message: '请输入验证码' }],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少需要6个字符', trigger: 'blur' }
+    { min: 6, message: '密码至少需要6个字符', trigger: 'blur' },
   ],
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
@@ -154,9 +151,9 @@ const rules: FormRules = {
           callback()
         }
       },
-      trigger: 'blur'
-    }
-  ]
+      trigger: 'blur',
+    },
+  ],
 }
 
 onMounted(async () => {
@@ -181,7 +178,7 @@ async function sendCode() {
     codeLoading.value = true
     await sendVerificationCode({
       email: form.email,
-      type: 'register'
+      type: 'register',
     })
     ElMessage.success('验证码已发送到您的邮箱')
 
@@ -215,7 +212,7 @@ async function register() {
       email: form.email,
       password: form.password,
       invite: form.invite ? form.invite.trim() : '',
-      code: form.code
+      code: form.code,
     }
 
     await apiRegister(payload)
@@ -238,67 +235,6 @@ async function register() {
 </script>
 
 <style scoped>
-.register-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: var(--color-background-hero-light);
-  transition: background 0.3s ease;
-}
-
-.register-card {
-  width: 100%;
-  max-width: 440px;
-  background: var(--color-card-background);
-  border-radius: 16px;
-  padding: 40px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  animation: slideUp 0.5s ease-out;
-  border: 1px solid var(--color-border);
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.register-header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.register-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--color-heading);
-  transition: color 0.3s ease;
-}
-
-.register-header p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-text-light);
-  transition: color 0.3s ease;
-}
-
-.register-footer {
-  text-align: center;
-  margin-top: 24px;
-  color: var(--color-text);
-  font-size: 14px;
-  transition: color 0.3s ease;
-}
-
 :deep(.el-form-item__label) {
   font-weight: 500;
   color: var(--color-text);
@@ -307,16 +243,5 @@ async function register() {
 
 :deep(.el-input__wrapper) {
   height: 48px;
-}
-
-.verification-code-row {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-}
-
-.code-btn {
-  height: 48px;
-  min-width: 120px;
 }
 </style>

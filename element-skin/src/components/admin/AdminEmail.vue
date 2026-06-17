@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-section animate-fade-in">
+  <div class="max-w-900 mx-auto py-5 animate-fade-in">
     <PageHeader title="邮件服务设置" subtitle="配置 SMTP 服务器以启用注册验证、找回密码等通知功能">
       <template #icon><Message /></template>
       <template #actions>
@@ -11,23 +11,32 @@
 
     <el-card class="surface-card" shadow="never">
       <template #header>
-        <div class="card-header-flex">
-          <div class="title-group">
+        <div class="flex justify-between items-center">
+          <div class="flex items-center gap-2 font-semibold text-heading">
             <el-icon><Postcard /></el-icon>
             <span>SMTP 与验证配置</span>
           </div>
-          <el-button type="primary" size="small" @click="saveSettings" :loading="saving" class="hover-lift">保存配置</el-button>
+          <el-button
+            type="primary"
+            size="small"
+            @click="saveSettings"
+            :loading="saving"
+            class="hover-lift"
+            >保存配置</el-button
+          >
         </div>
       </template>
 
       <el-form label-position="top" :model="emailSettings">
-        <div class="settings-group">
-          <div class="group-title">验证功能</div>
+        <div class="py-2">
+          <div class="text-sm font-semibold text-light mb-5 pl-3 border-l-4-primary">验证功能</div>
           <el-row :gutter="40">
             <el-col :xs="24" :sm="12">
               <el-form-item label="启用邮件验证">
                 <el-switch v-model="emailSettings.email_verify_enabled" />
-                <p class="hint-text">开启后，用户注册和重置密码时必须通过邮件验证码确认身份。</p>
+                <p class="text-xs text-light leading-normal mt-1">
+                  开启后，用户注册和重置密码时必须通过邮件验证码确认身份。
+                </p>
               </el-form-item>
             </el-col>
             <el-col :xs="24" :sm="12" v-if="emailSettings.email_verify_enabled">
@@ -40,8 +49,10 @@
 
         <el-divider />
 
-        <div class="settings-group">
-          <div class="group-title">SMTP 服务器</div>
+        <div class="py-2">
+          <div class="text-sm font-semibold text-light mb-5 pl-3 border-l-4-primary">
+            SMTP 服务器
+          </div>
           <el-row :gutter="20">
             <el-col :xs="24" :sm="18">
               <el-form-item label="服务器地址">
@@ -63,7 +74,12 @@
             </el-col>
             <el-col :xs="24" :sm="12">
               <el-form-item label="密码 / 授权码">
-                <el-input v-model="emailSettings.smtp_password" type="password" show-password placeholder="留空则不修改原有密码" />
+                <el-input
+                  v-model="emailSettings.smtp_password"
+                  type="password"
+                  show-password
+                  placeholder="留空则不修改原有密码"
+                />
               </el-form-item>
             </el-col>
           </el-row>
@@ -76,8 +92,13 @@
             </el-col>
             <el-col :xs="24" :sm="12">
               <el-form-item label="发件人显示名称">
-                <el-input v-model="emailSettings.smtp_sender" placeholder="SkinServer <no-reply@example.com>" />
-                <p class="hint-text">发件人在邮件客户端中显示的名称及回复地址。</p>
+                <el-input
+                  v-model="emailSettings.smtp_sender"
+                  placeholder="SkinServer <no-reply@example.com>"
+                />
+                <p class="text-xs text-light leading-normal mt-1">
+                  发件人在邮件客户端中显示的名称及回复地址。
+                </p>
               </el-form-item>
             </el-col>
           </el-row>
@@ -102,7 +123,7 @@ const emailSettings = reactive({
   smtp_user: '',
   smtp_password: '',
   smtp_ssl: true,
-  smtp_sender: ''
+  smtp_sender: '',
 })
 
 const saving = ref(false)
@@ -134,26 +155,3 @@ async function saveSettings() {
 
 onMounted(loadSettings)
 </script>
-
-<style scoped>
-.settings-section {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 20px 0;
-}
-
-.card-header-flex { display: flex; justify-content: space-between; align-items: center; }
-.card-header-flex .title-group { display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--color-heading); }
-
-.settings-group { padding: 10px 0; }
-.group-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text-light);
-  margin-bottom: 20px;
-  border-left: 4px solid var(--el-color-primary);
-  padding-left: 12px;
-}
-
-.hint-text { font-size: 12px; color: var(--color-text-light); line-height: 1.5; margin-top: 4px; }
-</style>

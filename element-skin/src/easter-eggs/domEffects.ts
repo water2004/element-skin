@@ -1,12 +1,5 @@
 import type { EasterEggCleanup } from './index'
 
-interface FloatingItemOptions {
-  className: string
-  count: number
-  create: (index: number) => HTMLElement
-  intervalMs?: number
-}
-
 interface ClickBurstOptions {
   className: string
   count: number
@@ -23,30 +16,6 @@ export function injectEasterEggStyle(name: string, css: string): HTMLStyleElemen
 
 export function randomBetween(min: number, max: number): number {
   return min + Math.random() * (max - min)
-}
-
-export function startFloatingItems(options: FloatingItemOptions): EasterEggCleanup {
-  const layer = document.createElement('div')
-  layer.className = options.className
-  layer.dataset.easterEgg = options.className
-  document.body.appendChild(layer)
-
-  function appendItem(index: number): void {
-    const item = options.create(index)
-    layer.appendChild(item)
-    item.addEventListener('animationend', () => item.remove(), { once: true })
-  }
-
-  for (let i = 0; i < options.count; i += 1) {
-    window.setTimeout(() => appendItem(i), randomBetween(0, options.intervalMs || 1000))
-  }
-
-  const timer = window.setInterval(() => appendItem(0), options.intervalMs || 1800)
-
-  return () => {
-    window.clearInterval(timer)
-    layer.remove()
-  }
 }
 
 export function startClickBurst(options: ClickBurstOptions): EasterEggCleanup {

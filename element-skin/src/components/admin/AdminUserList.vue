@@ -1,9 +1,15 @@
 <template>
-  <div class="users-section animate-fade-in">
+  <div class="max-w-1000 mx-auto py-5 animate-fade-in">
     <PageHeader title="用户管理" subtitle="管理站内所有用户及其角色的状态与权限">
       <template #icon><UserFilled /></template>
       <template #actions>
-        <el-button type="primary" :icon="Refresh" @click="refreshUsersFromFirst" plain class="hover-lift">
+        <el-button
+          type="primary"
+          :icon="Refresh"
+          @click="refreshUsersFromFirst"
+          plain
+          class="hover-lift"
+        >
           刷新列表
         </el-button>
       </template>
@@ -17,17 +23,21 @@
     />
 
     <el-card class="surface-card" shadow="never">
-      <el-table :data="users" style="width: 100%" class="modern-table" v-loading="loading">
+      <el-table :data="users" class="modern-table w-full" v-loading="loading">
         <el-table-column prop="display_name" label="用户名" min-width="150">
           <template #default="{ row }">
-            <div class="user-cell">
-              <el-avatar 
-                :size="32" 
-                :shape="row.avatar_hash ? 'square' : 'circle'" 
+            <div class="flex items-center">
+              <el-avatar
+                :size="32"
+                :shape="row.avatar_hash ? 'square' : 'circle'"
                 :class="[row.avatar_hash ? 'has-custom' : 'avatar-fallback', 'mr-2']"
                 :src="userAvatars[row.avatar_hash || ''] || ''"
               >
-                {{ !row.avatar_hash ? (row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase()) : '' }}
+                {{
+                  !row.avatar_hash
+                    ? row.display_name?.charAt(0).toUpperCase() || row.email.charAt(0).toUpperCase()
+                    : ''
+                }}
               </el-avatar>
               <span>{{ row.display_name || '未设置' }}</span>
             </div>
@@ -36,20 +46,21 @@
         <el-table-column prop="email" label="邮箱" min-width="220" />
         <el-table-column label="身份状态" width="120">
           <template #default="{ row }">
-            <el-tag v-if="row.is_super_admin" type="danger" effect="dark" size="small">超级管理员</el-tag>
-            <el-tag v-else-if="row.is_admin" type="danger" effect="light" size="small">管理员</el-tag>
-            <el-tag v-else-if="getUserBanStatus(row)" type="warning" effect="light" size="small">已封禁</el-tag>
+            <el-tag v-if="row.is_super_admin" type="danger" effect="dark" size="small"
+              >超级管理员</el-tag
+            >
+            <el-tag v-else-if="row.is_admin" type="danger" effect="light" size="small"
+              >管理员</el-tag
+            >
+            <el-tag v-else-if="getUserBanStatus(row)" type="warning" effect="light" size="small"
+              >已封禁</el-tag
+            >
             <el-tag v-else type="success" effect="light" size="small">正常</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="管理操作" width="120" align="center">
           <template #default="{ row }">
-            <el-button
-              size="small"
-              type="primary"
-              @click="showUserDetailDialog(row)"
-              class=""
-            >
+            <el-button size="small" type="primary" @click="showUserDetailDialog(row)" class="">
               管理
             </el-button>
           </template>
@@ -123,7 +134,17 @@ import ResetPasswordDialog from '@/components/admin/users/ResetPasswordDialog.vu
 import BanUserDialog from '@/components/admin/users/BanUserDialog.vue'
 import { getAvatarForHash } from '@/composables/useAvatar'
 import { useCursorPagination } from '@/composables/useCursorPagination'
-import { getUsers, getUser, getUserProfiles, toggleAdmin as apiToggleAdmin, transferSuperAdmin as apiTransferSuperAdmin, deleteUser as apiDeleteUser, banUser as apiBanUser, unbanUser as apiUnbanUser, resetUserPassword } from '@/api/admin/users'
+import {
+  getUsers,
+  getUser,
+  getUserProfiles,
+  toggleAdmin as apiToggleAdmin,
+  transferSuperAdmin as apiTransferSuperAdmin,
+  deleteUser as apiDeleteUser,
+  banUser as apiBanUser,
+  unbanUser as apiUnbanUser,
+  resetUserPassword,
+} from '@/api/admin/users'
 import type { User, Profile } from '@/api/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 
@@ -134,8 +155,8 @@ const limit = 15
 const usersPagination = useCursorPagination<User>(limit)
 const loading = ref(false)
 const searchQuery = ref('')
-const activeSearchQuery = ref('')  // 当前生效的搜索词（点击搜索按钮后才同步）
-const userAvatars = reactive<Record<string, string>>({})   // hash -> base64 avatar image cache
+const activeSearchQuery = ref('') // 当前生效的搜索词（点击搜索按钮后才同步）
+const userAvatars = reactive<Record<string, string>>({}) // hash -> base64 avatar image cache
 const currentUser = ref<User | null>(null)
 const userProfiles = ref<Profile[]>([])
 const profileLimit = 10
@@ -151,8 +172,11 @@ const banCustomHours = ref(24)
 const banning = ref(false)
 
 const presetDurations = [
-  { label: '1小时', value: 1 }, { label: '1天', value: 24 },
-  { label: '3天', value: 72 }, { label: '7天', value: 168 }, { label: '30天', value: 720 }
+  { label: '1小时', value: 1 },
+  { label: '1天', value: 24 },
+  { label: '3天', value: 72 },
+  { label: '7天', value: 168 },
+  { label: '30天', value: 720 },
 ]
 
 function buildSearchParams(extraParams: UserQueryParams = {}): UserQueryParams {
@@ -235,7 +259,10 @@ async function showUserDetailDialog(user: User) {
 async function fetchUserProfilesAdmin() {
   if (!currentUser.value) return
   try {
-    const res = await getUserProfiles(currentUser.value.id, { cursor: profilesPagination.currentCursor.value, limit: profileLimit })
+    const res = await getUserProfiles(currentUser.value.id, {
+      cursor: profilesPagination.currentCursor.value,
+      limit: profileLimit,
+    })
     userProfiles.value = res.data.items
     profilesPagination.setPageData(res.data)
   } catch (e) {
@@ -265,7 +292,9 @@ async function handleProfilesPrevPage() {
 
 async function toggleAdmin(user: User) {
   try {
-    await ElMessageBox.confirm(`确定要切换 ${user.email} 的管理员状态吗？`, '确认', { type: 'warning' })
+    await ElMessageBox.confirm(`确定要切换 ${user.email} 的管理员状态吗？`, '确认', {
+      type: 'warning',
+    })
     const res = await apiToggleAdmin(user.id)
     ElMessage.success('操作成功')
     await refreshUsers()
@@ -316,7 +345,7 @@ async function confirmResetPassword() {
   try {
     await resetUserPassword({
       user_id: currentUser.value.id,
-      new_password: f.new_password
+      new_password: f.new_password,
     })
     ElMessage.success('密码已重置')
     resetPasswordDialogVisible.value = false
@@ -392,13 +421,6 @@ watch(currentUser, async (u) => {
 </script>
 
 <style scoped>
-.users-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
-
-.search-bar-container {
-  margin-bottom: 16px;
-  display: flex;
-}
-
 .count-text {
   font-weight: 600;
   color: var(--color-text);
@@ -416,7 +438,4 @@ watch(currentUser, async (u) => {
 .modern-table :deep(.el-table__row) {
   transition: background-color 0.3s ease;
 }
-
-.user-cell { display: flex; align-items: center; }
-
 </style>

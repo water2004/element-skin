@@ -7,39 +7,40 @@
       </div>
     </div>
 
-    <el-card class="profile-form-card surface-card animate-card-slide">
-      <div class="profile-header">
-        <el-avatar :shape="customAvatar ? 'square' : 'circle'" :size="72" class="profile-avatar" :src="customAvatar || ''" :class="{ 'has-custom': !!customAvatar }">
+    <el-card class="max-w-600 mx-auto p-8 surface-card animate-card-slide profile-form-card">
+      <div class="flex items-center gap-4">
+        <el-avatar
+          :shape="customAvatar ? 'square' : 'circle'"
+          :size="72"
+          class="profile-avatar"
+          :src="customAvatar || ''"
+          :class="{ 'has-custom': !!customAvatar }"
+        >
           {{ !customAvatar ? emailInitial : '' }}
         </el-avatar>
-        <div class="profile-meta">
-          <h3>{{ user?.display_name || '未设置用户名' }}</h3>
-          <p>{{ user?.email }}</p>
+        <div>
+          <h3 class="m-0 text-lg font-semibold text-heading transition-colors">
+            {{ user?.display_name || '未设置用户名' }}
+          </h3>
+          <p class="mt-2 mb-0 text-13 text-light transition-colors">{{ user?.email }}</p>
         </div>
       </div>
 
       <el-divider />
 
       <!-- 封禁状态显示 -->
-      <el-alert
-        v-if="getUserBanStatus()"
-        type="warning"
-        :closable="false"
-        style="margin-bottom: 20px;"
-      >
+      <el-alert v-if="getUserBanStatus()" type="warning" :closable="false" class="mb-5">
         <template #title>
-          <div style="font-weight: 600; font-size: 16px;">账号已被封禁</div>
+          <div class="font-semibold text-base">账号已被封禁</div>
         </template>
-        <div style="margin-top: 8px; font-size: 14px;">
-          <p style="margin: 4px 0;">您的账号已被管理员封禁，暂时无法通过 Minecraft 客户端登录游戏。</p>
-          <p style="margin: 4px 0;">但您仍可以正常访问皮肤站进行皮肤管理等操作。</p>
-          <p style="margin: 8px 0 0 0; font-size: 15px; color: #e6a23c;">
+        <div class="mt-2 text-sm">
+          <p class="my-1">您的账号已被管理员封禁，暂时无法通过 Minecraft 客户端登录游戏。</p>
+          <p class="my-1">但您仍可以正常访问皮肤站进行皮肤管理等操作。</p>
+          <p class="mt-2 mb-0 text-warning">
             <el-icon><Clock /></el-icon>
             <strong>封禁剩余时间：{{ formatBanRemaining() }}</strong>
           </p>
-          <p style="margin: 4px 0 0 0; color: #909399; font-size: 13px;">
-            解封时间：{{ formatBanUntilTime() }}
-          </p>
+          <p class="mt-1 mb-0 text-13 text-info">解封时间：{{ formatBanUntilTime() }}</p>
         </div>
       </el-alert>
 
@@ -51,38 +52,54 @@
           <el-input v-model="form.display_name" placeholder="请输入用户名" />
         </el-form-item>
 
-        <el-divider content-position="left" class="form-divider password-divider">修改密码</el-divider>
+        <el-divider content-position="left" class="form-divider password-divider"
+          >修改密码</el-divider
+        >
 
         <el-form-item label="旧密码">
-          <el-input type="password" v-model="form.old_password" placeholder="请输入旧密码" show-password />
+          <el-input
+            type="password"
+            v-model="form.old_password"
+            placeholder="请输入旧密码"
+            show-password
+          />
         </el-form-item>
         <el-form-item label="新密码">
-          <el-input type="password" v-model="form.new_password" placeholder="请输入新密码（留空则不修改）" show-password />
+          <el-input
+            type="password"
+            v-model="form.new_password"
+            placeholder="请输入新密码（留空则不修改）"
+            show-password
+          />
         </el-form-item>
         <el-form-item label="确认新密码">
-          <el-input type="password" v-model="form.confirm_password" placeholder="请再次输入新密码" show-password />
+          <el-input
+            type="password"
+            v-model="form.confirm_password"
+            placeholder="请再次输入新密码"
+            show-password
+          />
         </el-form-item>
 
-        <el-divider
-          v-if="user"
-          content-position="left"
-          class="form-divider personalize-divider"
-        >
+        <el-divider v-if="user" content-position="left" class="form-divider personalize-divider">
           个性化
         </el-divider>
         <el-form-item v-if="user" label="关闭彩蛋">
           <el-switch v-model="disableEasterEgg" />
-          <el-text size="small" type="info" style="margin-left: 12px">
-            效果你猜
-          </el-text>
+          <el-text size="small" type="info" class="ml-3"> 效果你猜 </el-text>
         </el-form-item>
 
-        <div class="profile-actions">
+        <div class="flex gap-3 justify-end">
           <el-button type="primary" @click="updateProfile" size="large">
             <el-icon><Check /></el-icon>
             保存修改
           </el-button>
-          <el-button type="danger" @click="showDeleteDialog = true" size="large" v-if="!user?.is_admin">
+          <el-button
+            type="danger"
+            @click="showDeleteDialog = true"
+            size="large"
+            v-if="!user?.is_admin"
+          >
             <el-icon><Delete /></el-icon>
             注销账号
           </el-button>
@@ -102,16 +119,12 @@
         type="error"
         description="注销账号后，您的所有数据（包括角色、皮肤、披风等）将被永久删除，无法恢复。"
         :closable="false"
-        style="margin-bottom: 20px;"
+        class="mb-5"
       />
-      <p style="font-size: 14px; color: #606266;">
-        请输入 <strong style="color: #f56c6c;">注销账号</strong> 来确认操作：
+      <p class="text-sm text-info">
+        请输入 <strong class="text-danger">注销账号</strong> 来确认操作：
       </p>
-      <el-input
-        v-model="deleteConfirmText"
-        placeholder="请输入：注销账号"
-        style="margin-top: 10px;"
-      />
+      <el-input v-model="deleteConfirmText" placeholder="请输入：注销账号" class="mt-3" />
       <template #footer>
         <el-button @click="showDeleteDialog = false">取消</el-button>
         <el-button
@@ -144,7 +157,13 @@ const user = inject<Ref<User | null>>('user', ref(null))
 const fetchMe = inject<() => Promise<void>>('fetchMe')
 
 const router = useRouter()
-const form = ref({ email: '', display_name: '', old_password: '', new_password: '', confirm_password: '' })
+const form = ref({
+  email: '',
+  display_name: '',
+  old_password: '',
+  new_password: '',
+  confirm_password: '',
+})
 const showDeleteDialog = ref(false)
 const deleteConfirmText = ref('')
 const disableEasterEgg = ref(isEasterEggDisabled())
@@ -154,12 +173,16 @@ const emailInitial = computed(() => {
   return email.charAt(0).toUpperCase()
 })
 
-watch(() => user.value, (newUser) => {
-  if (newUser) {
-    form.value.email = newUser.email
-    form.value.display_name = newUser.display_name || ''
-  }
-}, { immediate: true, deep: true })
+watch(
+  () => user.value,
+  (newUser) => {
+    if (newUser) {
+      form.value.email = newUser.email
+      form.value.display_name = newUser.display_name || ''
+    }
+  },
+  { immediate: true, deep: true },
+)
 
 watch(disableEasterEgg, (disabled) => setEasterEggDisabled(disabled))
 
@@ -210,7 +233,7 @@ async function updateProfile() {
 
       await changePassword({
         old_password: form.value.old_password,
-        new_password: form.value.new_password
+        new_password: form.value.new_password,
       })
 
       ElMessage.success('密码修改成功')
@@ -221,7 +244,7 @@ async function updateProfile() {
 
     const payload = {
       email: form.value.email,
-      display_name: form.value.display_name
+      display_name: form.value.display_name,
     }
     await patchMe(payload)
     ElMessage.success('信息修改成功')
@@ -245,18 +268,6 @@ async function confirmDeleteAccount() {
 </script>
 
 <style scoped>
-.profile-form-card {
-  max-width: 600px;
-  margin: 0 auto;
-  padding: 30px;
-}
-
-.profile-header {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
 .profile-avatar {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
@@ -279,27 +290,6 @@ async function confirmDeleteAccount() {
   object-fit: contain;
 }
 
-.profile-meta h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-heading);
-  transition: color 0.3s ease;
-}
-
-.profile-meta p {
-  margin: 6px 0 0;
-  color: var(--color-text-light);
-  font-size: 13px;
-  transition: color 0.3s ease;
-}
-
-.profile-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: flex-end;
-}
-
 .profile-form-card :deep(.el-form-item__label) {
   color: var(--color-text);
   transition: color 0.3s ease;
@@ -312,7 +302,9 @@ async function confirmDeleteAccount() {
 .profile-form-card :deep(.el-divider__text) {
   background-color: var(--color-card-background);
   color: var(--color-heading);
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 .profile-form-card :deep(.el-form-item:hover) {

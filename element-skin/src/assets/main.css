@@ -9,13 +9,6 @@
   min-height: 100vh;
 }
 
-/* Dark mode backgrounds for auth pages */
-html.dark .login-container,
-html.dark .register-container,
-html.dark .reset-container {
-  background: var(--color-background-hero-dark);
-}
-
 /* Element Plus overrides */
 .el-tag__content {
   display: flex;

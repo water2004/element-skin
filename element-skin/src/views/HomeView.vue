@@ -100,7 +100,6 @@ function goRegister() {
       <div class="hero-content home-title-fade-in">
         <h1 class="hero-title">{{ siteName }}</h1>
         <p class="hero-subtitle">{{ siteSubtitle }}</p>
-        <div class="hero-actions"></div>
       </div>
     </div>
   </div>
@@ -248,10 +247,6 @@ function goRegister() {
   margin: 0 0 32px 0;
   opacity: 0.95;
   font-weight: 400;
-}
-
-.hero-actions {
-  display: none;
 }
 
 @media (max-width: 768px) {

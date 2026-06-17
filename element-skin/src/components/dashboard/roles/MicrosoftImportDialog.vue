@@ -8,14 +8,14 @@
     :before-close="beforeClose"
     append-to-body
   >
-    <div class="microsoft-login-content">
-      <div v-if="profile" class="step-content">
-        <div class="selection-item is-checked" style="cursor: default; pointer-events: none;">
+    <div class="py-3">
+      <div v-if="profile" class="flex flex-col items-center text-center">
+        <div class="selection-item is-checked cursor-default pointer-events-none">
           <div class="selection-info">
             <span class="title">{{ profile?.name }}</span>
             <span class="subtitle">{{ formatUUID(profile?.id || '') }}</span>
           </div>
-          <div style="margin-left: auto;">
+          <div class="ml-auto">
             <el-tag v-if="profile?.has_game" type="success" effect="dark">拥有游戏</el-tag>
             <el-tag v-else type="danger" effect="dark">无游戏权限</el-tag>
           </div>
@@ -60,16 +60,3 @@ function beforeClose(done?: () => void) {
   if (done) done()
 }
 </script>
-
-<style scoped>
-.microsoft-login-content {
-  padding: 10px 0;
-}
-
-.step-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-}
-</style>

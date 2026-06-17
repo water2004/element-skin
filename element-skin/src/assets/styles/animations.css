@@ -9,22 +9,36 @@
 
 /* 1. Keyframes */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes cardSlideIn {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-@keyframes badgeFadeIn {
-  from { opacity: 0; transform: scale(0.9); }
-  to { opacity: 1; transform: scale(1); }
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 2. Animation Classes */
@@ -38,8 +52,8 @@
   animation-delay: calc(var(--delay-index, 0) * 0.05s);
 }
 
-.animate-spin {
-  animation: spin 1s linear infinite;
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out;
 }
 
 /* 3. Reusable Transition/Transform Classes */
@@ -49,18 +63,3 @@
 .hover-lift:hover:not(:disabled) {
   transform: translateY(-4px);
 }
-
-.hover-shift-x {
-  transition: var(--transition-base);
-}
-.hover-shift-x:hover:not(:disabled) {
-  transform: translateX(6px);
-}
-
-.hover-scale {
-  transition: var(--transition-bounce);
-}
-.hover-scale:hover:not(:disabled) {
-  transform: scale(1.05);
-}
-

@@ -18,10 +18,9 @@ export function deleteMe(): Promise<{ data: { ok: boolean } }> {
   return client.delete('/me')
 }
 
-export function changePassword(data: { old_password: string; new_password: string }): Promise<{ data: { ok: boolean; message: string } }> {
+export function changePassword(data: {
+  old_password: string
+  new_password: string
+}): Promise<{ data: { ok: boolean; message: string } }> {
   return client.post('/me/password', data)
-}
-
-export function refreshToken(): Promise<{ data: { is_admin: boolean; is_super_admin?: boolean } }> {
-  return client.post('/me/refresh-token')
 }

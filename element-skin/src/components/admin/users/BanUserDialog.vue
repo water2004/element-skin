@@ -19,11 +19,11 @@
       </div>
 
       <div v-else class="custom-duration mb-4">
-        <el-input-number v-model="customHours" :min="1" :max="8760" class="custom-hours-input" />
+        <el-input-number v-model="customHours" :min="1" :max="8760" class="w-full" />
       </div>
 
-      <div class="ban-preview">
-        解封时间：<span>{{ untilLabel }}</span>
+      <div class="text-13 text-light p-3 bg-mute rounded-md">
+        解封时间：<span class="font-bold text-primary">{{ untilLabel }}</span>
       </div>
     </div>
     <template #footer>
@@ -49,22 +49,3 @@ defineEmits<{
   confirm: []
 }>()
 </script>
-
-<style scoped>
-.custom-hours-input {
-  width: 100%;
-}
-
-.ban-preview {
-  font-size: 13px;
-  color: var(--color-text-light);
-  padding: 10px;
-  background: var(--color-background-mute);
-  border-radius: 6px;
-}
-
-.ban-preview span {
-  font-weight: bold;
-  color: var(--el-color-primary);
-}
-</style>

@@ -2,7 +2,7 @@ import type { Router } from 'vue-router'
 
 export type EasterEggCleanup = () => void
 
-export interface EasterEggModule {
+interface EasterEggModule {
   start: () => void | EasterEggCleanup | Promise<void | EasterEggCleanup>
 }
 
@@ -133,7 +133,10 @@ function stopActive(): void {
 
 export function isEasterEggDisabled(): boolean {
   if (!hasDOM()) return true
-  return localStorage.getItem(EASTER_EGG_DISABLED_KEY) === '1' || localStorage.getItem(LEGACY_EASTER_EGG_DISABLED_KEY) === '1'
+  return (
+    localStorage.getItem(EASTER_EGG_DISABLED_KEY) === '1' ||
+    localStorage.getItem(LEGACY_EASTER_EGG_DISABLED_KEY) === '1'
+  )
 }
 
 export function setEasterEggDisabled(disabled: boolean): void {
@@ -149,16 +152,20 @@ export function setEasterEggDisabled(disabled: boolean): void {
   void refreshEasterEgg()
 }
 
-export function availableEasterEggs(): Array<Pick<EasterEggDefinition, 'id' | 'name' | 'description'>> {
+export function availableEasterEggs(): Array<
+  Pick<EasterEggDefinition, 'id' | 'name' | 'description'>
+> {
   return definitions.map(({ id, name, description }) => ({ id, name, description }))
 }
 
-export function activeEasterEggFor(date = new Date()): EasterEggDefinition | null {
+function activeEasterEggFor(date = new Date()): EasterEggDefinition | null {
   const enabled = serverConfig?.enabled
-  return definitions.find((definition) => {
-    if (enabled && !enabled.includes(definition.id)) return false
-    return definition.active(date)
-  }) || null
+  return (
+    definitions.find((definition) => {
+      if (enabled && !enabled.includes(definition.id)) return false
+      return definition.active(date)
+    }) || null
+  )
 }
 
 export function setServerEasterEggConfig(config?: EasterEggConfig | null): void {
@@ -213,7 +220,7 @@ export async function refreshEasterEgg(date = new Date()): Promise<void> {
   }
 }
 
-export async function startEasterEggForDebug(id: string): Promise<boolean> {
+async function startEasterEggForDebug(id: string): Promise<boolean> {
   if (!hasDOM()) return false
 
   const definition = definitions.find((item) => item.id === id)

@@ -1,15 +1,17 @@
 <template>
-  <div class="invites-section animate-fade-in">
+  <div class="max-w-1000 mx-auto py-5 animate-fade-in">
     <PageHeader title="邀请码管理" subtitle="创建并管理用于限制新用户注册的邀请码">
       <template #icon><Ticket /></template>
       <template #actions>
         <el-button :icon="Refresh" @click="loadInvites" plain class="hover-lift">刷新</el-button>
-        <el-button type="primary" :icon="Plus" @click="showInviteDialog" class="hover-lift">创建邀请码</el-button>
+        <el-button type="primary" :icon="Plus" @click="showInviteDialog" class="hover-lift"
+          >创建邀请码</el-button
+        >
       </template>
     </PageHeader>
 
     <el-card class="surface-card" shadow="never">
-      <el-table :data="invites" style="width: 100%" class="modern-table">
+      <el-table :data="invites" class="modern-table w-full">
         <el-table-column prop="code" label="邀请码" min-width="180">
           <template #default="{ row }">
             <el-text copyable class="code-text">{{ row.code }}</el-text>
@@ -17,7 +19,10 @@
         </el-table-column>
         <el-table-column label="可用次数" width="120" align="center">
           <template #default="{ row }">
-            <div class="usage-tag" :style="{ backgroundColor: getRemainingBg(row), color: getRemainingColor(row) }">
+            <div
+              class="usage-tag"
+              :style="{ backgroundColor: getRemainingBg(row), color: getRemainingColor(row) }"
+            >
               {{ row.used_count || 0 }} / {{ row.total_uses || '∞' }}
             </div>
           </template>
@@ -39,13 +44,7 @@
         </el-table-column>
         <el-table-column label="操作" width="80" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button
-              size="small"
-              type="danger"
-              :icon="Delete"
-              @click="deleteInvite(row)"
-              link
-            />
+            <el-button size="small" type="danger" :icon="Delete" @click="deleteInvite(row)" link />
           </template>
         </el-table-column>
       </el-table>
@@ -70,7 +69,7 @@
       class="dialog-form"
       append-to-body
     >
-      <div style="padding: 24px">
+      <div class="p-6">
         <el-form label-position="top">
           <el-form-item label="生成模式">
             <el-radio-group v-model="inviteMode" class="capsule-radio">
@@ -80,12 +79,19 @@
           </el-form-item>
 
           <el-form-item v-if="inviteMode === 'manual'" label="邀请码文本">
-            <el-input v-model="customInviteCode" placeholder="6-32位 字母/数字/下划线" maxlength="32" show-word-limit />
+            <el-input
+              v-model="customInviteCode"
+              placeholder="6-32位 字母/数字/下划线"
+              maxlength="32"
+              show-word-limit
+            />
           </el-form-item>
 
           <el-form-item v-else label="随机预览">
-            <div class="code-preview-box">
-              <span>{{ previewInviteCode }}</span>
+            <div
+              class="flex items-center justify-between bg-soft py-3 px-4 rounded-lg border-dashed-primary"
+            >
+              <span class="font-mono text-lg font-bold text-primary">{{ previewInviteCode }}</span>
               <el-button link :icon="Refresh" @click="refreshPreview">换一个</el-button>
             </div>
           </el-form-item>
@@ -102,20 +108,31 @@
               v-model="inviteUses"
               :min="1"
               :max="1000"
-              style="width: 100%"
+              class="w-full"
             />
           </el-form-item>
 
           <el-form-item label="备注 (可选)">
-            <el-input v-model="inviteNote" type="textarea" :rows="2" placeholder="填写该邀请码的用途..." />
+            <el-input
+              v-model="inviteNote"
+              type="textarea"
+              :rows="2"
+              placeholder="填写该邀请码的用途..."
+            />
           </el-form-item>
         </el-form>
       </div>
 
       <template #footer>
-        <div style="padding: 0 24px 24px">
+        <div class="px-6 pb-6">
           <el-button @click="inviteDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="confirmCreateInvite" :loading="creating" class="hover-lift">确认创建</el-button>
+          <el-button
+            type="primary"
+            @click="confirmCreateInvite"
+            :loading="creating"
+            class="hover-lift"
+            >确认创建</el-button
+          >
         </div>
       </template>
     </el-dialog>
@@ -145,14 +162,21 @@ const inviteUses = ref(1)
 const inviteNote = ref('')
 
 function formatDate(ts: number | undefined) {
-  return ts ? new Date(ts).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'
+  return ts
+    ? new Date(ts).toLocaleString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '-'
 }
 
 async function loadInvites() {
   try {
     const res = await getAdminInvites({
       cursor: pagination.currentCursor.value,
-      limit: limit
+      limit: limit,
     })
     invites.value = res.data.items
     pagination.setPageData(res.data)
@@ -183,7 +207,10 @@ async function refreshFirstPage() {
 }
 
 function generateRandomCode() {
-  return Math.random().toString(36).substring(2, 10).toUpperCase() + Math.random().toString(36).substring(2, 10).toUpperCase()
+  return (
+    Math.random().toString(36).substring(2, 10).toUpperCase() +
+    Math.random().toString(36).substring(2, 10).toUpperCase()
+  )
 }
 
 function showInviteDialog() {
@@ -225,7 +252,7 @@ async function confirmCreateInvite() {
     const payload = {
       code,
       note: inviteNote.value,
-      total_uses: inviteUsesMode.value === 'unlimited' ? null : inviteUses.value
+      total_uses: inviteUsesMode.value === 'unlimited' ? null : inviteUses.value,
     }
     await createAdminInvite(payload)
     ElMessage.success('创建成功')
@@ -251,13 +278,24 @@ onMounted(refreshFirstPage)
 </script>
 
 <style scoped>
-.invites-section { max-width: 1000px; margin: 0 auto; padding: 20px 0; }
-
-.code-text { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-weight: 600; color: var(--color-heading); }
-.usage-tag { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
-.note-text { color: var(--color-text-light); font-size: 13px; }
-.time-text { color: var(--color-text-light); font-size: 12px; }
-
-.code-preview-box { display: flex; align-items: center; justify-content: space-between; background: var(--color-background-soft); padding: 12px 16px; border-radius: 8px; border: 1px dashed var(--el-color-primary); }
-.code-preview-box span { font-family: monospace; font-size: 18px; font-weight: bold; color: var(--el-color-primary); }
+.code-text {
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-weight: 600;
+  color: var(--color-heading);
+}
+.usage-tag {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.note-text {
+  color: var(--color-text-light);
+  font-size: 13px;
+}
+.time-text {
+  color: var(--color-text-light);
+  font-size: 12px;
+}
 </style>

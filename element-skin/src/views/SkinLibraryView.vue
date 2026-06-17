@@ -22,7 +22,12 @@
             @clear="handleClearSearch"
             @search="handleSearch"
           />
-          <el-radio-group v-model="filterType" @change="handleFilterChange" size="large" class="capsule-radio">
+          <el-radio-group
+            v-model="filterType"
+            @change="handleFilterChange"
+            size="large"
+            class="capsule-radio"
+          >
             <el-radio-button value="">全部</el-radio-button>
             <el-radio-button value="skin">皮肤</el-radio-button>
             <el-radio-button value="cape">披风</el-radio-button>
@@ -34,114 +39,121 @@
         </ActionBar>
       </div>
 
-    <div class="library-grid-container" v-loading="loading" element-loading-background="transparent">
-      <div class="auto-grid" v-if="items.length > 0">
-        <TextureCard
-          v-for="(item, index) in items" 
-          :key="item.hash"
-          :texture="item"
-          :delay-index="index % 20"
-          :is-dark="isDark"
-          :textures-url="texturesUrl"
-          :resolution="textureResolutions.get(item.hash)"
-          :title="item.name || '未命名材质'"
-          @preview="openPreviewDialog"
-        >
-          <template #info="{ texture }">
-            <div class="texture-title">{{ item.name || '未命名材质' }}</div>
-            <div class="texture-meta-info">
-              <span class="uploader-name" v-if="texture.uploader_name">
-                <el-icon><User /></el-icon>
-                {{ texture.uploader_name }}
-              </span>
-              <span class="meta-separator" v-if="texture.uploader_name">·</span>
-              <span class="texture-date">
-                {{ formatDate(texture.created_at) }}
-              </span>
-              <span class="meta-separator">·</span>
-              <span class="texture-usage">{{ texture.usage_count || 0 }} 次使用</span>
-            </div>
-          </template>
-          <template #actions="{ texture }">
-            <el-button 
-              class="btn-gradient btn-gradient-primary" 
-              @click="addToWardrobe(texture)"
-              :disabled="!isLogged"
-            >
-              <el-icon><Plus /></el-icon>
-              <span>添加到衣柜</span>
-            </el-button>
-          </template>
-        </TextureCard>
-      </div>
-      
-      <el-empty v-else-if="!loading" description="库中暂无公开材质" />
-
-      <!-- 预览对话框 -->
-      <el-dialog
-        v-model="showPreviewDialog"
-        destroy-on-close
-        class="dialog-viewer"
-        append-to-body
+      <div
+        class="library-grid-container"
+        v-loading="loading"
+        element-loading-background="transparent"
       >
-        <div class="viewer-layout" v-if="selectedItem">
-          <TexturePreviewStage :texture="selectedItem" :textures-url="texturesUrl" />
-
-          <div class="viewer-info-panel">
-            <section class="viewer-section title-section">
-              <div class="viewer-title-row">
-                <h2 class="viewer-display-title">{{ selectedItem.name || '未命名纹理' }}</h2>
-              </div>
-            </section>
-
-            <section class="viewer-section meta-section">
-              <div class="viewer-title-row">
-                <span class="meta-chip">{{ textureResolutions.get(selectedItem.hash) || '--' }}px</span>
-                <span class="meta-chip" :class="selectedItem.type">
-                  {{ selectedItem.type === 'skin' ? '皮肤' : '披风' }}
+        <div class="auto-grid" v-if="items.length > 0">
+          <TextureCard
+            v-for="(item, index) in items"
+            :key="item.hash"
+            :texture="item"
+            :delay-index="index % 20"
+            :is-dark="isDark"
+            :textures-url="texturesUrl"
+            :resolution="textureResolutions.get(item.hash)"
+            :title="item.name || '未命名材质'"
+            @preview="openPreviewDialog"
+          >
+            <template #info="{ texture }">
+              <div class="texture-title">{{ item.name || '未命名材质' }}</div>
+              <div class="texture-meta-info">
+                <span class="uploader-name" v-if="texture.uploader_name">
+                  <el-icon><User /></el-icon>
+                  {{ texture.uploader_name }}
                 </span>
+                <span class="meta-separator" v-if="texture.uploader_name">·</span>
+                <span class="texture-date">
+                  {{ formatDate(texture.created_at) }}
+                </span>
+                <span class="meta-separator">·</span>
+                <span class="texture-usage">{{ texture.usage_count || 0 }} 次使用</span>
               </div>
-              <div class="hash-label">HASH: {{ selectedItem.hash }}</div>
-            </section>
-
-            <section class="viewer-section" v-if="selectedItem.uploader_name">
-              <div class="viewer-section-label">上传者</div>
-              <div class="uploader-info">
-                <el-icon><User /></el-icon>
-                <span>{{ selectedItem.uploader_name }}</span>
-              </div>
-            </section>
-
-            <section class="viewer-section footer-section" style="margin-top: auto;">
-              <el-button 
-                type="primary" 
-                size="large" 
-                class="btn-gradient btn-gradient-primary" 
-                style="width: 100%; border-radius: 12px; height: 50px;"
-                @click="addToWardrobe(selectedItem)"
+            </template>
+            <template #actions="{ texture }">
+              <el-button
+                class="btn-gradient btn-gradient-primary"
+                @click="addToWardrobe(texture)"
                 :disabled="!isLogged"
               >
                 <el-icon><Plus /></el-icon>
-                <span style="margin-left: 8px;">添加到我的衣柜</span>
+                <span>添加到衣柜</span>
               </el-button>
-              <p v-if="!isLogged" class="login-hint">登录后即可收藏此纹理</p>
-            </section>
-          </div>
+            </template>
+          </TextureCard>
         </div>
-      </el-dialog>
 
-      <div class="pagination-container">
-        <CursorPager
-          v-if="items.length > 0"
-          :count="items.length"
-          :loading="pagination.isLoading.value"
-          :disabled-prev="!pagination.canGoPrev.value"
-          :disabled-next="!pagination.canGoNext.value"
-          @prev="handlePrevPage"
-          @next="handleNextPage"
-        />
+        <el-empty v-else-if="!loading" description="库中暂无公开材质" />
+
+        <!-- 预览对话框 -->
+        <el-dialog
+          v-model="showPreviewDialog"
+          destroy-on-close
+          class="dialog-viewer"
+          append-to-body
+        >
+          <div class="viewer-layout" v-if="selectedItem">
+            <TexturePreviewStage :texture="selectedItem" :textures-url="texturesUrl" />
+
+            <div class="viewer-info-panel">
+              <section class="viewer-section title-section">
+                <div class="viewer-title-row">
+                  <h2 class="viewer-display-title">{{ selectedItem.name || '未命名纹理' }}</h2>
+                </div>
+              </section>
+
+              <section class="viewer-section meta-section">
+                <div class="viewer-title-row">
+                  <span class="meta-chip"
+                    >{{ textureResolutions.get(selectedItem.hash) || '--' }}px</span
+                  >
+                  <span class="meta-chip" :class="selectedItem.type">
+                    {{ selectedItem.type === 'skin' ? '皮肤' : '披风' }}
+                  </span>
+                </div>
+                <div class="hash-label">HASH: {{ selectedItem.hash }}</div>
+              </section>
+
+              <section class="viewer-section" v-if="selectedItem.uploader_name">
+                <div class="viewer-section-label">上传者</div>
+                <div class="flex items-center gap-2 text-15 text-heading font-medium">
+                  <el-icon><User /></el-icon>
+                  <span>{{ selectedItem.uploader_name }}</span>
+                </div>
+              </section>
+
+              <section class="viewer-section mt-auto border-b-0">
+                <el-button
+                  type="primary"
+                  size="large"
+                  class="btn-gradient btn-gradient-primary w-full rounded-2xl h-12"
+                  @click="addToWardrobe(selectedItem)"
+                  :disabled="!isLogged"
+                >
+                  <el-icon><Plus /></el-icon>
+                  <span class="ml-2">添加到我的衣柜</span>
+                </el-button>
+                <p v-if="!isLogged" class="text-center text-13 text-info mt-3">
+                  登录后即可收藏此纹理
+                </p>
+              </section>
+            </div>
+          </div>
+        </el-dialog>
+
+        <div class="pagination-container">
+          <CursorPager
+            v-if="items.length > 0"
+            :count="items.length"
+            :loading="pagination.isLoading.value"
+            :disabled-prev="!pagination.canGoPrev.value"
+            :disabled-next="!pagination.canGoNext.value"
+            @prev="handlePrevPage"
+            @next="handleNextPage"
+          />
+        </div>
       </div>
-    </div>
     </template>
   </div>
 </template>
@@ -209,7 +221,7 @@ async function fetchLibrary() {
     items.value = res.data.items
     pagination.setPageData(res.data)
 
-    items.value.forEach(item => {
+    items.value.forEach((item) => {
       if (item.type === 'skin') {
         loadTextureResolution(item.hash)
       }
@@ -250,7 +262,7 @@ async function handleNextPage() {
     items.value = res.data.items
     return res.data
   })
-  items.value.forEach(item => {
+  items.value.forEach((item) => {
     if (item.type === 'skin') {
       loadTextureResolution(item.hash)
     }
@@ -271,7 +283,7 @@ async function handlePrevPage() {
     items.value = res.data.items
     return res.data
   })
-  items.value.forEach(item => {
+  items.value.forEach((item) => {
     if (item.type === 'skin') {
       loadTextureResolution(item.hash)
     }

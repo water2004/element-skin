@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-content">
+  <div class="w-full h-full">
     <router-view />
   </div>
 </template>
@@ -8,10 +8,3 @@
 // This component now only serves as a layout container for the dashboard's nested routes.
 // The main layout, navigation, and user data are handled by AppLayout.vue.
 </script>
-
-<style scoped>
-.dashboard-content {
-  width: 100%;
-  height: 100%;
-}
-</style>

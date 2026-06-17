@@ -1,5 +1,5 @@
 <template>
-  <div class="dashboard-home animate-fade-in">
+  <div class="flex flex-col animate-fade-in">
     <div class="page-header">
       <div class="page-header-content">
         <h1>我的主页</h1>
@@ -7,8 +7,8 @@
       </div>
     </div>
 
-    <section class="dashboard-section stats-section">
-      <div class="stats-grid">
+    <section class="flex flex-col gap-4 mb-8">
+      <div class="grid grid-cols-2 max-sm:grid-cols-1 gap-4">
         <el-card shadow="hover" class="surface-card">
           <div class="stats-card-content">
             <div class="stats-card-icon bg-gradient-blue">
@@ -34,19 +34,19 @@
       </div>
     </section>
 
-    <section class="dashboard-section">
-      <div class="section-header">
-        <h2>快速接入启动器</h2>
+    <section class="flex flex-col gap-4 mb-8">
+      <div class="flex justify-between items-baseline gap-3">
+        <h2 class="m-0 text-lg font-semibold text-heading">快速接入启动器</h2>
       </div>
       <el-card shadow="hover" class="surface-card">
-        <div class="config-content">
-          <p class="config-desc">
+        <div class="flex flex-col gap-4 py-1">
+          <p class="text-sm text-light m-0 leading-normal">
             点击下方按钮复制 API 地址，或直接将其拖到支持 authlib-injector 的启动器窗口中。
           </p>
-          <div class="config-actions">
+          <div class="flex gap-3 items-stretch flex-wrap">
             <el-input v-model="apiUrl" readonly class="api-url-input" />
             <a
-              class="el-button el-button--primary drag-btn"
+              class="el-button el-button--primary drag-btn inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap"
               :href="`authlib-injector:yggdrasil-server:${encodeURIComponent(apiUrl)}`"
               title="点击复制，或拖到启动器"
               @click.prevent="copyApiUrl"
@@ -59,21 +59,17 @@
       </el-card>
     </section>
 
-    <section v-if="fallbackEntries.length" class="dashboard-section">
-      <div class="section-header">
-        <h2>服务状态</h2>
+    <section v-if="fallbackEntries.length" class="flex flex-col gap-4 mb-0">
+      <div class="flex justify-between items-baseline gap-3">
+        <h2 class="m-0 text-lg font-semibold text-heading">服务状态</h2>
         <el-button @click="loadFallbackStatus" :loading="isChecking" size="small" text>
           <el-icon><Refresh /></el-icon>
           <span>刷新</span>
         </el-button>
       </div>
 
-      <div class="fallback-list">
-        <FallbackStatusCard
-          v-for="entry in fallbackEntries"
-          :key="entry.id"
-          :entry="entry"
-        />
+      <div class="flex flex-col gap-4">
+        <FallbackStatusCard v-for="entry in fallbackEntries" :key="entry.id" :entry="entry" />
       </div>
     </section>
   </div>
@@ -108,11 +104,14 @@ function getApiUrl() {
 
 function copyApiUrl() {
   if (!apiUrl.value) return
-  navigator.clipboard.writeText(apiUrl.value).then(() => {
-    ElMessage.success('API 地址已复制')
-  }).catch(() => {
-    ElMessage.error('复制失败，请手动复制')
-  })
+  navigator.clipboard
+    .writeText(apiUrl.value)
+    .then(() => {
+      ElMessage.success('API 地址已复制')
+    })
+    .catch(() => {
+      ElMessage.error('复制失败，请手动复制')
+    })
 }
 
 const fallbackEntries = ref<FallbackStatusEntry[]>([])
@@ -136,7 +135,9 @@ onMounted(async () => {
   try {
     const res = await getPublicSettings()
     if (res.data.api_url) {
-      apiUrl.value = res.data.api_url.endsWith('/') ? res.data.api_url.slice(0, -1) : res.data.api_url
+      apiUrl.value = res.data.api_url.endsWith('/')
+        ? res.data.api_url.slice(0, -1)
+        : res.data.api_url
     } else {
       apiUrl.value = getApiUrl()
     }
@@ -159,61 +160,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.dashboard-home {
-  display: flex;
-  flex-direction: column;
-}
-
-.dashboard-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  margin-bottom: 32px;
-}
-.dashboard-section:last-child {
-  margin-bottom: 0;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 12px;
-}
-.section-header h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--color-heading);
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-}
-@media (max-width: 640px) {
-  .stats-grid { grid-template-columns: 1fr; }
-}
-
-.config-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 4px 0;
-}
-.config-desc {
-  font-size: 14px;
-  color: var(--color-text-light);
-  margin: 0;
-  line-height: 1.6;
-}
-.config-actions {
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
-  flex-wrap: wrap;
-}
 .api-url-input {
   flex: 99 1 320px;
   min-width: 0;
@@ -221,24 +167,12 @@ onMounted(async () => {
 .drag-btn {
   flex: 1 1 240px;
   text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
   min-height: var(--el-component-size, 32px);
   padding: 0 16px;
-  font-weight: 500;
-  white-space: nowrap;
   transition: transform 0.2s;
 }
 .drag-btn:hover {
   transform: translateY(-1px);
   color: white;
-}
-
-.fallback-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
 }
 </style>

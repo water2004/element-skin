@@ -1,22 +1,29 @@
 <template>
-  <div class="textures-section animate-fade-in">
+  <div class="w-full mx-auto py-5 animate-fade-in">
     <PageHeader title="材质管理" subtitle="浏览和管理皮肤库中所有上传的材质">
       <template #icon><Picture /></template>
       <template #actions>
-        <el-button type="primary" :icon="Refresh" @click="refreshTexturesFromFirst" plain class="hover-lift">
+        <el-button
+          type="primary"
+          :icon="Refresh"
+          @click="refreshTexturesFromFirst"
+          plain
+          class="hover-lift"
+        >
           刷新列表
         </el-button>
       </template>
     </PageHeader>
 
-    <div class="filter-bar">
+    <div class="flex items-center gap-4 mb-6 flex-wrap">
       <SearchBar
+        class="flex-1 min-w-260"
         v-model="searchQuery"
         placeholder="搜索哈希、材质名或上传者"
         @clear="handleClearSearch"
         @search="handleSearch"
       />
-      <div class="type-filter">
+      <div class="shrink-0">
         <el-radio-group v-model="typeFilter" @change="handleTypeFilterChange" class="capsule-radio">
           <el-radio-button :value="null">全部</el-radio-button>
           <el-radio-button value="skin">皮肤</el-radio-button>
@@ -50,14 +57,21 @@
         @preview="openPreview"
       >
         <template #info="{ texture }">
-          <div class="type-tag" :class="texture.type">{{ texture.type === 'skin' ? '皮肤' : '披风' }}</div>
+          <div class="type-tag" :class="texture.type">
+            {{ texture.type === 'skin' ? '皮肤' : '披风' }}
+          </div>
           <div class="item-card-title">{{ texture.name || '未命名' }}</div>
-          <div class="texture-uploader" v-if="texture.uploader_display_name || texture.uploader_email">
+          <div
+            class="texture-uploader"
+            v-if="texture.uploader_display_name || texture.uploader_email"
+          >
             {{ texture.uploader_display_name || texture.uploader_email }}
           </div>
         </template>
         <template #actions="{ texture }">
-          <el-button class="btn-gradient btn-gradient-primary" @click="openPreview(texture)"><el-icon><Edit /></el-icon><span>编辑</span></el-button>
+          <el-button class="btn-gradient btn-gradient-primary" @click="openPreview(texture)"
+            ><el-icon><Edit /></el-icon><span>编辑</span></el-button
+          >
         </template>
       </TextureCard>
     </div>
@@ -90,16 +104,25 @@
             <span class="meta-chip hash">{{ selectedItem.hash }}</span>
           </section>
           <!-- uploader -->
-          <section class="viewer-section" v-if="selectedItem.uploader_display_name || selectedItem.uploader_email">
+          <section
+            class="viewer-section"
+            v-if="selectedItem.uploader_display_name || selectedItem.uploader_email"
+          >
             <div class="viewer-section-label">上传者</div>
-            <div class="uploader-info">
-              <span>{{ selectedItem.uploader_display_name || selectedItem.uploader_email || '未知' }}</span>
+            <div class="flex items-center gap-2 text-15 text-heading font-medium">
+              <span>{{
+                selectedItem.uploader_display_name || selectedItem.uploader_email || '未知'
+              }}</span>
             </div>
           </section>
           <!-- model (skin only) -->
           <section class="viewer-section" v-if="selectedItem.type === 'skin'">
             <div class="viewer-section-label">模型选择</div>
-            <el-radio-group :model-value="selectedItem.model" @change="updateModel" class="capsule-radio">
+            <el-radio-group
+              :model-value="selectedItem.model"
+              @change="updateModel"
+              class="capsule-radio"
+            >
               <el-radio-button value="default">Default</el-radio-button>
               <el-radio-button value="slim">Slim</el-radio-button>
             </el-radio-group>
@@ -107,13 +130,10 @@
           <!-- public toggle -->
           <section class="viewer-section">
             <div class="viewer-section-label">公开状态</div>
-            <el-switch
-              :model-value="selectedItem.is_public"
-              @change="updateIsPublic"
-            />
+            <el-switch :model-value="selectedItem.is_public" @change="updateIsPublic" />
           </section>
           <!-- force delete -->
-          <section class="viewer-section footer-section">
+          <section class="viewer-section border-b-0">
             <el-button type="danger" plain @click="confirmForceDelete">强制下架</el-button>
           </section>
         </div>
@@ -170,7 +190,9 @@ async function fetchTextures() {
   loading.value = true
   pagination.isLoading.value = true
   try {
-    const res = await getAdminTextures(buildSearchParams({ cursor: pagination.currentCursor.value }))
+    const res = await getAdminTextures(
+      buildSearchParams({ cursor: pagination.currentCursor.value }),
+    )
     textures.value = res.data.items
     pagination.setPageData(res.data)
   } catch (e) {
@@ -233,7 +255,10 @@ async function updatePreviewNote() {
   const newName = previewNote.value.trim()
   if (newName === selectedItem.value.name) return
   try {
-    await patchAdminTexture(selectedItem.value.hash, { type: selectedItem.value.type, note: newName })
+    await patchAdminTexture(selectedItem.value.hash, {
+      type: selectedItem.value.type,
+      note: newName,
+    })
     selectedItem.value.name = newName
     ElMessage.success('名称已更新')
   } catch (e) {
@@ -244,7 +269,10 @@ async function updatePreviewNote() {
 async function updateModel(newModel: string | number | boolean | undefined) {
   if (!selectedItem.value) return
   try {
-    await patchAdminTexture(selectedItem.value.hash, { type: selectedItem.value.type, model: String(newModel) })
+    await patchAdminTexture(selectedItem.value.hash, {
+      type: selectedItem.value.type,
+      model: String(newModel),
+    })
     selectedItem.value.model = String(newModel)
     ElMessage.success('模型已更新')
   } catch (e) {
@@ -265,7 +293,7 @@ async function updateIsPublic(newValue: string | number | boolean) {
       await ElMessageBox.confirm(
         '取消公开后，该材质将不会出现在公共皮肤库中，已绑定此材质的角色不受影响。确定取消公开？',
         '确认操作',
-        { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+        { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' },
       )
     } catch {
       return
@@ -288,7 +316,7 @@ async function confirmForceDelete() {
     await ElMessageBox.confirm(
       '强制下架将从所有用户的衣柜中移除该材质，并从皮肤库中彻底删除。此操作不可撤销！确定继续？',
       '危险操作',
-      { confirmButtonText: '确认强制删除', cancelButtonText: '取消', type: 'error' }
+      { confirmButtonText: '确认强制删除', cancelButtonText: '取消', type: 'error' },
     )
     await deleteAdminTexture(item.hash, { force: true, type: item.type })
     ElMessage.success('材质已强制下架')
@@ -303,30 +331,6 @@ onMounted(refreshTexturesFromFirst)
 </script>
 
 <style scoped>
-.textures-section {
-  /* max-width: 1500px; */
-  width: 100%;
-  margin: 0 auto;
-  padding: 20px 0;
-}
-
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-}
-
-.search-bar-container {
-  flex: 1;
-  min-width: 260px;
-}
-
-.type-filter {
-  flex-shrink: 0;
-}
-
 .texture-uploader {
   font-size: 12px;
   color: var(--color-text-light);
@@ -336,24 +340,24 @@ onMounted(refreshTexturesFromFirst)
 }
 
 /* Skeleton loading */
-.skeleton-card { pointer-events: none; }
-.skeleton-preview { height: 280px; background: var(--el-skeleton-color, #e0e0e0); border-radius: 8px 8px 0 0; }
-.skeleton-info { padding: 12px; }
-.skeleton-line { height: 14px; background: var(--el-skeleton-color, #e0e0e0); border-radius: 4px; margin-bottom: 8px; }
-.skeleton-line.short { width: 60%; }
-
-/* Preview dialog uploader */
-.uploader-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  color: var(--color-heading);
-  font-weight: 500;
+.skeleton-card {
+  pointer-events: none;
 }
-
-/* Footer section pushed to bottom */
-.viewer-section.footer-section {
-  border-bottom: none;
+.skeleton-preview {
+  height: 280px;
+  background: var(--el-skeleton-color, #e0e0e0);
+  border-radius: 8px 8px 0 0;
+}
+.skeleton-info {
+  padding: 12px;
+}
+.skeleton-line {
+  height: 14px;
+  background: var(--el-skeleton-color, #e0e0e0);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+.skeleton-line.short {
+  width: 60%;
 }
 </style>

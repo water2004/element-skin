@@ -27,7 +27,9 @@
           <div class="viewer-section-label">皮肤绑定</div>
           <el-input :model-value="profile.skin_hash || '未绑定'" disabled>
             <template #append>
-              <el-button :disabled="!profile.skin_hash" @click="$emit('clear-skin')">清除</el-button>
+              <el-button :disabled="!profile.skin_hash" @click="$emit('clear-skin')"
+                >清除</el-button
+              >
             </template>
           </el-input>
         </section>
@@ -36,13 +38,15 @@
           <div class="viewer-section-label">披风绑定</div>
           <el-input :model-value="profile.cape_hash || '未绑定'" disabled>
             <template #append>
-              <el-button :disabled="!profile.cape_hash" @click="$emit('clear-cape')">清除</el-button>
+              <el-button :disabled="!profile.cape_hash" @click="$emit('clear-cape')"
+                >清除</el-button
+              >
             </template>
           </el-input>
         </section>
 
-        <section class="viewer-section footer-section">
-          <el-button type="danger" plain class="delete-role-button" @click="$emit('delete')">
+        <section class="viewer-section mt-auto">
+          <el-button type="danger" plain class="w-full rounded-lg" @click="$emit('delete')">
             删除角色
           </el-button>
         </section>
@@ -70,14 +74,3 @@ defineEmits<{
   delete: []
 }>()
 </script>
-
-<style scoped>
-.footer-section {
-  margin-top: auto;
-}
-
-.delete-role-button {
-  width: 100%;
-  border-radius: 8px;
-}
-</style>

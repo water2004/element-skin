@@ -88,21 +88,6 @@ export interface Invite {
   created_at?: number
 }
 
-// Fallback / external Yggdrasil endpoint
-export interface FallbackEndpoint {
-  id?: number
-  priority?: number
-  session_url?: string
-  account_url?: string
-  services_url?: string
-  cache_ttl?: number
-  enable_profile?: boolean
-  enable_hasjoined?: boolean
-  enable_whitelist?: boolean
-  note?: string
-  skin_domains?: string
-}
-
 // Whitelist entry
 export interface WhitelistEntry {
   username: string
@@ -113,12 +98,6 @@ export interface WhitelistEntry {
 export interface MicrosoftAuthUrlResponse {
   auth_url: string
   state: string
-}
-
-// Yggdrasil profile (remote)
-export interface YggdrasilProfile {
-  id: string
-  name: string
 }
 
 export interface YggdrasilImportResult {
@@ -146,7 +125,7 @@ export interface HomepageMedia {
   updated_at: number
 }
 
-export interface FallbackStatusTick {
+interface FallbackStatusTick {
   checked_at: number
   session: 'up' | 'down'
   account: 'up' | 'down'

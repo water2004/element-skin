@@ -1,9 +1,11 @@
 <template>
-  <div class="login-container">
-    <div class="login-card">
-      <div class="login-header">
-        <h1>欢迎回来</h1>
-        <p>登录您的账号</p>
+  <div class="flex items-center justify-center min-h-screen p-5 bg-screen-gradient transition-bg">
+    <div
+      class="w-full max-w-440 bg-card rounded-3xl p-10 shadow-lg-soft animate-slide-up border transition-colors"
+    >
+      <div class="text-center mb-8">
+        <h1 class="m-0 mb-2 text-28 font-semibold text-heading">欢迎回来</h1>
+        <p class="m-0 text-sm text-light">登录您的账号</p>
       </div>
 
       <el-form :model="form" :rules="rules" ref="formRef" label-position="top" size="large">
@@ -28,29 +30,22 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button
-            type="primary"
-            @click="login"
-            :loading="loading"
-            style="width: 100%"
-          >
+          <el-button type="primary" @click="login" :loading="loading" class="w-full">
             <el-icon v-if="!loading"><Right /></el-icon>
             {{ loading ? '登录中...' : '登录' }}
           </el-button>
         </el-form-item>
       </el-form>
 
-      <div class="login-actions" v-if="emailVerifyEnabled">
+      <div class="text-right -mt-3 mb-5" v-if="emailVerifyEnabled">
         <el-button link type="info" @click="$router.push('/reset-password')">
           忘记密码？
         </el-button>
       </div>
 
-      <div class="login-footer">
+      <div class="text-center mt-6 text-body text-sm transition-colors">
         <span>还没有账号？</span>
-        <el-button link type="primary" @click="$router.push('/register')">
-          立即注册
-        </el-button>
+        <el-button link type="primary" @click="$router.push('/register')"> 立即注册 </el-button>
       </div>
     </div>
   </div>
@@ -71,7 +66,7 @@ const loading = ref(false)
 
 const form = reactive({
   email: '',
-  password: ''
+  password: '',
 })
 
 const emailVerifyEnabled = ref(false)
@@ -88,11 +83,9 @@ onMounted(async () => {
 const rules: FormRules = {
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' }
+    { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' },
   ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' }
-  ]
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
 async function login() {
@@ -125,73 +118,6 @@ async function login() {
 </script>
 
 <style scoped>
-.login-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: var(--color-background-hero-light);
-  transition: background 0.3s ease;
-}
-
-.login-card {
-  width: 100%;
-  max-width: 440px;
-  background: var(--color-card-background);
-  border-radius: 16px;
-  padding: 40px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  animation: slideUp 0.5s ease-out;
-  border: 1px solid var(--color-border);
-  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(30px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.login-header {
-  text-align: center;
-  margin-bottom: 32px;
-}
-
-.login-header h1 {
-  margin: 0 0 8px 0;
-  font-size: 28px;
-  font-weight: 600;
-  color: var(--color-heading);
-  transition: color 0.3s ease;
-}
-
-.login-header p {
-  margin: 0;
-  font-size: 14px;
-  color: var(--color-text-light);
-  transition: color 0.3s ease;
-}
-
-.login-actions {
-  text-align: right;
-  margin-top: -12px;
-  margin-bottom: 20px;
-}
-
-.login-footer {
-  text-align: center;
-  margin-top: 24px;
-  color: var(--color-text);
-  font-size: 14px;
-  transition: color 0.3s ease;
-}
-
 :deep(.el-form-item__label) {
   font-weight: 500;
   color: var(--color-text);

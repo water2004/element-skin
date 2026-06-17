@@ -1,9 +1,15 @@
 <template>
-  <div class="roles-section animate-fade-in">
+  <div class="w-full mx-auto py-5 animate-fade-in">
     <PageHeader title="角色管理" subtitle="浏览和管理全站所有用户的游戏角色与材质">
       <template #icon><UserFilled /></template>
       <template #actions>
-        <el-button type="primary" :icon="Refresh" @click="refreshFromFirst" plain class="hover-lift">
+        <el-button
+          type="primary"
+          :icon="Refresh"
+          @click="refreshFromFirst"
+          plain
+          class="hover-lift"
+        >
           刷新列表
         </el-button>
       </template>
@@ -16,7 +22,7 @@
       @search="handleSearch"
     />
 
-    <div class="roles-grid-container" v-loading="loading" element-loading-background="transparent">
+    <div class="min-h-400" v-loading="loading" element-loading-background="transparent">
       <div class="auto-grid" v-if="profiles.length > 0">
         <AdminRoleCard
           v-for="(profile, index) in profiles"
@@ -65,7 +71,13 @@ import SearchBar from '@/components/common/SearchBar.vue'
 import AdminRoleCard from '@/components/admin/roles/AdminRoleCard.vue'
 import AdminRolePreviewDialog from '@/components/admin/roles/AdminRolePreviewDialog.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
-import { getAdminProfiles, patchAdminProfile, deleteAdminProfile, patchProfileSkin, patchProfileCape } from '@/api/admin/profiles'
+import {
+  getAdminProfiles,
+  patchAdminProfile,
+  deleteAdminProfile,
+  patchProfileSkin,
+  patchProfileCape,
+} from '@/api/admin/profiles'
 import PageHeader from '@/components/common/PageHeader.vue'
 import type { Profile } from '@/api/types'
 
@@ -99,7 +111,9 @@ async function refreshProfiles() {
   loading.value = true
   profilesPagination.isLoading.value = true
   try {
-    const res = await getAdminProfiles(buildSearchParams({ cursor: profilesPagination.currentCursor.value }))
+    const res = await getAdminProfiles(
+      buildSearchParams({ cursor: profilesPagination.currentCursor.value }),
+    )
     profiles.value = res.data.items
     profilesPagination.setPageData(res.data)
   } catch (e) {
@@ -220,27 +234,3 @@ async function confirmDeleteRole() {
 
 onMounted(refreshFromFirst)
 </script>
-
-<style scoped>
-.roles-section {
-  /* max-width: 1500px; */
-  width: 100%;
-  margin: 0 auto;
-  padding: 20px 0;
-}
-
-.search-bar-container {
-  margin-bottom: 16px;
-  display: flex;
-}
-
-.roles-grid-container {
-  min-height: 400px;
-}
-
-@media (max-width: 768px) {
-  .roles-section {
-    padding: 10px 0;
-  }
-}
-</style>

@@ -1,9 +1,9 @@
 <template>
-  <div class="admin-homepage-media animate-fade-in">
+  <div class="max-w-1040 mx-auto py-5 animate-fade-in">
     <PageHeader title="首页图片" subtitle="管理静态图与 Panorama 的播放顺序、时长和镜头轨迹">
       <template #icon><PictureFilled /></template>
       <template #actions>
-        <div class="upload-actions">
+        <div class="flex items-center flex-wrap gap-3">
           <el-button
             type="primary"
             :icon="Check"
@@ -54,7 +54,7 @@
         @dragend="endDrag"
       />
 
-      <div v-if="items.length === 0 && !loading" class="empty-placeholder">
+      <div v-if="items.length === 0 && !loading" class="py-10">
         <el-empty description="暂无首页媒体" />
       </div>
     </TransitionGroup>
@@ -481,17 +481,6 @@ onMounted(fetchItems)
 </script>
 
 <style scoped>
-.admin-homepage-media {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 20px 0;
-}
-.upload-actions {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  flex-wrap: wrap;
-}
 .media-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, 240px);

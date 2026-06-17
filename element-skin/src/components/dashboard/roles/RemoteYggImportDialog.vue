@@ -16,13 +16,18 @@
           <el-input v-model="username" placeholder="外部皮肤站的登录用户名" />
         </el-form-item>
         <el-form-item label="密码">
-          <el-input v-model="password" type="password" show-password placeholder="外部皮肤站的登录密码" />
+          <el-input
+            v-model="password"
+            type="password"
+            show-password
+            placeholder="外部皮肤站的登录密码"
+          />
         </el-form-item>
       </el-form>
     </div>
 
     <div v-else-if="step === 'select'">
-      <p style="margin-bottom: 16px;">请选择要导入的角色：</p>
+      <p class="mb-4">请选择要导入的角色：</p>
       <el-checkbox-group v-model="selectedProfiles" class="selection-list">
         <el-checkbox
           v-for="profile in profiles"

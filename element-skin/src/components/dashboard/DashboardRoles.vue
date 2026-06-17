@@ -8,22 +8,34 @@
         </div>
       </div>
       <ActionBar full>
-        <el-button size="large" @click="showYggImportDialog = true" class="btn-gradient btn-gradient-warning role-header-button">
+        <el-button
+          size="large"
+          @click="showYggImportDialog = true"
+          class="btn-gradient btn-gradient-warning role-header-button"
+        >
           <el-icon><Download /></el-icon>
-          <span style="margin-left:8px">导入皮肤站角色</span>
+          <span class="ml-2">导入皮肤站角色</span>
         </el-button>
-        <el-button size="large" @click="startMicrosoftAuth" class="btn-gradient btn-gradient-success role-header-button">
+        <el-button
+          size="large"
+          @click="startMicrosoftAuth"
+          class="btn-gradient btn-gradient-success role-header-button"
+        >
           <el-icon><Connection /></el-icon>
-          <span style="margin-left:8px">绑定正版角色</span>
+          <span class="ml-2">绑定正版角色</span>
         </el-button>
-        <el-button size="large" @click="showCreateRoleDialog = true" class="btn-gradient btn-gradient-primary role-header-button">
+        <el-button
+          size="large"
+          @click="showCreateRoleDialog = true"
+          class="btn-gradient btn-gradient-primary role-header-button"
+        >
           <el-icon><Plus /></el-icon>
-          <span style="margin-left:8px">新建角色</span>
+          <span class="ml-2">新建角色</span>
         </el-button>
       </ActionBar>
     </div>
 
-    <div class="roles-grid-container" v-loading="loading" element-loading-background="transparent">
+    <div class="min-h-400" v-loading="loading" element-loading-background="transparent">
       <div class="auto-grid" v-if="profiles.length > 0">
         <RoleCard
           v-for="(profile, index) in profiles"
@@ -109,8 +121,19 @@ import MicrosoftImportDialog from '@/components/dashboard/roles/MicrosoftImportD
 import RemoteYggImportDialog from '@/components/dashboard/roles/RemoteYggImportDialog.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { useAvatar } from '@/composables/useAvatar'
-import { getProfiles, createProfile, patchProfile, deleteProfile, clearProfileSkin, clearProfileCape } from '@/api/profiles'
-import { getMicrosoftAuthUrl, getMicrosoftProfile, importMicrosoftProfile as apiImportMicrosoftProfile } from '@/api/microsoft'
+import {
+  getProfiles,
+  createProfile,
+  patchProfile,
+  deleteProfile,
+  clearProfileSkin,
+  clearProfileCape,
+} from '@/api/profiles'
+import {
+  getMicrosoftAuthUrl,
+  getMicrosoftProfile,
+  importMicrosoftProfile as apiImportMicrosoftProfile,
+} from '@/api/microsoft'
 import { getRemoteYggProfiles, importRemoteYggProfiles } from '@/api/remote-ygg'
 import type { Profile } from '@/api/types'
 
@@ -164,7 +187,7 @@ async function fetchProfiles() {
   try {
     const params = {
       cursor: pagination.currentCursor.value,
-      limit: limit
+      limit: limit,
     }
     const res = await getProfiles(params)
     profiles.value = res.data.items
@@ -251,11 +274,11 @@ async function updateRoleName(name: string) {
 
 async function clearRoleSkin(pid: string) {
   try {
-    await ElMessageBox.confirm(
-      '确定要清除该角色的皮肤吗？',
-      '确认清除',
-      { type: 'warning', confirmButtonText: '确定清除', cancelButtonText: '取消' }
-    )
+    await ElMessageBox.confirm('确定要清除该角色的皮肤吗？', '确认清除', {
+      type: 'warning',
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+    })
     await clearProfileSkin(pid)
     ElMessage.success('皮肤已清除')
     showPreviewDialog.value = false
@@ -270,11 +293,11 @@ async function clearRoleSkin(pid: string) {
 
 async function clearRoleCape(pid: string) {
   try {
-    await ElMessageBox.confirm(
-      '确定要清除该角色的披风吗？',
-      '确认清除',
-      { type: 'warning', confirmButtonText: '确定清除', cancelButtonText: '取消' }
-    )
+    await ElMessageBox.confirm('确定要清除该角色的披风吗？', '确认清除', {
+      type: 'warning',
+      confirmButtonText: '确定清除',
+      cancelButtonText: '取消',
+    })
     await clearProfileCape(pid)
     ElMessage.success('披风已清除')
     showPreviewDialog.value = false
@@ -293,7 +316,7 @@ async function setAsAvatar(profile: Profile) {
   const loadingMsg = ElMessage({
     message: '正在设置头像...',
     type: 'info',
-    duration: 0
+    duration: 0,
   })
 
   try {
@@ -349,7 +372,6 @@ async function importMicrosoftProfile() {
     } catch (e) {
       console.warn('Failed to refresh user profile:', e)
     }
-
   } catch (error: any) {
     ElMessage.error('导入失败: ' + (error.response?.data?.detail || error.message))
   } finally {
@@ -374,7 +396,7 @@ async function getYggProfiles() {
     const res = await getRemoteYggProfiles({
       api_url: yggApiUrl.value,
       username: yggUsername.value,
-      password: yggPassword.value
+      password: yggPassword.value,
     })
 
     yggProfiles.value = res.data.profiles
@@ -382,7 +404,7 @@ async function getYggProfiles() {
       ElMessage.warning('该账户下没有角色')
     } else {
       yggStep.value = 'select'
-      selectedYggProfiles.value = yggProfiles.value.map(profile => profile.id)
+      selectedYggProfiles.value = yggProfiles.value.map((profile) => profile.id)
     }
   } catch (e: any) {
     ElMessage.error('获取失败: ' + (e.response?.data?.detail || e.message))
@@ -392,17 +414,19 @@ async function getYggProfiles() {
 }
 
 async function importYggProfile() {
-  const selectedProfiles = yggProfiles.value.filter(profile => selectedYggProfiles.value.includes(profile.id))
+  const selectedProfiles = yggProfiles.value.filter((profile) =>
+    selectedYggProfiles.value.includes(profile.id),
+  )
   if (selectedProfiles.length === 0) return
 
   try {
     yggLoading.value = true
     const res = await importRemoteYggProfiles({
       api_url: yggApiUrl.value,
-      profiles: selectedProfiles.map(profile => ({
+      profiles: selectedProfiles.map((profile) => ({
         profile_id: profile.id,
         profile_name: profile.name,
-      }))
+      })),
     })
 
     const successCount = res.data?.success_count ?? 0
@@ -468,10 +492,6 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.roles-grid-container {
-  min-height: 400px;
-}
-
 .role-header-button {
   flex: 0 1 auto;
   margin-left: 0 !important;

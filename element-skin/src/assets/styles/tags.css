@@ -1,34 +1,6 @@
 /* Tag and Badge Components */
 
-/* 1. Status Indicators (Used in Mojang Status) */
-.status-tag {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  padding: 4px 12px;
-  border-radius: 16px;
-  background: var(--color-background-soft);
-  transition: all 0.3s ease;
-}
-
-.status-tag.online { 
-  color: #67c23a; 
-  background: rgba(103, 194, 58, 0.1); 
-}
-
-.status-tag.checking { 
-  color: #409eff; 
-  background: rgba(64, 158, 255, 0.1); 
-}
-
-.status-tag.offline { 
-  color: #f56c6c; 
-  background: rgba(245, 108, 108, 0.1); 
-}
-
-/* 2. Texture Type Tags (Skin / Cape) */
+/* 1. Texture Type Tags (Skin / Cape) */
 .type-tag {
   font-size: 12px;
   padding: 4px 10px;
@@ -50,7 +22,7 @@
   color: #67c23a;
 }
 
-/* 3. Floating Badges (Resolution info on cards) */
+/* 2. Floating Badges (Resolution info on cards) */
 .floating-badge {
   position: absolute;
   top: 8px;
@@ -64,7 +36,7 @@
   z-index: 10;
 }
 
-/* 4. Meta Chips (Rounded info pills) */
+/* 3. Meta Chips (Rounded info pills) */
 .meta-chip {
   display: inline-flex;
   align-items: center;

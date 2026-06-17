@@ -7,13 +7,17 @@
           <p>管理并应用您的皮肤与披风纹理</p>
         </div>
       </div>
-      <el-button @click="showUploadDialog = true" size="large" class="btn-gradient btn-gradient-primary">
+      <el-button
+        @click="showUploadDialog = true"
+        size="large"
+        class="btn-gradient btn-gradient-primary"
+      >
         <el-icon><Upload /></el-icon>
-        <span style="margin-left:8px">上传纹理</span>
+        <span class="ml-2">上传纹理</span>
       </el-button>
     </div>
 
-    <div class="wardrobe-grid-container" v-loading="loading" element-loading-background="transparent">
+    <div class="min-h-400" v-loading="loading" element-loading-background="transparent">
       <div class="auto-grid" v-if="textures.length > 0">
         <TextureCard
           v-for="(tex, index) in textures"
@@ -45,92 +49,114 @@
       />
     </div>
 
-    <el-dialog
-      v-model="showDetailDialog"
-      destroy-on-close
-      class="dialog-viewer"
-      append-to-body
-    >
+    <el-dialog v-model="showDetailDialog" destroy-on-close class="dialog-viewer" append-to-body>
       <div class="viewer-layout" v-if="selectedTexture">
         <TexturePreviewStage :texture="selectedTexture" :textures-url="texturesUrl" />
 
         <div class="viewer-info-panel" v-loading="isDetailLoading">
           <template v-if="selectedTexture">
             <section class="viewer-section title-section">
-            <div class="viewer-title-row">
-              <el-button text circle class="title-edit-btn" @click="focusNoteInput">
-                <el-icon><Edit /></el-icon>
-              </el-button>
-              <el-input
-                ref="noteInputRef"
-                v-model="editingNoteValue"
-                placeholder="未命名纹理"
-                class="viewer-title-input"
-                @blur="updateNote"
-                @keyup.enter="updateNote"
-              />
-            </div>
-          </section>
-
-          <section class="viewer-section meta-section">
-            <div class="viewer-title-row">
-              <span class="meta-chip">{{ textureResolutions.get(selectedTexture.hash) || '--' }}px</span>
-              <span class="meta-chip hash">{{ selectedTexture.hash }}</span>
-            </div>
-          </section>
-
-          <section class="viewer-section" v-if="selectedTexture.type === 'skin'">
-            <div class="viewer-section-label">模型选择</div>
-            <el-radio-group v-model="selectedTexture.model" @change="updateModel" class="capsule-radio">
-              <el-radio-button value="default">Default</el-radio-button>
-              <el-radio-button value="slim">Slim</el-radio-button>
-            </el-radio-group>
-          </section>
-
-          <section class="viewer-section" v-if="!isDetailLoading && selectedTexture.is_public !== 2">
-            <div class="viewer-section-label">公开状态</div>
-            <div class="public-toggle-row">
-              <el-switch
-                v-model="selectedTexture.is_public"
-                :active-value="1"
-                :inactive-value="0"
-                @change="updateIsPublic"
-              />
-              <span class="public-status-text">
-                {{ selectedTexture.is_public === 1 ? '公开（其他用户可在皮肤库看到）' : '私有（仅自己可见）' }}
-              </span>
-            </div>
-          </section>
-
-          <section class="viewer-section">
-            <div class="viewer-section-label">应用到角色</div>
-            <div class="apply-row">
-              <el-select v-model="applyForm.profile_id" placeholder="选择目标" class="gallery-select">
-                <el-option
-                  v-for="p in userProfiles || []"
-                  :key="p.id"
-                  :label="p.name"
-                  :value="p.id"
+              <div class="viewer-title-row">
+                <el-button text circle class="title-edit-btn" @click="focusNoteInput">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+                <el-input
+                  ref="noteInputRef"
+                  v-model="editingNoteValue"
+                  placeholder="未命名纹理"
+                  class="viewer-title-input"
+                  @blur="updateNote"
+                  @keyup.enter="updateNote"
                 />
-              </el-select>
-              <el-button type="primary" class="gallery-apply-btn" @click="doApply" :loading="isApplying">
-                确定
-              </el-button>
-            </div>
-          </section>
+              </div>
+            </section>
 
-          <section class="viewer-section footer-section">
-            <el-button type="danger" plain class="gallery-delete-btn" @click="confirmDelete">
-              删除纹理
-            </el-button>
-          </section>
+            <section class="viewer-section meta-section">
+              <div class="viewer-title-row">
+                <span class="meta-chip"
+                  >{{ textureResolutions.get(selectedTexture.hash) || '--' }}px</span
+                >
+                <span class="meta-chip hash">{{ selectedTexture.hash }}</span>
+              </div>
+            </section>
+
+            <section class="viewer-section" v-if="selectedTexture.type === 'skin'">
+              <div class="viewer-section-label">模型选择</div>
+              <el-radio-group
+                v-model="selectedTexture.model"
+                @change="updateModel"
+                class="capsule-radio"
+              >
+                <el-radio-button value="default">Default</el-radio-button>
+                <el-radio-button value="slim">Slim</el-radio-button>
+              </el-radio-group>
+            </section>
+
+            <section
+              class="viewer-section"
+              v-if="!isDetailLoading && selectedTexture.is_public !== 2"
+            >
+              <div class="viewer-section-label">公开状态</div>
+              <div class="flex items-center gap-3">
+                <el-switch
+                  v-model="selectedTexture.is_public"
+                  :active-value="1"
+                  :inactive-value="0"
+                  @change="updateIsPublic"
+                />
+                <span class="text-13 text-info">
+                  {{
+                    selectedTexture.is_public === 1
+                      ? '公开（其他用户可在皮肤库看到）'
+                      : '私有（仅自己可见）'
+                  }}
+                </span>
+              </div>
+            </section>
+
+            <section class="viewer-section">
+              <div class="viewer-section-label">应用到角色</div>
+              <div class="flex gap-2">
+                <el-select
+                  v-model="applyForm.profile_id"
+                  placeholder="选择目标"
+                  class="gallery-select"
+                >
+                  <el-option
+                    v-for="p in userProfiles || []"
+                    :key="p.id"
+                    :label="p.name"
+                    :value="p.id"
+                  />
+                </el-select>
+                <el-button
+                  type="primary"
+                  class="gallery-apply-btn"
+                  @click="doApply"
+                  :loading="isApplying"
+                >
+                  确定
+                </el-button>
+              </div>
+            </section>
+
+            <section class="viewer-section mt-auto pb-0 border-b-0">
+              <el-button type="danger" plain class="w-full rounded-lg" @click="confirmDelete">
+                删除纹理
+              </el-button>
+            </section>
           </template>
         </div>
       </div>
     </el-dialog>
 
     <!-- 上传对话框 -->
-    <el-dialog v-model="showUploadDialog" title="上传纹理" class="upload-dialog dialog-form" append-to-body>
+    <el-dialog
+      v-model="showUploadDialog"
+      title="上传纹理"
+      class="upload-dialog dialog-form"
+      append-to-body
+    >
       <el-form label-width="100px" :model="uploadForm" class="upload-form">
         <el-form-item label="选择文件" class="upload-form-item">
           <el-upload
@@ -143,24 +169,20 @@
             class="upload-wrapper"
           >
             <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-            <div class="el-upload__text">
-              将 PNG 文件拖到此处，或<em>点击上传</em>
-            </div>
+            <div class="el-upload__text">将 PNG 文件拖到此处，或<em>点击上传</em></div>
             <template #tip>
-              <div class="el-upload__tip">
-                仅支持 PNG 格式的皮肤文件
-              </div>
+              <div class="el-upload__tip">仅支持 PNG 格式的皮肤文件</div>
             </template>
           </el-upload>
         </el-form-item>
         <el-form-item label="纹理类型">
-          <el-select v-model="uploadForm.texture_type" placeholder="选择类型" style="width:100%">
+          <el-select v-model="uploadForm.texture_type" placeholder="选择类型" class="w-full">
             <el-option label="皮肤 (Skin)" value="skin" />
             <el-option label="披风 (Cape)" value="cape" />
           </el-select>
         </el-form-item>
         <el-form-item label="皮肤模型" v-if="uploadForm.texture_type === 'skin'">
-          <el-select v-model="uploadForm.model" placeholder="选择模型" style="width:100%">
+          <el-select v-model="uploadForm.model" placeholder="选择模型" class="w-full">
             <el-option label="普通 (4px 手臂)" value="default" />
             <el-option label="纤细 (3px 手臂)" value="slim" />
           </el-select>
@@ -170,7 +192,7 @@
         </el-form-item>
         <el-form-item label="是否公开">
           <el-switch v-model="uploadForm.is_public" />
-          <el-text size="small" type="info" style="margin-left: 12px">
+          <el-text size="small" type="info" class="ml-3">
             公开后其他用户可以在皮肤库中看到并使用
           </el-text>
         </el-form-item>
@@ -183,7 +205,6 @@
         </el-button>
       </template>
     </el-dialog>
-
   </div>
 </template>
 
@@ -198,7 +219,14 @@ import TextureCard from '@/components/textures/TextureCard.vue'
 import TexturePreviewStage from '@/components/textures/TexturePreviewStage.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getProfiles } from '@/api/profiles'
-import { getTextures, uploadTexture, getTextureDetail, patchTexture, deleteTexture, applyTexture } from '@/api/textures'
+import {
+  getTextures,
+  uploadTexture,
+  getTextureDetail,
+  patchTexture,
+  deleteTexture,
+  applyTexture,
+} from '@/api/textures'
 import type { Profile, Texture } from '@/api/types'
 
 // Inject shared state from AppLayout
@@ -229,7 +257,13 @@ const isApplying = ref(false)
 const noteInputRef = ref<{ focus: () => void } | null>(null)
 
 const showUploadDialog = ref(false)
-const uploadForm = ref<{ texture_type: string; model: string; note: string; is_public: boolean; file: File | null }>({ texture_type: 'skin', model: 'default', note: '', is_public: false, file: null })
+const uploadForm = ref<{
+  texture_type: string
+  model: string
+  note: string
+  is_public: boolean
+  file: File | null
+}>({ texture_type: 'skin', model: 'default', note: '', is_public: false, file: null })
 const uploadRef = ref<UploadInstance | null>(null)
 const applyForm = ref({ profile_id: '', texture_type: '', hash: '' })
 
@@ -274,7 +308,7 @@ async function updateNote() {
   try {
     await patchTexture(tex.hash, tex.type, { note: updated })
     tex.note = updated
-    const localTex = textures.value.find(t => t.hash === tex.hash && t.type === tex.type)
+    const localTex = textures.value.find((t) => t.hash === tex.hash && t.type === tex.type)
     if (localTex) localTex.note = updated
     ElMessage.success('备注已更新')
   } catch (e) {
@@ -288,7 +322,7 @@ async function updateModel(val: string | number | boolean | undefined) {
   try {
     await patchTexture(tex.hash, tex.type, { model: String(val) })
     tex.model = String(val)
-    const localTex = textures.value.find(t => t.hash === tex.hash && t.type === tex.type)
+    const localTex = textures.value.find((t) => t.hash === tex.hash && t.type === tex.type)
     if (localTex) localTex.model = String(val)
     ElMessage.success(`模型已切换为 ${val === 'slim' ? '纤细' : '普通'}`)
   } catch (e) {
@@ -313,12 +347,12 @@ async function fetchTextures() {
   try {
     const params = {
       cursor: pagination.currentCursor.value,
-      limit: limit
+      limit: limit,
     }
     const res = await getTextures(params)
     textures.value = res.data.items
     pagination.setPageData(res.data)
-    textures.value.forEach(tex => {
+    textures.value.forEach((tex) => {
       if (tex.type === 'skin') {
         loadTextureResolution(tex.hash)
       }
@@ -337,7 +371,7 @@ async function handleNextPage() {
     textures.value = res.data.items
     return res.data
   })
-  textures.value.forEach(tex => {
+  textures.value.forEach((tex) => {
     if (tex.type === 'skin') {
       loadTextureResolution(tex.hash)
     }
@@ -352,7 +386,7 @@ async function handlePrevPage() {
     textures.value = res.data.items
     return res.data
   })
-  textures.value.forEach(tex => {
+  textures.value.forEach((tex) => {
     if (tex.type === 'skin') {
       loadTextureResolution(tex.hash)
     }
@@ -396,7 +430,13 @@ async function doUpload() {
     await uploadTexture(formData)
     ElMessage.success('上传成功')
     showUploadDialog.value = false
-    uploadForm.value = { texture_type: 'skin', model: 'default', note: '', is_public: false, file: null }
+    uploadForm.value = {
+      texture_type: 'skin',
+      model: 'default',
+      note: '',
+      is_public: false,
+      file: null,
+    }
     if (uploadRef.value) {
       uploadRef.value.clearFiles()
     }
@@ -413,7 +453,7 @@ async function confirmDelete() {
       confirmButtonText: '确定删除',
       cancelButtonText: '取消',
       type: 'warning',
-      confirmButtonClass: 'el-button--danger'
+      confirmButtonClass: 'el-button--danger',
     })
 
     await deleteTexture(selectedTexture.value.hash, selectedTexture.value.type)
@@ -431,7 +471,7 @@ async function doApply() {
   try {
     await applyTexture(applyForm.value.hash, {
       profile_id: applyForm.value.profile_id,
-      texture_type: applyForm.value.texture_type
+      texture_type: applyForm.value.texture_type,
     })
     ElMessage.success('已应用')
     if (fetchMe) fetchMe()
@@ -451,28 +491,8 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.wardrobe-grid-container {
-  min-height: 400px;
-}
-
 .title-section {
   padding-top: 0;
-}
-
-.apply-row {
-  display: flex;
-  gap: 8px;
-}
-
-.public-toggle-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.public-status-text {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
 }
 
 .gallery-select {
@@ -488,17 +508,6 @@ onMounted(() => {
 
 .gallery-apply-btn {
   min-width: 90px;
-  border-radius: 8px;
-}
-
-.footer-section {
-  margin-top: auto;
-  border-bottom: 0;
-  padding-bottom: 0;
-}
-
-.gallery-delete-btn {
-  width: 100%;
   border-radius: 8px;
 }
 

@@ -41,21 +41,44 @@
 
         <section class="viewer-section" v-if="profile.skin_hash || profile.cape_hash">
           <div class="viewer-section-label">快捷操作</div>
-          <div class="apply-row">
-            <el-button v-if="profile.skin_hash" type="primary" plain @click="$emit('set-avatar', profile)">
+          <div class="apply-row flex gap-2">
+            <el-button
+              v-if="profile.skin_hash"
+              type="primary"
+              plain
+              class="flex-1 rounded-lg"
+              @click="$emit('set-avatar', profile)"
+            >
               用作头像
             </el-button>
-            <el-button v-if="profile.skin_hash" type="warning" plain @click="$emit('clear-skin', profile.id)">
+            <el-button
+              v-if="profile.skin_hash"
+              type="warning"
+              plain
+              class="flex-1 rounded-lg"
+              @click="$emit('clear-skin', profile.id)"
+            >
               清除皮肤
             </el-button>
-            <el-button v-if="profile.cape_hash" type="warning" plain @click="$emit('clear-cape', profile.id)">
+            <el-button
+              v-if="profile.cape_hash"
+              type="warning"
+              plain
+              class="flex-1 rounded-lg"
+              @click="$emit('clear-cape', profile.id)"
+            >
               清除披风
             </el-button>
           </div>
         </section>
 
-        <section class="viewer-section footer-section">
-          <el-button type="danger" plain class="delete-role-button" @click="$emit('delete', profile.id)">
+        <section class="viewer-section mt-auto">
+          <el-button
+            type="danger"
+            plain
+            class="w-full rounded-lg"
+            @click="$emit('delete', profile.id)"
+          >
             删除此角色
           </el-button>
         </section>
@@ -103,23 +126,7 @@ function focusNameInput() {
 </script>
 
 <style scoped>
-.apply-row {
-  display: flex;
-  gap: 8px;
-}
-
 .apply-row .el-button {
-  flex: 1;
-  border-radius: 8px;
   margin-left: 0 !important;
-}
-
-.footer-section {
-  margin-top: auto;
-}
-
-.delete-role-button {
-  width: 100%;
-  border-radius: 8px;
 }
 </style>

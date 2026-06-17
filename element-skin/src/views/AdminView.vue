@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-content">
+  <div class="w-full h-full">
     <router-view />
   </div>
 </template>
@@ -8,10 +8,3 @@
 // This component now only serves as a layout container for the admin panel's nested routes.
 // The main layout and navigation are handled by AppLayout.vue.
 </script>
-
-<style scoped>
-.admin-content {
-  width: 100%;
-  height: 100%;
-}
-</style>

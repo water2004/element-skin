@@ -116,22 +116,6 @@ html.dark .viewer-stage {
   -webkit-text-fill-color: transparent;
 }
 
-.uploader-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-  color: var(--color-heading);
-  font-weight: 500;
-}
-
-.login-hint {
-  text-align: center;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  margin-top: 12px;
-}
-
 .hash-label {
   margin-top: 12px;
   font-family: monospace;
