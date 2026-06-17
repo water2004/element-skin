@@ -232,7 +232,7 @@ async function fetchTextures() {
     )
     textures.value = res.data.items
     pagination.setPageData(res.data)
-  } catch (e) {
+  } catch {
     ElMessage.error('加载材质列表失败')
   } finally {
     loading.value = false
@@ -298,7 +298,7 @@ async function updatePreviewNote() {
     })
     selectedItem.value.name = newName
     ElMessage.success('名称已更新')
-  } catch (e) {
+  } catch {
     ElMessage.error('更新名称失败')
   }
 }
@@ -312,7 +312,7 @@ async function updateModel(newModel: string | number | boolean | undefined) {
     })
     selectedItem.value.model = String(newModel)
     ElMessage.success('模型已更新')
-  } catch (e) {
+  } catch {
     ElMessage.error('更新模型失败')
   }
 }
@@ -341,7 +341,7 @@ async function updateIsPublic(newValue: string | number | boolean) {
     await patchAdminTexture(item.hash, { type: item.type, is_public: Boolean(newValue) })
     item.is_public = Boolean(newValue)
     ElMessage.success(newValue ? '材质已公开' : '已取消公开')
-  } catch (e) {
+  } catch {
     ElMessage.error('操作失败')
   }
 }
@@ -359,7 +359,7 @@ async function confirmForceDelete() {
     ElMessage.success('材质已强制下架')
     showPreview.value = false
     await fetchTextures()
-  } catch (e) {
+  } catch {
     // User cancelled or error
   }
 }

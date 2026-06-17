@@ -1,11 +1,11 @@
 import client from './client'
-import type { MicrosoftAuthUrlResponse } from './types'
+import type { MicrosoftAuthUrlResponse, MicrosoftProfileResponse } from './types'
 
 export function getMicrosoftAuthUrl(): Promise<{ data: MicrosoftAuthUrlResponse }> {
   return client.get('/microsoft/auth-url')
 }
 
-export function getMicrosoftProfile(data: { ms_token: string }): Promise<{ data: any }> {
+export function getMicrosoftProfile(data: { ms_token: string }): Promise<{ data: MicrosoftProfileResponse }> {
   return client.post('/microsoft/get-profile', data)
 }
 

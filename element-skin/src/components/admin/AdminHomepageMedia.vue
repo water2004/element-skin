@@ -63,6 +63,7 @@
       v-model:visible="detailVisible"
       :item="selectedItem"
       :preview-url="selectedItem ? previewUrl(selectedItem) : ''"
+      @update:item="updateSelectedItem"
     />
   </div>
 </template>
@@ -84,6 +85,7 @@ import {
 import HomepageMediaCard from '@/components/admin/homepage/HomepageMediaCard.vue'
 import HomepageMediaDialog from '@/components/admin/homepage/HomepageMediaDialog.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { getErrorMessage } from '@/utils/error'
 
 type HomepageMediaPatch = Parameters<typeof patchHomepageMedia>[1]
 
@@ -132,7 +134,7 @@ async function fetchItems() {
     const normalized = res.data.map(normalizeItem)
     items.value = cloneItems(normalized)
     savedItems.value = cloneItems(normalized)
-  } catch (e) {
+  } catch {
     ElMessage.error('获取首页媒体失败')
   } finally {
     loading.value = false
@@ -193,6 +195,11 @@ function openDetails(item: HomepageMedia) {
   detailVisible.value = true
 }
 
+function updateSelectedItem(updated: HomepageMedia) {
+  const item = items.value.find((candidate) => candidate.id === updated.id)
+  if (item) Object.assign(item, normalizeItem(updated))
+}
+
 async function uploadImage({ file }: UploadRequestOptions) {
   if (!canRunResourceAction()) return
   const formData = new FormData()
@@ -201,8 +208,8 @@ async function uploadImage({ file }: UploadRequestOptions) {
     await uploadHomepageImage(formData)
     ElMessage.success('图片已上传')
     fetchItems()
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '上传失败')
+  } catch (e: unknown) {
+    ElMessage.error(getErrorMessage(e, '上传失败'))
   }
 }
 
@@ -214,8 +221,8 @@ async function uploadPanorama({ file }: UploadRequestOptions) {
     await uploadHomepagePanorama(formData)
     ElMessage.success('Panorama 已上传')
     fetchItems()
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '上传失败')
+  } catch (e: unknown) {
+    ElMessage.error(getErrorMessage(e, '上传失败'))
   }
 }
 
@@ -248,8 +255,8 @@ async function saveChanges() {
 
     savedItems.value = cloneItems(items.value.map(normalizeItem))
     ElMessage.success('配置已保存')
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '保存失败')
+  } catch (e: unknown) {
+    ElMessage.error(getErrorMessage(e, '保存失败'))
     await fetchItems()
   } finally {
     saving.value = false
@@ -474,7 +481,7 @@ async function remove(item: HomepageMedia) {
     await deleteHomepageMedia(item.id)
     ElMessage.success('已删除')
     fetchItems()
-  } catch (e) {}
+  } catch {}
 }
 
 onMounted(fetchItems)

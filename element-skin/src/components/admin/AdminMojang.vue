@@ -341,6 +341,7 @@ import type { WhitelistEntry } from '@/api/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
+import { getErrorMessage } from '@/utils/error'
 
 interface FallbackRow {
   id: number | null
@@ -361,6 +362,20 @@ interface FallbackRow {
   _loaded: boolean
 }
 
+interface FallbackEndpoint {
+  id: number | null
+  priority: number
+  session_url: string
+  account_url: string
+  services_url: string
+  cache_ttl: number
+  enable_profile: boolean
+  enable_hasjoined: boolean
+  enable_whitelist: boolean
+  note?: string
+  skin_domains?: string[] | string | null
+}
+
 const settings = ref<{ fallback_strategy: string; fallback_probe_interval: number }>({
   fallback_strategy: 'serial',
   fallback_probe_interval: 600,
@@ -376,7 +391,9 @@ async function fetchSettings() {
     settings.value.fallback_probe_interval =
       Number.isFinite(interval) && interval >= 60 ? interval : 600
 
-    const raw = Array.isArray(res.data.fallbacks) ? (res.data.fallbacks as any[]) : []
+    const raw = Array.isArray(res.data.fallbacks)
+      ? (res.data.fallbacks as FallbackEndpoint[])
+      : []
 
     const newFallbacks = raw.map((item, index) => {
       const existing = fallbacks.value.find(
@@ -402,7 +419,7 @@ async function fetchSettings() {
 
     fallbacks.value = newFallbacks
     fallbacks.value.sort((a, b) => a.priority - b.priority)
-  } catch (e) {
+  } catch {
     ElMessage.error('加载 Fallback 配置失败')
   }
 }
@@ -437,7 +454,9 @@ async function saveSettings() {
     await saveAdminSettingsGroup('fallback', payload)
 
     const res = await getAdminSettingsGroup('fallback')
-    const updatedFallbacksFromDB = (res.data.fallbacks as any[]) || []
+    const updatedFallbacksFromDB = Array.isArray(res.data.fallbacks)
+      ? (res.data.fallbacks as FallbackEndpoint[])
+      : []
 
     for (const localRow of fallbacks.value) {
       const dbEndpoint = updatedFallbacksFromDB.find(
@@ -470,9 +489,9 @@ async function saveSettings() {
 
     ElMessage.success('所有配置及白名单已成功同步')
     await fetchSettings()
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error(e)
-    ElMessage.error('保存失败: ' + (e.response?.data?.detail || e.message))
+    ElMessage.error('保存失败: ' + getErrorMessage(e, '保存失败'))
   } finally {
     saving.value = false
     loading.close()
@@ -566,7 +585,7 @@ async function fetchWhitelist(row: FallbackRow) {
     row._whitelist = JSON.parse(JSON.stringify(res.data))
     row._initialWhitelist = JSON.parse(JSON.stringify(res.data))
     row._loaded = true
-  } catch (e) {
+  } catch {
     ElMessage.error(`白名单加载失败: ${row.note || '未命名端点'}`)
   }
 }

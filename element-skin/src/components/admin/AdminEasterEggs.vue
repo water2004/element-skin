@@ -76,7 +76,7 @@ async function loadSettings() {
     enabledIds.value = Array.isArray(enabled)
       ? enabled.filter((item): item is string => typeof item === 'string')
       : []
-  } catch (e) {
+  } catch {
     ElMessage.error('加载彩蛋设置失败')
   }
 }
@@ -97,7 +97,7 @@ async function saveSettings() {
       easter_eggs_enabled: enabledIds.value,
     })
     ElMessage.success('彩蛋设置已更新')
-  } catch (e) {
+  } catch {
     ElMessage.error('保存彩蛋设置失败')
   } finally {
     saving.value = false

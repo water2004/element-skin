@@ -251,6 +251,7 @@ import {
   applyTexture,
 } from '@/api/textures'
 import type { Profile, Texture } from '@/api/types'
+import { getErrorMessage } from '@/utils/error'
 
 // Inject shared state from AppLayout
 const fetchMe = inject<() => Promise<void>>('fetchMe')
@@ -334,7 +335,7 @@ async function updateNote() {
     const localTex = textures.value.find((t) => t.hash === tex.hash && t.type === tex.type)
     if (localTex) localTex.note = updated
     ElMessage.success('备注已更新')
-  } catch (e) {
+  } catch {
     ElMessage.error('更新备注失败')
   }
 }
@@ -348,7 +349,7 @@ async function updateModel(val: string | number | boolean | undefined) {
     const localTex = textures.value.find((t) => t.hash === tex.hash && t.type === tex.type)
     if (localTex) localTex.model = String(val)
     ElMessage.success(`模型已切换为 ${val === 'slim' ? '纤细' : '普通'}`)
-  } catch (e) {
+  } catch {
     ElMessage.error('切换模型失败')
   }
 }
@@ -359,7 +360,7 @@ async function updateIsPublic(val: string | number | boolean) {
   try {
     await patchTexture(tex.hash, tex.type, { is_public: val === 1 })
     ElMessage.success(val === 1 ? '材质已公开' : '材质已设为私有')
-  } catch (e) {
+  } catch {
     ElMessage.error('更新公开状态失败')
     tex.is_public = val === 1 ? 0 : 1
   }
@@ -464,8 +465,8 @@ async function doUpload() {
       uploadRef.value.clearFiles()
     }
     await refreshFirstPage()
-  } catch (e: any) {
-    ElMessage.error('上传失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('上传失败: ' + getErrorMessage(e, '上传失败'))
   }
 }
 
@@ -500,8 +501,8 @@ async function doApply() {
     if (fetchMe) fetchMe()
     fetchUserProfiles()
     fetchTextures()
-  } catch (e: any) {
-    ElMessage.error('应用失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('应用失败: ' + getErrorMessage(e, '应用失败'))
   } finally {
     isApplying.value = false
   }

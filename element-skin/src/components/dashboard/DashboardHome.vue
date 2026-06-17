@@ -133,7 +133,7 @@ async function loadFallbackStatus() {
     const list = (res.data.endpoints || []).slice()
     list.sort((a, b) => (a.priority || 0) - (b.priority || 0))
     fallbackEntries.value = list
-  } catch (e) {
+  } catch {
     ElMessage.error('加载 Fallback 状态失败')
   } finally {
     isChecking.value = false
@@ -150,7 +150,7 @@ onMounted(async () => {
     } else {
       apiUrl.value = getApiUrl()
     }
-  } catch (e) {
+  } catch {
     apiUrl.value = getApiUrl()
   }
 

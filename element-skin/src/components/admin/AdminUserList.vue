@@ -194,7 +194,7 @@ async function refreshUsers() {
     const res = await getUsers(buildSearchParams({ cursor: usersPagination.currentCursor.value }))
     users.value = res.data.items
     usersPagination.setPageData(res.data)
-  } catch (e) {
+  } catch {
     ElMessage.error('加载用户列表失败')
   } finally {
     loading.value = false
@@ -253,7 +253,7 @@ async function showUserDetailDialog(user: User) {
     profilesPagination.reset()
     await fetchUserProfilesAdmin()
     userDetailDialogVisible.value = true
-  } catch (e) {
+  } catch {
     ElMessage.error('无法加载用户详情')
   }
 }
@@ -267,7 +267,7 @@ async function fetchUserProfilesAdmin() {
     })
     userProfiles.value = res.data.items
     profilesPagination.setPageData(res.data)
-  } catch (e) {
+  } catch {
     ElMessage.error('无法加载用户角色列表')
   }
 }
@@ -301,7 +301,7 @@ async function toggleAdmin(user: User) {
     ElMessage.success('操作成功')
     await refreshUsers()
     if (currentUser.value) currentUser.value.is_admin = Boolean(res.data.is_admin)
-  } catch (e) {}
+  } catch {}
 }
 
 async function transferSuperAdmin(user: User) {
@@ -319,7 +319,7 @@ async function transferSuperAdmin(user: User) {
     }
     userDetailDialogVisible.value = false
     await refreshUsersFromFirst()
-  } catch (e) {}
+  } catch {}
 }
 
 async function deleteUser(user: User) {
@@ -329,7 +329,7 @@ async function deleteUser(user: User) {
     ElMessage.success('用户已删除')
     userDetailDialogVisible.value = false
     await refreshUsersFromFirst()
-  } catch (e) {}
+  } catch {}
 }
 
 function showResetPasswordDialog() {
@@ -351,7 +351,7 @@ async function confirmResetPassword() {
     })
     ElMessage.success('密码已重置')
     resetPasswordDialogVisible.value = false
-  } catch (e) {
+  } catch {
     ElMessage.error('重置失败')
   } finally {
     resetting.value = false
@@ -374,7 +374,7 @@ async function confirmBanUser() {
     banDialogVisible.value = false
     await refreshUsers()
     if (currentUser.value) currentUser.value.banned_until = bannedUntil
-  } catch (e) {
+  } catch {
     ElMessage.error('封禁失败')
   } finally {
     banning.value = false
@@ -387,7 +387,7 @@ async function unbanUser(user: User) {
     ElMessage.success('封禁已解除')
     await refreshUsers()
     if (currentUser.value) currentUser.value.banned_until = 0
-  } catch (e) {}
+  } catch {}
 }
 
 // Helpers

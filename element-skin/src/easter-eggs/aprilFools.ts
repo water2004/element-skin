@@ -1,8 +1,7 @@
 import Matter from 'matter-js'
+import type { CompositeType, EngineType } from 'matter-js'
 import type { EasterEggCleanup } from './index'
 
-type Composite = any
-type Engine = any
 type Tracked = [HTMLElement, number, number]
 
 interface ListenerEntry {
@@ -13,9 +12,9 @@ interface ListenerEntry {
 }
 
 export function start(): EasterEggCleanup {
-  let engine: Engine | null = null
+  let engine: EngineType | null = null
   let bodyMap: Map<number, Tracked> | null = null
-  let walls: Composite | null = null
+  let walls: CompositeType | null = null
   let overlayDiv: HTMLDivElement | null = null
   let listeners: ListenerEntry[] = []
   let bootstrapped = false
@@ -109,7 +108,7 @@ export function start(): EasterEggCleanup {
         const dx = window.screenX - lastScreenX
         const dy = window.screenY - lastScreenY
         for (const body of engine.world.bodies) {
-          if (body !== walls) Matter.Body.translate(body, { x: -dx, y: -dy })
+          Matter.Body.translate(body, { x: -dx, y: -dy })
         }
         lastScreenX = window.screenX
         lastScreenY = window.screenY

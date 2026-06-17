@@ -200,6 +200,7 @@ import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getPublicSkinLibrary } from '@/api/public'
 import { addToWardrobe as apiAddToWardrobe } from '@/api/textures'
 import type { Texture, User as UserType } from '@/api/types'
+import { getErrorMessage, getErrorStatus } from '@/utils/error'
 
 const isDark = inject<Ref<boolean>>('isDark', ref(false))
 const user = inject<Ref<UserType | null>>('user', ref(null))
@@ -255,9 +256,9 @@ async function fetchLibrary() {
         loadTextureResolution(item.hash)
       }
     })
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error('Fetch library error:', e)
-    if (e.response?.status === 403) {
+    if (getErrorStatus(e) === 403) {
       isDisabled.value = true
     } else {
       ElMessage.error('加载皮肤库失败')
@@ -347,8 +348,8 @@ async function addToWardrobe(item: Texture) {
   try {
     await apiAddToWardrobe(item.hash, item.type)
     ElMessage.success('已成功添加到我的衣柜')
-  } catch (e: any) {
-    ElMessage.error('添加失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('添加失败: ' + getErrorMessage(e, '添加失败'))
   }
 }
 

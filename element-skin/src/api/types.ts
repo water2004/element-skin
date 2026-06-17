@@ -100,6 +100,18 @@ export interface MicrosoftAuthUrlResponse {
   state: string
 }
 
+export interface MicrosoftGameProfile {
+  id: string
+  name: string
+  has_game?: boolean
+}
+
+export interface MicrosoftProfileResponse {
+  profile: MicrosoftGameProfile
+  has_game: boolean
+  import_token: string
+}
+
 export interface YggdrasilImportResult {
   items: Array<{ id: string; name: string }>
   success_count: number

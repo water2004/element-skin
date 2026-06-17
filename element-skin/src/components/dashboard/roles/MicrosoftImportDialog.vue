@@ -39,6 +39,7 @@
 </template>
 
 <script setup lang="ts">
+import type { MicrosoftGameProfile } from '@/api/types'
 import { formatUUID } from '@/utils/format'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiOptionCard from '@/components/ui/UiOptionCard.vue'
@@ -46,7 +47,7 @@ import UiOptionCard from '@/components/ui/UiOptionCard.vue'
 const visible = defineModel<boolean>('visible', { required: true })
 
 const props = defineProps<{
-  profile: any | null
+  profile: MicrosoftGameProfile | null
   importing: boolean
 }>()
 

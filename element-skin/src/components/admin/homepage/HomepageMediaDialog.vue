@@ -1,12 +1,12 @@
 <template>
   <el-dialog
     v-model="visible"
-    :title="item?.type === 'panorama' ? 'Panorama 配置' : '图片配置'"
+    :title="itemDraft?.type === 'panorama' ? 'Panorama 配置' : '图片配置'"
     width="720px"
     destroy-on-close
     append-to-body
   >
-    <div v-if="item" class="detail-layout">
+    <div v-if="itemDraft" class="detail-layout">
       <div class="detail-preview">
         <el-image
           :src="previewUrl"
@@ -19,16 +19,16 @@
 
       <el-form label-width="96px" class="detail-form">
         <el-form-item label="文件名">
-          <el-input v-model="item.title" />
+          <el-input v-model="itemDraft.title" />
         </el-form-item>
         <el-form-item label="类型">
-          <el-tag :type="item.type === 'panorama' ? 'warning' : 'success'">
-            {{ item.type === 'panorama' ? '全景图' : '静态图' }}
+          <el-tag :type="itemDraft.type === 'panorama' ? 'warning' : 'success'">
+            {{ itemDraft.type === 'panorama' ? '全景图' : '静态图' }}
           </el-tag>
         </el-form-item>
         <el-form-item label="时长">
           <el-input-number
-            v-model="item.duration_ms"
+            v-model="itemDraft.duration_ms"
             :min="1000"
             :max="60000"
             :step="500"
@@ -36,15 +36,15 @@
           />
         </el-form-item>
         <el-form-item label="浅色遮罩">
-          <el-slider v-model="item.overlay_opacity_light" :min="0" :max="0.9" :step="0.05" />
+          <el-slider v-model="itemDraft.overlay_opacity_light" :min="0" :max="0.9" :step="0.05" />
         </el-form-item>
         <el-form-item label="深色遮罩">
-          <el-slider v-model="item.overlay_opacity_dark" :min="0" :max="0.9" :step="0.05" />
+          <el-slider v-model="itemDraft.overlay_opacity_dark" :min="0" :max="0.9" :step="0.05" />
         </el-form-item>
-        <template v-if="item.type === 'panorama'">
+        <template v-if="itemDraft.type === 'panorama'">
           <el-form-item v-for="field in panoramaFields" :key="field.key" :label="field.label">
             <el-input-number
-              v-model="item[field.key]"
+              v-model="itemDraft[field.key]"
               :min="field.min"
               :max="field.max"
               :step="field.step"
@@ -61,6 +61,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, watch } from 'vue'
 import type { HomepageMedia } from '@/api/types'
 
 type PanoramaField = keyof Pick<
@@ -68,12 +69,33 @@ type PanoramaField = keyof Pick<
   'start_yaw' | 'start_pitch' | 'yaw_speed_dps' | 'pitch_speed_dps'
 >
 
-defineProps<{
+const props = defineProps<{
   item?: HomepageMedia
   previewUrl: string
 }>()
 
+const emit = defineEmits<{
+  'update:item': [item: HomepageMedia]
+}>()
+
 const visible = defineModel<boolean>('visible', { required: true })
+const itemDraft = ref<HomepageMedia | null>(null)
+
+watch(
+  () => props.item,
+  (item) => {
+    itemDraft.value = item ? { ...item } : null
+  },
+  { immediate: true },
+)
+
+watch(
+  itemDraft,
+  (item) => {
+    if (item) emit('update:item', { ...item })
+  },
+  { deep: true },
+)
 
 const panoramaFields = [
   { key: 'start_yaw', label: '起始 yaw', min: -360, max: 360, step: 1 },

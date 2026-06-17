@@ -81,6 +81,7 @@ import {
 } from '@/api/admin/profiles'
 import PageHeader from '@/components/common/PageHeader.vue'
 import type { Profile } from '@/api/types'
+import { getErrorStatus } from '@/utils/error'
 
 const isDark = inject('isDark', ref(false))
 
@@ -117,7 +118,7 @@ async function refreshProfiles() {
     )
     profiles.value = res.data.items
     profilesPagination.setPageData(res.data)
-  } catch (e) {
+  } catch {
     ElMessage.error('加载角色列表失败')
   } finally {
     loading.value = false
@@ -182,8 +183,8 @@ async function updateProfileName() {
     selectedProfile.value.name = newName
     ElMessage.success('角色名称已更新')
     await refreshFromFirst()
-  } catch (e: any) {
-    if (e?.response?.status === 409) {
+  } catch (e: unknown) {
+    if (getErrorStatus(e) === 409) {
       ElMessage.error('角色名已存在，请使用其他名称')
     } else {
       ElMessage.error('更新角色名失败')
@@ -199,7 +200,7 @@ async function clearProfileSkin() {
     await patchProfileSkin(id, { hash: null })
     ElMessage.success('皮肤绑定已清除')
     await refreshFromFirst()
-  } catch (e) {
+  } catch {
     ElMessage.error('清除失败')
   }
 }
@@ -211,7 +212,7 @@ async function clearProfileCape() {
     await patchProfileCape(id, { hash: null })
     ElMessage.success('披风绑定已清除')
     await refreshFromFirst()
-  } catch (e) {
+  } catch {
     ElMessage.error('清除失败')
   }
 }
@@ -228,7 +229,7 @@ async function confirmDeleteRole() {
     ElMessage.success('角色已删除')
     showPreview.value = false
     await refreshFromFirst()
-  } catch (e) {
+  } catch {
     // User cancelled or error
   }
 }

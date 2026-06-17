@@ -154,6 +154,7 @@ import { isEasterEggDisabled, setEasterEggDisabled } from '@/easter-eggs'
 import type { User } from '@/api/types'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import { getErrorMessage } from '@/utils/error'
 
 const { currentAvatarImg: customAvatar } = useAvatar()
 
@@ -254,8 +255,8 @@ async function updateProfile() {
     await patchMe(payload)
     ElMessage.success('信息修改成功')
     if (fetchMe) fetchMe()
-  } catch (e: any) {
-    ElMessage.error('保存失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('保存失败: ' + getErrorMessage(e, '保存失败'))
   }
 }
 
@@ -266,8 +267,8 @@ async function confirmDeleteAccount() {
     setTimeout(() => {
       router.push('/')
     }, 1000)
-  } catch (e: any) {
-    ElMessage.error('注销失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('注销失败: ' + getErrorMessage(e, '注销失败'))
   }
 }
 </script>

@@ -151,6 +151,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
+import { getErrorMessage } from '@/utils/error'
 
 const invites = ref<Invite[]>([])
 const limit = 15
@@ -183,7 +184,7 @@ async function loadInvites() {
     })
     invites.value = res.data.items
     pagination.setPageData(res.data)
-  } catch (e) {
+  } catch {
     ElMessage.error('加载列表失败')
   }
 }
@@ -261,8 +262,8 @@ async function confirmCreateInvite() {
     ElMessage.success('创建成功')
     inviteDialogVisible.value = false
     await refreshFirstPage()
-  } catch (e: any) {
-    ElMessage.error(e.response?.data?.detail || '创建失败')
+  } catch (e: unknown) {
+    ElMessage.error(getErrorMessage(e, '创建失败'))
   } finally {
     creating.value = false
   }
@@ -274,7 +275,7 @@ async function deleteInvite(invite: Invite) {
     await deleteAdminInvite(invite.code)
     ElMessage.success('已删除')
     await refreshFirstPage()
-  } catch (e) {}
+  } catch {}
 }
 
 onMounted(refreshFirstPage)

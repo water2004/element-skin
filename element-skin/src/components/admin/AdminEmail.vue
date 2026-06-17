@@ -142,7 +142,7 @@ async function loadSettings() {
       Object.assign(emailSettings, res.data)
       emailSettings.smtp_password = '' // Don't show password
     }
-  } catch (e) {
+  } catch {
     ElMessage.error('加载邮件设置失败')
   }
 }
@@ -153,7 +153,7 @@ async function saveSettings() {
     await saveAdminSettingsGroup('email', emailSettings)
     ElMessage.success('设置已保存')
     emailSettings.smtp_password = '' // Clear password field after save
-  } catch (e) {
+  } catch {
     ElMessage.error('保存失败')
   } finally {
     saving.value = false

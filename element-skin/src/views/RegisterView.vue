@@ -104,6 +104,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import { sendVerificationCode, register as apiRegister } from '@/api/auth'
+import { getErrorMessage, isValidationError } from '@/utils/error'
 
 const router = useRouter()
 const formRef = ref<FormInstance | null>(null)
@@ -171,7 +172,7 @@ async function sendCode() {
   try {
     if (!formRef.value) return
     await formRef.value.validateField('email')
-  } catch (e) {
+  } catch {
     ElMessage.warning('请先输入有效的邮箱地址')
     return
   }
@@ -191,12 +192,8 @@ async function sendCode() {
         clearInterval(timer)
       }
     }, 1000)
-  } catch (e: any) {
-    if (e.response?.data?.detail) {
-      ElMessage.error('发送失败: ' + e.response.data.detail)
-    } else {
-      ElMessage.error('发送失败，请稍后再试')
-    }
+  } catch (e: unknown) {
+    ElMessage.error('发送失败: ' + getErrorMessage(e, '请稍后再试'))
   } finally {
     codeLoading.value = false
   }
@@ -224,11 +221,9 @@ async function register() {
     setTimeout(() => {
       router.push('/login')
     }, 1500)
-  } catch (e: any) {
-    if (e.response?.data?.detail) {
-      ElMessage.error('注册失败: ' + e.response.data.detail)
-    } else if (e.message && !e.message.includes('validate')) {
-      ElMessage.error('注册失败: ' + e.message)
+  } catch (e: unknown) {
+    if (!isValidationError(e)) {
+      ElMessage.error('注册失败: ' + getErrorMessage(e, '注册失败'))
     }
   } finally {
     loading.value = false

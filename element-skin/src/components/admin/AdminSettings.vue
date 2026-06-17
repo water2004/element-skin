@@ -302,7 +302,7 @@ async function loadGroup(group: SettingsGroup) {
   try {
     const res = await getAdminSettingsGroup(group)
     Object.assign(settings[group], res.data)
-  } catch (e) {
+  } catch {
     ElMessage.error(`加载 ${group} 设置失败`)
   }
 }
@@ -324,7 +324,7 @@ async function saveGroup(group: SettingsGroup) {
     if (group === 'microsoft') {
       settings.microsoft.microsoft_client_secret = '' // Clear local secret field
     }
-  } catch (e) {
+  } catch {
     ElMessage.error('保存失败')
   } finally {
     saving[group] = false

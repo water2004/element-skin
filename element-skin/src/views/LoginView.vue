@@ -60,6 +60,7 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock, Right } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import { siteLogin } from '@/api/auth'
+import { getErrorMessage, isValidationError } from '@/utils/error'
 
 const router = useRouter()
 const fetchMe = inject<() => Promise<void>>('fetchMe')
@@ -107,11 +108,9 @@ async function login() {
 
     ElMessage.success('登录成功！')
     router.push('/dashboard')
-  } catch (e: any) {
-    if (e.response?.data?.detail) {
-      ElMessage.error('登录失败: ' + e.response.data.detail)
-    } else if (e.message && !e.message.includes('validate')) {
-      ElMessage.error('登录失败: ' + e.message)
+  } catch (e: unknown) {
+    if (!isValidationError(e)) {
+      ElMessage.error('登录失败: ' + getErrorMessage(e, '登录失败'))
     }
   } finally {
     loading.value = false

@@ -1,12 +1,9 @@
 import Matter from 'matter-js'
+import type { BodyType, CompositeType, EngineType } from 'matter-js'
 import type { EasterEggCleanup } from './index'
 
-type Engine = any
-type Body = any
-type Composite = any
-
 interface Zongzi {
-  body: Body
+  body: BodyType
   size: number
 }
 
@@ -63,9 +60,9 @@ export function start(): EasterEggCleanup {
   const image = new Image()
   image.src = zongziDataUrl
 
-  let engine: Engine | null = null
-  let walls: Composite | null = null
-  let mouseBody: Body | null = null
+  let engine: EngineType | null = null
+  let walls: CompositeType | null = null
+  let mouseBody: BodyType | null = null
   let raf = 0
   let width = 0
   let height = 0

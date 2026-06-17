@@ -139,7 +139,8 @@ import {
   importMicrosoftProfile as apiImportMicrosoftProfile,
 } from '@/api/microsoft'
 import { getRemoteYggProfiles, importRemoteYggProfiles } from '@/api/remote-ygg'
-import type { Profile } from '@/api/types'
+import type { MicrosoftGameProfile, Profile } from '@/api/types'
+import { getErrorMessage } from '@/utils/error'
 
 const { setAvatar } = useAvatar()
 
@@ -159,7 +160,7 @@ const pagination = useCursorPagination<Profile>(limit)
 const showCreateRoleDialog = ref(false)
 const newRoleName = ref('')
 const showMicrosoftLoginDialog = ref(false)
-const microsoftProfile = ref<any>(null)
+const microsoftProfile = ref<MicrosoftGameProfile | null>(null)
 const microsoftImportToken = ref<string | null>(null)
 const importing = ref(false)
 
@@ -196,7 +197,7 @@ async function fetchProfiles() {
     const res = await getProfiles(params)
     profiles.value = res.data.items
     pagination.setPageData(res.data)
-  } catch (e) {
+  } catch {
     ElMessage.error('加载角色失败')
   } finally {
     loading.value = false
@@ -238,8 +239,8 @@ async function createRole() {
     ElMessage.success('创建成功')
     await refreshFirstPage()
     if (fetchMe) fetchMe()
-  } catch (e: any) {
-    ElMessage.error('创建失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('创建失败: ' + getErrorMessage(e, '创建失败'))
   }
 }
 
@@ -250,7 +251,7 @@ async function deleteRole(pid: string) {
     showPreviewDialog.value = false
     await refreshFirstPage()
     if (fetchMe) fetchMe()
-  } catch (e) {
+  } catch {
     ElMessage.error('删除失败')
   }
 }
@@ -271,8 +272,8 @@ async function updateRoleName(name: string) {
     ElMessage.success('名称已修改')
     await fetchProfiles()
     if (fetchMe) fetchMe()
-  } catch (e: any) {
-    ElMessage.error('修改失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('修改失败: ' + getErrorMessage(e, '修改失败'))
   }
 }
 
@@ -288,9 +289,9 @@ async function clearRoleSkin(pid: string) {
     showPreviewDialog.value = false
     await fetchProfiles()
     if (fetchMe) fetchMe()
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (e !== 'cancel') {
-      ElMessage.error('清除失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('清除失败: ' + getErrorMessage(e, '清除失败'))
     }
   }
 }
@@ -307,9 +308,9 @@ async function clearRoleCape(pid: string) {
     showPreviewDialog.value = false
     await fetchProfiles()
     if (fetchMe) fetchMe()
-  } catch (e: any) {
+  } catch (e: unknown) {
     if (e !== 'cancel') {
-      ElMessage.error('清除失败: ' + (e.response?.data?.detail || e.message))
+      ElMessage.error('清除失败: ' + getErrorMessage(e, '清除失败'))
     }
   }
 }
@@ -340,8 +341,8 @@ async function startMicrosoftAuth() {
     const authUrl = response.data.auth_url
     sessionStorage.setItem('ms_auth_state', response.data.state)
     window.location.href = authUrl
-  } catch (error: any) {
-    ElMessage.error('启动微软登录失败: ' + (error.response?.data?.detail || error.message))
+  } catch (error: unknown) {
+    ElMessage.error('启动微软登录失败: ' + getErrorMessage(error, '启动微软登录失败'))
   }
 }
 
@@ -376,8 +377,8 @@ async function importMicrosoftProfile() {
     } catch (e) {
       console.warn('Failed to refresh user profile:', e)
     }
-  } catch (error: any) {
-    ElMessage.error('导入失败: ' + (error.response?.data?.detail || error.message))
+  } catch (error: unknown) {
+    ElMessage.error('导入失败: ' + getErrorMessage(error, '导入失败'))
   } finally {
     importing.value = false
   }
@@ -410,8 +411,8 @@ async function getYggProfiles() {
       yggStep.value = 'select'
       selectedYggProfiles.value = yggProfiles.value.map((profile) => profile.id)
     }
-  } catch (e: any) {
-    ElMessage.error('获取失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('获取失败: ' + getErrorMessage(e, '获取失败'))
   } finally {
     yggLoading.value = false
   }
@@ -444,8 +445,8 @@ async function importYggProfile() {
     await refreshFirstPage()
     if (fetchMe) fetchMe()
     resetYggImport()
-  } catch (e: any) {
-    ElMessage.error('导入失败: ' + (e.response?.data?.detail || e.message))
+  } catch (e: unknown) {
+    ElMessage.error('导入失败: ' + getErrorMessage(e, '导入失败'))
   } finally {
     yggLoading.value = false
   }
@@ -480,15 +481,17 @@ onMounted(async () => {
     try {
       const response = await getMicrosoftProfile({ ms_token: msToken })
 
-      microsoftProfile.value = response.data.profile
-      microsoftProfile.value.has_game = response.data.has_game
+      microsoftProfile.value = {
+        ...response.data.profile,
+        has_game: response.data.has_game,
+      }
       // 服务端换发的一次性导入凭证：确认导入时回传，导入资料以服务端固化为准。
       microsoftImportToken.value = response.data.import_token
       showMicrosoftLoginDialog.value = true
 
       ElMessage.success('授权成功！')
-    } catch (e: any) {
-      ElMessage.error('获取角色信息失败: ' + (e.response?.data?.detail || e.message))
+    } catch (e: unknown) {
+      ElMessage.error('获取角色信息失败: ' + getErrorMessage(e, '获取角色信息失败'))
     }
     router.replace({ query: {} })
   }
