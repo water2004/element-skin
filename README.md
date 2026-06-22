@@ -56,7 +56,12 @@ services:
       POSTGRES_PASSWORD: password123 #⚠️ 生产环境请修改密码
       POSTGRES_DB: elementskin
     volumes:
-      - ./data/db:/var/lib/postgresql
+      - ./data/db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U elementskin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     ports:
       - "5432:5432" # 在迁移完成后可以关闭这个端口暴露
   redis:
@@ -139,6 +144,8 @@ cors:
   allow_origins: ["*"] # ⚠️ 生产环境请根据实际情况限制来源
   allow_credentials: true
 ```
+
+首次启动时如果 `/app/data/private.pem` 和 `/app/data/public.pem` 不存在，系统会自动生成并保存。请持久化 `./data` 目录，后续不要删除或替换私钥，否则已有 Yggdrasil 客户端会看到服务端签名身份变化。
 
 **Nginx 主机配置**
 只需将 Nginx 的 `root` 指向宿主机的 `./frontend` 目录。

@@ -23,6 +23,64 @@ func TestNewSignerRejectsMissingKeyFiles(t *testing.T) {
 	}
 }
 
+func TestNewSignerGeneratesMissingKeyPair(t *testing.T) {
+	dir := t.TempDir()
+	cfg := testutil.TestConfig()
+	cfg.PrivateKeyPath = filepath.Join(dir, "private.pem")
+	cfg.PublicKeyPath = filepath.Join(dir, "public.pem")
+
+	signer, err := yggdrasil.NewSigner(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if signer == nil {
+		t.Fatal("generated signer is nil")
+	}
+	if _, err := os.Stat(cfg.PrivateKeyPath); err != nil {
+		t.Fatalf("private key should be generated: %v", err)
+	}
+	if _, err := os.Stat(cfg.PublicKeyPath); err != nil {
+		t.Fatalf("public key should be generated: %v", err)
+	}
+	if signature, err := signer.SignPropertyValue("value"); signature == "" || err != nil {
+		t.Fatalf("generated signer should sign values: signature=%q err=%v", signature, err)
+	}
+}
+
+func TestNewSignerRegeneratesMissingPublicKeyFromPrivateKey(t *testing.T) {
+	dir := t.TempDir()
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateDER, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := testutil.TestConfig()
+	cfg.PrivateKeyPath = filepath.Join(dir, "private.pem")
+	cfg.PublicKeyPath = filepath.Join(dir, "public.pem")
+	if err := os.WriteFile(cfg.PrivateKeyPath, pem.EncodeToMemory(&pem.Block{
+		Type:  "PRIVATE KEY",
+		Bytes: privateDER,
+	}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	signer, err := yggdrasil.NewSigner(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicPEM, err := os.ReadFile(cfg.PublicKeyPath)
+	if err != nil {
+		t.Fatalf("public key should be regenerated: %v", err)
+	}
+	if signer.PublicKeyPEM() != string(publicPEM) {
+		t.Fatal("signer should use regenerated public key")
+	}
+}
+
 func TestNewSignerRejectsMalformedAndMissingKeyConfigurationExactly(t *testing.T) {
 	valid := testutil.TestConfig()
 	dir := t.TempDir()

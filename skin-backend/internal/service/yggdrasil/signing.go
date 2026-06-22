@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"element-skin/backend/internal/config"
@@ -22,11 +23,23 @@ type Signer struct {
 }
 
 func NewSigner(cfg config.Config) (*Signer, error) {
-	privateKey, err := readPrivateKey(cfg.PrivateKeyPath)
+	privatePath := strings.TrimSpace(cfg.PrivateKeyPath)
+	if privatePath == "" {
+		return nil, errors.New("keys.private_key 未配置")
+	}
+	publicPath := strings.TrimSpace(cfg.PublicKeyPath)
+	if publicPath == "" {
+		return nil, errors.New("keys.public_key 未配置")
+	}
+
+	if err := ensureSigningKeyFiles(privatePath, publicPath); err != nil {
+		return nil, err
+	}
+	privateKey, err := readPrivateKey(privatePath)
 	if err != nil {
 		return nil, err
 	}
-	publicPEM, publicKey, err := readPublicKey(cfg.PublicKeyPath)
+	publicPEM, publicKey, err := readPublicKey(publicPath)
 	if err != nil {
 		return nil, err
 	}
@@ -34,6 +47,91 @@ func NewSigner(cfg config.Config) (*Signer, error) {
 		return nil, err
 	}
 	return &Signer{privateKey: privateKey, publicPEM: publicPEM}, nil
+}
+
+func ensureSigningKeyFiles(privatePath, publicPath string) error {
+	privateExists, err := fileExists(privatePath)
+	if err != nil {
+		return err
+	}
+	publicExists, err := fileExists(publicPath)
+	if err != nil {
+		return err
+	}
+	if privateExists && publicExists {
+		return nil
+	}
+	if !privateExists && publicExists {
+		return nil
+	}
+
+	var privateKey *rsa.PrivateKey
+	if privateExists {
+		privateKey, err = readPrivateKey(privatePath)
+		if err != nil {
+			return err
+		}
+	} else {
+		privateKey, err = rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			return fmt.Errorf("生成 Yggdrasil RSA 密钥失败: %w", err)
+		}
+		privatePEM, err := marshalPrivateKeyPEM(privateKey)
+		if err != nil {
+			return err
+		}
+		if err := writeKeyFile(privatePath, privatePEM, 0o600); err != nil {
+			return err
+		}
+	}
+
+	publicPEM, err := marshalPublicKeyPEM(&privateKey.PublicKey)
+	if err != nil {
+		return err
+	}
+	if err := writeKeyFile(publicPath, publicPEM, 0o644); err != nil {
+		return err
+	}
+	return nil
+}
+
+func fileExists(path string) (bool, error) {
+	_, err := os.Stat(path)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
+}
+
+func writeKeyFile(path string, data []byte, mode os.FileMode) error {
+	if dir := filepath.Dir(path); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("创建 Yggdrasil 密钥目录失败 %q: %w", dir, err)
+		}
+	}
+	if err := os.WriteFile(path, data, mode); err != nil {
+		return fmt.Errorf("写入 Yggdrasil 密钥失败 %q: %w", path, err)
+	}
+	return nil
+}
+
+func marshalPrivateKeyPEM(privateKey *rsa.PrivateKey) ([]byte, error) {
+	der, err := x509.MarshalPKCS8PrivateKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("编码 Yggdrasil 私钥失败: %w", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}), nil
+}
+
+func marshalPublicKeyPEM(publicKey *rsa.PublicKey) ([]byte, error) {
+	der, err := x509.MarshalPKIXPublicKey(publicKey)
+	if err != nil {
+		return nil, fmt.Errorf("编码 Yggdrasil 公钥失败: %w", err)
+	}
+	return pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}), nil
 }
 
 func (s *Signer) PublicKeyPEM() string {
