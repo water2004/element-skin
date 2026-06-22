@@ -166,14 +166,13 @@ server {
 
     # 2. 后端 API 转发
     location /skinapi/ {
-        proxy_pass http://localhost:8000;
+        proxy_pass http://localhost:8000/;
         proxy_set_header Host $host;
     }
     
     # 直接转发不带斜杠的 API 请求
     location = /skinapi {
-        proxy_pass http://localhost:8000/skinapi/;
-        proxy_set_header Host $host;
+        return 308 /skinapi/;
     }
 }
 ```
@@ -195,6 +194,7 @@ docker compose up -d
 | **场景 2** | `/skin/` | `/skin/api/` | `VITE_BASE_PATH=/skin/ VITE_API_BASE=/skin/api docker compose up -d` |
 
 需要注意的是，`config.yaml` 中的 `server.site_url` 和 `server.api_url` 也需要根据实际部署路径进行调整，以确保生成的链接正确。
+当 `VITE_API_BASE` 使用 `/skinapi`、`/skin/api` 这类前缀时，Nginx 的 `proxy_pass` 末尾必须带 `/`，这样会把前缀剥掉再转发给后端。例如 `/skinapi/me` 会转成后端实际路由 `/me`。
 
 **Nginx 主机配置 (对应场景 1)**
 ```nginx
@@ -212,12 +212,11 @@ location = /skin {
 
 # 2. 后端 API 转发
 location /skinapi/ {
-    proxy_pass http://localhost:8000;
+    proxy_pass http://localhost:8000/;
     proxy_set_header Host $host;
 }
 location = /skinapi {
-    proxy_pass http://localhost:8000/skinapi/;
-    proxy_set_header Host $host;
+    return 308 /skinapi/;
 }
 ```
 
@@ -237,12 +236,11 @@ location = /skin {
 
 # 2. 后端 API 转发 (嵌套路径)
 location /skin/api/ {
-    proxy_pass http://localhost:8000;
+    proxy_pass http://localhost:8000/;
     proxy_set_header Host $host;
 }
 location = /skin/api {
-    proxy_pass http://localhost:8000/skin/api/;
-    proxy_set_header Host $host;
+    return 308 /skin/api/;
 }
 ```
 ---
