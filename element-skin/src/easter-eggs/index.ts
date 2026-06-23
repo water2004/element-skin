@@ -1,4 +1,5 @@
 import type { Router } from 'vue-router'
+import { appStorage } from '@/utils/storage'
 
 export type EasterEggCleanup = () => void
 
@@ -18,9 +19,6 @@ interface EasterEggDefinition {
 export interface EasterEggConfig {
   enabled?: string[]
 }
-
-const EASTER_EGG_DISABLED_KEY = 'disableEasterEgg'
-const LEGACY_EASTER_EGG_DISABLED_KEY = 'disableMeowEasterEgg'
 
 function isChineseCalendarDay(date: Date, month: number, day: number): boolean {
   try {
@@ -133,22 +131,17 @@ function stopActive(): void {
 
 export function isEasterEggDisabled(): boolean {
   if (!hasDOM()) return true
-  return (
-    localStorage.getItem(EASTER_EGG_DISABLED_KEY) === '1' ||
-    localStorage.getItem(LEGACY_EASTER_EGG_DISABLED_KEY) === '1'
-  )
+  return appStorage.easterEgg.isDisabled()
 }
 
 export function setEasterEggDisabled(disabled: boolean): void {
   if (!hasDOM()) return
   if (disabled) {
-    localStorage.setItem(EASTER_EGG_DISABLED_KEY, '1')
-    localStorage.removeItem(LEGACY_EASTER_EGG_DISABLED_KEY)
+    appStorage.easterEgg.setDisabled(true)
     cleanupEasterEgg()
     return
   }
-  localStorage.removeItem(EASTER_EGG_DISABLED_KEY)
-  localStorage.removeItem(LEGACY_EASTER_EGG_DISABLED_KEY)
+  appStorage.easterEgg.setDisabled(false)
   void refreshEasterEgg()
 }
 

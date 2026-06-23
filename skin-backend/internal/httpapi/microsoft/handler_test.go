@@ -6,14 +6,14 @@ import (
 	"testing"
 
 	"element-skin/backend/internal/httpapi/microsoft"
+	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/testutil"
-	"element-skin/backend/internal/util"
 )
 
 func TestHandlerAuthRequestsUserAccessAndKeepsStateStore(t *testing.T) {
 	var requireAdmin bool
-	states := util.NewInMemoryStateStore()
+	states := redisstore.NewMemoryStore()
 	h := microsoft.New(testutil.TestConfig(), nil, settings.Settings{Redis: testutil.NewMemoryRedis()}, func(next http.HandlerFunc, require bool) http.HandlerFunc {
 		requireAdmin = require
 		return next

@@ -13,14 +13,13 @@ import (
 	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/testutil"
-	"element-skin/backend/internal/util"
 )
 
 func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
 	cfg.SiteURL = "https://skin.example/root"
-	states := util.NewInMemoryStateStore()
+	states := redisstore.NewMemoryStore()
 	h := microsoft.New(cfg, db, settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}, func(next http.HandlerFunc, requireAdmin bool) http.HandlerFunc {
 		return next
 	}, states)
@@ -54,7 +53,9 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 		t.Fatalf("callback missing state token response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	microsoft.SeedStateForTest(states, "oauth-state", map[string]any{"kind": microsoft.TestStateKindOAuth, "user_id": "user-id"}, time.Minute)
+	if err := microsoft.SeedStateForTest(states, "oauth-state", map[string]any{"kind": microsoft.TestStateKindOAuth, "user_id": "user-id"}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 	req = httptest.NewRequest(http.MethodGet, "/microsoft/callback?code=code&state=oauth-state", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
@@ -74,7 +75,7 @@ func TestMicrosoftRoutesSettingsFailuresAndDefaultRedirectConsumeStateExactly(t 
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
 	cfg.SiteURL = ""
-	states := util.NewInMemoryStateStore()
+	states := redisstore.NewMemoryStore()
 	cache := redisstore.NewMemoryStore()
 	cache.Err = errors.New("settings cache unavailable")
 	h := microsoft.New(cfg, db, settings.Settings{DB: db, Redis: cache}, func(next http.HandlerFunc, requireAdmin bool) http.HandlerFunc {
@@ -88,9 +89,11 @@ func TestMicrosoftRoutesSettingsFailuresAndDefaultRedirectConsumeStateExactly(t 
 		t.Fatalf("auth URL settings failure mismatch: status=%d body=%q states=%d", rec.Code, rec.Body.String(), states.Len())
 	}
 
-	microsoft.SeedStateForTest(states, "settings-failure-state", map[string]any{
+	if err := microsoft.SeedStateForTest(states, "settings-failure-state", map[string]any{
 		"kind": microsoft.TestStateKindOAuth, "user_id": "user-id",
-	}, time.Minute)
+	}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 	req = httptest.NewRequest(http.MethodGet, "/microsoft/callback?code=code&state=settings-failure-state", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
@@ -102,9 +105,11 @@ func TestMicrosoftRoutesSettingsFailuresAndDefaultRedirectConsumeStateExactly(t 
 	h = microsoft.New(cfg, db, settings.Settings{DB: db, Redis: healthyCache}, func(next http.HandlerFunc, requireAdmin bool) http.HandlerFunc {
 		return next
 	}, states)
-	microsoft.SeedStateForTest(states, "default-site-state", map[string]any{
+	if err := microsoft.SeedStateForTest(states, "default-site-state", map[string]any{
 		"kind": microsoft.TestStateKindOAuth, "user_id": "user-id",
-	}, time.Minute)
+	}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 	req = httptest.NewRequest(http.MethodGet, "/microsoft/callback?code=code&state=default-site-state", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)

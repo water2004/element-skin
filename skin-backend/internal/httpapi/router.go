@@ -9,7 +9,6 @@ import (
 	settingssvc "element-skin/backend/internal/service/settings"
 	sitepkg "element-skin/backend/internal/service/site"
 	yggpkg "element-skin/backend/internal/service/yggdrasil"
-	"element-skin/backend/internal/util"
 )
 
 type Router struct {
@@ -21,8 +20,6 @@ type Router struct {
 	ygg      yggpkg.Yggdrasil
 	mux      *http.ServeMux
 }
-
-var MicrosoftImportStates = util.NewInMemoryStateStore()
 
 func NewRouter(cfg config.Config, db *database.DB, site sitepkg.Site, ygg yggpkg.Yggdrasil) http.Handler {
 	redis := redisstore.Store(redisstore.NewMemoryStore())

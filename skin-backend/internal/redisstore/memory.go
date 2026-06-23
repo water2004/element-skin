@@ -35,6 +35,12 @@ func (s *MemoryStore) Close() error {
 	return nil
 }
 
+func (s *MemoryStore) Len() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.items)
+}
+
 func (s *MemoryStore) key(parts ...string) string {
 	return strings.Join(parts, ":")
 }
@@ -246,6 +252,10 @@ func (s *MemoryStore) authUserKey(userID string) string {
 	return s.key("auth", "user", "v2", userID)
 }
 
+func (s *MemoryStore) stateKey(token string) string {
+	return s.key("state", token)
+}
+
 func (s *MemoryStore) SetYggToken(_ context.Context, token model.Token, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -444,6 +454,33 @@ func (s *MemoryStore) DeleteFallbackRequest(_ context.Context, endpoint, request
 	}
 	delete(s.items, s.key("fallback", "request", endpoint, request))
 	return nil
+}
+
+func (s *MemoryStore) SetState(_ context.Context, token string, value map[string]any, ttl time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.set(s.stateKey(token), value, ttl)
+}
+
+func (s *MemoryStore) PopState(_ context.Context, token string) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := s.stateKey(token)
+	value, err := s.get(key)
+	if err != nil {
+		return nil, err
+	}
+	delete(s.items, key)
+	out, ok := value.(map[string]any)
+	if ok {
+		return out, nil
+	}
+	b, _ := json.Marshal(value)
+	_ = json.Unmarshal(b, &out)
+	if out == nil {
+		out = map[string]any{}
+	}
+	return out, nil
 }
 
 func (s *MemoryStore) HitRateLimit(_ context.Context, key string, limit int, window time.Duration) (RateLimitResult, error) {

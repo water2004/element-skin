@@ -1,6 +1,12 @@
 package microsoft
 
-import "element-skin/backend/internal/util"
+import (
+	"context"
+	"errors"
+
+	"element-skin/backend/internal/redisstore"
+	"element-skin/backend/internal/util"
+)
 
 const (
 	stateKindOAuth   = "oauth_state"
@@ -8,9 +14,15 @@ const (
 	stateKindImport  = "import"
 )
 
-func (h Handler) popState(token, kind, invalidDetail string) (map[string]any, error) {
-	session, ok := h.states.Pop(token).(map[string]any)
-	if !ok || session["kind"] != kind {
+func (h Handler) popState(ctx context.Context, token, kind, invalidDetail string) (map[string]any, error) {
+	session, err := h.states.PopState(ctx, token)
+	if errors.Is(err, redisstore.ErrCacheMiss) {
+		return nil, util.HTTPError{Status: 400, Detail: invalidDetail}
+	}
+	if err != nil {
+		return nil, err
+	}
+	if session["kind"] != kind {
 		return nil, util.HTTPError{Status: 400, Detail: invalidDetail}
 	}
 	return session, nil

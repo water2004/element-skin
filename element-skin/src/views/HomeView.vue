@@ -4,13 +4,12 @@ import { useRouter } from 'vue-router'
 import { getPublicSettings, getPublicHomepageMedia } from '@/api/public'
 import { getMe } from '@/api/me'
 import { createHeroScene } from '@/composables/useHeroScene'
+import { appStorage } from '@/utils/storage'
 import { User } from '@element-plus/icons-vue'
 
 const router = useRouter()
-const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
-const siteSubtitle = ref(
-  localStorage.getItem('site_subtitle_cache') || '简洁、高效、现代的 Minecraft 皮肤 management 站',
-)
+const siteName = ref(appStorage.siteSettings.getSiteName())
+const siteSubtitle = ref(appStorage.siteSettings.getSiteSubtitle())
 const isLogged = ref(false)
 const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 
@@ -26,11 +25,11 @@ onMounted(async () => {
     const res = await getPublicSettings()
     if (res.data.site_name) {
       siteName.value = res.data.site_name
-      localStorage.setItem('site_name_cache', res.data.site_name)
+      appStorage.siteSettings.setSiteName(res.data.site_name)
     }
     if (res.data.site_subtitle) {
       siteSubtitle.value = res.data.site_subtitle
-      localStorage.setItem('site_subtitle_cache', res.data.site_subtitle)
+      appStorage.siteSettings.setSiteSubtitle(res.data.site_subtitle)
     }
   } catch (e) {
     console.warn('Failed to load site settings:', e)

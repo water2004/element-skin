@@ -1,9 +1,10 @@
 package microsoft
 
 import (
+	"context"
 	"time"
 
-	"element-skin/backend/internal/util"
+	"element-skin/backend/internal/redisstore"
 )
 
 const (
@@ -12,11 +13,11 @@ const (
 	TestStateKindImport  = stateKindImport
 )
 
-func SeedStateForTest(states *util.InMemoryStateStore, token string, session map[string]any, ttl time.Duration) {
-	states.Put(token, session, ttl)
+func SeedStateForTest(states redisstore.Store, token string, session map[string]any, ttl time.Duration) error {
+	return states.SetState(context.Background(), token, session, ttl)
 }
 
-func PopStateForTest(states *util.InMemoryStateStore, token string) map[string]any {
-	session, _ := states.Pop(token).(map[string]any)
+func PopStateForTest(states redisstore.Store, token string) map[string]any {
+	session, _ := states.PopState(context.Background(), token)
 	return session
 }

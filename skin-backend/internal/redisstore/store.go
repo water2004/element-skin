@@ -63,6 +63,8 @@ type Store interface {
 	GetYggSession(context.Context, string) (model.Session, error)
 	MarkFallbackRequest(context.Context, string, string, time.Duration) (bool, error)
 	DeleteFallbackRequest(context.Context, string, string) error
+	SetState(context.Context, string, map[string]any, time.Duration) error
+	PopState(context.Context, string) (map[string]any, error)
 	HitRateLimit(context.Context, string, int, time.Duration) (RateLimitResult, error)
 	GetAuthUser(context.Context, string) (AuthUser, error)
 	SetAuthUser(context.Context, AuthUser, time.Duration) error
@@ -276,6 +278,10 @@ func (s *RedisStore) fallbackRequestKey(endpoint, request string) string {
 	return s.key("fallback", "request", endpoint, request)
 }
 
+func (s *RedisStore) stateKey(token string) string {
+	return s.key("state", token)
+}
+
 func (s *RedisStore) authUserKey(userID string) string {
 	return s.key("auth", "user", "v2", userID)
 }
@@ -407,6 +413,46 @@ func (s *RedisStore) MarkFallbackRequest(ctx context.Context, endpoint, request 
 
 func (s *RedisStore) DeleteFallbackRequest(ctx context.Context, endpoint, request string) error {
 	return s.client.Del(ctx, s.fallbackRequestKey(endpoint, request)).Err()
+}
+
+func (s *RedisStore) SetState(ctx context.Context, token string, value map[string]any, ttl time.Duration) error {
+	return s.setJSON(ctx, s.stateKey(token), value, ttl)
+}
+
+var popStateScript = redis.NewScript(`
+local value = redis.call("GET", KEYS[1])
+if not value then
+	return nil
+end
+redis.call("DEL", KEYS[1])
+return value
+`)
+
+func (s *RedisStore) PopState(ctx context.Context, token string) (map[string]any, error) {
+	result, err := popStateScript.Run(ctx, s.client, []string{s.stateKey(token)}).Result()
+	if err == redis.Nil {
+		return nil, ErrCacheMiss
+	}
+	if err != nil {
+		return nil, err
+	}
+	var raw []byte
+	switch value := result.(type) {
+	case string:
+		raw = []byte(value)
+	case []byte:
+		raw = value
+	default:
+		return nil, fmt.Errorf("unexpected state payload type %T", result)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		return map[string]any{}, nil
+	}
+	return out, nil
 }
 
 var rateLimitScript = redis.NewScript(`

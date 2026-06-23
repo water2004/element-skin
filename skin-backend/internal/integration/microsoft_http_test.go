@@ -2,7 +2,7 @@ package integration_test
 
 import (
 	"context"
-	"element-skin/backend/internal/httpapi"
+	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
 	"net/http"
@@ -12,13 +12,13 @@ import (
 )
 
 func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
-	db, h := testutil.NewTestApp(t)
+	db, h, cache := testutil.NewTestAppWithRedisTB(t)
 	user := testutil.CreateUser(t, db, "msapi@test.com", "Password123", "MsApiUser", false)
 	token, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, user.ID, false, time.Hour)
 	cookie := &http.Cookie{Name: "access_token", Value: token}
 
 	importToken := "import-token-ok"
-	httpapi.MicrosoftImportStates.Put(importToken, map[string]any{
+	seedMicrosoftState(t, cache, importToken, map[string]any{
 		"user_id": user.ID,
 		"kind":    "import",
 		"profile": map[string]any{
@@ -29,7 +29,7 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 			},
 			"capes": []any{},
 		},
-	}, time.Minute)
+	})
 
 	resp := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{
 		"ms_token":     importToken,
@@ -58,22 +58,22 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 	}
 
 	otherUserToken := "import-token-other-user"
-	httpapi.MicrosoftImportStates.Put(otherUserToken, map[string]any{
+	seedMicrosoftState(t, cache, otherUserToken, map[string]any{
 		"user_id": "some-other-user-id",
 		"kind":    "import",
 		"profile": map[string]any{"id": "x_id", "name": "X"},
-	}, time.Minute)
+	})
 	other := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": otherUserToken}, cookie)
 	if other.Code != 403 {
 		t.Fatalf("other user's token should be 403, got %d body=%s", other.Code, other.Body.String())
 	}
 
 	wrongKindToken := "import-token-wrong-kind"
-	httpapi.MicrosoftImportStates.Put(wrongKindToken, map[string]any{
+	seedMicrosoftState(t, cache, wrongKindToken, map[string]any{
 		"user_id": user.ID,
 		"kind":    "profile",
 		"profile": map[string]any{"id": "wrong_kind_id", "name": "WrongKind"},
-	}, time.Minute)
+	})
 	wrongKind := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": wrongKindToken}, cookie)
 	if wrongKind.Code != 400 {
 		t.Fatalf("wrong kind token should be 400, got %d body=%s", wrongKind.Code, wrongKind.Body.String())
@@ -86,11 +86,11 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 
 	conflictToken := "import-token-uuid-conflict"
 	testutil.CreateProfile(t, db, user.ID, "conflict_ms_id", "ExistingMsProfile")
-	httpapi.MicrosoftImportStates.Put(conflictToken, map[string]any{
+	seedMicrosoftState(t, cache, conflictToken, map[string]any{
 		"user_id": user.ID,
 		"kind":    "import",
 		"profile": map[string]any{"id": "conflict_ms_id", "name": "ConflictMsPlayer", "skins": []any{}, "capes": []any{}},
-	}, time.Minute)
+	})
 	conflict := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": conflictToken}, cookie)
 	if conflict.Code != 400 || !strings.Contains(conflict.Body.String(), "UUID") {
 		t.Fatalf("uuid conflict should be 400 with UUID detail, got %d body=%s", conflict.Code, conflict.Body.String())
@@ -98,11 +98,11 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 
 	nameDedupToken := "import-token-name-dedup"
 	testutil.CreateProfile(t, db, user.ID, "other_ms_name", "TakenMsName")
-	httpapi.MicrosoftImportStates.Put(nameDedupToken, map[string]any{
+	seedMicrosoftState(t, cache, nameDedupToken, map[string]any{
 		"user_id": user.ID,
 		"kind":    "import",
 		"profile": map[string]any{"id": "new_ms_id", "name": "TakenMsName", "skins": []any{}, "capes": []any{}},
-	}, time.Minute)
+	})
 	dedup := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": nameDedupToken}, cookie)
 	if dedup.Code != 200 {
 		t.Fatalf("name dedup import status=%d body=%s", dedup.Code, dedup.Body.String())
@@ -117,7 +117,7 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 }
 
 func TestMicrosoftAuthURLAndGetProfileTokenSemantics(t *testing.T) {
-	userDB, h := testutil.NewTestApp(t)
+	userDB, h, cache := testutil.NewTestAppWithRedisTB(t)
 	user := testutil.CreateUser(t, userDB, "msflow@test.com", "Password123", "MsFlow", false)
 	other := testutil.CreateUser(t, userDB, "msflow-other@test.com", "Password123", "MsFlowOther", false)
 	token, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, user.ID, false, time.Hour)
@@ -136,7 +136,7 @@ func TestMicrosoftAuthURLAndGetProfileTokenSemantics(t *testing.T) {
 	}
 
 	profileToken := "ms-profile-token"
-	httpapi.MicrosoftImportStates.Put(profileToken, map[string]any{
+	seedMicrosoftState(t, cache, profileToken, map[string]any{
 		"user_id": user.ID,
 		"kind":    "profile",
 		"profile": map[string]any{
@@ -150,20 +150,20 @@ func TestMicrosoftAuthURLAndGetProfileTokenSemantics(t *testing.T) {
 				"capes": []any{},
 			},
 		},
-	}, time.Minute)
+	})
 	getProfileOther := doJSON(t, h, "POST", "/microsoft/get-profile", map[string]any{"ms_token": profileToken}, otherCookie)
 	if getProfileOther.Code != 403 {
 		t.Fatalf("other user's profile token should be 403, got %d body=%s", getProfileOther.Code, getProfileOther.Body.String())
 	}
 	// The failed cross-user attempt pops the one-shot token; seed it again for the owner path.
-	httpapi.MicrosoftImportStates.Put(profileToken, map[string]any{
+	seedMicrosoftState(t, cache, profileToken, map[string]any{
 		"user_id": user.ID,
 		"kind":    "profile",
 		"profile": map[string]any{
 			"has_game": true,
 			"profile":  map[string]any{"id": "ms_flow_profile", "name": "MsFlowPlayer", "skins": []any{}, "capes": []any{}},
 		},
-	}, time.Minute)
+	})
 	getProfile := doJSON(t, h, "POST", "/microsoft/get-profile", map[string]any{"ms_token": profileToken}, cookie)
 	if getProfile.Code != 200 {
 		t.Fatalf("get-profile status=%d body=%s", getProfile.Code, getProfile.Body.String())
@@ -180,5 +180,12 @@ func TestMicrosoftAuthURLAndGetProfileTokenSemantics(t *testing.T) {
 	importResp := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": importToken}, cookie)
 	if importResp.Code != 200 {
 		t.Fatalf("import issued token status=%d body=%s", importResp.Code, importResp.Body.String())
+	}
+}
+
+func seedMicrosoftState(t *testing.T, cache redisstore.Store, token string, value map[string]any) {
+	t.Helper()
+	if err := cache.SetState(context.Background(), token, value, time.Minute); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -339,7 +339,6 @@ async function startMicrosoftAuth() {
   try {
     const response = await getMicrosoftAuthUrl()
     const authUrl = response.data.auth_url
-    sessionStorage.setItem('ms_auth_state', response.data.state)
     window.location.href = authUrl
   } catch (error: unknown) {
     ElMessage.error('启动微软登录失败: ' + getErrorMessage(error, '启动微软登录失败'))

@@ -197,6 +197,7 @@ import {
 } from '@element-plus/icons-vue'
 
 import { useAvatar } from '@/composables/useAvatar'
+import { appStorage } from '@/utils/storage'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import {
@@ -229,11 +230,8 @@ const route = useRoute()
 const { push } = useRouter()
 const isHome = computed(() => route.path === '/')
 const isAuthPage = computed(() => ['/login', '/register', '/reset-password'].includes(route.path))
-const siteName = ref(localStorage.getItem('site_name_cache') || '皮肤站')
-const enableSkinLibrary = ref(
-  localStorage.getItem('enable_skin_library_cache') === 'true' ||
-    localStorage.getItem('enable_skin_library_cache') === null,
-)
+const siteName = ref(appStorage.siteSettings.getSiteName())
+const enableSkinLibrary = ref(appStorage.siteSettings.getEnableSkinLibrary())
 const user = ref<UserType | null>(null)
 const drawer = ref(false)
 const footerText = ref('')
@@ -255,14 +253,14 @@ watch([() => route.path, footerText, filingIcp, filingMps], updateFooterHeight)
 
 const isDark = ref(false)
 function initTheme() {
-  const savedTheme = localStorage.getItem('theme')
+  const savedTheme = appStorage.theme.get()
   if (savedTheme) isDark.value = savedTheme === 'dark'
   else isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
   applyTheme()
 }
 function toggleTheme() {
   isDark.value = !isDark.value
-  localStorage.setItem('theme', isDark.value ? 'dark' : 'light')
+  appStorage.theme.set(isDark.value ? 'dark' : 'light')
   applyTheme()
 }
 function applyTheme() {
@@ -270,7 +268,7 @@ function applyTheme() {
 }
 
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-  if (!localStorage.getItem('theme')) {
+  if (!appStorage.theme.hasUserPreference()) {
     isDark.value = e.matches
     applyTheme()
   }
@@ -422,12 +420,12 @@ onMounted(async () => {
     const res = await getPublicSettings()
     if (res.data.site_name) {
       siteName.value = res.data.site_name
-      localStorage.setItem('site_name_cache', res.data.site_name)
+      appStorage.siteSettings.setSiteName(res.data.site_name)
       document.title = res.data.site_name
     }
     if (res.data.enable_skin_library !== undefined) {
       enableSkinLibrary.value = res.data.enable_skin_library
-      localStorage.setItem('enable_skin_library_cache', res.data.enable_skin_library.toString())
+      appStorage.siteSettings.setEnableSkinLibrary(res.data.enable_skin_library)
     }
     if (res.data.footer_text !== undefined) footerText.value = res.data.footer_text
     if (res.data.filing_icp !== undefined) filingIcp.value = res.data.filing_icp

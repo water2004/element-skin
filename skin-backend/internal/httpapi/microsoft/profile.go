@@ -14,7 +14,7 @@ func (h Handler) GetProfile(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
 		return
 	}
-	session, err := h.popState(body["ms_token"], stateKindProfile, "Invalid or expired token")
+	session, err := h.popState(req.Context(), body["ms_token"], stateKindProfile, "Invalid or expired token")
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -31,11 +31,14 @@ func (h Handler) GetProfile(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	h.states.Put(importToken, map[string]any{
+	if err := h.states.SetState(req.Context(), importToken, map[string]any{
 		"user_id": userID,
 		"kind":    stateKindImport,
 		"profile": verified,
-	}, 5*time.Minute)
+	}, 5*time.Minute); err != nil {
+		util.Error(w, err)
+		return
+	}
 	util.JSON(w, 200, map[string]any{
 		"profile":      verified,
 		"has_game":     shared.ValueOrAny(flowProfile["has_game"], false),

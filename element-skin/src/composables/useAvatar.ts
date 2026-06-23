@@ -1,6 +1,7 @@
 import { ref } from 'vue'
 import * as skinview3d from 'skinview3d'
 import { patchMe } from '@/api/me'
+import { appStorage } from '@/utils/storage'
 
 type SkinModel = 'default' | 'slim'
 
@@ -47,7 +48,7 @@ function _doGenerateAvatar(hash: string, model: SkinModel = 'default'): Promise<
       .then(() => {
         viewer.render()
         const base64 = canvas.toDataURL()
-        localStorage.setItem(`avatar_cache_${hash}`, base64)
+        appStorage.avatar.set(hash, base64)
         viewer.dispose()
         resolve(base64)
       })
@@ -60,13 +61,13 @@ function _doGenerateAvatar(hash: string, model: SkinModel = 'default'): Promise<
 }
 
 /**
- * Get avatar image for any texture hash. Returns cached base64 from localStorage
+ * Get avatar image for any texture hash. Returns cached base64 from app storage
  * instantly, or generates sequentially (WebGL instances serialized via a promise queue).
  */
 export function getAvatarForHash(hash: string | null | undefined, model: SkinModel = 'default'): Promise<string | null> {
   if (!hash) return Promise.resolve(null)
 
-  const cached = localStorage.getItem(`avatar_cache_${hash}`)
+  const cached = appStorage.avatar.get(hash)
   if (cached) return Promise.resolve(cached)
 
   const task = _generationQueue.then(() => _doGenerateAvatar(hash, model))
@@ -83,7 +84,7 @@ export function useAvatar() {
     }
 
     avatarHash.value = hash
-    const cached = localStorage.getItem(`avatar_cache_${hash}`)
+    const cached = appStorage.avatar.get(hash)
     if (cached) {
       currentAvatarImg.value = cached
     } else {

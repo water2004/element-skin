@@ -26,7 +26,10 @@ func (h Handler) AuthURL(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	h.states.Put(state, map[string]any{"user_id": shared.CurrentUserID(req), "kind": stateKindOAuth}, 10*time.Minute)
+	if err := h.states.SetState(req.Context(), state, map[string]any{"user_id": shared.CurrentUserID(req), "kind": stateKindOAuth}, 10*time.Minute); err != nil {
+		util.Error(w, err)
+		return
+	}
 	util.JSON(w, 200, map[string]any{
 		"auth_url": mssvc.MicrosoftAuthorizationURL(clientID, redirectURI, state),
 		"state":    state,
@@ -48,7 +51,7 @@ func (h Handler) Callback(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "Missing code or state parameter"})
 		return
 	}
-	session, err := h.popState(state, stateKindOAuth, "Invalid or expired state parameter")
+	session, err := h.popState(req.Context(), state, stateKindOAuth, "Invalid or expired state parameter")
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -84,6 +87,9 @@ func (h Handler) Callback(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	h.states.Put(token, map[string]any{"user_id": session["user_id"], "kind": stateKindProfile, "profile": result}, 5*time.Minute)
+	if err := h.states.SetState(req.Context(), token, map[string]any{"user_id": session["user_id"], "kind": stateKindProfile, "profile": result}, 5*time.Minute); err != nil {
+		util.Error(w, err)
+		return
+	}
 	http.Redirect(w, req, siteURL+"/dashboard/roles?ms_token="+token, http.StatusFound)
 }

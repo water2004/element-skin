@@ -14,7 +14,7 @@ func (h Handler) ImportProfile(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
 		return
 	}
-	session, err := h.popState(body["ms_token"], stateKindImport, "invalid import token")
+	session, err := h.popState(req.Context(), body["ms_token"], stateKindImport, "invalid import token")
 	if err != nil {
 		util.Error(w, err)
 		return

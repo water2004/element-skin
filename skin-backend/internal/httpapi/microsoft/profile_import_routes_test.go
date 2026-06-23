@@ -9,17 +9,17 @@ import (
 
 	"element-skin/backend/internal/httpapi/microsoft"
 	"element-skin/backend/internal/httpapi/shared"
+	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/testutil"
-	"element-skin/backend/internal/util"
 )
 
 func TestGetProfileConsumesStateAndIssuesImportTokenExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
-	states := util.NewInMemoryStateStore()
+	states := redisstore.NewMemoryStore()
 	h := microsoft.New(testutil.TestConfig(), db, settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}, nil, states)
 	user := testutil.CreateUser(t, db, "ms-profile@test.com", "Password123", "MSProfile", false)
-	microsoft.SeedStateForTest(states, "profile-token", map[string]any{
+	if err := microsoft.SeedStateForTest(states, "profile-token", map[string]any{
 		"user_id": user.ID,
 		"kind":    microsoft.TestStateKindProfile,
 		"profile": map[string]any{
@@ -30,7 +30,9 @@ func TestGetProfileConsumesStateAndIssuesImportTokenExactly(t *testing.T) {
 			},
 			"has_game": true,
 		},
-	}, time.Minute)
+	}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/microsoft/get-profile", strings.NewReader(`{"ms_token":"profile-token"}`))
 	req = req.WithContext(shared.WithUser(req.Context(), user.ID, false))
@@ -62,15 +64,17 @@ func TestGetProfileConsumesStateAndIssuesImportTokenExactly(t *testing.T) {
 
 func TestMicrosoftProfileRoutesRejectWrongOwnerExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
-	states := util.NewInMemoryStateStore()
+	states := redisstore.NewMemoryStore()
 	h := microsoft.New(testutil.TestConfig(), db, settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}, nil, states)
 	owner := testutil.CreateUser(t, db, "ms-owner@test.com", "Password123", "MSOwner", false)
 	other := testutil.CreateUser(t, db, "ms-other@test.com", "Password123", "MSOther", false)
-	microsoft.SeedStateForTest(states, "owned-token", map[string]any{
+	if err := microsoft.SeedStateForTest(states, "owned-token", map[string]any{
 		"user_id": owner.ID,
 		"kind":    microsoft.TestStateKindProfile,
 		"profile": map[string]any{"profile": map[string]any{"id": "id", "name": "Name"}},
-	}, time.Minute)
+	}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/microsoft/get-profile", strings.NewReader(`{"ms_token":"owned-token"}`))
 	req = req.WithContext(shared.WithUser(req.Context(), other.ID, false))
@@ -83,7 +87,7 @@ func TestMicrosoftProfileRoutesRejectWrongOwnerExactly(t *testing.T) {
 
 func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
-	states := util.NewInMemoryStateStore()
+	states := redisstore.NewMemoryStore()
 	h := microsoft.New(testutil.TestConfig(), db, settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}, nil, states)
 	owner := testutil.CreateUser(t, db, "ms-import-owner@test.com", "Password123", "MSImportOwner", false)
 	other := testutil.CreateUser(t, db, "ms-import-other@test.com", "Password123", "MSImportOther", false)
@@ -96,11 +100,13 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 		t.Fatalf("missing import token mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	microsoft.SeedStateForTest(states, "wrong-owner", map[string]any{
+	if err := microsoft.SeedStateForTest(states, "wrong-owner", map[string]any{
 		"user_id": other.ID,
 		"kind":    microsoft.TestStateKindImport,
 		"profile": map[string]any{"id": "ms-import-id", "name": "MSImport"},
-	}, time.Minute)
+	}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 	req = httptest.NewRequest(http.MethodPost, "/microsoft/import-profile", strings.NewReader(`{"ms_token":"wrong-owner"}`))
 	req = req.WithContext(shared.WithUser(req.Context(), owner.ID, false))
 	rec = httptest.NewRecorder()
@@ -109,7 +115,9 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 		t.Fatalf("wrong owner import token mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	microsoft.SeedStateForTest(states, "bad-payload", map[string]any{"user_id": owner.ID, "kind": microsoft.TestStateKindImport, "profile": "bad"}, time.Minute)
+	if err := microsoft.SeedStateForTest(states, "bad-payload", map[string]any{"user_id": owner.ID, "kind": microsoft.TestStateKindImport, "profile": "bad"}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 	req = httptest.NewRequest(http.MethodPost, "/microsoft/import-profile", strings.NewReader(`{"ms_token":"bad-payload"}`))
 	req = req.WithContext(shared.WithUser(req.Context(), owner.ID, false))
 	rec = httptest.NewRecorder()
@@ -121,10 +129,10 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 
 func TestImportProfileCreatesProfileFromStateExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
-	states := util.NewInMemoryStateStore()
+	states := redisstore.NewMemoryStore()
 	h := microsoft.New(testutil.TestConfig(), db, settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}, nil, states)
 	user := testutil.CreateUser(t, db, "ms-import-ok@test.com", "Password123", "MSImportOK", false)
-	microsoft.SeedStateForTest(states, "import-ok", map[string]any{
+	if err := microsoft.SeedStateForTest(states, "import-ok", map[string]any{
 		"user_id": user.ID,
 		"kind":    microsoft.TestStateKindImport,
 		"profile": map[string]any{
@@ -133,7 +141,9 @@ func TestImportProfileCreatesProfileFromStateExactly(t *testing.T) {
 			"skins": []any{map[string]any{"url": "http://skin-bytes", "variant": "slim"}},
 			"capes": []any{map[string]any{"url": "http://cape-bytes"}},
 		},
-	}, time.Minute)
+	}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
 
 	req := httptest.NewRequest(http.MethodPost, "/microsoft/import-profile", strings.NewReader(`{"ms_token":"import-ok"}`))
 	req = req.WithContext(shared.WithUser(req.Context(), user.ID, false))

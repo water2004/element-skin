@@ -186,6 +186,24 @@ func TestMemoryStorePrefixTTLAndErrorContracts(t *testing.T) {
 		t.Fatalf("verification code should expire at ttl boundary, got %v", err)
 	}
 
+	if err := store.SetState(ctx, "state-token", map[string]any{"kind": "oauth_state", "user_id": "u1"}, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	state, err := store.PopState(ctx, "state-token")
+	if err != nil || state["kind"] != "oauth_state" || state["user_id"] != "u1" {
+		t.Fatalf("state pop mismatch: state=%#v err=%v", state, err)
+	}
+	if _, err := store.PopState(ctx, "state-token"); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("state token should be single-use, got %v", err)
+	}
+	if err := store.SetState(ctx, "expired-state", map[string]any{"kind": "profile"}, time.Second); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Second)
+	if _, err := store.PopState(ctx, "expired-state"); !errors.Is(err, ErrCacheMiss) {
+		t.Fatalf("state token should expire at ttl boundary, got %v", err)
+	}
+
 	boom := errors.New("cache unavailable")
 	store.Err = boom
 	if err := store.SetSetting(ctx, "site_name", "B", time.Minute); !errors.Is(err, boom) {
@@ -199,6 +217,12 @@ func TestMemoryStorePrefixTTLAndErrorContracts(t *testing.T) {
 	}
 	if err := store.DeleteFallbackRequest(ctx, "endpoint", "request"); !errors.Is(err, boom) {
 		t.Fatalf("delete fallback guard should propagate store error, got %v", err)
+	}
+	if err := store.SetState(ctx, "state-error", map[string]any{"kind": "oauth_state"}, time.Minute); !errors.Is(err, boom) {
+		t.Fatalf("state set should propagate store error, got %v", err)
+	}
+	if _, err := store.PopState(ctx, "state-error"); !errors.Is(err, boom) {
+		t.Fatalf("state pop should propagate store error, got %v", err)
 	}
 	if _, err := store.HitRateLimit(ctx, "login", 1, time.Minute); !errors.Is(err, boom) {
 		t.Fatalf("rate limit should propagate store error, got %v", err)
