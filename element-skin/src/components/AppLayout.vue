@@ -47,7 +47,7 @@
           />
 
           <!-- Mobile Nav Trigger -->
-          <div class="mobile-nav" v-if="isLogged">
+          <div class="mobile-nav" v-if="authReady && isLogged">
             <el-button
               @click="drawer = true"
               :icon="MenuIcon"
@@ -59,7 +59,7 @@
 
           <!-- Account Popover -->
           <el-popover
-            v-if="isLogged"
+            v-if="authReady && isLogged"
             placement="bottom-end"
             :width="240"
             trigger="hover"
@@ -124,7 +124,7 @@
           </el-popover>
 
           <!-- Auth Buttons -->
-          <template v-if="!isLogged">
+          <template v-if="authReady && !isLogged">
             <el-button type="primary" @click="go('/login')">登录</el-button>
             <el-button @click="go('/register')" class="hero-register-btn ml-2"> 注册 </el-button>
           </template>
@@ -239,6 +239,7 @@ const isAuthPage = computed(() => ['/login', '/register', '/reset-password'].inc
 const siteName = ref(appStorage.siteSettings.getSiteName())
 const enableSkinLibrary = ref(appStorage.siteSettings.getEnableSkinLibrary())
 const user = ref<UserType | null>(null)
+const authReady = ref(false)
 const drawer = ref(false)
 const footerText = ref('')
 const filingIcp = ref('')
@@ -284,6 +285,7 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e)
 
 provide('user', user)
 provide('fetchMe', fetchMe)
+provide('authReady', authReady)
 provide('isDark', isDark)
 provide('footerHeight', footerHeight)
 
@@ -404,6 +406,7 @@ async function logout() {
     await siteLogout()
   } catch {}
   user.value = null
+  authReady.value = true
   push('/')
   setTimeout(() => window.location.reload(), 100)
 }
@@ -417,6 +420,8 @@ async function fetchMe() {
     }
   } catch {
     user.value = null
+  } finally {
+    authReady.value = true
   }
 }
 
@@ -425,6 +430,7 @@ onMounted(async () => {
   initTheme()
   installEasterEggDevTools()
   void refreshEasterEgg()
+  void fetchMe()
   try {
     const res = await getPublicSettings()
     if (res.data.site_name) {
@@ -446,8 +452,6 @@ onMounted(async () => {
   } catch (e) {
     console.warn('Failed to load site settings:', e)
   }
-
-  await fetchMe()
 
   if (window.ResizeObserver) {
     resizeObserver = new ResizeObserver(() => updateFooterHeight())

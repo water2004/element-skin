@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, inject, ref, onMounted, onBeforeUnmount, type Ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getPublicSettings, getPublicHomepageMedia } from '@/api/public'
-import { getMe } from '@/api/me'
+import type { User as UserType } from '@/api/types'
 import { createHeroScene } from '@/composables/useHeroScene'
 import { appStorage } from '@/storage'
 import { User } from '@element-plus/icons-vue'
@@ -10,7 +10,9 @@ import { User } from '@element-plus/icons-vue'
 const router = useRouter()
 const siteName = ref(appStorage.siteSettings.getSiteName())
 const siteSubtitle = ref(appStorage.siteSettings.getSiteSubtitle())
-const isLogged = ref(false)
+const user = inject<Ref<UserType | null>>('user', ref(null))
+const authReady = inject<Ref<boolean>>('authReady', ref(false))
+const isLogged = computed(() => authReady.value && !!user.value)
 const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 
 // Single source-of-truth renderer for the fixed hero background.
@@ -42,12 +44,6 @@ onMounted(async () => {
   } catch (e) {
     console.warn('Failed to load homepage media:', e)
   }
-
-  // 检查登录状态（cookie 自动携带）
-  try {
-    await getMe()
-    isLogged.value = true
-  } catch {}
 })
 
 onBeforeUnmount(() => {
@@ -70,7 +66,7 @@ function goRegister() {
     <!-- Background is FIXED and outside of main content flow -->
     <canvas ref="bgCanvasRef" class="hero-bg-fixed" aria-hidden="true"></canvas>
     <button
-      v-if="isLogged"
+      v-if="authReady && isLogged"
       type="button"
       class="home-fixed-button home-fixed-primary home-fixed-single probe-fade-in"
       @click="goDashboard"
@@ -79,7 +75,7 @@ function goRegister() {
       <span class="home-fixed-label">进入个人面板</span>
     </button>
     <button
-      v-else
+      v-else-if="authReady"
       type="button"
       class="home-fixed-button home-fixed-primary probe-fade-in"
       @click="goLogin"
@@ -87,7 +83,7 @@ function goRegister() {
       <span class="home-fixed-label">登录账号</span>
     </button>
     <button
-      v-if="!isLogged"
+      v-if="authReady && !isLogged"
       type="button"
       class="home-fixed-button home-fixed-secondary probe-fade-in"
       @click="goRegister"
