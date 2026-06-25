@@ -104,7 +104,7 @@ function goRegister() {
 .home-container {
   --home-anchor-y: var(--home-content-center-y, calc(50vh + 32px));
   --home-title-y: calc(var(--home-anchor-y) - 72px);
-  --home-action-top: calc(var(--home-anchor-y) + 48px);
+  --home-action-top: calc(var(--home-anchor-y) + 20px);
   --home-action-hover-top: calc(var(--home-action-top) - 4px);
   width: 100%;
   height: 100vh;
@@ -250,7 +250,7 @@ function goRegister() {
 @media (max-width: 768px) {
   .home-container {
     --home-title-y: calc(var(--home-anchor-y) - 92px);
-    --home-action-top: calc(var(--home-anchor-y) + 22px);
+    --home-action-top: calc(var(--home-anchor-y) + 2px);
     --home-second-action-top: calc(var(--home-action-top) + 64px);
     --home-action-hover-top: calc(var(--home-action-top) - 4px);
     --home-second-action-hover-top: calc(var(--home-second-action-top) - 4px);
