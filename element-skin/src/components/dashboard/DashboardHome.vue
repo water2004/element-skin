@@ -15,7 +15,6 @@
               <el-icon><Box /></el-icon>
             </template>
           </el-statistic>
-          <div class="stat-divider" aria-hidden="true"></div>
           <el-statistic title="角色数量" :value="profileCount">
             <template #prefix>
               <el-icon><User /></el-icon>
@@ -157,8 +156,8 @@ onMounted(async () => {
 .stat-card-content {
   display: flex;
   align-items: center;
-  justify-content: space-around;
-  gap: 24px;
+  justify-content: center;
+  gap: 96px;
   min-height: 96px;
 }
 
@@ -188,12 +187,6 @@ onMounted(async () => {
   align-items: center;
   color: var(--el-color-primary);
   font-size: 26px;
-}
-
-.stat-divider {
-  width: 1px;
-  height: 56px;
-  background: var(--color-border);
 }
 
 .launcher-card :deep(.el-card__body) {
@@ -249,11 +242,6 @@ onMounted(async () => {
 
   .dashboard-stat-card :deep(.el-statistic) {
     min-width: 0;
-  }
-
-  .stat-divider {
-    width: 100%;
-    height: 1px;
   }
 
   .drag-btn {
