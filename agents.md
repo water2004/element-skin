@@ -166,13 +166,24 @@
 - Commit message 使用英文。
 - 标题使用小写前缀，格式为 `<type>: <summary>`。
 - 允许的 type：
+  - `feat:` 新增用户可见功能。
+  - `add:` 新增文件、文档、测试、资源或内部能力；也可用于不适合归入 `feat` 的新增内容。
   - `fix:` 修复缺陷。
-  - `add:` 新增功能、文档或测试。
-  - `chore:` 构建、依赖、配置、清理等非业务改动。
   - `refactor:` 重构，不改变外部行为。
+  - `perf:` 性能优化。
+  - `docs:` 文档变更。
+  - `test:` 测试新增或调整。
+  - `style:` 代码风格、格式、样式调整，不改变逻辑。
+  - `build:` 构建系统、依赖、打包配置变更。
+  - `ci:` CI/CD 配置和脚本变更。
+  - `chore:` 维护性杂项、配置清理、工具调整等非业务改动。
+  - `revert:` 回滚先前提交。
 - Summary 使用简短英文祈使句或名词短语，例如：
-  - `fix: avoid auth flicker on home page`
+  - `feat: add developer application dashboard`
   - `add: notice system design`
+  - `fix: avoid auth flicker on home page`
+  - `docs: update coding standards`
+  - `test: cover notice expiration cleanup`
   - `chore: update frontend dependencies`
   - `refactor: split dashboard notice panel`
 - 一次提交只表达一个主要意图。
