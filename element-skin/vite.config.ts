@@ -73,7 +73,7 @@ export default defineConfig({
       },
       // API routes that might conflict with frontend routes
       // When a browser refreshes on these paths, it should serve index.html instead of proxying to the backend
-      '^/(admin|register|reset-password|site-login|site-logout|me|public|microsoft|send-verification-code|remote-ygg|textures)':
+      '^/(admin|register|reset-password|site-login|site-logout|me|public|microsoft|send-verification-code|remote-ygg|textures|notices)':
         {
           target: 'http://127.0.0.1:8000',
           changeOrigin: true,

@@ -7,7 +7,6 @@ import ResetPassword from '../views/ResetPassword.vue'
 import UserDashboard from '../views/UserDashboard.vue'
 import SkinLibraryView from '../views/SkinLibraryView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
-import NotificationDetailView from '../views/NotificationDetailView.vue'
 
 // Dashboard Components
 import DashboardWardrobe from '@/components/dashboard/DashboardWardrobe.vue'
@@ -148,7 +147,7 @@ const router = createRouter({
     {
       path: '/notifications/:id',
       name: 'notification-detail',
-      component: NotificationDetailView,
+      component: NotificationsView,
     },
   ],
 })

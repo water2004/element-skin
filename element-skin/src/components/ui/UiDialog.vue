@@ -24,7 +24,7 @@ const model = defineModel<boolean>({ required: true })
 
 const props = withDefaults(
   defineProps<{
-    variant?: 'form' | 'viewer'
+    variant?: 'form' | 'wide-form' | 'viewer'
     appendToBody?: boolean
   }>(),
   {
@@ -54,6 +54,15 @@ const rootClass = computed(() => ['ui-dialog', `ui-dialog--${props.variant}`, at
 .ui-dialog--form {
   width: min(calc(100vw - 24px), 500px) !important;
   border-radius: 14px !important;
+}
+
+.ui-dialog--wide-form {
+  width: min(calc(100vw - 24px), 1120px) !important;
+  border-radius: 14px !important;
+}
+
+.ui-dialog--wide-form .el-dialog__body {
+  padding: 0 !important;
 }
 
 .ui-dialog--viewer {

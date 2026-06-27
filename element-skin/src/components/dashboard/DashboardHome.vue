@@ -8,7 +8,7 @@
     </div>
 
     <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
-      <div>
+      <div class="order-2 xl:order-1">
         <section class="flex flex-col gap-4 mb-8">
           <UiCard class="dashboard-stat-card" shadow="hover">
             <div class="stat-card-content">
@@ -67,7 +67,7 @@
         </section>
       </div>
 
-      <aside class="flex flex-col gap-4">
+      <aside class="order-1 xl:order-2 flex flex-col gap-4">
         <div class="flex justify-between items-center gap-3">
           <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">公告</h2>
           <el-button size="small" text @click="goNotifications">
@@ -82,16 +82,35 @@
               class="w-full text-left rounded-xl border border-[var(--color-border)] bg-[var(--color-background-soft)] px-4 py-3 transition hover:border-[var(--el-color-primary)] hover:bg-[var(--color-card-background)]"
               @click="openNotice(notice.id)"
             >
-              <div class="flex items-center justify-between gap-3">
-                <div class="min-w-0 font-semibold text-[var(--color-heading)] truncate">
-                  {{ notice.title }}
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2 mb-2">
+                    <el-tag size="small" :type="levelTagType(notice.level)">
+                      {{ levelLabel(notice.level) }}
+                    </el-tag>
+                    <el-tag v-if="notice.pinned" size="small" type="warning">置顶</el-tag>
+                  </div>
+                  <div class="font-semibold text-[var(--color-heading)] truncate">
+                    {{ notice.title }}
+                  </div>
                 </div>
-                <el-tag v-if="notice.pinned" size="small" type="warning">置顶</el-tag>
+                <el-button
+                  v-if="notice.dismissible"
+                  size="small"
+                  text
+                  class="shrink-0"
+                  @click.stop="dismissDashboardNotice(notice.id)"
+                >
+                  忽略
+                </el-button>
               </div>
               <div
                 class="mt-2 text-sm text-[var(--color-text-light)] leading-6 line-clamp-3 [&_p]:m-0 [&_a]:text-[var(--el-color-primary)]"
                 v-html="noticePreview(notice)"
               />
+              <div class="mt-3 text-xs text-[var(--color-text-light)]">
+                {{ formatShortDate(notice.created_at) }}
+              </div>
             </button>
             <el-empty v-if="!dashboardNotices.length && !noticesLoading" description="暂无公告" />
           </div>
@@ -105,11 +124,11 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { getPublicSettings, getPublicFallbackStatus } from '@/api/public'
 import { getMe } from '@/api/me'
-import { getNotices } from '@/api/notices'
+import { dismissNotice, getNotices } from '@/api/notices'
 import { useRouter } from 'vue-router'
 import { Box, User, CopyDocument, Refresh } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import type { FallbackStatusEntry, NoticeView } from '@/api/types'
+import type { FallbackStatusEntry, NoticeLevel, NoticeView } from '@/api/types'
 import FallbackStatusCard from './FallbackStatusCard.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { renderMarkdown } from '@/utils/markdown'
@@ -152,6 +171,36 @@ function noticePreview(notice: NoticeView) {
   return renderMarkdown(text)
 }
 
+function levelLabel(level: NoticeLevel) {
+  return (
+    {
+      info: '普通',
+      success: '成功',
+      warning: '重要',
+      danger: '紧急',
+    } satisfies Record<NoticeLevel, string>
+  )[level]
+}
+
+function levelTagType(level: NoticeLevel) {
+  return level === 'danger'
+    ? 'danger'
+    : level === 'warning'
+      ? 'warning'
+      : level === 'success'
+        ? 'success'
+        : 'info'
+}
+
+function formatShortDate(ts: number) {
+  return new Date(ts).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 function goNotifications() {
   router.push('/notifications')
 }
@@ -169,6 +218,16 @@ async function loadDashboardNotices() {
     dashboardNotices.value = []
   } finally {
     noticesLoading.value = false
+  }
+}
+
+async function dismissDashboardNotice(id: string) {
+  try {
+    await dismissNotice(id)
+    dashboardNotices.value = dashboardNotices.value.filter((notice) => notice.id !== id)
+    ElMessage.success('已忽略')
+  } catch {
+    ElMessage.error('忽略公告失败')
   }
 }
 
