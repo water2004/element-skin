@@ -372,7 +372,7 @@ func TestProfilesCursorsDisabledLibraryAndAdminDeleteByID(t *testing.T) {
 	if _, err := svc.ListMyProfiles(ctx, testUserActor(user.ID), "not-base64", 10); !httpError(err, 400, "Invalid cursor") {
 		t.Fatalf("invalid profile cursor should reject exactly, got %#v", err)
 	}
-	if _, err := svc.ListMyTextures(ctx, user.ID, "not-base64", 10, "skin"); !httpError(err, 400, "Invalid cursor") {
+	if _, err := svc.ListMyTextures(ctx, testUserActor(user.ID), "not-base64", 10, "skin"); !httpError(err, 400, "Invalid cursor") {
 		t.Fatalf("invalid texture cursor should reject exactly, got %#v", err)
 	}
 	if _, err := svc.PublicLibrary(ctx, "not-base64", 10, "skin", "", "latest"); !httpError(err, 400, "Invalid cursor") {
@@ -421,7 +421,7 @@ func TestProfilesListTexturesParsesCursorAndPublicLibraryMostUsedCursor(t *testi
 		t.Fatal(err)
 	}
 
-	firstPage, err := svc.ListMyTextures(ctx, owner.ID, "", 1, "skin")
+	firstPage, err := svc.ListMyTextures(ctx, testUserActor(owner.ID), "", 1, "skin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestProfilesListTexturesParsesCursorAndPublicLibraryMostUsedCursor(t *testi
 	if len(firstItems) != 1 || cursor == "" {
 		t.Fatalf("ListMyTextures first page should include one item and next cursor: %#v", firstPage)
 	}
-	secondPage, err := svc.ListMyTextures(ctx, owner.ID, cursor, 10, "skin")
+	secondPage, err := svc.ListMyTextures(ctx, testUserActor(owner.ID), cursor, 10, "skin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -567,14 +567,14 @@ func TestPrivateListsRejectIncompleteCursors(t *testing.T) {
 		t.Fatalf("ListMyProfiles result=%#v err=%#v; want nil and exact invalid cursor", profileResult, err)
 	}
 
-	textureResult, err := svc.ListMyTextures(ctx, user.ID, util.EncodeCursor(map[string]any{
+	textureResult, err := svc.ListMyTextures(ctx, testUserActor(user.ID), util.EncodeCursor(map[string]any{
 		"last_created_at": int64(1234),
 	}), 10, "skin")
 	if textureResult != nil || !httpError(err, 400, "Invalid cursor") {
 		t.Fatalf("ListMyTextures result=%#v err=%#v; want nil and exact invalid cursor", textureResult, err)
 	}
 
-	textureResult, err = svc.ListMyTextures(ctx, user.ID, util.EncodeCursor(map[string]any{
+	textureResult, err = svc.ListMyTextures(ctx, testUserActor(user.ID), util.EncodeCursor(map[string]any{
 		"last_created_at": 1.5,
 		"last_hash":       "cursor_hash",
 	}), 10, "skin")

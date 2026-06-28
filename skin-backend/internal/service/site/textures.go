@@ -7,18 +7,23 @@ import (
 
 	"element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/database/texture"
+	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/util"
 )
 
-func (s Site) ApplyTextureToProfile(ctx context.Context, userID, profileID, hash, textureType string) error {
-	return s.applyTextureToProfile(ctx, userID, profileID, hash, textureType, nil)
+func (s Site) ApplyTextureToProfile(ctx context.Context, actor permission.Actor, profileID, hash, textureType string) error {
+	return s.applyTextureToProfile(ctx, actor, profileID, hash, textureType, nil)
 }
 
-func (s Site) ApplyTextureToProfileWithModel(ctx context.Context, userID, profileID, hash, textureType, skinModel string) error {
-	return s.applyTextureToProfile(ctx, userID, profileID, hash, textureType, &skinModel)
+func (s Site) ApplyTextureToProfileWithModel(ctx context.Context, actor permission.Actor, profileID, hash, textureType, skinModel string) error {
+	return s.applyTextureToProfile(ctx, actor, profileID, hash, textureType, &skinModel)
 }
 
-func (s Site) applyTextureToProfile(ctx context.Context, userID, profileID, hash, textureType string, skinModel *string) error {
+func (s Site) applyTextureToProfile(ctx context.Context, actor permission.Actor, profileID, hash, textureType string, skinModel *string) error {
+	if err := requireOwnedOrBoundProfilePermission(actor, profileID, serviceTextureApplyOwnedPermission, serviceTextureApplyBoundPermission); err != nil {
+		return err
+	}
+	userID := actor.UserID
 	owns, err := s.DB.Textures.VerifyOwnership(ctx, userID, hash, textureType)
 	if err != nil {
 		return err
@@ -54,7 +59,11 @@ func (s Site) applyTextureToProfile(ctx context.Context, userID, profileID, hash
 	}
 }
 
-func (s Site) TextureDetail(ctx context.Context, userID, hash, textureType string) (map[string]any, error) {
+func (s Site) TextureDetail(ctx context.Context, actor permission.Actor, hash, textureType string) (map[string]any, error) {
+	if err := requireActorPermission(actor, serviceTextureReadOwnedPermission); err != nil {
+		return nil, err
+	}
+	userID := actor.UserID
 	info, err := s.DB.Textures.GetInfo(ctx, userID, hash, textureType)
 	if err != nil {
 		return nil, err
@@ -65,17 +74,26 @@ func (s Site) TextureDetail(ctx context.Context, userID, hash, textureType strin
 	return info, nil
 }
 
-func (s Site) UpdateTexture(ctx context.Context, userID, hash, textureType string, body map[string]any) (map[string]any, error) {
+func (s Site) UpdateTexture(ctx context.Context, actor permission.Actor, hash, textureType string, body map[string]any) (map[string]any, error) {
 	var patch texture.Patch
 	if model, ok := body["model"].(string); ok && model != "default" && model != "slim" {
 		return nil, util.HTTPError{Status: 400, Detail: "invalid model"}
 	} else if ok {
+		if err := requireActorPermission(actor, serviceTextureUpdateMetadataOwned); err != nil {
+			return nil, err
+		}
 		patch.Model = &model
 	}
 	if note, ok := body["note"].(string); ok {
+		if err := requireActorPermission(actor, serviceTextureUpdateMetadataOwned); err != nil {
+			return nil, err
+		}
 		patch.Note = &note
 	}
 	if value, ok := body["is_public"]; ok {
+		if err := requireActorPermission(actor, serviceTextureUpdateVisibilityOwned); err != nil {
+			return nil, err
+		}
 		parsed := false
 		switch x := value.(type) {
 		case bool:
@@ -89,12 +107,13 @@ func (s Site) UpdateTexture(ctx context.Context, userID, hash, textureType strin
 		}
 		patch.IsPublic = &parsed
 	}
+	userID := actor.UserID
 	if patch.Note != nil || patch.Model != nil || patch.IsPublic != nil {
 		if err := s.DB.Textures.UpdateForUser(ctx, userID, hash, textureType, patch); err != nil {
 			return nil, textureNotFoundError(err)
 		}
 	}
-	info, err := s.TextureDetail(ctx, userID, hash, textureType)
+	info, err := s.TextureDetail(ctx, actor, hash, textureType)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +121,11 @@ func (s Site) UpdateTexture(ctx context.Context, userID, hash, textureType strin
 	return info, nil
 }
 
-func (s Site) DeleteTexture(ctx context.Context, userID, hash, textureType string) error {
+func (s Site) DeleteTexture(ctx context.Context, actor permission.Actor, hash, textureType string) error {
+	if err := requireActorPermission(actor, serviceTextureDeleteOwnedPermission); err != nil {
+		return err
+	}
+	userID := actor.UserID
 	uploader, exists, err := s.DB.Textures.LibraryUploader(ctx, hash, textureType)
 	if err != nil {
 		return err

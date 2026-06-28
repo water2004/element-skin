@@ -20,18 +20,18 @@ func TestTexturesApplyUpdateAndDeleteExactState(t *testing.T) {
 	if err := db.Textures.AddToLibrary(ctx, user.ID, "texture_service_skin", "skin", "Texture Service Skin", true, "slim"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ApplyTextureToProfile(ctx, user.ID, profile.ID, "texture_service_skin", "skin"); err != nil {
+	if err := svc.ApplyTextureToProfile(ctx, testUserActor(user.ID), profile.ID, "texture_service_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 	updatedProfile, err := db.Profiles.GetByID(ctx, profile.ID)
 	if err != nil || updatedProfile.SkinHash == nil || *updatedProfile.SkinHash != "texture_service_skin" || updatedProfile.TextureModel != "slim" {
 		t.Fatalf("profile texture state mismatch: profile=%#v err=%v", updatedProfile, err)
 	}
-	detail, err := svc.UpdateTexture(ctx, user.ID, "texture_service_skin", "skin", map[string]any{"note": "Updated Texture Service", "is_public": false})
+	detail, err := svc.UpdateTexture(ctx, testUserActor(user.ID), "texture_service_skin", "skin", map[string]any{"note": "Updated Texture Service", "is_public": false})
 	if err != nil || detail["note"] != "Updated Texture Service" || detail["is_public"] != 0 {
 		t.Fatalf("UpdateTexture detail mismatch: detail=%#v err=%v", detail, err)
 	}
-	if err := svc.DeleteTexture(ctx, user.ID, "texture_service_skin", "skin"); err != nil {
+	if err := svc.DeleteTexture(ctx, testUserActor(user.ID), "texture_service_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 	if info, err := db.Textures.GetInfo(ctx, user.ID, "texture_service_skin", "skin"); err != nil || info != nil {
@@ -58,13 +58,13 @@ func TestApplyTextureRejectsMissingForeignAndInvalidTypeWithoutMutatingProfile(t
 		want string
 	}{
 		{"missing texture ownership", func() error {
-			return svc.ApplyTextureToProfile(ctx, owner.ID, profile.ID, "missing_apply_texture", "skin")
+			return svc.ApplyTextureToProfile(ctx, testUserActor(owner.ID), profile.ID, "missing_apply_texture", "skin")
 		}, 403, "Texture not found in your library"},
 		{"foreign profile", func() error {
-			return svc.ApplyTextureToProfile(ctx, owner.ID, foreign.ID, "texture_service_apply_skin", "skin")
+			return svc.ApplyTextureToProfile(ctx, testUserActor(owner.ID), foreign.ID, "texture_service_apply_skin", "skin")
 		}, 403, "Profile not yours"},
 		{"invalid type", func() error {
-			return svc.ApplyTextureToProfile(ctx, owner.ID, profile.ID, "texture_service_apply_skin", "elytra")
+			return svc.ApplyTextureToProfile(ctx, testUserActor(owner.ID), profile.ID, "texture_service_apply_skin", "elytra")
 		}, 403, "Texture not found in your library"},
 		{"set invalid type", func() error {
 			return svc.SetProfileTexture(ctx, profile.ID, "elytra", ptrString("texture_service_apply_skin"))
@@ -99,10 +99,10 @@ func TestUploaderDeleteRemovesWardrobeCopiesButKeepsAppliedProfileHash(t *testin
 	if err := svc.AddTextureToWardrobe(ctx, testUserActor(other.ID), "texture_service_delete_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ApplyTextureToProfile(ctx, other.ID, profile.ID, "texture_service_delete_skin", "skin"); err != nil {
+	if err := svc.ApplyTextureToProfile(ctx, testUserActor(other.ID), profile.ID, "texture_service_delete_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.DeleteTexture(ctx, owner.ID, "texture_service_delete_skin", "skin"); err != nil {
+	if err := svc.DeleteTexture(ctx, testUserActor(owner.ID), "texture_service_delete_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 	if exists, err := db.Textures.Exists(ctx, "texture_service_delete_skin", "skin"); err != nil || exists {
@@ -131,7 +131,7 @@ func TestNonUploaderDeleteOnlyDecrementsUsageCount(t *testing.T) {
 	if err := svc.AddTextureToWardrobe(ctx, testUserActor(other.ID), "texture_service_count_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.DeleteTexture(ctx, other.ID, "texture_service_count_skin", "skin"); err != nil {
+	if err := svc.DeleteTexture(ctx, testUserActor(other.ID), "texture_service_count_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 	public, err := svc.PublicLibrary(ctx, "", 10, "skin", "Texture Count", "most_used")
@@ -161,7 +161,7 @@ func TestDeleteMissingWardrobeTextureReturnsNotFoundAndKeepsAppliedHash(t *testi
 		t.Fatal(err)
 	}
 
-	err := svc.DeleteTexture(ctx, other.ID, "texture_service_missing_delete", "skin")
+	err := svc.DeleteTexture(ctx, testUserActor(other.ID), "texture_service_missing_delete", "skin")
 	var httpErr util.HTTPError
 	if !errors.As(err, &httpErr) || httpErr.Status != 404 || httpErr.Detail != "Texture not found" {
 		t.Fatalf("missing wardrobe delete should return exact 404 error, got %#v", err)
@@ -190,7 +190,7 @@ func TestApplySkinRollsBackHashWhenModelUpdateFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := svc.ApplyTextureToProfile(ctx, user.ID, profile.ID, "site_apply_atomic_skin", "skin")
+	err := svc.ApplyTextureToProfile(ctx, testUserActor(user.ID), profile.ID, "site_apply_atomic_skin", "skin")
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "23514" {
 		t.Fatalf("apply skin failure = %#v, want PostgreSQL 23514", err)
@@ -221,7 +221,7 @@ func TestUpdateTextureRejectsInvalidFieldsBeforeMutation(t *testing.T) {
 		{"invalid public", map[string]any{"note": "Changed", "is_public": "yes"}, "invalid is_public"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			result, err := svc.UpdateTexture(ctx, user.ID, "site_texture_validate", "skin", test.body)
+			result, err := svc.UpdateTexture(ctx, testUserActor(user.ID), "site_texture_validate", "skin", test.body)
 			if result != nil || !httpError(err, 400, test.detail) {
 				t.Fatalf("invalid update result=%#v err=%#v, want exact 400 %q", result, err, test.detail)
 			}
@@ -250,7 +250,7 @@ func TestUpdateTextureRollsBackAllFieldsWhenLibraryModelUpdateFails(t *testing.T
 		t.Fatal(err)
 	}
 
-	result, err := svc.UpdateTexture(ctx, user.ID, "site_texture_patch_rollback", "skin", map[string]any{
+	result, err := svc.UpdateTexture(ctx, testUserActor(user.ID), "site_texture_patch_rollback", "skin", map[string]any{
 		"note":      "Changed",
 		"model":     "slim",
 		"is_public": false,
@@ -279,19 +279,19 @@ func TestTextureServiceMapsMissingUpdatesAndDetailToExactNotFound(t *testing.T) 
 		call func() error
 	}{
 		{name: "detail", call: func() error {
-			_, err := svc.TextureDetail(ctx, user.ID, "missing_texture", "skin")
+			_, err := svc.TextureDetail(ctx, testUserActor(user.ID), "missing_texture", "skin")
 			return err
 		}},
 		{name: "note update", call: func() error {
-			_, err := svc.UpdateTexture(ctx, user.ID, "missing_texture", "skin", map[string]any{"note": "No row"})
+			_, err := svc.UpdateTexture(ctx, testUserActor(user.ID), "missing_texture", "skin", map[string]any{"note": "No row"})
 			return err
 		}},
 		{name: "model update", call: func() error {
-			_, err := svc.UpdateTexture(ctx, user.ID, "missing_texture", "skin", map[string]any{"model": "slim"})
+			_, err := svc.UpdateTexture(ctx, testUserActor(user.ID), "missing_texture", "skin", map[string]any{"model": "slim"})
 			return err
 		}},
 		{name: "visibility update", call: func() error {
-			_, err := svc.UpdateTexture(ctx, user.ID, "missing_texture", "skin", map[string]any{"is_public": true})
+			_, err := svc.UpdateTexture(ctx, testUserActor(user.ID), "missing_texture", "skin", map[string]any{"is_public": true})
 			return err
 		}},
 	} {
@@ -321,7 +321,7 @@ func TestTextureServiceAppliesCapeWithoutChangingSkinOrModel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := svc.ApplyTextureToProfile(ctx, user.ID, profile.ID, "texture_service_cape", "cape"); err != nil {
+	if err := svc.ApplyTextureToProfile(ctx, testUserActor(user.ID), profile.ID, "texture_service_cape", "cape"); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := db.Profiles.GetByID(ctx, profile.ID)

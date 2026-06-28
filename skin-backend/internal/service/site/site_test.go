@@ -130,10 +130,10 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 	if err := db.Textures.AddToLibrary(ctx, user.ID, "site_cape", "cape", "Site Cape", false, "default"); err != nil {
 		t.Fatal(err)
 	}
-	if err := site.ApplyTextureToProfile(ctx, user.ID, profileID, "site_skin", "skin"); err != nil {
+	if err := site.ApplyTextureToProfile(ctx, testUserActor(user.ID), profileID, "site_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := site.ApplyTextureToProfile(ctx, user.ID, profileID, "site_cape", "cape"); err != nil {
+	if err := site.ApplyTextureToProfile(ctx, testUserActor(user.ID), profileID, "site_cape", "cape"); err != nil {
 		t.Fatal(err)
 	}
 	withTextures, err := db.Profiles.GetByID(ctx, profileID)
@@ -152,7 +152,7 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 		t.Fatalf("usage_count should count personal library rows, not profile applications: %#v", publicAfterApply)
 	}
 
-	detail, err := site.UpdateTexture(ctx, user.ID, "site_skin", "skin", map[string]any{"note": "Updated Skin", "model": "default", "is_public": false})
+	detail, err := site.UpdateTexture(ctx, testUserActor(user.ID), "site_skin", "skin", map[string]any{"note": "Updated Skin", "model": "default", "is_public": false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +173,7 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 	if err := site.AddTextureToWardrobe(ctx, testUserActor(other.ID), "site_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
-	otherTexture, err := site.TextureDetail(ctx, other.ID, "site_skin", "skin")
+	otherTexture, err := site.TextureDetail(ctx, testUserActor(other.ID), "site_skin", "skin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 	if publicItems[0]["usage_count"] != int64(2) {
 		t.Fatalf("AddTextureToWardrobe should increment usage_count: %#v", publicItems[0])
 	}
-	myTextures, err := site.ListMyTextures(ctx, user.ID, "", 10, "skin")
+	myTextures, err := site.ListMyTextures(ctx, testUserActor(user.ID), "", 10, "skin")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 	if len(clearedItems) != 1 || clearedItems[0]["usage_count"] != int64(2) {
 		t.Fatalf("ClearProfileTexture should not affect usage_count: %#v", publicAfterClear)
 	}
-	if err := site.DeleteTexture(ctx, user.ID, "site_cape", "cape"); err != nil {
+	if err := site.DeleteTexture(ctx, testUserActor(user.ID), "site_cape", "cape"); err != nil {
 		t.Fatal(err)
 	}
 	if cape, err := db.Textures.GetInfo(ctx, user.ID, "site_cape", "cape"); err != nil || cape != nil {

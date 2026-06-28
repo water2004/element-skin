@@ -1,11 +1,15 @@
 package yggdrasil
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
+	permissiondb "element-skin/backend/internal/database/permission"
 	profilestore "element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/httpapi/shared"
+	"element-skin/backend/internal/model"
+	"element-skin/backend/internal/permission"
 	texturesvc "element-skin/backend/internal/service/texture"
 	"element-skin/backend/internal/util"
 )
@@ -32,6 +36,11 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 	}
 	if selectedProfile == nil || selectedProfile.UserID != tok.UserID {
 		util.Error(w, util.HTTPError{Status: 403, Detail: "Profile not yours"})
+		return
+	}
+	actor, err := h.yggTextureActor(req.Context(), tok)
+	if err != nil {
+		util.Error(w, err)
 		return
 	}
 	textureType := strings.ToLower(req.PathValue("texture_type"))
@@ -69,7 +78,7 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 	}
 	if err := h.site.ApplyTextureToProfileWithModel(
 		req.Context(),
-		tok.UserID,
+		actor,
 		selectedProfile.ID,
 		hash,
 		textureType,
@@ -96,11 +105,16 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 401, Detail: "Invalid token"})
 		return
 	}
+	actor, err := h.yggTextureActor(req.Context(), tok)
+	if err != nil {
+		util.Error(w, err)
+		return
+	}
 	switch strings.ToLower(req.PathValue("texture_type")) {
 	case "skin":
-		err = h.site.SetProfileTexture(req.Context(), *tok.ProfileID, "skin", nil)
+		err = h.site.ClearProfileTexture(req.Context(), actor, *tok.ProfileID, "skin")
 	case "cape":
-		err = h.site.SetProfileTexture(req.Context(), *tok.ProfileID, "cape", nil)
+		err = h.site.ClearProfileTexture(req.Context(), actor, *tok.ProfileID, "cape")
 	default:
 		err = util.HTTPError{Status: 400, Detail: "Invalid texture_type"}
 	}
@@ -109,4 +123,18 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	w.WriteHeader(204)
+}
+
+func (h Handler) yggTextureActor(ctx context.Context, token model.Token) (permission.Actor, error) {
+	actor, err := h.db.Permissions.ActorForUser(ctx, token.UserID, permissiondb.EffectiveOptions{
+		SessionKind: permission.SessionKindYggdrasil,
+		Entrypoint:  permission.EntrypointYggdrasil,
+	})
+	if err != nil {
+		return permission.Actor{}, err
+	}
+	if token.ProfileID != nil {
+		actor.BoundProfileID = *token.ProfileID
+	}
+	return actor, nil
 }

@@ -111,7 +111,11 @@ func (s Site) ListMyProfiles(ctx context.Context, actor permission.Actor, cursor
 	return res, nil
 }
 
-func (s Site) ListMyTextures(ctx context.Context, userID, cursor string, limit int, typ string) (map[string]any, error) {
+func (s Site) ListMyTextures(ctx context.Context, actor permission.Actor, cursor string, limit int, typ string) (map[string]any, error) {
+	if err := requireActorPermission(actor, serviceTextureReadOwnedPermission); err != nil {
+		return nil, err
+	}
+	userID := actor.UserID
 	lastCreated, lastHash, err := textureCursor(cursor, "last_hash")
 	if err != nil {
 		return nil, util.HTTPError{Status: 400, Detail: "Invalid cursor"}
@@ -199,7 +203,7 @@ func (s Site) DeleteProfile(ctx context.Context, actor permission.Actor, profile
 }
 
 func (s Site) ClearProfileTexture(ctx context.Context, actor permission.Actor, profileID, textureType string) error {
-	if err := requireActorPermission(actor, serviceTextureClearOwnedPermission); err != nil {
+	if err := requireOwnedOrBoundProfilePermission(actor, profileID, serviceTextureClearOwnedPermission, serviceTextureClearBoundPermission); err != nil {
 		return err
 	}
 	userID := actor.UserID
