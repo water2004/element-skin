@@ -104,7 +104,7 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 	user := testutil.CreateUser(t, db, "profile-site@test.com", "Password123", "ProfileSite", false)
 	other := testutil.CreateUser(t, db, "other-site@test.com", "Password123", "OtherSite", false)
 
-	created, err := site.CreateProfile(ctx, user.ID, "MainRole", "slim")
+	created, err := site.CreateProfile(ctx, testUserActor(user.ID), "MainRole", "slim")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,10 +112,10 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 	if created["name"] != "MainRole" || created["model"] != "slim" {
 		t.Fatalf("CreateProfile response mismatch: %#v", created)
 	}
-	if err := site.UpdateProfile(ctx, user.ID, profileID, "RenamedRole"); err != nil {
+	if err := site.UpdateProfile(ctx, testUserActor(user.ID), profileID, "RenamedRole"); err != nil {
 		t.Fatal(err)
 	}
-	listProfiles, err := site.ListMyProfiles(ctx, user.ID, "", 10)
+	listProfiles, err := site.ListMyProfiles(ctx, testUserActor(user.ID), "", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 	if err := db.Textures.AdminUpdatePublic(ctx, "site_skin", "skin", true); err != nil {
 		t.Fatal(err)
 	}
-	if err := site.AddTextureToWardrobe(ctx, other.ID, "site_skin", "skin"); err != nil {
+	if err := site.AddTextureToWardrobe(ctx, testUserActor(other.ID), "site_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 	otherTexture, err := site.TextureDetail(ctx, other.ID, "site_skin", "skin")
@@ -200,7 +200,7 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 		t.Fatalf("ListMyTextures mismatch: %#v", myTextures)
 	}
 
-	if err := site.ClearProfileTexture(ctx, user.ID, profileID, "skin"); err != nil {
+	if err := site.ClearProfileTexture(ctx, testUserActor(user.ID), profileID, "skin"); err != nil {
 		t.Fatal(err)
 	}
 	cleared, err := db.Profiles.GetByID(ctx, profileID)
@@ -224,7 +224,7 @@ func TestSiteProfilesTexturesAndLibraryExactState(t *testing.T) {
 	if cape, err := db.Textures.GetInfo(ctx, user.ID, "site_cape", "cape"); err != nil || cape != nil {
 		t.Fatalf("DeleteTexture should remove user's cape: cape=%#v err=%v", cape, err)
 	}
-	if err := site.DeleteProfile(ctx, user.ID, profileID); err != nil {
+	if err := site.DeleteProfile(ctx, testUserActor(user.ID), profileID); err != nil {
 		t.Fatal(err)
 	}
 	if deleted, err := db.Profiles.GetByID(ctx, profileID); err != nil || deleted != nil {

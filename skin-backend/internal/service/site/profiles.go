@@ -13,7 +13,11 @@ import (
 	"element-skin/backend/internal/util"
 )
 
-func (s Site) CreateProfile(ctx context.Context, userID, name, mdl string) (map[string]any, error) {
+func (s Site) CreateProfile(ctx context.Context, actor permission.Actor, name, mdl string) (map[string]any, error) {
+	if err := requireActorPermission(actor, serviceProfileCreateOwnedPermission); err != nil {
+		return nil, err
+	}
+	userID := actor.UserID
 	if name == "" {
 		return nil, util.HTTPError{Status: 400, Detail: "name required"}
 	}
@@ -82,7 +86,11 @@ func (s Site) PublicLibrary(ctx context.Context, cursor string, limit int, typ, 
 	})
 }
 
-func (s Site) ListMyProfiles(ctx context.Context, userID, cursor string, limit int) (map[string]any, error) {
+func (s Site) ListMyProfiles(ctx context.Context, actor permission.Actor, cursor string, limit int) (map[string]any, error) {
+	if err := requireActorPermission(actor, serviceProfileReadOwnedPermission); err != nil {
+		return nil, err
+	}
+	userID := actor.UserID
 	m, err := util.DecodeCursor(cursor)
 	if err != nil {
 		return nil, util.HTTPError{Status: 400, Detail: "Invalid cursor"}
@@ -114,7 +122,11 @@ func (s Site) ListMyTextures(ctx context.Context, userID, cursor string, limit i
 	return s.DB.Textures.ListForUser(ctx, userID, typ, limit, lastCreated, lastHash)
 }
 
-func (s Site) AddTextureToWardrobe(ctx context.Context, userID, hash, textureType string) error {
+func (s Site) AddTextureToWardrobe(ctx context.Context, actor permission.Actor, hash, textureType string) error {
+	if err := requireActorPermission(actor, serviceWardrobeEntryAddPermission); err != nil {
+		return err
+	}
+	userID := actor.UserID
 	ok, err := s.DB.Textures.AddToWardrobe(ctx, userID, hash, textureType)
 	if err != nil {
 		return err
@@ -125,7 +137,11 @@ func (s Site) AddTextureToWardrobe(ctx context.Context, userID, hash, textureTyp
 	return nil
 }
 
-func (s Site) UpdateProfile(ctx context.Context, userID, profileID, name string) error {
+func (s Site) UpdateProfile(ctx context.Context, actor permission.Actor, profileID, name string) error {
+	if err := requireActorPermission(actor, serviceProfileUpdateOwnedPermission); err != nil {
+		return err
+	}
+	userID := actor.UserID
 	p, err := s.DB.Profiles.GetByID(ctx, profileID)
 	if err != nil {
 		return err
@@ -164,7 +180,11 @@ func (s Site) UpdateProfile(ctx context.Context, userID, profileID, name string)
 	return nil
 }
 
-func (s Site) DeleteProfile(ctx context.Context, userID, profileID string) error {
+func (s Site) DeleteProfile(ctx context.Context, actor permission.Actor, profileID string) error {
+	if err := requireActorPermission(actor, serviceProfileDeleteOwnedPermission); err != nil {
+		return err
+	}
+	userID := actor.UserID
 	p, err := s.DB.Profiles.GetByID(ctx, profileID)
 	if err != nil {
 		return err
@@ -178,7 +198,11 @@ func (s Site) DeleteProfile(ctx context.Context, userID, profileID string) error
 	return s.deleteProfile(ctx, profileID)
 }
 
-func (s Site) ClearProfileTexture(ctx context.Context, userID, profileID, textureType string) error {
+func (s Site) ClearProfileTexture(ctx context.Context, actor permission.Actor, profileID, textureType string) error {
+	if err := requireActorPermission(actor, serviceTextureClearOwnedPermission); err != nil {
+		return err
+	}
+	userID := actor.UserID
 	p, err := s.DB.Profiles.GetByID(ctx, profileID)
 	if err != nil {
 		return err

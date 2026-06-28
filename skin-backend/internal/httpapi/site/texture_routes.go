@@ -208,7 +208,7 @@ func (h Handler) AddTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	if err := h.site.AddTextureToWardrobe(req.Context(), shared.CurrentUserID(req), req.PathValue("hash"), req.URL.Query().Get("texture_type")); err != nil {
+	if err := h.site.AddTextureToWardrobe(req.Context(), shared.CurrentActor(req), req.PathValue("hash"), req.URL.Query().Get("texture_type")); err != nil {
 		util.Error(w, err)
 		return
 	}

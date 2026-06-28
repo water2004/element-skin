@@ -19,14 +19,14 @@ func TestProfilesCreateListAndClearTextureExactState(t *testing.T) {
 	ctx := context.Background()
 	svc := newSiteService(db, testutil.TestConfig())
 	user := testutil.CreateUser(t, db, "site-profiles-service@test.com", "Password123", "SiteProfilesService", false)
-	created, err := svc.CreateProfile(ctx, user.ID, "ProfileSvc", "slim")
+	created, err := svc.CreateProfile(ctx, testUserActor(user.ID), "ProfileSvc", "slim")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if created["name"] != "ProfileSvc" || created["model"] != "slim" {
 		t.Fatalf("CreateProfile response mismatch: %#v", created)
 	}
-	list, err := svc.ListMyProfiles(ctx, user.ID, "", 10)
+	list, err := svc.ListMyProfiles(ctx, testUserActor(user.ID), "", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,49 +53,49 @@ func TestProfilesRejectInvalidProfileAndLibraryInputsExactly(t *testing.T) {
 		want string
 	}{
 		{"empty create name", func() error {
-			_, err := svc.CreateProfile(ctx, user.ID, "", "default")
+			_, err := svc.CreateProfile(ctx, testUserActor(user.ID), "", "default")
 			return err
 		}, 400, "name required"},
 		{"invalid create name", func() error {
-			_, err := svc.CreateProfile(ctx, user.ID, "bad-name!", "default")
+			_, err := svc.CreateProfile(ctx, testUserActor(user.ID), "bad-name!", "default")
 			return err
 		}, 400, "角色名只能包含字母、数字、下划线，长度1-16字符"},
 		{"duplicate create name", func() error {
-			_, err := svc.CreateProfile(ctx, user.ID, existing.Name, "default")
+			_, err := svc.CreateProfile(ctx, testUserActor(user.ID), existing.Name, "default")
 			return err
 		}, 400, "角色名已被占用，请换一个名称"},
 		{"empty update name", func() error {
-			return svc.UpdateProfile(ctx, user.ID, target.ID, "")
+			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, "")
 		}, 400, "name required"},
 		{"invalid update name", func() error {
-			return svc.UpdateProfile(ctx, user.ID, target.ID, "bad-name!")
+			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, "bad-name!")
 		}, 400, "角色名只能包含字母、数字、下划线，长度1-16字符"},
 		{"duplicate update name", func() error {
-			return svc.UpdateProfile(ctx, user.ID, target.ID, existing.Name)
+			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, existing.Name)
 		}, 400, "角色名已被占用"},
 		{"foreign update", func() error {
-			return svc.UpdateProfile(ctx, user.ID, foreign.ID, "StolenProfileSvc")
+			return svc.UpdateProfile(ctx, testUserActor(user.ID), foreign.ID, "StolenProfileSvc")
 		}, 403, "not allowed"},
 		{"missing update", func() error {
-			return svc.UpdateProfile(ctx, user.ID, "missing-profile", "MissingProfileSvc")
+			return svc.UpdateProfile(ctx, testUserActor(user.ID), "missing-profile", "MissingProfileSvc")
 		}, 404, "profile not found"},
 		{"foreign delete", func() error {
-			return svc.DeleteProfile(ctx, user.ID, foreign.ID)
+			return svc.DeleteProfile(ctx, testUserActor(user.ID), foreign.ID)
 		}, 403, "not allowed"},
 		{"missing delete", func() error {
-			return svc.DeleteProfile(ctx, user.ID, "missing-profile")
+			return svc.DeleteProfile(ctx, testUserActor(user.ID), "missing-profile")
 		}, 404, "profile not found"},
 		{"invalid clear texture type", func() error {
-			return svc.ClearProfileTexture(ctx, user.ID, target.ID, "elytra")
+			return svc.ClearProfileTexture(ctx, testUserActor(user.ID), target.ID, "elytra")
 		}, 400, "Invalid texture_type"},
 		{"foreign clear texture", func() error {
-			return svc.ClearProfileTexture(ctx, user.ID, foreign.ID, "skin")
+			return svc.ClearProfileTexture(ctx, testUserActor(user.ID), foreign.ID, "skin")
 		}, 403, "not allowed"},
 		{"missing clear texture", func() error {
-			return svc.ClearProfileTexture(ctx, user.ID, "missing-profile", "skin")
+			return svc.ClearProfileTexture(ctx, testUserActor(user.ID), "missing-profile", "skin")
 		}, 404, "profile not found"},
 		{"missing wardrobe add", func() error {
-			return svc.AddTextureToWardrobe(ctx, user.ID, "missing_texture_hash", "skin")
+			return svc.AddTextureToWardrobe(ctx, testUserActor(user.ID), "missing_texture_hash", "skin")
 		}, 404, "Texture not found in library"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -135,7 +135,7 @@ func TestConcurrentProfileNameWritesReturnExactBusinessConflict(t *testing.T) {
 	}
 
 	createErrors := runConcurrentProfileWrites(2, func() error {
-		_, err := svc.CreateProfile(context.Background(), user.ID, "ConcurrentCreate", "default")
+		_, err := svc.CreateProfile(context.Background(), testUserActor(user.ID), "ConcurrentCreate", "default")
 		return err
 	})
 	assertOneProfileWriteConflict(t, createErrors, "角色名已被占用，请换一个名称")
@@ -165,7 +165,7 @@ func TestConcurrentProfileNameWritesReturnExactBusinessConflict(t *testing.T) {
 		profileID := profileIDs[index]
 		index++
 		mu.Unlock()
-		return svc.UpdateProfile(context.Background(), user.ID, profileID, "ConcurrentRename")
+		return svc.UpdateProfile(context.Background(), testUserActor(user.ID), profileID, "ConcurrentRename")
 	})
 	assertOneProfileWriteConflict(t, renameErrors, "角色名已被占用")
 	var renamedCount, originalCount int
@@ -205,7 +205,7 @@ func TestCreateProfileMapsDatabaseIDConflictExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := svc.CreateProfile(ctx, user.ID, "ForcedUUID", "slim")
+	result, err := svc.CreateProfile(ctx, testUserActor(user.ID), "ForcedUUID", "slim")
 	if result != nil || !httpError(err, 400, "角色 UUID 冲突，无法新建角色") {
 		t.Fatalf("forced profile ID conflict result=%#v err=%#v; want nil and exact 400", result, err)
 	}
@@ -237,7 +237,7 @@ func TestUpdateProfileReturnsNotFoundWhenProfileIsDeletedAfterRead(t *testing.T)
 
 	result := make(chan error, 1)
 	go func() {
-		result <- svc.UpdateProfile(context.Background(), user.ID, target.ID, target.Name)
+		result <- svc.UpdateProfile(context.Background(), testUserActor(user.ID), target.ID, target.Name)
 	}()
 	waitForBlockedDatabaseOperation(t, db.Pool, lockHolderPID, result)
 	if _, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id=$1`, target.ID); err != nil {
@@ -274,7 +274,7 @@ func TestClearProfileTextureReturnsNotFoundWhenProfileIsDeletedAfterRead(t *test
 
 	result := make(chan error, 1)
 	go func() {
-		result <- svc.ClearProfileTexture(context.Background(), user.ID, target.ID, "skin")
+		result <- svc.ClearProfileTexture(context.Background(), testUserActor(user.ID), target.ID, "skin")
 	}()
 	waitForBlockedDatabaseOperation(t, db.Pool, lockHolderPID, result)
 	if _, err := tx.Exec(ctx, `DELETE FROM profiles WHERE id=$1`, target.ID); err != nil {
@@ -369,7 +369,7 @@ func TestProfilesCursorsDisabledLibraryAndAdminDeleteByID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.ListMyProfiles(ctx, user.ID, "not-base64", 10); !httpError(err, 400, "Invalid cursor") {
+	if _, err := svc.ListMyProfiles(ctx, testUserActor(user.ID), "not-base64", 10); !httpError(err, 400, "Invalid cursor") {
 		t.Fatalf("invalid profile cursor should reject exactly, got %#v", err)
 	}
 	if _, err := svc.ListMyTextures(ctx, user.ID, "not-base64", 10, "skin"); !httpError(err, 400, "Invalid cursor") {
@@ -417,7 +417,7 @@ func TestProfilesListTexturesParsesCursorAndPublicLibraryMostUsedCursor(t *testi
 			t.Fatal(err)
 		}
 	}
-	if err := svc.AddTextureToWardrobe(ctx, other.ID, "profile_cursor_old", "skin"); err != nil {
+	if err := svc.AddTextureToWardrobe(ctx, testUserActor(other.ID), "profile_cursor_old", "skin"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -471,13 +471,13 @@ func TestDeleteUserRecountsSharedLibraryButDeletesUploadedTextures(t *testing.T)
 	if err := db.Textures.AddToLibrary(ctx, target.ID, "delete_user_uploaded_skin", "skin", "Delete User Uploaded", true, "slim"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.AddTextureToWardrobe(ctx, target.ID, "delete_user_shared_skin", "skin"); err != nil {
+	if err := svc.AddTextureToWardrobe(ctx, testUserActor(target.ID), "delete_user_shared_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.AddTextureToWardrobe(ctx, other.ID, "delete_user_shared_skin", "skin"); err != nil {
+	if err := svc.AddTextureToWardrobe(ctx, testUserActor(other.ID), "delete_user_shared_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.AddTextureToWardrobe(ctx, other.ID, "delete_user_uploaded_skin", "skin"); err != nil {
+	if err := svc.AddTextureToWardrobe(ctx, testUserActor(other.ID), "delete_user_uploaded_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -560,7 +560,7 @@ func TestPrivateListsRejectIncompleteCursors(t *testing.T) {
 	svc := newSiteService(db, testutil.TestConfig())
 	user := testutil.CreateUser(t, db, "private-cursor@test.com", "Password123", "PrivateCursor", false)
 
-	profileResult, err := svc.ListMyProfiles(ctx, user.ID, util.EncodeCursor(map[string]any{
+	profileResult, err := svc.ListMyProfiles(ctx, testUserActor(user.ID), util.EncodeCursor(map[string]any{
 		"unexpected": "value",
 	}), 10)
 	if profileResult != nil || !httpError(err, 400, "Invalid cursor") {

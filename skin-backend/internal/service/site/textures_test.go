@@ -96,7 +96,7 @@ func TestUploaderDeleteRemovesWardrobeCopiesButKeepsAppliedProfileHash(t *testin
 	if err := db.Textures.AddToLibrary(ctx, owner.ID, "texture_service_delete_skin", "skin", "Texture Delete Skin", true, "default"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.AddTextureToWardrobe(ctx, other.ID, "texture_service_delete_skin", "skin"); err != nil {
+	if err := svc.AddTextureToWardrobe(ctx, testUserActor(other.ID), "texture_service_delete_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.ApplyTextureToProfile(ctx, other.ID, profile.ID, "texture_service_delete_skin", "skin"); err != nil {
@@ -128,7 +128,7 @@ func TestNonUploaderDeleteOnlyDecrementsUsageCount(t *testing.T) {
 	if err := db.Textures.AddToLibrary(ctx, owner.ID, "texture_service_count_skin", "skin", "Texture Count Skin", true, "default"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.AddTextureToWardrobe(ctx, other.ID, "texture_service_count_skin", "skin"); err != nil {
+	if err := svc.AddTextureToWardrobe(ctx, testUserActor(other.ID), "texture_service_count_skin", "skin"); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.DeleteTexture(ctx, other.ID, "texture_service_count_skin", "skin"); err != nil {
