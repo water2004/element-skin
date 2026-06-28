@@ -6,8 +6,14 @@ import (
 	"strings"
 
 	"element-skin/backend/internal/httpapi/shared"
+	"element-skin/backend/internal/permission"
 	importsvc "element-skin/backend/internal/service/imports"
 	"element-skin/backend/internal/util"
+)
+
+var (
+	remoteProfileCreatePermission = permission.MustDefinitionByCode("profile.create.owned")
+	remoteTextureCreatePermission = permission.MustDefinitionByCode("texture.create.owned")
 )
 
 func (h Handler) GetProfiles(w http.ResponseWriter, req *http.Request) {
@@ -24,6 +30,14 @@ func (h Handler) GetProfiles(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) ImportProfiles(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, remoteProfileCreatePermission); err != nil {
+		util.Error(w, err)
+		return
+	}
+	if err := shared.RequirePermission(req, remoteTextureCreatePermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	var body map[string]any
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
@@ -42,6 +56,14 @@ func (h Handler) ImportProfiles(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) ImportProfile(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, remoteProfileCreatePermission); err != nil {
+		util.Error(w, err)
+		return
+	}
+	if err := shared.RequirePermission(req, remoteTextureCreatePermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})

@@ -5,10 +5,17 @@ import (
 	"time"
 
 	"element-skin/backend/internal/httpapi/shared"
+	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/util"
 )
 
+var microsoftReadProfilePermission = permission.MustDefinitionByCode("microsoft_import.read_profile.owned")
+
 func (h Handler) GetProfile(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, microsoftReadProfilePermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})

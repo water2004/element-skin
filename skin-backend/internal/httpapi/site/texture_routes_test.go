@@ -3,6 +3,10 @@ package site_test
 import (
 	"bytes"
 	"context"
+	"element-skin/backend/internal/httpapi/site"
+	sitesvc "element-skin/backend/internal/service/site"
+	texturesvc "element-skin/backend/internal/service/texture"
+	"element-skin/backend/internal/testutil"
 	"image"
 	"image/color"
 	"image/png"
@@ -13,12 +17,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"element-skin/backend/internal/httpapi/shared"
-	"element-skin/backend/internal/httpapi/site"
-	sitesvc "element-skin/backend/internal/service/site"
-	texturesvc "element-skin/backend/internal/service/texture"
-	"element-skin/backend/internal/testutil"
 )
 
 func TestTextureRoutesListAndDetailExactResponses(t *testing.T) {
@@ -31,7 +29,7 @@ func TestTextureRoutesListAndDetailExactResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := httptest.NewRequest(http.MethodGet, "/me/textures?texture_type=skin", nil)
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.ListMyTextures(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"hash":"site_route_hash"`) || !strings.Contains(rec.Body.String(), `"note":"Site Route Texture"`) {
@@ -41,7 +39,7 @@ func TestTextureRoutesListAndDetailExactResponses(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/me/textures/site_route_hash/skin", nil)
 	req.SetPathValue("hash", "site_route_hash")
 	req.SetPathValue("texture_type", "skin")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.TextureDetail(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"hash":"site_route_hash"`) || !strings.Contains(rec.Body.String(), `"type":"skin"`) {
@@ -63,7 +61,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 		"is_public":    "true",
 		"model":        "slim",
 	}, "file", "skin.png", routePNG(t, 64, 64))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
@@ -93,7 +91,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 		"texture_type": "skin",
 		"model":        "slim",
 	}, "file", "apply.png", applyData)
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":true`) {
@@ -177,7 +175,7 @@ func TestTextureRoutesAddUpdateDeleteAndApplyExactResponses(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/me/textures/site_route_public_hash/add?texture_type=skin", nil)
 	req.SetPathValue("hash", "site_route_public_hash")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), other.ID))
+	req = withUserActor(req, other.ID)
 	rec := httptest.NewRecorder()
 	h.AddTexture(rec, req)
 	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
@@ -191,7 +189,7 @@ func TestTextureRoutesAddUpdateDeleteAndApplyExactResponses(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPatch, "/me/textures/site_route_public_hash/skin", strings.NewReader(`{"note":"Mine","model":"slim","is_public":false}`))
 	req.SetPathValue("hash", "site_route_public_hash")
 	req.SetPathValue("texture_type", "skin")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), other.ID))
+	req = withUserActor(req, other.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"note":"Mine"`) || !strings.Contains(rec.Body.String(), `"model":"slim"`) {
@@ -200,7 +198,7 @@ func TestTextureRoutesAddUpdateDeleteAndApplyExactResponses(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/me/textures/site_route_public_hash/apply", strings.NewReader(`{"profile_id":"`+profile.ID+`","texture_type":"skin"}`))
 	req.SetPathValue("hash", "site_route_public_hash")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), other.ID))
+	req = withUserActor(req, other.ID)
 	rec = httptest.NewRecorder()
 	h.ApplyTexture(rec, req)
 	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
@@ -214,7 +212,7 @@ func TestTextureRoutesAddUpdateDeleteAndApplyExactResponses(t *testing.T) {
 	req = httptest.NewRequest(http.MethodDelete, "/me/textures/site_route_public_hash/skin", nil)
 	req.SetPathValue("hash", "site_route_public_hash")
 	req.SetPathValue("texture_type", "skin")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), other.ID))
+	req = withUserActor(req, other.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
 	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
@@ -237,7 +235,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req := textureMultipartRequest(t, "/me/textures", map[string]string{
 		"texture_type": "elytra",
 	}, "file", "invalid-type.png", routePNG(t, 64, 64))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid texture_type\"}\n" {
@@ -248,7 +246,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 		"uuid":         profile.ID,
 		"texture_type": "elytra",
 	}, "file", "invalid-apply-type.png", routePNG(t, 64, 64))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid texture_type\"}\n" {
@@ -260,7 +258,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/me/textures/missing_hash/add?texture_type=skin", nil)
 	req.SetPathValue("hash", "missing_hash")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.AddTexture(rec, req)
 	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"Texture not found in library\"}\n" {
@@ -272,7 +270,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 
 	req = httptest.NewRequest(http.MethodPost, "/me/textures/missing_hash/apply", strings.NewReader(`{"profile_id":"`+profile.ID+`","texture_type":"skin"}`))
 	req.SetPathValue("hash", "missing_hash")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ApplyTexture(rec, req)
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"Texture not found in your library\"}\n" {
@@ -282,7 +280,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPatch, "/me/textures/missing_hash/skin", strings.NewReader(`{`))
 	req.SetPathValue("hash", "missing_hash")
 	req.SetPathValue("texture_type", "skin")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
@@ -292,7 +290,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/me/textures/missing_hash/skin", nil)
 	req.SetPathValue("hash", "missing_hash")
 	req.SetPathValue("texture_type", "skin")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.TextureDetail(rec, req)
 	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"Texture not found\"}\n" {
@@ -309,7 +307,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/me/textures", strings.NewReader("not multipart"))
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid multipart form\"}\n" {
@@ -317,7 +315,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	}
 
 	req = textureMultipartRequest(t, "/me/textures", map[string]string{"texture_type": "skin"}, "not_file", "skin.png", routePNG(t, 64, 64))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"file is required"`) {
@@ -325,7 +323,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	}
 
 	req = textureMultipartRequest(t, "/textures/upload", map[string]string{"texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"uuid and texture_type are required\"}\n" {
@@ -351,7 +349,7 @@ func TestTextureRoutesUploadApplyFailureKeepsUploadedLibraryRow(t *testing.T) {
 		"texture_type": "skin",
 		"model":        "slim",
 	}, "file", "skin.png", routePNGWithColor(t, 64, 64, color.RGBA{R: 20, G: 180, B: 120, A: 255}))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"Profile not yours\"}\n" {
@@ -385,7 +383,7 @@ func TestTextureUploadRemovesNewFileWhenDatabaseInsertFails(t *testing.T) {
 	req := textureMultipartRequest(t, "/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "skin.png", routePNG(t, 64, 64))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
@@ -423,7 +421,7 @@ func TestTextureUploadKeepsNewFileWhenAnotherTextureTypeReferencesHash(t *testin
 	req := textureMultipartRequest(t, "/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "skin.png", data)
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), uploader.ID))
+	req = withUserActor(req, uploader.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
@@ -457,7 +455,7 @@ func TestTextureRoutesDeleteMissingWardrobeRowDoesNotClearAppliedProfile(t *test
 	req := httptest.NewRequest(http.MethodDelete, "/me/textures/site_route_delete_foreign/skin", nil)
 	req.SetPathValue("hash", "site_route_delete_foreign")
 	req.SetPathValue("texture_type", "skin")
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), other.ID))
+	req = withUserActor(req, other.ID)
 	rec := httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
 	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"Texture not found\"}\n" {

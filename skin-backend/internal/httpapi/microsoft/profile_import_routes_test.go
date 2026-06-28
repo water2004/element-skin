@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"element-skin/backend/internal/httpapi/microsoft"
-	"element-skin/backend/internal/httpapi/shared"
 	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/testutil"
@@ -35,7 +34,7 @@ func TestGetProfileConsumesStateAndIssuesImportTokenExactly(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/microsoft/get-profile", strings.NewReader(`{"ms_token":"profile-token"}`))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.GetProfile(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"has_game":true`) ||
@@ -54,7 +53,7 @@ func TestGetProfileConsumesStateAndIssuesImportTokenExactly(t *testing.T) {
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/microsoft/get-profile", strings.NewReader(`{"ms_token":"profile-token"}`))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.GetProfile(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"Invalid or expired token"`) {
@@ -77,7 +76,7 @@ func TestMicrosoftProfileRoutesRejectWrongOwnerExactly(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/microsoft/get-profile", strings.NewReader(`{"ms_token":"owned-token"}`))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), other.ID))
+	req = withUserActor(req, other.ID)
 	rec := httptest.NewRecorder()
 	h.GetProfile(rec, req)
 	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"detail":"Unauthorized"`) {
@@ -93,7 +92,7 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 	other := testutil.CreateUser(t, db, "ms-import-other@test.com", "Password123", "MSImportOther", false)
 
 	req := httptest.NewRequest(http.MethodPost, "/microsoft/import-profile", strings.NewReader(`{"ms_token":"missing"}`))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), owner.ID))
+	req = withUserActor(req, owner.ID)
 	rec := httptest.NewRecorder()
 	h.ImportProfile(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid import token"`) {
@@ -108,7 +107,7 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 	req = httptest.NewRequest(http.MethodPost, "/microsoft/import-profile", strings.NewReader(`{"ms_token":"wrong-owner"}`))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), owner.ID))
+	req = withUserActor(req, owner.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfile(rec, req)
 	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"detail":"not allowed"`) {
@@ -119,7 +118,7 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 	req = httptest.NewRequest(http.MethodPost, "/microsoft/import-profile", strings.NewReader(`{"ms_token":"bad-payload"}`))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), owner.ID))
+	req = withUserActor(req, owner.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfile(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid import token"`) {
@@ -146,7 +145,7 @@ func TestImportProfileCreatesProfileFromStateExactly(t *testing.T) {
 	}
 
 	req := httptest.NewRequest(http.MethodPost, "/microsoft/import-profile", strings.NewReader(`{"ms_token":"import-ok"}`))
-	req = req.WithContext(shared.WithActorPermissions(req.Context(), user.ID))
+	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.ImportProfile(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":true`) ||

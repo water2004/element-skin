@@ -6,11 +6,18 @@ import (
 	"time"
 
 	"element-skin/backend/internal/httpapi/shared"
+	"element-skin/backend/internal/permission"
 	mssvc "element-skin/backend/internal/service/microsoft"
 	"element-skin/backend/internal/util"
 )
 
+var microsoftImportStartPermission = permission.MustDefinitionByCode("microsoft_import.start.owned")
+
 func (h Handler) AuthURL(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, microsoftImportStartPermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	state, err := randomToken(64)
 	if err != nil {
 		util.Error(w, err)

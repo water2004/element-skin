@@ -26,6 +26,7 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 	}, states)
 
 	req := httptest.NewRequest(http.MethodGet, "/microsoft/auth-url", nil)
+	req = withUserActor(req, "microsoft-auth-user")
 	rec := httptest.NewRecorder()
 	h.AuthURL(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "login.live.com") || !strings.Contains(rec.Body.String(), `"state":"`) ||
@@ -65,6 +66,7 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/microsoft/get-profile", strings.NewReader(`{"ms_token":"missing"}`))
+	req = withUserActor(req, "microsoft-profile-user")
 	rec = httptest.NewRecorder()
 	h.GetProfile(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Invalid or expired token") {
@@ -84,6 +86,7 @@ func TestMicrosoftRoutesSettingsFailuresAndDefaultRedirectConsumeStateExactly(t 
 	}, states)
 
 	req := httptest.NewRequest(http.MethodGet, "/microsoft/auth-url", nil)
+	req = withUserActor(req, "microsoft-auth-settings-user")
 	rec := httptest.NewRecorder()
 	h.AuthURL(rec, req)
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" || states.Len() != 0 {

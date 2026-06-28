@@ -4,11 +4,18 @@ import (
 	"net/http"
 
 	"element-skin/backend/internal/httpapi/shared"
+	"element-skin/backend/internal/permission"
 	importsvc "element-skin/backend/internal/service/imports"
 	"element-skin/backend/internal/util"
 )
 
+var microsoftCreateProfilePermission = permission.MustDefinitionByCode("microsoft_import.create_profile.owned")
+
 func (h Handler) ImportProfile(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, microsoftCreateProfilePermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})

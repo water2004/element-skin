@@ -4,10 +4,22 @@ import (
 	"net/http"
 
 	"element-skin/backend/internal/httpapi/shared"
+	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/util"
 )
 
+var (
+	accountReadSelfPermission    = permission.MustDefinitionByCode("account.read.self")
+	accountUpdateSelfPermission  = permission.MustDefinitionByCode("account.update.self")
+	accountDeleteSelfPermission  = permission.MustDefinitionByCode("account.delete.self")
+	passwordUpdateSelfPermission = permission.MustDefinitionByCode("account_password.update.self")
+)
+
 func (h Handler) Me(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, accountReadSelfPermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	res, err := h.site.Me(req.Context(), shared.CurrentUserID(req))
 	if err != nil {
 		util.Error(w, err)
@@ -17,6 +29,10 @@ func (h Handler) Me(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) UpdateMe(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, accountUpdateSelfPermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	var body map[string]any
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
@@ -34,6 +50,10 @@ func (h Handler) UpdateMe(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) DeleteMe(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, accountDeleteSelfPermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	userID := shared.CurrentUserID(req)
 	user, err := h.db.Users.GetByID(req.Context(), userID)
 	if err != nil {
@@ -65,6 +85,10 @@ func (h Handler) DeleteMe(w http.ResponseWriter, req *http.Request) {
 }
 
 func (h Handler) ChangePassword(w http.ResponseWriter, req *http.Request) {
+	if err := shared.RequirePermission(req, passwordUpdateSelfPermission); err != nil {
+		util.Error(w, err)
+		return
+	}
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
