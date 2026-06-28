@@ -50,7 +50,7 @@ func TestNoticeStoreFiltersReceiptsPaginationAndCleanupExactly(t *testing.T) {
 		t.Fatalf("fresh notice receipt state mismatch: %#v", normalItems[0])
 	}
 
-	adminPage, err := db.Notices.ListForUser(ctx, noticedb.UserListOptions{UserID: admin.ID, IsAdmin: true, Type: "announcement", Limit: 10, Now: now, IncludeRead: true})
+	adminPage, err := db.Notices.ListForUser(ctx, noticedb.UserListOptions{UserID: admin.ID, CanReadAdminAudience: true, Type: "announcement", Limit: 10, Now: now, IncludeRead: true})
 	if err != nil {
 		t.Fatal(err)
 	}

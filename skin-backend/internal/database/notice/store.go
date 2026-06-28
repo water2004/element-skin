@@ -17,15 +17,15 @@ type Store struct {
 }
 
 type UserListOptions struct {
-	UserID      string
-	IsAdmin     bool
-	Type        string
-	Limit       int
-	Now         int64
-	IncludeRead bool
-	LastPinned  *bool
-	LastCreated *int64
-	LastID      string
+	UserID               string
+	CanReadAdminAudience bool
+	Type                 string
+	Limit                int
+	Now                  int64
+	IncludeRead          bool
+	LastPinned           *bool
+	LastCreated          *int64
+	LastID               string
 }
 
 type AdminListOptions struct {
@@ -77,7 +77,7 @@ func (s Store) ListForUser(ctx context.Context, opts UserListOptions) (map[strin
 	actual := opts.Limit + 1
 	args := []any{opts.UserID, opts.Now}
 	where := `n.enabled=TRUE AND (n.starts_at IS NULL OR n.starts_at <= $2) AND (n.ends_at IS NULL OR n.ends_at > $2) AND (n.audience='users'`
-	if opts.IsAdmin {
+	if opts.CanReadAdminAudience {
 		where += ` OR n.audience='admins'`
 	}
 	where += `) AND r.dismissed_at IS NULL`

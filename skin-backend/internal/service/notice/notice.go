@@ -112,15 +112,15 @@ func (s Service) ListForUser(ctx context.Context, user CurrentUser, params ListP
 		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid type"}
 	}
 	return s.DB.Notices.ListForUser(ctx, noticedb.UserListOptions{
-		UserID:      user.ID,
-		IsAdmin:     user.CanReadAdminAudience,
-		Type:        typ,
-		Limit:       params.Limit,
-		Now:         database.NowMS(),
-		IncludeRead: params.IncludeRead || params.Dashboard,
-		LastPinned:  cur.lastPinned,
-		LastCreated: cur.lastCreated,
-		LastID:      cur.lastID,
+		UserID:               user.ID,
+		CanReadAdminAudience: user.CanReadAdminAudience,
+		Type:                 typ,
+		Limit:                params.Limit,
+		Now:                  database.NowMS(),
+		IncludeRead:          params.IncludeRead || params.Dashboard,
+		LastPinned:           cur.lastPinned,
+		LastCreated:          cur.lastCreated,
+		LastID:               cur.lastID,
 	})
 }
 

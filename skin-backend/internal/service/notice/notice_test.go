@@ -184,7 +184,7 @@ func TestNoticeServiceAudienceAndLifecycleVisibilityExactly(t *testing.T) {
 	if _, err := svc.GetForUser(ctx, adminOnly.ID, noticesvc.CurrentUser{ID: user.ID}); !httpError(err, 404, "notice not found") {
 		t.Fatalf("normal user should not see admin notice, got %#v", err)
 	}
-	if got, err := svc.GetForUser(ctx, adminOnly.ID, noticesvc.CurrentUser{ID: admin.ID, IsAdmin: true}); err != nil || got == nil || got.ID != adminOnly.ID {
+	if got, err := svc.GetForUser(ctx, adminOnly.ID, noticesvc.CurrentUser{ID: admin.ID, CanReadAdminAudience: true}); err != nil || got == nil || got.ID != adminOnly.ID {
 		t.Fatalf("admin should see admin notice: got=%#v err=%v", got, err)
 	}
 
@@ -192,7 +192,7 @@ func TestNoticeServiceAudienceAndLifecycleVisibilityExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.GetForUser(ctx, scheduled.ID, noticesvc.CurrentUser{ID: admin.ID, IsAdmin: true}); !httpError(err, 404, "notice not found") {
+	if _, err := svc.GetForUser(ctx, scheduled.ID, noticesvc.CurrentUser{ID: admin.ID, CanReadAdminAudience: true}); !httpError(err, 404, "notice not found") {
 		t.Fatalf("scheduled notice should be hidden, got %#v", err)
 	}
 	expired, err := svc.Create(ctx, noticesvc.CreateInput{Title: "Expired Soon", ContentMarkdown: "Body", EndsAt: ptrInt64(now + 1)}, admin.ID)
