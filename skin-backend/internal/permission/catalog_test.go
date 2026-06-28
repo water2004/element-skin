@@ -60,6 +60,14 @@ func TestRolesOnlyReferenceKnownDefinitions(t *testing.T) {
 			if !def.ID.Valid() {
 				t.Fatalf("role %q references invalid permission id: code=%q id=%#x", role.ID, def.Code, uint64(def.ID))
 			}
+			found, ok := permission.DefinitionByCode(def.Code)
+			if !ok {
+				t.Fatalf("role %q references unknown permission code %q", role.ID, def.Code)
+			}
+			if found.ID != def.ID || found.BitIndex != def.BitIndex {
+				t.Fatalf("role %q permission %q mismatch: id=%#x/%#x bit=%d/%d",
+					role.ID, def.Code, uint64(found.ID), uint64(def.ID), found.BitIndex, def.BitIndex)
+			}
 		}
 	}
 }
@@ -71,6 +79,15 @@ func TestSessionPoliciesOnlyReferenceKnownDefinitions(t *testing.T) {
 				t.Fatalf("session policy %q/%q references invalid permission id: code=%q id=%#x",
 					policy.SessionKind, policy.Entrypoint, def.Code, uint64(def.ID))
 			}
+			found, ok := permission.DefinitionByCode(def.Code)
+			if !ok {
+				t.Fatalf("session policy %q/%q references unknown permission code %q",
+					policy.SessionKind, policy.Entrypoint, def.Code)
+			}
+			if found.ID != def.ID || found.BitIndex != def.BitIndex {
+				t.Fatalf("session policy %q/%q permission %q mismatch: id=%#x/%#x bit=%d/%d",
+					policy.SessionKind, policy.Entrypoint, def.Code, uint64(found.ID), uint64(def.ID), found.BitIndex, def.BitIndex)
+			}
 		}
 	}
 }
@@ -80,24 +97,41 @@ func TestUserRoleDoesNotIncludeAdminScopedPermissions(t *testing.T) {
 	if userRole == nil {
 		t.Fatal("user role not found")
 	}
+	if len(userRole.Permissions) == 0 {
+		t.Fatal("user role must have at least one permission")
+	}
+	expectedCodes := []string{
+		"profile.read.owned", "profile.create.owned", "profile.update.owned", "profile.delete.owned",
+		"texture.create.owned", "texture.read.owned", "texture.delete.owned",
+		"account.read.self", "account.update.self",
+	}
+	roleCodes := make(map[string]bool, len(userRole.Permissions))
+	for _, def := range userRole.Permissions {
+		roleCodes[def.Code] = true
+	}
+	for _, code := range expectedCodes {
+		if !roleCodes[code] {
+			t.Fatalf("user role must include %s", code)
+		}
+	}
 	adminCodes := map[string]bool{
-		"account.ban.any":            true,
-		"account.unban.any":          true,
-		"account.read.any":           true,
-		"account.update.any":         true,
-		"account.delete.any":         true,
-		"profile.read.any":           true,
-		"profile.update.any":         true,
-		"profile.delete.any":         true,
-		"texture.read.any":           true,
+		"account.ban.any":             true,
+		"account.unban.any":           true,
+		"account.read.any":            true,
+		"account.update.any":          true,
+		"account.delete.any":          true,
+		"profile.read.any":            true,
+		"profile.update.any":          true,
+		"profile.delete.any":          true,
+		"texture.read.any":            true,
 		"texture.update_metadata.any": true,
 		"texture.update_visibility.any": true,
-		"texture.delete.any":         true,
-		"notice.create.any":          true,
-		"notice.update.any":          true,
-		"notice.delete.any":          true,
-		"permission.grant.any":       true,
-		"permission.revoke.any":      true,
+		"texture.delete.any":          true,
+		"notice.create.any":           true,
+		"notice.update.any":           true,
+		"notice.delete.any":           true,
+		"permission.grant.any":        true,
+		"permission.revoke.any":       true,
 	}
 	for _, def := range userRole.Permissions {
 		if adminCodes[def.Code] {
@@ -111,6 +145,22 @@ func TestAdminRoleDoesNotIncludeSuperAdminOrSystemPermissions(t *testing.T) {
 	if adminRole == nil {
 		t.Fatal("admin role not found")
 	}
+	if len(adminRole.Permissions) == 0 {
+		t.Fatal("admin role must have at least one permission")
+	}
+	expectedCodes := []string{
+		"account.ban.any", "notice.create.any", "profile.read.any",
+		"texture.read.any", "site_settings.read.any", "permission.grant.any",
+	}
+	roleCodes := make(map[string]bool, len(adminRole.Permissions))
+	for _, def := range adminRole.Permissions {
+		roleCodes[def.Code] = true
+	}
+	for _, code := range expectedCodes {
+		if !roleCodes[code] {
+			t.Fatalf("admin role must include %s", code)
+		}
+	}
 	superAdminCodes := map[string]bool{
 		"permission_protected.manage.any": true,
 		"permission_role.create.any":      true,
@@ -118,10 +168,10 @@ func TestAdminRoleDoesNotIncludeSuperAdminOrSystemPermissions(t *testing.T) {
 		"permission_role.delete.any":      true,
 	}
 	systemCodes := map[string]bool{
-		"notice.delete.system":           true,
+		"notice.delete.system":            true,
 		"yggdrasil_session.delete.system": true,
-		"audit.archive.system":           true,
-		"cache.invalidate.system":        true,
+		"audit.archive.system":            true,
+		"cache.invalidate.system":         true,
 	}
 	for _, def := range adminRole.Permissions {
 		if superAdminCodes[def.Code] {
@@ -162,6 +212,22 @@ func TestYggdrasilSessionPolicyOnlyIncludesYggdrasilOperations(t *testing.T) {
 	for _, policy := range permission.SessionPolicies {
 		if policy.SessionKind != permission.SessionKindYggdrasil {
 			continue
+		}
+		if len(policy.Permissions) == 0 {
+			t.Fatal("yggdrasil session policy must have at least one permission")
+		}
+		expectedCodes := []string{
+			"profile.read.bound_profile", "texture.apply.bound_profile",
+			"yggdrasil_session.create.owned", "yggdrasil_server.join.bound_profile",
+		}
+		policyCodes := make(map[string]bool, len(policy.Permissions))
+		for _, def := range policy.Permissions {
+			policyCodes[def.Code] = true
+		}
+		for _, code := range expectedCodes {
+			if !policyCodes[code] {
+				t.Fatalf("yggdrasil session policy must include %s", code)
+			}
 		}
 		for _, def := range policy.Permissions {
 			if def.Resource.ID != permission.ResourceYggdrasilSession &&
