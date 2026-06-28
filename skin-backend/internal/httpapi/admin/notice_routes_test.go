@@ -195,7 +195,6 @@ func adminNoticeRequest(method, target, body, userID string) *http.Request {
 		reader = strings.NewReader(body)
 	}
 	req := httptest.NewRequest(method, target, reader)
-	req = withAdminActor(req, "admin-test-user")
 	return withAdminActor(req, userID)
 }
 

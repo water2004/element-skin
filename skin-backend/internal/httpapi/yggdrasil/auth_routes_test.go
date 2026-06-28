@@ -16,6 +16,7 @@ import (
 	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/settings"
 	yggsvc "element-skin/backend/internal/service/yggdrasil"
+	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/testutil"
 )
 
@@ -57,7 +58,10 @@ func TestAuthRoutesAuthenticateRefreshJoinAndHasJoinedFlow(t *testing.T) {
 		t.Fatalf("authenticate response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	authPayload := decodeYggJSON(t, rec.Body.String())
-	access, _ := authPayload["accessToken"].(string)
+	access, ok := authPayload["accessToken"].(string)
+	if !ok || access == "" {
+		t.Fatalf("authenticate accessToken missing or not a string: %#v", authPayload)
+	}
 	if _, err := redis.GetYggToken(context.Background(), access); err != nil {
 		t.Fatalf("authenticate should store access token in redis: %v", err)
 	}
@@ -70,7 +74,7 @@ func TestAuthRoutesAuthenticateRefreshJoinAndHasJoinedFlow(t *testing.T) {
 		t.Fatalf("refresh response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	refreshPayload := decodeYggJSON(t, rec.Body.String())
-	refreshed, _ := refreshPayload["accessToken"].(string)
+	refreshed, ok := refreshPayload["accessToken"].(string)
 	if refreshed == "" || refreshed == access {
 		t.Fatalf("refresh should rotate access token: old=%q newBody=%q", access, rec.Body.String())
 	}
@@ -111,7 +115,11 @@ func TestAuthRoutesAuthenticateRefreshJoinAndHasJoinedFlow(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("authenticate before signout mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	signoutAccess := decodeYggJSON(t, rec.Body.String())["accessToken"].(string)
+	payload := decodeYggJSON(t, rec.Body.String())
+	signoutAccess, ok := payload["accessToken"].(string)
+	if !ok || signoutAccess == "" {
+		t.Fatalf("signout accessToken missing or not a string: %#v", payload)
+	}
 	req = httptest.NewRequest(http.MethodPost, "/authserver/signout", strings.NewReader(`{"username":"ygg-flow@test.com","password":"Password123"}`))
 	rec = httptest.NewRecorder()
 	h.Signout(rec, req)
@@ -137,7 +145,11 @@ func TestAuthRoutesProtocolStatusBodiesAndErrorsExactly(t *testing.T) {
 	if authRec.Code != http.StatusOK {
 		t.Fatalf("authenticate status=%d body=%q", authRec.Code, authRec.Body.String())
 	}
-	access := decodeYggJSON(t, authRec.Body.String())["accessToken"].(string)
+	payload := decodeYggJSON(t, authRec.Body.String())
+	access, ok := payload["accessToken"].(string)
+	if !ok || access == "" {
+		t.Fatalf("protocol test accessToken missing or not a string: body=%q", authRec.Body.String())
+	}
 
 	validateReq := httptest.NewRequest(http.MethodPost, "/authserver/validate", strings.NewReader(`{"accessToken":"`+access+`"}`))
 	validateRec := httptest.NewRecorder()
@@ -229,6 +241,107 @@ func TestAuthRoutesRefreshSelectedProfileProtocolRules(t *testing.T) {
 	if _, err := redis.GetYggToken(context.Background(), "unbound_access"); err != nil {
 		t.Fatalf("invalid selectedProfile must keep original token valid: %v", err)
 	}
+}
+
+func TestAuthRoutesPermissionDeniedOnEachProtocolEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		permission string
+		call       func(*testing.T, yggdrasil.Handler, string, string)
+	}{
+		{
+			name:       "authenticate",
+			permission: "yggdrasil_session.create.owned",
+			call: func(t *testing.T, h yggdrasil.Handler, email, password string) {
+				req := httptest.NewRequest(http.MethodPost, "/authserver/authenticate", strings.NewReader(`{"username":"`+email+`","password":"`+password+`"}`))
+				rec := httptest.NewRecorder()
+				h.Authenticate(rec, req)
+				assertYggError(t, rec, http.StatusForbidden, "ForbiddenOperationException", "Permission denied.")
+			},
+		},
+		{
+			name:       "refresh",
+			permission: "yggdrasil_session.refresh.owned",
+			call: func(t *testing.T, h yggdrasil.Handler, email, password string) {
+				auth := mustYggAuthHTTP(t, h, email, password)
+				access, ok := auth["accessToken"].(string)
+				if !ok || access == "" {
+					t.Fatalf("refresh permission deny fixture: accessToken missing or not a string: %#v", auth)
+				}
+				req := httptest.NewRequest(http.MethodPost, "/authserver/refresh", strings.NewReader(`{"accessToken":"`+access+`"}`))
+				rec := httptest.NewRecorder()
+				h.Refresh(rec, req)
+				assertYggError(t, rec, http.StatusForbidden, "ForbiddenOperationException", "Permission denied.")
+			},
+		},
+		{
+			name:       "validate",
+			permission: "yggdrasil_session.validate.owned",
+			call: func(t *testing.T, h yggdrasil.Handler, email, password string) {
+				auth := mustYggAuthHTTP(t, h, email, password)
+				access, ok := auth["accessToken"].(string)
+				if !ok || access == "" {
+					t.Fatalf("validate permission deny fixture: accessToken missing or not a string: %#v", auth)
+				}
+				req := httptest.NewRequest(http.MethodPost, "/authserver/validate", strings.NewReader(`{"accessToken":"`+access+`"}`))
+				rec := httptest.NewRecorder()
+				h.Validate(rec, req)
+				assertYggError(t, rec, http.StatusForbidden, "ForbiddenOperationException", "Permission denied.")
+			},
+		},
+		{
+			name:       "invalidate",
+			permission: "yggdrasil_session.invalidate.owned",
+			call: func(t *testing.T, h yggdrasil.Handler, email, password string) {
+				auth := mustYggAuthHTTP(t, h, email, password)
+				access, ok := auth["accessToken"].(string)
+				if !ok || access == "" {
+					t.Fatalf("invalidate permission deny fixture: accessToken missing or not a string: %#v", auth)
+				}
+				req := httptest.NewRequest(http.MethodPost, "/authserver/invalidate", strings.NewReader(`{"accessToken":"`+access+`"}`))
+				rec := httptest.NewRecorder()
+				h.Invalidate(rec, req)
+				assertYggError(t, rec, http.StatusForbidden, "ForbiddenOperationException", "Permission denied.")
+			},
+		},
+		{
+			name:       "signout",
+			permission: "yggdrasil_session.signout.owned",
+			call: func(t *testing.T, h yggdrasil.Handler, email, password string) {
+				_ = mustYggAuthHTTP(t, h, email, password)
+				req := httptest.NewRequest(http.MethodPost, "/authserver/signout", strings.NewReader(`{"username":"`+email+`","password":"`+password+`"}`))
+				rec := httptest.NewRecorder()
+				h.Signout(rec, req)
+				assertYggError(t, rec, http.StatusForbidden, "ForbiddenOperationException", "Permission denied.")
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, _ := testutil.NewTestApp(t)
+			cfg := testutil.TestConfig()
+			redis := testutil.NewMemoryRedis()
+			h := yggdrasil.New(cfg, db, redis, settings.Settings{DB: db, Redis: redis}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+			user := testutil.CreateUser(t, db, "ygg-deny-"+tc.name+"@test.com", "Password123", "YggDeny"+tc.name, false)
+			testutil.CreateProfile(t, db, user.ID, "ygg_deny_"+tc.name+"_profile", "YggDeny"+tc.name)
+
+			def := permission.MustDefinitionByCode(tc.permission)
+			if err := db.Permissions.SetSubjectPermissionOverride(t.Context(), user.ID, def, "deny", ""); err != nil {
+				t.Fatal(err)
+			}
+			tc.call(t, h, user.Email, "Password123")
+		})
+	}
+}
+
+func mustYggAuthHTTP(t *testing.T, h yggdrasil.Handler, email, password string) map[string]any {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/authserver/authenticate", strings.NewReader(`{"username":"`+email+`","password":"`+password+`"}`))
+	rec := httptest.NewRecorder()
+	h.Authenticate(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("authenticate fixture failed: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	return decodeYggJSON(t, rec.Body.String())
 }
 
 func decodeYggJSON(t *testing.T, body string) map[string]any {
