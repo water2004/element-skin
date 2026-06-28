@@ -358,6 +358,115 @@ func TestEnsureUserSubjectIdempotent(t *testing.T) {
 	}
 }
 
+func TestActorForUserExactFields(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "actor-for-user@test.com", "pw", "ActorForUser", false)
+
+	actor, err := db.Permissions.ActorForUser(ctx, user.ID, permissiondb.EffectiveOptions{
+		SessionKind: core.SessionKindWeb,
+		Entrypoint:  core.EntrypointDashboard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if actor.SubjectID != permissiondb.SubjectIDForUser(user.ID) {
+		t.Fatalf("SubjectID=%q want=%q", actor.SubjectID, permissiondb.SubjectIDForUser(user.ID))
+	}
+	if actor.UserID != user.ID {
+		t.Fatalf("UserID=%q want=%q", actor.UserID, user.ID)
+	}
+	if actor.SessionKind != core.SessionKindWeb || actor.Entrypoint != core.EntrypointDashboard {
+		t.Fatalf("session fields mismatch: kind=%q entrypoint=%q", actor.SessionKind, actor.Entrypoint)
+	}
+	if actor.Permissions.Empty() {
+		t.Fatal("actor should have non-empty permissions")
+	}
+	if !actor.Permissions.Has(core.MustDefinitionByCode("profile.create.owned").BitIndex) {
+		t.Fatal("web actor should have profile.create.owned")
+	}
+	if actor.Permissions.Has(core.MustDefinitionByCode("notice.create.any").BitIndex) {
+		t.Fatal("normal user should not have notice.create.any in actor")
+	}
+}
+
+func TestActorForUserWithBanPolicy(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "actor-ban@test.com", "pw", "ActorBan", false)
+	if err := db.Users.Ban(ctx, user.ID, time.Now().Add(time.Hour).UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+
+	actor, err := db.Permissions.ActorForUser(ctx, user.ID, permissiondb.EffectiveOptions{
+		SessionKind:    core.SessionKindYggdrasil,
+		Entrypoint:     core.EntrypointYggdrasil,
+		ApplyBanPolicy: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joinBit := core.MustDefinitionByCode("yggdrasil_server.join.bound_profile").BitIndex
+	if actor.Permissions.Has(joinBit) {
+		t.Fatal("banned user joined via actor should have join permission cleared")
+	}
+	hasJoinedBit := core.MustDefinitionByCode("yggdrasil_server.hasjoined.bound_profile").BitIndex
+	if !actor.Permissions.Has(hasJoinedBit) {
+		t.Fatal("banned user should still have hasjoined permission")
+	}
+}
+
+func TestRoleIDsForUserRejectsNonexistentUser(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	roles, err := db.Permissions.RoleIDsForUser(ctx, "nonexistent-user-id")
+	if err == nil {
+		t.Fatalf("RoleIDsForUser should reject nonexistent user: roles=%#v", roles)
+	}
+}
+
+func TestEffectivePermissionsRejectsNonexistentUser(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	opts := permissiondb.EffectiveOptions{
+		SessionKind:    core.SessionKindYggdrasil,
+		Entrypoint:     core.EntrypointYggdrasil,
+		ApplyBanPolicy: true,
+	}
+	bits, err := db.Permissions.EffectivePermissionsForUser(ctx, "nonexistent-ban-check", opts)
+	if err == nil {
+		t.Fatalf("EffectivePermissionsForUser should reject nonexistent user: bits=%#v", bits)
+	}
+}
+
+func TestSetSubjectPermissionOverrideIdempotent(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "override-idempotent@test.com", "pw", "OverrideIdempotent", false)
+	def := core.MustDefinitionByCode("texture.update_visibility.owned")
+
+	if err := db.Permissions.SetSubjectPermissionOverride(ctx, user.ID, def, "deny", ""); err != nil {
+		t.Fatal(err)
+	}
+	bits, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if has(bits, def.Code) {
+		t.Fatal("first deny should remove the permission")
+	}
+	if err := db.Permissions.SetSubjectPermissionOverride(ctx, user.ID, def, "allow", ""); err != nil {
+		t.Fatal(err)
+	}
+	bits, err = db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !has(bits, def.Code) {
+		t.Fatal("allow override after deny should restore the permission")
+	}
+}
+
 func has(bits core.BitSet, code string) bool {
 	return bits.Has(core.MustDefinitionByCode(code).BitIndex)
 }

@@ -48,3 +48,12 @@ func TestIDRejectsNonZeroReservedCategorySegmentExactly(t *testing.T) {
 		t.Fatalf("low segments should still decode exactly: resource=%d action=%d scope=%d", id.ResourceID(), id.ActionID(), id.ScopeID())
 	}
 }
+
+func TestMustComposeIDPanicsOnZeroPart(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("MustComposeID should panic on zero resource")
+		}
+	}()
+	permission.MustComposeID(0, 1, 1)
+}

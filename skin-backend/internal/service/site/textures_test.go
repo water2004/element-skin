@@ -332,6 +332,31 @@ func TestTextureServiceAppliesCapeWithoutChangingSkinOrModel(t *testing.T) {
 	}
 }
 
+func TestApplyTextureToProfileWithModel(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := newSiteService(db, testutil.TestConfig())
+	user := testutil.CreateUser(t, db, "apply-model@test.com", "Password123", "ApplyModel", false)
+	profile := testutil.CreateProfile(t, db, user.ID, "apply_model_profile", "ApplyModelProfile")
+	if err := db.Textures.AddToLibrary(ctx, user.ID, "apply_model_skin", "skin", "Model Skin", true, "slim"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := svc.ApplyTextureToProfileWithModel(ctx, testUserActor(user.ID), profile.ID, "apply_model_skin", "skin", "default"); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := db.Profiles.GetByID(ctx, profile.ID)
+	if err != nil || updated == nil {
+		t.Fatalf("profile not found after apply: err=%v", err)
+	}
+	if updated.SkinHash == nil || *updated.SkinHash != "apply_model_skin" {
+		t.Fatalf("skin hash mismatch: %#v", updated.SkinHash)
+	}
+	if updated.TextureModel != "default" {
+		t.Fatalf("model should be 'default' as explicitly passed: %s", updated.TextureModel)
+	}
+}
+
 func ptrString(s string) *string {
 	return &s
 }

@@ -175,6 +175,15 @@ func TestYggdrasilSessionPolicyOnlyIncludesYggdrasilOperations(t *testing.T) {
 	}
 }
 
+func TestMustDefinitionByCodePanicsOnUnknownCode(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("MustDefinitionByCode should panic on unknown code")
+		}
+	}()
+	permission.MustDefinitionByCode("nonexistent.permission.code")
+}
+
 func roleByID(id string) *permission.Role {
 	for _, role := range permission.Roles {
 		if role.ID == id {
