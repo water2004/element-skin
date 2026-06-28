@@ -15,6 +15,7 @@ var (
 	serviceProfileReadOwnedPermission   = permission.MustDefinitionByCode("profile.read.owned")
 	serviceProfileCreateOwnedPermission = permission.MustDefinitionByCode("profile.create.owned")
 	serviceProfileUpdateOwnedPermission = permission.MustDefinitionByCode("profile.update.owned")
+	serviceProfileUpdateAnyPermission   = permission.MustDefinitionByCode("profile.update.any")
 	serviceProfileDeleteOwnedPermission = permission.MustDefinitionByCode("profile.delete.owned")
 	serviceTextureReadOwnedPermission   = permission.MustDefinitionByCode("texture.read.owned")
 	serviceTextureUpdateMetadataOwned   = permission.MustDefinitionByCode("texture.update_metadata.owned")

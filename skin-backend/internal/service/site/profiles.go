@@ -217,10 +217,17 @@ func (s Site) ClearProfileTexture(ctx context.Context, actor permission.Actor, p
 	if p.UserID != userID {
 		return util.HTTPError{Status: 403, Detail: "not allowed"}
 	}
-	return s.SetProfileTexture(ctx, profileID, textureType, nil)
+	return s.setProfileTexture(ctx, profileID, textureType, nil)
 }
 
-func (s Site) SetProfileTexture(ctx context.Context, profileID, textureType string, hash *string) error {
+func (s Site) SetProfileTexture(ctx context.Context, actor permission.Actor, profileID, textureType string, hash *string) error {
+	if err := requireActorPermission(actor, serviceProfileUpdateAnyPermission); err != nil {
+		return err
+	}
+	return s.setProfileTexture(ctx, profileID, textureType, hash)
+}
+
+func (s Site) setProfileTexture(ctx context.Context, profileID, textureType string, hash *string) error {
 	p, err := s.DB.Profiles.GetByID(ctx, profileID)
 	if err != nil {
 		return err

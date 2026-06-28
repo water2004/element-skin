@@ -590,6 +590,7 @@ func TestSetProfileTextureSkipsExactNoOpWrites(t *testing.T) {
 	user := testutil.CreateUser(t, db, "profile-noop@test.com", "Password123", "ProfileNoop", false)
 	profile := testutil.CreateProfile(t, db, user.ID, "profile_noop_values", "ProfileNoopValues")
 	empty := testutil.CreateProfile(t, db, user.ID, "profile_noop_empty", "ProfileNoopEmpty")
+	adminActor := testActorWithCodes("profile-texture-admin", "profile.update.any")
 	skin := "same_skin_hash"
 	cape := "same_cape_hash"
 	if err := db.Profiles.UpdateSkin(ctx, profile.ID, &skin); err != nil {
@@ -625,14 +626,14 @@ func TestSetProfileTextureSkipsExactNoOpWrites(t *testing.T) {
 		{name: "already clear cape", profileID: empty.ID, textureType: "cape", hash: nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := svc.SetProfileTexture(ctx, tc.profileID, tc.textureType, tc.hash); err != nil {
+			if err := svc.SetProfileTexture(ctx, adminActor, tc.profileID, tc.textureType, tc.hash); err != nil {
 				t.Fatalf("exact no-op should skip database update: %v", err)
 			}
 		})
 	}
 
 	different := "different_skin_hash"
-	err := svc.SetProfileTexture(ctx, profile.ID, "skin", &different)
+	err := svc.SetProfileTexture(ctx, adminActor, profile.ID, "skin", &different)
 	var pgErr *pgconn.PgError
 	if !errors.As(err, &pgErr) || pgErr.Code != "23514" || pgErr.Message != "profile update should not run" {
 		t.Fatalf("different skin error=%#v; want exact trigger failure", err)

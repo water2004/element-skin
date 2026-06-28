@@ -126,7 +126,7 @@ func (h Handler) setProfileTexture(w http.ResponseWriter, req *http.Request, typ
 		util.Error(w, util.HTTPError{Status: 404, Detail: "profile not found"})
 		return
 	}
-	if err := h.site.SetProfileTexture(req.Context(), profileID, typ, body["hash"]); err != nil {
+	if err := h.site.SetProfileTexture(req.Context(), shared.CurrentActor(req), profileID, typ, body["hash"]); err != nil {
 		util.Error(w, err)
 		return
 	}

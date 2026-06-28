@@ -53,7 +53,7 @@ func (s Site) applyTextureToProfile(ctx context.Context, actor permission.Actor,
 		}
 		return profileUpdateError(s.DB.Profiles.UpdateSkinAndModel(ctx, profileID, &hash, profile.NormalizeModel(modelName)))
 	case "cape":
-		return s.SetProfileTexture(ctx, profileID, "cape", &hash)
+		return s.setProfileTexture(ctx, profileID, "cape", &hash)
 	default:
 		return util.HTTPError{Status: 400, Detail: "Invalid texture_type"}
 	}

@@ -67,10 +67,10 @@ func TestApplyTextureRejectsMissingForeignAndInvalidTypeWithoutMutatingProfile(t
 			return svc.ApplyTextureToProfile(ctx, testUserActor(owner.ID), profile.ID, "texture_service_apply_skin", "elytra")
 		}, 403, "Texture not found in your library"},
 		{"set invalid type", func() error {
-			return svc.SetProfileTexture(ctx, profile.ID, "elytra", ptrString("texture_service_apply_skin"))
+			return svc.SetProfileTexture(ctx, testActorWithCodes("texture-service-admin", "profile.update.any"), profile.ID, "elytra", ptrString("texture_service_apply_skin"))
 		}, 400, "Invalid texture_type"},
 		{"set missing profile", func() error {
-			return svc.SetProfileTexture(ctx, "missing-profile", "skin", ptrString("texture_service_apply_skin"))
+			return svc.SetProfileTexture(ctx, testActorWithCodes("texture-service-admin", "profile.update.any"), "missing-profile", "skin", ptrString("texture_service_apply_skin"))
 		}, 404, "profile not found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
