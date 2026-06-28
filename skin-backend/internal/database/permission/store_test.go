@@ -2,12 +2,16 @@ package permission_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
 	permissiondb "element-skin/backend/internal/database/permission"
 	core "element-skin/backend/internal/permission"
 	"element-skin/backend/internal/testutil"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestSeedDefaultsPersistsCatalogExactly(t *testing.T) {
@@ -419,10 +423,8 @@ func TestActorForUserWithBanPolicy(t *testing.T) {
 func TestRoleIDsForUserRejectsNonexistentUser(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
-	roles, err := db.Permissions.RoleIDsForUser(ctx, "nonexistent-user-id")
-	if err == nil {
-		t.Fatalf("RoleIDsForUser should reject nonexistent user: roles=%#v", roles)
-	}
+	_, err := db.Permissions.RoleIDsForUser(ctx, "nonexistent-user-id")
+	assertPostgresError(t, err, "23503")
 }
 
 func TestEffectivePermissionsRejectsNonexistentUser(t *testing.T) {
@@ -433,10 +435,8 @@ func TestEffectivePermissionsRejectsNonexistentUser(t *testing.T) {
 		Entrypoint:     core.EntrypointYggdrasil,
 		ApplyBanPolicy: true,
 	}
-	bits, err := db.Permissions.EffectivePermissionsForUser(ctx, "nonexistent-ban-check", opts)
-	if err == nil {
-		t.Fatalf("EffectivePermissionsForUser should reject nonexistent user: bits=%#v", bits)
-	}
+	_, err := db.Permissions.EffectivePermissionsForUser(ctx, "nonexistent-ban-check", opts)
+	assertPostgresError(t, err, "23503")
 }
 
 func TestSetSubjectPermissionOverrideIdempotent(t *testing.T) {
@@ -671,9 +671,7 @@ func TestSessionPolicyReturnsErrorOnMissingTable(t *testing.T) {
 		SessionKind: core.SessionKindWeb,
 		Entrypoint:  core.EntrypointDashboard,
 	})
-	if err == nil {
-		t.Fatal("EffectivePermissionsForUser should fail when session_permission_policies is missing")
-	}
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestDelegationPolicyReturnsErrorOnMissingTable(t *testing.T) {
@@ -690,9 +688,7 @@ func TestDelegationPolicyReturnsErrorOnMissingTable(t *testing.T) {
 		DelegatedGrantID:  "test-grant",
 		DelegatedClientID: "test-client",
 	})
-	if err == nil {
-		t.Fatal("EffectivePermissionsForUser should fail when delegated_permission_grants is missing")
-	}
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestEffectivePermissionsForUserCancelledContext(t *testing.T) {
@@ -702,9 +698,7 @@ func TestEffectivePermissionsForUserCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
-	if err == nil {
-		t.Fatal("EffectivePermissionsForUser should fail with cancelled context")
-	}
+	assertCancelled(t, err)
 }
 
 func TestActorForUserErrorFromPermissions(t *testing.T) {
@@ -712,9 +706,7 @@ func TestActorForUserErrorFromPermissions(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := db.Permissions.ActorForUser(ctx, "nonexistent", permissiondb.EffectiveOptions{})
-	if err == nil {
-		t.Fatal("ActorForUser should fail with cancelled context")
-	}
+	assertCancelled(t, err)
 }
 
 func TestGrantRoleErrorFromEnsureUserSubject(t *testing.T) {
@@ -722,9 +714,7 @@ func TestGrantRoleErrorFromEnsureUserSubject(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	err := db.Permissions.GrantRole(ctx, "nonexistent", core.RoleModerator, "")
-	if err == nil {
-		t.Fatal("GrantRole should fail with cancelled context")
-	}
+	assertCancelled(t, err)
 }
 
 func TestRevokeRoleErrorPath(t *testing.T) {
@@ -732,9 +722,7 @@ func TestRevokeRoleErrorPath(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := db.Permissions.RevokeRole(ctx, "nonexistent", core.RoleModerator)
-	if err == nil {
-		t.Fatal("RevokeRole should fail with cancelled context")
-	}
+	assertCancelled(t, err)
 }
 
 func TestRoleIDsForUserCancelledContext(t *testing.T) {
@@ -742,9 +730,7 @@ func TestRoleIDsForUserCancelledContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := db.Permissions.RoleIDsForUser(ctx, "nonexistent")
-	if err == nil {
-		t.Fatal("RoleIDsForUser should fail with cancelled context")
-	}
+	assertCancelled(t, err)
 }
 
 func TestSetSubjectPermissionOverrideCancelledContext(t *testing.T) {
@@ -753,9 +739,7 @@ func TestSetSubjectPermissionOverrideCancelledContext(t *testing.T) {
 	cancel()
 	def := core.MustDefinitionByCode("notice.create.any")
 	err := db.Permissions.SetSubjectPermissionOverride(ctx, "nonexistent", def, "allow", "")
-	if err == nil {
-		t.Fatal("SetSubjectPermissionOverride should fail with cancelled context")
-	}
+	assertCancelled(t, err)
 }
 
 func TestGrantInitialSuperAdminIfNoneErrorPath(t *testing.T) {
@@ -763,9 +747,7 @@ func TestGrantInitialSuperAdminIfNoneErrorPath(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := db.Permissions.GrantInitialSuperAdminIfNone(ctx, "nonexistent")
-	if err == nil {
-		t.Fatal("GrantInitialSuperAdminIfNone should fail with cancelled context")
-	}
+	assertCancelled(t, err)
 }
 
 func TestSeedDefaultsFailsWhenCatalogTableMissing(t *testing.T) {
@@ -774,9 +756,8 @@ func TestSeedDefaultsFailsWhenCatalogTableMissing(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE permission_resources CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err == nil {
-		t.Fatal("SeedDefaults should fail when permission_resources is missing")
-	}
+	err := db.Permissions.SeedDefaults(ctx)
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestSeedDefaultsFailsWhenRolesTableMissing(t *testing.T) {
@@ -785,9 +766,8 @@ func TestSeedDefaultsFailsWhenRolesTableMissing(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE roles CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err == nil {
-		t.Fatal("SeedDefaults should fail when roles is missing")
-	}
+	err := db.Permissions.SeedDefaults(ctx)
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestSeedDefaultsFailsWhenPermissionsTableMissing(t *testing.T) {
@@ -796,9 +776,8 @@ func TestSeedDefaultsFailsWhenPermissionsTableMissing(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE permissions CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err == nil {
-		t.Fatal("SeedDefaults should fail when permissions is missing")
-	}
+	err := db.Permissions.SeedDefaults(ctx)
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestSeedDefaultsFailsWhenSessionPoliciesTableMissing(t *testing.T) {
@@ -807,9 +786,8 @@ func TestSeedDefaultsFailsWhenSessionPoliciesTableMissing(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE session_permission_policies CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err == nil {
-		t.Fatal("SeedDefaults should fail when session_permission_policies is missing")
-	}
+	err := db.Permissions.SeedDefaults(ctx)
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestSeedDefaultsFailsWhenSubjectRolesTableMissing(t *testing.T) {
@@ -818,9 +796,8 @@ func TestSeedDefaultsFailsWhenSubjectRolesTableMissing(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE subject_roles CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err == nil {
-		t.Fatal("SeedDefaults should fail when subject_roles is missing")
-	}
+	err := db.Permissions.SeedDefaults(ctx)
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestSeedDefaultsFailsWhenPermissionActionsTableMissing(t *testing.T) {
@@ -829,9 +806,8 @@ func TestSeedDefaultsFailsWhenPermissionActionsTableMissing(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE permission_actions CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err == nil {
-		t.Fatal("SeedDefaults should fail when permission_actions is missing")
-	}
+	err := db.Permissions.SeedDefaults(ctx)
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestSeedDefaultsFailsWhenRolePermissionsTableMissing(t *testing.T) {
@@ -840,9 +816,8 @@ func TestSeedDefaultsFailsWhenRolePermissionsTableMissing(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE role_permissions CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err == nil {
-		t.Fatal("SeedDefaults should fail when role_permissions is missing")
-	}
+	err := db.Permissions.SeedDefaults(ctx)
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestSeedDefaultsFailsWhenPermissionSubjectsTableMissing(t *testing.T) {
@@ -851,9 +826,8 @@ func TestSeedDefaultsFailsWhenPermissionSubjectsTableMissing(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE permission_subjects CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err == nil {
-		t.Fatal("SeedDefaults should fail when permission_subjects is missing")
-	}
+	err := db.Permissions.SeedDefaults(ctx)
+	assertPostgresError(t, err, "42P01")
 }
 
 func TestEffectivePermissionsWithBanPolicyColumnTypeError(t *testing.T) {
@@ -866,9 +840,7 @@ func TestEffectivePermissionsWithBanPolicyColumnTypeError(t *testing.T) {
 	_, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{
 		ApplyBanPolicy: true,
 	})
-	if err == nil {
-		t.Fatal("EffectivePermissionsForUser should fail when banned_until column type is wrong")
-	}
+	assertPgErrorOrClosed(t, err)
 }
 
 func TestEnsureUserSubjectConstraintError(t *testing.T) {
@@ -878,9 +850,8 @@ func TestEnsureUserSubjectConstraintError(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `ALTER TABLE permission_subjects ADD CONSTRAINT always_reject CHECK (FALSE) NOT VALID`); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Permissions.EnsureUserSubject(ctx, user.ID); err == nil {
-		t.Fatal("EnsureUserSubject should fail with CHECK constraint violation")
-	}
+	err := db.Permissions.EnsureUserSubject(ctx, user.ID)
+	assertPostgresError(t, err, "23514")
 }
 
 func TestPoolClosedReturnsError(t *testing.T) {
@@ -889,18 +860,15 @@ func TestPoolClosedReturnsError(t *testing.T) {
 	user := testutil.CreateUser(t, db, "pool-closed@test.com", "pw", "PoolClosed", false)
 	db.Pool.Close()
 	_, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
-	if err == nil {
-		t.Fatal("all queries should fail after pool is closed")
-	}
+	assertPgErrorOrClosed(t, err)
 }
 
 func TestEnsureUserSubjectCancelledContext(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := db.Permissions.EnsureUserSubject(ctx, "nonexistent"); err == nil {
-		t.Fatal("EnsureUserSubject should fail with cancelled context")
-	}
+	err := db.Permissions.EnsureUserSubject(ctx, "nonexistent")
+	assertCancelled(t, err)
 }
 
 func TestEffectivePermissionsRowsCanError(t *testing.T) {
@@ -937,6 +905,46 @@ func TestRoleIDsForUserRowsScanError(t *testing.T) {
 	if err != testutil.ErrFaultInjected {
 		t.Fatalf("should return injected Scan error: %v", err)
 	}
+}
+
+func assertCancelled(t *testing.T, err error) {
+	t.Helper()
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %T: %v", err, err)
+	}
+}
+
+func assertPostgresError(t *testing.T, err error, code string) {
+	t.Helper()
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		t.Fatalf("expected PostgreSQL error, got %T: %v", err, err)
+	}
+	if pgErr.Code != code {
+		t.Fatalf("expected SQLSTATE %s, got %s: %s", code, pgErr.Code, pgErr.Message)
+	}
+}
+
+func assertPgErrorOrClosed(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return
+	}
+	if errors.Is(err, context.Canceled) {
+		return
+	}
+	var scanErr pgx.ScanArgError
+	if errors.As(err, &scanErr) {
+		return
+	}
+	if err.Error() == "closed pool" {
+		return
+	}
+	t.Fatalf("unexpected error type %T: %v", err, err)
 }
 
 func has(bits core.BitSet, code string) bool {
