@@ -168,6 +168,7 @@ var SessionPolicies = []SessionPolicy{
 			"profile.update.bound_profile",
 			"texture.apply.bound_profile",
 			"texture.clear.bound_profile",
+			"yggdrasil_session.create.owned",
 			"yggdrasil_session.refresh.owned",
 			"yggdrasil_session.validate.owned",
 			"yggdrasil_session.invalidate.owned",
