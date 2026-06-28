@@ -659,6 +659,212 @@ func TestSeedDefaultsDeduplicatesMultipleSuperAdminsExactly(t *testing.T) {
 	}
 }
 
+func TestSessionPolicyReturnsErrorOnMissingTable(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "session-policy-err@test.com", "pw", "SessionPolicyErr", false)
+
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE session_permission_policies CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{
+		SessionKind: core.SessionKindWeb,
+		Entrypoint:  core.EntrypointDashboard,
+	})
+	if err == nil {
+		t.Fatal("EffectivePermissionsForUser should fail when session_permission_policies is missing")
+	}
+}
+
+func TestDelegationPolicyReturnsErrorOnMissingTable(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "delegation-policy-err@test.com", "pw", "DelegationPolicyErr", false)
+
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE delegated_permission_grants CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	_, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{
+		SessionKind:       core.SessionKindWeb,
+		Entrypoint:        core.EntrypointDashboard,
+		DelegatedGrantID:  "test-grant",
+		DelegatedClientID: "test-client",
+	})
+	if err == nil {
+		t.Fatal("EffectivePermissionsForUser should fail when delegated_permission_grants is missing")
+	}
+}
+
+func TestEffectivePermissionsForUserCancelledContext(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	user := testutil.CreateUser(t, db, "cancelled-ctx@test.com", "pw", "CancelledCtx", false)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
+	if err == nil {
+		t.Fatal("EffectivePermissionsForUser should fail with cancelled context")
+	}
+}
+
+func TestActorForUserErrorFromPermissions(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := db.Permissions.ActorForUser(ctx, "nonexistent", permissiondb.EffectiveOptions{})
+	if err == nil {
+		t.Fatal("ActorForUser should fail with cancelled context")
+	}
+}
+
+func TestGrantRoleErrorFromEnsureUserSubject(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err := db.Permissions.GrantRole(ctx, "nonexistent", core.RoleModerator, "")
+	if err == nil {
+		t.Fatal("GrantRole should fail with cancelled context")
+	}
+}
+
+func TestRevokeRoleErrorPath(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := db.Permissions.RevokeRole(ctx, "nonexistent", core.RoleModerator)
+	if err == nil {
+		t.Fatal("RevokeRole should fail with cancelled context")
+	}
+}
+
+func TestRoleIDsForUserCancelledContext(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := db.Permissions.RoleIDsForUser(ctx, "nonexistent")
+	if err == nil {
+		t.Fatal("RoleIDsForUser should fail with cancelled context")
+	}
+}
+
+func TestSetSubjectPermissionOverrideCancelledContext(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	def := core.MustDefinitionByCode("notice.create.any")
+	err := db.Permissions.SetSubjectPermissionOverride(ctx, "nonexistent", def, "allow", "")
+	if err == nil {
+		t.Fatal("SetSubjectPermissionOverride should fail with cancelled context")
+	}
+}
+
+func TestGrantInitialSuperAdminIfNoneErrorPath(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := db.Permissions.GrantInitialSuperAdminIfNone(ctx, "nonexistent")
+	if err == nil {
+		t.Fatal("GrantInitialSuperAdminIfNone should fail with cancelled context")
+	}
+}
+
+func TestSeedDefaultsFailsWhenCatalogTableMissing(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE permission_resources CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SeedDefaults(ctx); err == nil {
+		t.Fatal("SeedDefaults should fail when permission_resources is missing")
+	}
+}
+
+func TestSeedDefaultsFailsWhenRolesTableMissing(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE roles CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SeedDefaults(ctx); err == nil {
+		t.Fatal("SeedDefaults should fail when roles is missing")
+	}
+}
+
+func TestSeedDefaultsFailsWhenPermissionsTableMissing(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE permissions CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SeedDefaults(ctx); err == nil {
+		t.Fatal("SeedDefaults should fail when permissions is missing")
+	}
+}
+
+func TestSeedDefaultsFailsWhenSessionPoliciesTableMissing(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE session_permission_policies CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SeedDefaults(ctx); err == nil {
+		t.Fatal("SeedDefaults should fail when session_permission_policies is missing")
+	}
+}
+
+func TestSeedDefaultsFailsWhenSubjectRolesTableMissing(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE subject_roles CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SeedDefaults(ctx); err == nil {
+		t.Fatal("SeedDefaults should fail when subject_roles is missing")
+	}
+}
+
+func TestSeedDefaultsFailsWhenPermissionActionsTableMissing(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE permission_actions CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SeedDefaults(ctx); err == nil {
+		t.Fatal("SeedDefaults should fail when permission_actions is missing")
+	}
+}
+
+func TestSeedDefaultsFailsWhenRolePermissionsTableMissing(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE role_permissions CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SeedDefaults(ctx); err == nil {
+		t.Fatal("SeedDefaults should fail when role_permissions is missing")
+	}
+}
+
+func TestSeedDefaultsFailsWhenPermissionSubjectsTableMissing(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `DROP TABLE permission_subjects CASCADE`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SeedDefaults(ctx); err == nil {
+		t.Fatal("SeedDefaults should fail when permission_subjects is missing")
+	}
+}
+
+func TestEnsureUserSubjectCancelledContext(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := db.Permissions.EnsureUserSubject(ctx, "nonexistent"); err == nil {
+		t.Fatal("EnsureUserSubject should fail with cancelled context")
+	}
+}
+
 func has(bits core.BitSet, code string) bool {
 	return bits.Has(core.MustDefinitionByCode(code).BitIndex)
 }
