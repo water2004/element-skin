@@ -134,26 +134,48 @@
 
             <section>
               <div class="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <h4 class="m-0 text-base font-semibold text-[var(--color-heading)]">
-                  单项权限覆盖
-                </h4>
+                <h4 class="m-0 text-base font-semibold text-[var(--color-heading)]">单项权限</h4>
               </div>
-              <div class="mb-4 rounded-lg border border-[var(--color-border)] p-4">
-                <div class="mb-4 flex flex-wrap gap-2">
-                  <el-tag
-                    v-for="item in overrideTagItems"
-                    :key="item.permission_code"
-                    :type="item.effect === 'allow' ? 'success' : 'danger'"
-                    closable
-                    disable-transitions
-                    @close="emit('clear-permission', item.permission_code)"
-                  >
-                    {{ item.effect === 'allow' ? '允许' : '拒绝' }} · {{ item.label }}
-                  </el-tag>
-                  <el-text v-if="!overrideTagItems.length" type="info" size="small">
-                    暂无单项权限覆盖
-                  </el-text>
+              <div class="rounded-lg border border-[var(--color-border)] p-4">
+                <div class="grid gap-4">
+                  <div class="flex flex-col gap-2">
+                    <div class="text-sm font-semibold text-[var(--color-heading)]">继承的权限</div>
+                    <div class="flex flex-wrap gap-2">
+                      <el-tag
+                        v-for="item in inheritedPermissionItems"
+                        :key="item.code"
+                        :title="item.code"
+                        effect="plain"
+                        disable-transitions
+                      >
+                        {{ item.label }}
+                      </el-tag>
+                      <el-text v-if="!inheritedPermissionItems.length" type="info" size="small">
+                        暂无继承权限
+                      </el-text>
+                    </div>
+                  </div>
+                  <div class="flex flex-col gap-2">
+                    <div class="text-sm font-semibold text-[var(--color-heading)]">覆盖</div>
+                    <div class="flex flex-wrap gap-2">
+                      <el-tag
+                        v-for="item in overrideTagItems"
+                        :key="item.permission_code"
+                        :title="item.permission_code"
+                        :type="item.effect === 'allow' ? 'success' : 'danger'"
+                        closable
+                        disable-transitions
+                        @close="emit('clear-permission', item.permission_code)"
+                      >
+                        {{ item.effect === 'allow' ? '允许' : '拒绝' }} · {{ item.label }}
+                      </el-tag>
+                      <el-text v-if="!overrideTagItems.length" type="info" size="small">
+                        暂无单项权限覆盖
+                      </el-text>
+                    </div>
+                  </div>
                 </div>
+                <el-divider class="my-4" />
                 <div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_120px_auto]">
                   <el-select
                     v-model="selectedPermissionCode"
@@ -190,59 +212,6 @@
                   </el-button>
                 </div>
               </div>
-              <div class="mb-3 flex flex-col gap-2 md:flex-row md:justify-end">
-                <el-select v-model="resourceFilter" class="md:w-48" placeholder="资源" clearable>
-                  <el-option
-                    v-for="resource in resourceOptions"
-                    :key="resource.value"
-                    :label="resource.label"
-                    :value="resource.value"
-                  />
-                </el-select>
-                <el-input
-                  v-model="permissionSearch"
-                  class="md:w-64"
-                  placeholder="搜索权限 code / 描述"
-                  clearable
-                />
-              </div>
-              <el-table :data="filteredPermissions" size="small" max-height="340" class="w-full">
-                <el-table-column label="权限" min-width="280">
-                  <template #default="{ row }">
-                    <div class="font-mono text-xs text-[var(--color-heading)]">{{ row.code }}</div>
-                    <div class="mt-1 text-sm text-[var(--color-text-light)]">
-                      {{ row.description }}
-                    </div>
-                  </template>
-                </el-table-column>
-                <el-table-column label="分类" width="170">
-                  <template #default="{ row }">
-                    <el-tag size="small" effect="plain">{{ row.resource_description }}</el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="有效状态" width="100" align="center">
-                  <template #default="{ row }">
-                    <el-tag
-                      :type="effectivePermissions.has(row.code) ? 'success' : 'info'"
-                      size="small"
-                    >
-                      {{ effectivePermissions.has(row.code) ? '已拥有' : '未拥有' }}
-                    </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="覆盖" width="160">
-                  <template #default="{ row }">
-                    <el-tag
-                      v-if="overrideEffect(row.code) !== 'inherit'"
-                      :type="overrideEffect(row.code) === 'allow' ? 'success' : 'danger'"
-                      size="small"
-                    >
-                      {{ overrideEffect(row.code) === 'allow' ? '允许' : '拒绝' }}
-                    </el-tag>
-                    <el-tag v-else size="small" effect="plain">继承</el-tag>
-                  </template>
-                </el-table-column>
-              </el-table>
             </section>
           </div>
         </el-tab-pane>
@@ -347,8 +316,6 @@ const emit = defineEmits<{
   'delete-user': [user: User]
 }>()
 
-const permissionSearch = ref('')
-const resourceFilter = ref('')
 const selectedRoleId = ref('')
 const selectedPermissionCode = ref('')
 const selectedPermissionEffect = ref<PermissionOverrideEffect>('allow')
@@ -389,17 +356,25 @@ const assignedRoleLabels = computed(() => {
 const grantableRoles = computed(() =>
   (props.permissionState?.catalog.roles || []).filter((role) => !roleIds.value.has(role.id)),
 )
-const resourceOptions = computed(() => {
-  const seen = new Map<string, string>()
-  for (const item of props.permissionState?.catalog.permissions || []) {
-    if (!seen.has(item.resource)) seen.set(item.resource, item.resource_description)
-  }
-  return [...seen.entries()].map(([value, label]) => ({ value, label }))
-})
 const permissionByCode = computed(() => {
   const out = new Map<string, PermissionDefinition>()
   for (const item of props.permissionState?.catalog.permissions || []) out.set(item.code, item)
   return out
+})
+const inheritedPermissionItems = computed(() => {
+  const inherited = new Set<string>()
+  for (const role of props.permissionState?.catalog.roles || []) {
+    if (!roleIds.value.has(role.id)) continue
+    for (const code of role.permissions) {
+      if (overrideMap.value.has(code)) continue
+      if (!effectivePermissions.value.has(code)) continue
+      inherited.add(code)
+    }
+  }
+  return [...inherited].sort().map((code) => ({
+    code,
+    label: permissionByCode.value.get(code)?.description || code,
+  }))
 })
 const overrideTagItems = computed(() =>
   (props.permissionState?.overrides || []).map((item) => ({
@@ -421,37 +396,19 @@ const canAddSelectedPermission = computed(() => {
   if (selectedPermissionEffect.value === 'deny' && !canRevokePermission.value) return false
   return !permissionControlDisabled(selectedPermission.value)
 })
-const filteredPermissions = computed(() => {
-  const keyword = permissionSearch.value.trim().toLowerCase()
-  return (props.permissionState?.catalog.permissions || []).filter((item) => {
-    if (resourceFilter.value && item.resource !== resourceFilter.value) return false
-    if (!keyword) return true
-    return (
-      item.code.toLowerCase().includes(keyword) ||
-      item.description.toLowerCase().includes(keyword) ||
-      item.resource_description.toLowerCase().includes(keyword)
-    )
-  })
-})
 
 watch(visible, (open) => {
   if (!open) {
-    permissionSearch.value = ''
-    resourceFilter.value = ''
     selectedRoleId.value = ''
     selectedPermissionCode.value = ''
     selectedPermissionEffect.value = 'allow'
   }
 })
 
-function hasRole(roleId: string) {
-  return roleIds.value.has(roleId)
-}
-
 function roleTagClosable(role: PermissionRole) {
   if (role.id === 'user') return false
-  if (props.isSelf && role.protected) return true
-  if (role.protected && !canManageProtected.value) return true
+  if (props.isSelf && role.protected) return false
+  if (role.protected && !canManageProtected.value) return false
   return canRevokePermission.value
 }
 
