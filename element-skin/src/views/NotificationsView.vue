@@ -7,14 +7,12 @@
           <p>查看与你相关的站内消息和公告</p>
         </div>
       </div>
-      <div class="page-header-actions">
-        <el-radio-group v-model="readScope" @change="refreshFirstPage">
+      <ActionBar full align="start">
+        <UiSegmented v-model="readScope" @change="refreshFirstPage">
           <el-radio-button value="all">全部</el-radio-button>
           <el-radio-button value="unread">未读</el-radio-button>
-        </el-radio-group>
-        <el-select v-model="noticeType" class="w-[128px]" @change="refreshFirstPage">
-          <el-option label="公告" value="announcement" />
-        </el-select>
+        </UiSegmented>
+        <el-tag size="large" type="info">公告</el-tag>
         <el-button
           :icon="Refresh"
           :loading="loading"
@@ -24,7 +22,7 @@
         >
           刷新
         </el-button>
-      </div>
+      </ActionBar>
     </div>
 
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-[420px_minmax(0,1fr)]">
@@ -163,9 +161,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
+import ActionBar from '@/components/common/ActionBar.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiSegmented from '@/components/ui/UiSegmented.vue'
 import { dismissNotice, getNotice, getNotices } from '@/api/notices'
-import type { NoticeLevel, NoticeType, NoticeView } from '@/api/types'
+import type { NoticeLevel, NoticeView } from '@/api/types'
 import { renderMarkdown } from '@/utils/markdown'
 
 const route = useRoute()
@@ -181,7 +181,6 @@ const nextCursor = ref<string | null>(null)
 const listScrollRef = ref<HTMLElement | null>(null)
 const loadMoreRef = ref<HTMLElement | null>(null)
 const readScope = ref<'all' | 'unread'>('all')
-const noticeType = ref<NoticeType>('announcement')
 const limit = 20
 let loadObserver: IntersectionObserver | null = null
 
@@ -263,7 +262,7 @@ async function loadNotices() {
     const res = await getNotices({
       cursor: null,
       limit,
-      type: noticeType.value,
+      type: 'announcement',
       include_read: readScope.value === 'all',
     })
     notices.value = res.data.items
@@ -299,7 +298,7 @@ async function loadMoreNotices() {
     const res = await getNotices({
       cursor: nextCursor.value,
       limit,
-      type: noticeType.value,
+      type: 'announcement',
       include_read: readScope.value === 'all',
     })
     const existing = new Set(notices.value.map((notice) => notice.id))
