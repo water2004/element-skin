@@ -271,6 +271,7 @@ func TestSetSubjectPermissionOverrideAllowEffect(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user := testutil.CreateUser(t, db, "override-allow@test.com", "pw", "OverrideAllow", false)
+	admin := testutil.CreateUser(t, db, "override-admin@test.com", "pw", "OverrideAdmin", true)
 	allowDef := core.MustDefinitionByCode("notice.create.any")
 	before, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
 	if err != nil {
@@ -279,7 +280,8 @@ func TestSetSubjectPermissionOverrideAllowEffect(t *testing.T) {
 	if has(before, allowDef.Code) {
 		t.Fatal("normal user should not have notice.create.any before override")
 	}
-	if err := db.Permissions.SetSubjectPermissionOverride(ctx, user.ID, allowDef, "allow", "user:admin-1"); err != nil {
+	grantorSubjectID := permissiondb.SubjectIDForUser(admin.ID)
+	if err := db.Permissions.SetSubjectPermissionOverride(ctx, user.ID, allowDef, "allow", grantorSubjectID); err != nil {
 		t.Fatal(err)
 	}
 	after, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
@@ -289,7 +291,7 @@ func TestSetSubjectPermissionOverrideAllowEffect(t *testing.T) {
 	if !has(after, allowDef.Code) {
 		t.Fatal("allow override should grant notice.create.any")
 	}
-	if err := db.Permissions.SetSubjectPermissionOverride(ctx, user.ID, allowDef, "deny", ""); err != nil {
+	if err := db.Permissions.SetSubjectPermissionOverride(ctx, user.ID, allowDef, "deny", grantorSubjectID); err != nil {
 		t.Fatal(err)
 	}
 	afterDeny, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
