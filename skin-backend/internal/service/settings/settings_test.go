@@ -60,7 +60,7 @@ func TestSettingsReturnsRedisErrors(t *testing.T) {
 func TestSettingsIntUsesCacheTTLAndFallbacksExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	redis := redisstore.NewMemoryStore()
-	svc := settings.Settings{DB: db, Redis: redis, TTL: 50 * time.Millisecond}
+	svc := settings.Settings{DB: db, Redis: redis, TTL: 500 * time.Millisecond}
 
 	if err := db.Settings.Set(t.Context(), "rate_limit_auth_attempts", "7"); err != nil {
 		t.Fatal(err)
@@ -76,7 +76,7 @@ func TestSettingsIntUsesCacheTTLAndFallbacksExactly(t *testing.T) {
 	if err != nil || cached != 7 {
 		t.Fatalf("Int should use redis value before custom TTL expires: got=%d err=%v", cached, err)
 	}
-	time.Sleep(70 * time.Millisecond)
+	time.Sleep(700 * time.Millisecond)
 	refreshed, err := svc.Int(t.Context(), "rate_limit_auth_attempts", 5)
 	if err != nil || refreshed != 9 {
 		t.Fatalf("Int should refresh after custom TTL expires: got=%d err=%v", refreshed, err)

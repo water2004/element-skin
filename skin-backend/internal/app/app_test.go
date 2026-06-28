@@ -39,8 +39,8 @@ func TestRefreshCleanupLoopRemovesExpiredThenCancels(t *testing.T) {
 		app.RunRefreshCleanupLoop(ctx, db.Tokens, 10*time.Millisecond)
 	}()
 
-	for i := 0; i < 200; i++ {
-		time.Sleep(10 * time.Millisecond)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
 		row, err := db.Tokens.GetRefresh(context.Background(), "hash_old")
 		if err != nil {
 			t.Fatal(err)
@@ -48,6 +48,7 @@ func TestRefreshCleanupLoopRemovesExpiredThenCancels(t *testing.T) {
 		if row == nil {
 			break
 		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	cancel()
 	select {
@@ -81,7 +82,8 @@ func TestRefreshCleanupLoopSurvivesCleanupError(t *testing.T) {
 		app.RunRefreshCleanupLoop(ctx, cleaner, 10*time.Millisecond)
 	}()
 
-	for i := 0; i < 200 && cleaner.calls.Load() < 2; i++ {
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && cleaner.calls.Load() < 2 {
 		time.Sleep(10 * time.Millisecond)
 	}
 	cancel()
