@@ -49,6 +49,13 @@ func CurrentUserID(req *http.Request) string {
 	return CurrentActor(req).UserID
 }
 
+func RequirePermission(req *http.Request, def permission.Definition) error {
+	if CurrentActor(req).Has(def) {
+		return nil
+	}
+	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+}
+
 func AsMap(v any) map[string]any {
 	if v == nil {
 		return nil

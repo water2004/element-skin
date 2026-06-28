@@ -6,11 +6,18 @@ import (
 	"time"
 
 	"element-skin/backend/internal/database"
+	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/model"
+	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/redisstore"
 )
 
 const joinSessionTTL = 30 * time.Second
+
+var (
+	yggJoinPermission      = permission.MustDefinitionByCode("yggdrasil_server.join.bound_profile")
+	yggHasJoinedPermission = permission.MustDefinitionByCode("yggdrasil_server.hasjoined.bound_profile")
+)
 
 func (y Yggdrasil) Join(ctx context.Context, access, profileID, serverID, ip string) error {
 	t, err := y.Redis.GetYggToken(ctx, access)
@@ -29,6 +36,18 @@ func (y Yggdrasil) Join(ctx context.Context, access, profileID, serverID, ip str
 	}
 	if !owned {
 		return yggErr(403, "ForbiddenOperationException", "Invalid token.")
+	}
+	actor, err := y.DB.Permissions.ActorForUser(ctx, t.UserID, permissiondb.EffectiveOptions{
+		SessionKind:    permission.SessionKindYggdrasil,
+		Entrypoint:     permission.EntrypointYggdrasil,
+		ApplyBanPolicy: true,
+	})
+	if err != nil {
+		return err
+	}
+	actor.BoundProfileID = profileID
+	if !actor.Has(yggJoinPermission) {
+		return yggErr(403, "ForbiddenOperationException", "Permission denied.")
 	}
 	return y.Redis.SetYggSession(ctx, model.Session{ServerID: serverID, AccessToken: access, IP: &ip, CreatedAt: database.NowMS()}, joinSessionTTL)
 }
@@ -61,10 +80,16 @@ func (y Yggdrasil) HasJoined(ctx context.Context, username, serverID string) (ma
 	if p == nil || p.UserID != t.UserID || p.Name != username {
 		return nil, 204, nil
 	}
-	if banned, err := y.DB.Users.IsBanned(ctx, p.UserID); err != nil {
+	actor, err := y.DB.Permissions.ActorForUser(ctx, t.UserID, permissiondb.EffectiveOptions{
+		SessionKind: permission.SessionKindYggdrasil,
+		Entrypoint:  permission.EntrypointYggdrasil,
+	})
+	if err != nil {
 		return nil, 0, err
-	} else if banned {
-		return nil, 0, yggErr(403, "ForbiddenOperationException", "Account is banned. Please contact administrator.")
+	}
+	actor.BoundProfileID = p.ID
+	if !actor.Has(yggHasJoinedPermission) {
+		return nil, 0, yggErr(403, "ForbiddenOperationException", "Permission denied.")
 	}
 	body, err := y.ProfileJSON(*p, true)
 	if err != nil {

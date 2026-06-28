@@ -143,7 +143,7 @@ func TestYggdrasilHasJoinedMissesExpiredUnboundAndDeletedProfile(t *testing.T) {
 	}
 }
 
-func TestYggdrasilHasJoinedRejectsBannedUserExactly(t *testing.T) {
+func TestYggdrasilJoinRejectsBannedUserByPermissionExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 	user := testutil.CreateUser(t, db, "ygg-banned@test.com", "Password123", "YggBanned", false)
@@ -155,19 +155,16 @@ func TestYggdrasilHasJoinedRejectsBannedUserExactly(t *testing.T) {
 	if err := redis.SetYggToken(ctx, model.Token{AccessToken: "banned_access", ClientToken: "client", UserID: user.ID, ProfileID: &profileID, CreatedAt: database.NowMS()}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if err := redis.SetYggSession(ctx, model.Session{ServerID: "server_banned", AccessToken: "banned_access", CreatedAt: database.NowMS()}, time.Minute); err != nil {
-		t.Fatal(err)
-	}
 	if err := db.Users.Ban(ctx, user.ID, time.Now().Add(time.Hour).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
 
-	body, status, err := ygg.HasJoined(ctx, profile.Name, "server_banned")
-	if err == nil || !strings.Contains(err.Error(), "Account is banned") {
-		t.Fatalf("banned user should be rejected with exact error, status=%d body=%#v err=%v", status, body, err)
+	err := ygg.Join(ctx, "banned_access", profile.ID, "server_banned", "127.0.0.1")
+	if err == nil || !strings.Contains(err.Error(), "Permission denied.") {
+		t.Fatalf("banned user should be rejected by join permission exactly, got %v", err)
 	}
-	if body != nil || status != 0 {
-		t.Fatalf("banned hasJoined should not return a success body/status: status=%d body=%#v", status, body)
+	if session, err := redis.GetYggSession(ctx, "server_banned"); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("failed banned join must not create a session: session=%#v err=%v", session, err)
 	}
 }
 
