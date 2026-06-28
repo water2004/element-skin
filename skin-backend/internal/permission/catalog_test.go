@@ -53,3 +53,133 @@ func TestCatalogCodesAreStrictTriplesAndIDsMatchParts(t *testing.T) {
 		t.Fatalf("yggdrasil_server.join.bound_profile is missing")
 	}
 }
+
+func TestRolesOnlyReferenceKnownDefinitions(t *testing.T) {
+	for _, role := range permission.Roles {
+		for _, def := range role.Permissions {
+			if !def.ID.Valid() {
+				t.Fatalf("role %q references invalid permission id: code=%q id=%#x", role.ID, def.Code, uint64(def.ID))
+			}
+		}
+	}
+}
+
+func TestSessionPoliciesOnlyReferenceKnownDefinitions(t *testing.T) {
+	for _, policy := range permission.SessionPolicies {
+		for _, def := range policy.Permissions {
+			if !def.ID.Valid() {
+				t.Fatalf("session policy %q/%q references invalid permission id: code=%q id=%#x",
+					policy.SessionKind, policy.Entrypoint, def.Code, uint64(def.ID))
+			}
+		}
+	}
+}
+
+func TestUserRoleDoesNotIncludeAdminScopedPermissions(t *testing.T) {
+	userRole := roleByID(permission.RoleUser)
+	if userRole == nil {
+		t.Fatal("user role not found")
+	}
+	adminCodes := map[string]bool{
+		"account.ban.any":            true,
+		"account.unban.any":          true,
+		"account.read.any":           true,
+		"account.update.any":         true,
+		"account.delete.any":         true,
+		"profile.read.any":           true,
+		"profile.update.any":         true,
+		"profile.delete.any":         true,
+		"texture.read.any":           true,
+		"texture.update_metadata.any": true,
+		"texture.update_visibility.any": true,
+		"texture.delete.any":         true,
+		"notice.create.any":          true,
+		"notice.update.any":          true,
+		"notice.delete.any":          true,
+		"permission.grant.any":       true,
+		"permission.revoke.any":      true,
+	}
+	for _, def := range userRole.Permissions {
+		if adminCodes[def.Code] {
+			t.Fatalf("user role should not include admin permission %q", def.Code)
+		}
+	}
+}
+
+func TestAdminRoleDoesNotIncludeSuperAdminOrSystemPermissions(t *testing.T) {
+	adminRole := roleByID(permission.RoleAdmin)
+	if adminRole == nil {
+		t.Fatal("admin role not found")
+	}
+	superAdminCodes := map[string]bool{
+		"permission_protected.manage.any": true,
+		"permission_role.create.any":      true,
+		"permission_role.update.any":      true,
+		"permission_role.delete.any":      true,
+	}
+	systemCodes := map[string]bool{
+		"notice.delete.system":           true,
+		"yggdrasil_session.delete.system": true,
+		"audit.archive.system":           true,
+		"cache.invalidate.system":        true,
+	}
+	for _, def := range adminRole.Permissions {
+		if superAdminCodes[def.Code] {
+			t.Fatalf("admin role should not include super-admin permission %q", def.Code)
+		}
+		if systemCodes[def.Code] {
+			t.Fatalf("admin role should not include system-scope permission %q", def.Code)
+		}
+	}
+}
+
+func TestWebSessionPolicyIncludesAllNonSystemDefinitions(t *testing.T) {
+	for _, policy := range permission.SessionPolicies {
+		if policy.SessionKind != permission.SessionKindWeb {
+			continue
+		}
+		policyCodes := make(map[string]bool, len(policy.Permissions))
+		for _, def := range policy.Permissions {
+			policyCodes[def.Code] = true
+		}
+		for _, def := range permission.Definitions {
+			if def.Scope.ID == permission.ScopeSystem {
+				if policyCodes[def.Code] {
+					t.Fatalf("web session policy %q should not include system permission %q",
+						policy.Entrypoint, def.Code)
+				}
+				continue
+			}
+			if !policyCodes[def.Code] {
+				t.Fatalf("web session policy %q missing non-system permission %q",
+					policy.Entrypoint, def.Code)
+			}
+		}
+	}
+}
+
+func TestYggdrasilSessionPolicyOnlyIncludesYggdrasilOperations(t *testing.T) {
+	for _, policy := range permission.SessionPolicies {
+		if policy.SessionKind != permission.SessionKindYggdrasil {
+			continue
+		}
+		for _, def := range policy.Permissions {
+			if def.Resource.ID != permission.ResourceYggdrasilSession &&
+				def.Resource.ID != permission.ResourceYggdrasilServer &&
+				def.Resource.ID != permission.ResourceProfile &&
+				def.Resource.ID != permission.ResourceTexture {
+				t.Fatalf("yggdrasil session policy includes unexpected resource %q: %s",
+					def.Resource.Code, def.Code)
+			}
+		}
+	}
+}
+
+func roleByID(id string) *permission.Role {
+	for _, role := range permission.Roles {
+		if role.ID == id {
+			return &role
+		}
+	}
+	return nil
+}
