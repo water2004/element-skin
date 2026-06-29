@@ -126,6 +126,9 @@ func (s Store) effectivePermissionsForSubject(ctx context.Context, subjectID str
 }
 
 func (s Store) sessionPolicy(ctx context.Context, sessionKind, entrypoint string) (core.BitSet, error) {
+	if cached, ok := s.cachedSessionPolicy(sessionKind, entrypoint); ok {
+		return cached.Clone(), nil
+	}
 	policy := core.NewBitSet(len(core.Definitions))
 	rows, err := s.conn().Query(ctx, `
 		SELECT p.bit_index

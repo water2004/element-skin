@@ -279,19 +279,24 @@ func TestActorForUserWithDelegationFieldsExactly(t *testing.T) {
 	}
 }
 
-func TestSessionPolicyReturnsErrorOnMissingTable(t *testing.T) {
+func TestSessionPolicyUsesCacheNotDatabase(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
-	user := testutil.CreateUser(t, db, "session-policy-err@test.com", "pw", "SessionPolicyErr", false)
+	user := testutil.CreateUser(t, db, "session-policy-cache@test.com", "pw", "SessionPolicyCache", false)
 
 	if _, err := db.Pool.Exec(ctx, `DROP TABLE session_permission_policies CASCADE`); err != nil {
 		t.Fatal(err)
 	}
-	_, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{
+	bits, err := db.Permissions.EffectivePermissionsForUser(ctx, user.ID, permissiondb.EffectiveOptions{
 		SessionKind: core.SessionKindWeb,
 		Entrypoint:  core.EntrypointDashboard,
 	})
-	assertPostgresError(t, err, "42P01")
+	if err != nil {
+		t.Fatalf("session policy should use in-memory cache, not DB: %v", err)
+	}
+	if !has(bits, "profile.create.owned") {
+		t.Fatal("cached web session policy should include profile.create.owned")
+	}
 }
 
 func TestDelegationPolicyReturnsErrorOnMissingTable(t *testing.T) {
