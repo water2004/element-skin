@@ -38,6 +38,8 @@ yggdrasil.db-wal
 *.log
 .pytest_cache/
 coverage/
+coverage.out
+cover*.out
 
 ### IDEs
 .vscode/
@@ -70,6 +72,7 @@ node_modules/
 .history/
 
 .gemini/
+.claude/
 .sisyphus/
 skills/
 .playwright-mcp/
