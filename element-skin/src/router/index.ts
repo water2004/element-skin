@@ -25,7 +25,9 @@ import AdminEasterEggs from '@/components/admin/AdminEasterEggs.vue'
 import AdminTexturesList from '@/components/admin/AdminTexturesList.vue'
 import AdminRolesList from '@/components/admin/AdminRolesList.vue'
 import AdminNotices from '@/components/admin/AdminNotices.vue'
+import { getMe } from '@/api/me'
 import { installEasterEggRouterHooks } from '@/easter-eggs'
+import { canAccessAdminPath, firstAccessibleAdminPath } from '@/permissions/adminPages'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -53,7 +55,6 @@ const router = createRouter({
     {
       path: '/admin',
       component: AdminView,
-      redirect: '/admin/settings',
       children: [
         {
           path: 'settings',
@@ -150,6 +151,22 @@ const router = createRouter({
       component: NotificationsView,
     },
   ],
+})
+
+router.beforeEach(async (to) => {
+  if (to.path !== '/admin' && !to.path.startsWith('/admin/')) return true
+
+  try {
+    const res = await getMe()
+    const permissions = res.data.permissions ?? []
+    const firstAdminPath = firstAccessibleAdminPath(permissions)
+    if (!firstAdminPath) return { path: '/dashboard/home' }
+    if (to.path === '/admin' || to.path === '/admin/') return { path: firstAdminPath }
+    if (canAccessAdminPath(to.path, permissions)) return true
+    return { path: firstAdminPath }
+  } catch {
+    return { path: '/login' }
+  }
 })
 
 installEasterEggRouterHooks(router)

@@ -6,7 +6,6 @@ import (
 	"element-skin/backend/internal/config"
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/httpapi/shared"
-	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/redisstore"
 	adminsvc "element-skin/backend/internal/service/admin"
 	noticesvc "element-skin/backend/internal/service/notice"
@@ -36,5 +35,5 @@ func NewWithRedis(cfg config.Config, db *database.DB, redis redisstore.Store, au
 }
 
 func (h Handler) Auth(next http.HandlerFunc) http.HandlerFunc {
-	return h.auth(next, permission.MustDefinitionByCode("user.read.any"))
+	return h.auth(next)
 }

@@ -353,7 +353,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	}
 }
 
-func TestAdminAuthWrapperRequiresAdmin(t *testing.T) {
+func TestAdminAuthWrapperOnlyRequiresAuthenticatedUser(t *testing.T) {
 	var required []permission.Definition
 	h := admin.New(testutil.TestConfig(), nil, func(next http.HandlerFunc, defs ...permission.Definition) http.HandlerFunc {
 		required = defs
@@ -364,7 +364,7 @@ func TestAdminAuthWrapperRequiresAdmin(t *testing.T) {
 	})
 	rec := httptest.NewRecorder()
 	wrapped(rec, httptest.NewRequest(http.MethodGet, "/", nil).WithContext(context.Background()))
-	if rec.Code != http.StatusNoContent || len(required) != 1 || required[0].Code != "user.read.any" {
+	if rec.Code != http.StatusNoContent || len(required) != 0 {
 		t.Fatalf("admin Auth required permissions mismatch: status=%d required=%v", rec.Code, required)
 	}
 }

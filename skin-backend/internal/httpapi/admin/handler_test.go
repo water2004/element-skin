@@ -10,7 +10,7 @@ import (
 	"element-skin/backend/internal/testutil"
 )
 
-func TestHandlerAuthRequestsAdminAccess(t *testing.T) {
+func TestHandlerAuthOnlyRequiresAuthenticatedUser(t *testing.T) {
 	var required []permission.Definition
 	h := admin.New(testutil.TestConfig(), nil, func(next http.HandlerFunc, defs ...permission.Definition) http.HandlerFunc {
 		required = defs
@@ -21,7 +21,7 @@ func TestHandlerAuthRequestsAdminAccess(t *testing.T) {
 	})
 	rec := httptest.NewRecorder()
 	wrapped(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-	if rec.Code != http.StatusNoContent || len(required) != 1 || required[0].Code != "user.read.any" {
+	if rec.Code != http.StatusNoContent || len(required) != 0 {
 		t.Fatalf("admin Auth required permissions mismatch: status=%d required=%v", rec.Code, required)
 	}
 }
