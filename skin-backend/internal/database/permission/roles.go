@@ -34,7 +34,11 @@ func (s Store) RevokeRole(ctx context.Context, userID, roleID string) (bool, err
 	if err != nil {
 		return false, err
 	}
-	return tag.RowsAffected() > 0, nil
+	affected := tag.RowsAffected() > 0
+	if affected && s.Cache != nil {
+		_ = s.Cache.DeleteEffective(ctx, SubjectIDForUser(userID))
+	}
+	return affected, nil
 }
 
 func (s Store) GrantInitialSuperAdminIfNone(ctx context.Context, userID string) (bool, error) {

@@ -71,5 +71,9 @@ func (s Store) ClearSubjectPermissionOverride(ctx context.Context, userID string
 	if err != nil {
 		return false, err
 	}
-	return tag.RowsAffected() > 0, nil
+	affected := tag.RowsAffected() > 0
+	if affected && s.Cache != nil {
+		_ = s.Cache.DeleteEffective(ctx, SubjectIDForUser(userID))
+	}
+	return affected, nil
 }
