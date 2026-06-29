@@ -132,9 +132,9 @@ carousel:
 server:
   host: "0.0.0.0"
   port: 8000
-  # ⚠️ 站点的外部访问地址
+  # ⚠️ 站点的外部访问地址，用于页面、OAuth 回调和 /static/textures 材质静态文件
   site_url: "http://yourdomain.com" 
-  # ⚠️ 后端 API 外部访问地址
+  # ⚠️ 后端 API 外部访问地址，用于 Yggdrasil/Authlib API 入口
   api_url: "http://yourdomain.com/skinapi" 
 
 # CORS 跨域配置

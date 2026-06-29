@@ -38,8 +38,8 @@ carousel:
 server:
   host: "0.0.0.0"
   port: 8000
-  site_url: "http://localhost:5173" # 前端站点外部访问地址 (用于 OAuth 回调等)
-  api_url: "http://localhost:8000"  # 后端 API 外部访问地址 (用于 Yggdrasil 材质 URL)
+  site_url: "http://localhost:5173" # 前端站点外部访问地址 (用于 OAuth 回调、材质静态文件等)
+  api_url: "http://localhost:8000"  # 后端 API 外部访问地址 (用于 Yggdrasil/Authlib API 入口)
   debug: true  # 开启后会输出所有HTTP请求和响应的详细信息（包括图片请求），用于调试
 
 # CORS 跨域配置

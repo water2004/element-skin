@@ -54,9 +54,9 @@ func TestYggdrasilProfileJSONExactTexturePayload(t *testing.T) {
 	}
 	textures := payload["textures"].(map[string]any)
 	skinPayload := textures["SKIN"].(map[string]any)
-	if skinPayload["url"] != "https://api.example/skinapi/static/textures/skin_hash.png" ||
+	if skinPayload["url"] != "https://skin.example/root/static/textures/skin_hash.png" ||
 		skinPayload["metadata"].(map[string]any)["model"] != "slim" ||
-		textures["CAPE"].(map[string]any)["url"] != "https://api.example/skinapi/static/textures/cape_hash.png" {
+		textures["CAPE"].(map[string]any)["url"] != "https://skin.example/root/static/textures/cape_hash.png" {
 		t.Fatalf("unexpected textures payload: %#v", textures)
 	}
 	verifySignature(t, cfg.PublicKeyPath, textureProp["value"].(string), textureProp["signature"].(string))

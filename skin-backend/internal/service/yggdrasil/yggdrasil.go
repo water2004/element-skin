@@ -40,8 +40,8 @@ func (y Yggdrasil) settings() settingssvc.Settings {
 }
 
 func (y Yggdrasil) publicTextureBaseURL() string {
-	if y.Cfg.APIURL != "" {
-		return y.Cfg.APIURL
+	if y.Cfg.SiteURL != "" {
+		return y.Cfg.SiteURL
 	}
-	return y.Cfg.SiteURL
+	return y.Cfg.APIURL
 }
