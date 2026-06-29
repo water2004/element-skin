@@ -252,6 +252,9 @@ func TestEnsureUserSubjectConstraintError(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user := testutil.CreateUser(t, db, "constraint-err@test.com", "pw", "ConstraintErr", false)
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM permission_subjects WHERE id=$1`, permissiondb.SubjectIDForUser(user.ID)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Pool.Exec(ctx, `ALTER TABLE permission_subjects ADD CONSTRAINT always_reject CHECK (FALSE) NOT VALID`); err != nil {
 		t.Fatal(err)
 	}
