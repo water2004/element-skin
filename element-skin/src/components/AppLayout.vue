@@ -171,68 +171,33 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  ref,
-  onMounted,
-  onUnmounted,
-  provide,
-  watch,
-  nextTick,
-  type Component,
-} from 'vue'
+import { computed, ref, onMounted, onUnmounted, provide, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getPublicSettings } from '@/api/public'
 import { getMe } from '@/api/me'
 import { siteLogout } from '@/api/auth'
 import type { User as UserType } from '@/api/types'
-import {
-  Menu as MenuIcon,
-  Box,
-  User,
-  Setting,
-  Tools,
-  Back,
-  Odometer,
-  Link,
-  Picture,
-  Message,
-  Bell,
-  Moon,
-  Sunny,
-  MagicStick,
-} from '@element-plus/icons-vue'
+import { Menu as MenuIcon, Moon, Sunny } from '@element-plus/icons-vue'
 
 import { useAvatar } from '@/composables/useAvatar'
 import { useNotificationIndicator } from '@/composables/useNotificationIndicator'
-import { canAccessAdminPath, hasAnyAdminPagePermission } from '@/permissions/adminPages'
-import { canAccessSitePath } from '@/permissions/sitePages'
 import { appStorage } from '@/storage'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import {
+  buildDefaultOpeneds,
+  buildDrawerLinks,
+  buildNavLinks,
+  canAccessAdmin as canAccessAdminPanel,
+  type DrawerLink,
+  type NavLink,
+} from '@/components/layout/appNavigation'
 import {
   cleanupEasterEgg,
   installEasterEggDevTools,
   refreshEasterEgg,
   setServerEasterEggConfig,
 } from '@/easter-eggs'
-
-interface NavLink {
-  type?: 'item' | 'group'
-  path?: string
-  index?: string
-  trigger?: 'hover' | 'click'
-  title?: string
-  icon?: Component
-  children?: NavLink[]
-}
-
-interface DrawerLink {
-  isDivider?: boolean
-  path?: string
-  title?: string
-  icon?: Component
-}
 
 const { currentAvatarImg: customAvatar, initializeAvatar } = useAvatar()
 const { hasUnreadNotifications, refreshUnreadNotifications, clearUnreadNotifications } =
@@ -295,131 +260,26 @@ provide('authReady', authReady)
 provide('isDark', isDark)
 provide('footerHeight', footerHeight)
 
-const dashboardLinks: NavLink[] = [
-  { path: '/dashboard/home', title: '仪表盘', icon: Odometer },
-  { path: '/notifications', title: '通知中心', icon: Bell },
-  { path: '/dashboard/wardrobe', title: '我的衣柜', icon: Box },
-  { path: '/dashboard/roles', title: '角色管理', icon: User },
-  { path: '/dashboard/profile', title: '个人资料', icon: Setting },
-]
 const isLogged = computed(() => !!user.value)
 const userPermissions = computed(() => user.value?.permissions || [])
-const canAccessAdmin = computed(() => hasAnyAdminPagePermission(userPermissions.value))
-const canAccessSiteLink = (item: NavLink | DrawerLink) =>
-  !!item.path && canAccessSitePath(item.path, userPermissions.value)
-const accessibleDashboardLinks = computed(() => dashboardLinks.filter((item) => canAccessSiteLink(item)))
-const adminNavLinks: NavLink[] = [
-  { path: '/dashboard', title: '返回面板', icon: Back },
-  { path: '/admin/users', title: '用户管理', icon: User },
-  { path: '/admin/roles', title: '角色管理', icon: User },
-  { path: '/admin/textures', title: '材质管理', icon: Box },
-  { path: '/admin/invites', title: '邀请码管理', icon: Tools },
-  { path: '/admin/settings', title: '站点设置', icon: Setting },
-  { path: '/admin/email', title: '邮件服务', icon: Message },
-  { path: '/admin/notices', title: '通知公告', icon: Bell },
-  { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
-  { path: '/admin/homepage-media', title: '首页图片', icon: Picture },
-  { path: '/admin/easter-eggs', title: '彩蛋列表', icon: MagicStick },
-]
-
-const canAccessAdminLink = (item: NavLink | DrawerLink) =>
-  item.path === '/dashboard' ||
-  (!!item.path && canAccessAdminPath(item.path, userPermissions.value))
-
-const filterAdminLinks = <T extends NavLink | DrawerLink>(items: T[]) =>
-  items.filter((item) => canAccessAdminLink(item))
-
-const adminNavItems = computed<NavLink[]>(() => {
-  const contentChildren = filterAdminLinks([
-    { path: '/admin/users', title: '用户管理', icon: User },
-    { path: '/admin/roles', title: '角色管理', icon: User },
-    { path: '/admin/textures', title: '材质管理', icon: Box },
-  ])
-  const directItems = filterAdminLinks([
-    { type: 'item', path: '/admin/invites', title: '邀请码管理', icon: Tools },
-    { type: 'item', path: '/admin/settings', title: '站点设置', icon: Setting },
-  ])
-  const configChildren = filterAdminLinks([
-    { path: '/admin/email', title: '邮件服务', icon: Message },
-    { path: '/admin/notices', title: '通知公告', icon: Bell },
-    { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
-    { path: '/admin/homepage-media', title: '首页图片', icon: Picture },
-    { path: '/admin/easter-eggs', title: '彩蛋列表', icon: MagicStick },
-  ])
-
-  return [
-    { type: 'item', path: '/dashboard', title: '返回面板', icon: Back },
-    ...(contentChildren.length
-      ? [
-          {
-            type: 'group' as const,
-            index: 'admin-content-group',
-            title: '用户与内容',
-            trigger: 'click' as const,
-            children: contentChildren,
-          },
-        ]
-      : []),
-    ...directItems,
-    ...(configChildren.length
-      ? [
-          {
-            type: 'group' as const,
-            index: 'admin-config-group',
-            title: '更多设置',
-            trigger: 'click' as const,
-            children: configChildren,
-          },
-        ]
-      : []),
-  ]
-})
-
-const defaultOpeneds = computed(() => {
-  const path = route.path
-  const opened: string[] = []
-  if (['/admin/users', '/admin/roles', '/admin/textures'].some((p) => path.startsWith(p))) {
-    opened.push('admin-content-group')
-  }
-  if (
-    [
-      '/admin/email',
-      '/admin/notices',
-      '/admin/mojang',
-      '/admin/homepage-media',
-      '/admin/easter-eggs',
-    ].some((p) => path.startsWith(p))
-  ) {
-    opened.push('admin-config-group')
-  }
-  return opened
-})
+const canAccessAdmin = computed(() => canAccessAdminPanel(userPermissions.value))
+const defaultOpeneds = computed(() => buildDefaultOpeneds(route.path))
 
 const navLinks = computed<NavLink[]>(() => {
-  if (route.path.startsWith('/admin')) return adminNavItems.value
-  const links: NavLink[] = []
-  if (isLogged.value) {
-    if (enableSkinLibrary.value && canAccessSitePath('/skin-library', userPermissions.value))
-      links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
-    links.push(...accessibleDashboardLinks.value)
-    if (canAccessAdmin.value) links.push({ path: '/admin', title: '管理面板', icon: Tools })
-  }
-  return links
+  return buildNavLinks({
+    path: route.path,
+    isLogged: isLogged.value,
+    enableSkinLibrary: enableSkinLibrary.value,
+    userPermissions: userPermissions.value,
+  })
 })
 
 const drawerLinks = computed<DrawerLink[]>(() => {
-  const links: DrawerLink[] = []
-  if (isLogged.value) {
-    if (enableSkinLibrary.value && canAccessSitePath('/skin-library', userPermissions.value))
-      links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
-    links.push({ isDivider: true })
-    links.push(...accessibleDashboardLinks.value)
-    if (canAccessAdmin.value) {
-      links.push({ isDivider: true })
-      links.push(...filterAdminLinks(adminNavLinks))
-    }
-  }
-  return links
+  return buildDrawerLinks({
+    isLogged: isLogged.value,
+    enableSkinLibrary: enableSkinLibrary.value,
+    userPermissions: userPermissions.value,
+  })
 })
 
 const activeRoute = computed(() => route.path)
@@ -428,7 +288,9 @@ const repoUrl = 'https://github.com/water2004/element-skin'
 // REPAIRED: Correct version number display
 const repoLabel = `Element Skin ${typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'v1.3.0'}`
 
-const isSuperAdmin = computed(() => userPermissions.value.includes('permission_protected.manage.any'))
+const isSuperAdmin = computed(() =>
+  userPermissions.value.includes('permission_protected.manage.any'),
+)
 const accountRoleLabel = computed(() =>
   isSuperAdmin.value ? '超级管理员' : canAccessAdmin.value ? '管理员' : '普通用户',
 )
