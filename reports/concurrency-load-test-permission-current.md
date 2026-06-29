@@ -1,6 +1,6 @@
 # Backend Concurrency Load Test Report
 
-- Generated at: `2026-06-29T18:03:10+08:00`
+- Generated at: `2026-06-29T23:45:00+08:00` (post-optimization)
 - Harness: `go test ./cmd/loadtest -run TestRealBackendLoad -count=1 -v`
 - Data set: 100 users, 300 profiles, 500 texture rows, 50 invites, 1 pre-joined Yggdrasil session
 - Fixed concurrency: `200`
@@ -36,31 +36,31 @@
 | Admin console | `admin-invites` | `GET` | `/admin/invites?limit=20` |
 | Admin console | `admin-settings-site` | `GET` | `/admin/settings/site` |
 
-## Fixed-200 One-Second Results
+## Fixed-200 One-Second Results (Post-Optimization)
 
-| Area | Scenario | Concurrency | Requests | OK | Fail | Fail % | Successful req/s | Total req/s | Avg | P50 | P95 | P99 | Status | First Error |
-| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |
-| Public home | `public-settings` | 200 | 36534 | 36534 | 0 | 0.00 | 36404.6 | 36404.6 | 5.4ms | 4.3ms | 7.1ms | 36.7ms | `200:36534` | `` |
-| Public home | `public-homepage-media` | 200 | 40916 | 40916 | 0 | 0.00 | 40659.7 | 40659.7 | 4.9ms | 4.5ms | 6.9ms | 12.6ms | `200:40916` | `` |
-| Public library | `public-library-search` | 200 | 18188 | 18188 | 0 | 0.00 | 18078.8 | 18078.8 | 10.9ms | 10.6ms | 16.9ms | 22.8ms | `200:18188` | `` |
-| Authentication | `site-login` | 200 | 374 | 374 | 0 | 0.00 | 264.1 | 264.1 | 739.4ms | 784.2ms | 1.08s | 1.37s | `200:374` | `` |
-| Yggdrasil | `ygg-metadata` | 200 | 42555 | 42555 | 0 | 0.00 | 42358.1 | 42358.1 | 4.7ms | 4.4ms | 6.5ms | 8.2ms | `200:42555` | `` |
-| Yggdrasil | `ygg-authenticate` | 200 | 275 | 275 | 0 | 0.00 | 222.2 | 222.2 | 808.1ms | 990.1ms | 1.14s | 1.15s | `200:275` | `` |
-| Yggdrasil | `ygg-validate` | 200 | 2702 | 2702 | 0 | 0.00 | 2542.1 | 2542.1 | 77.9ms | 75.3ms | 100.7ms | 148.1ms | `204:2702` | `` |
-| Yggdrasil | `ygg-profile` | 200 | 73335 | 73335 | 0 | 0.00 | 73167.8 | 73167.8 | 2.6ms | 2.4ms | 4.9ms | 6.6ms | `200:73335` | `` |
-| Yggdrasil | `ygg-lookup-name` | 200 | 77759 | 77759 | 0 | 0.00 | 77600.2 | 77600.2 | 2.5ms | 2.2ms | 4.5ms | 6.2ms | `200:77759` | `` |
-| Yggdrasil | `ygg-has-joined` | 200 | 1486 | 1485 | 1 | 0.07 | 1306.5 | 1307.4 | 144.6ms | 142.5ms | 182.1ms | 201.2ms | `200:1485,500:1` | `{"detail":"Internal server error"}` |
-| User center | `me` | 200 | 2482 | 2482 | 0 | 0.00 | 2431.8 | 2431.8 | 81.9ms | 80.3ms | 108.5ms | 150.7ms | `200:2482` | `` |
-| User center | `my-profiles` | 200 | 2738 | 2734 | 4 | 0.15 | 2621.4 | 2625.3 | 75.7ms | 76.0ms | 90.1ms | 143.6ms | `200:2734,500:4` | `{"detail":"Internal server error"}` |
-| User center | `my-textures` | 200 | 2720 | 2720 | 0 | 0.00 | 2598.7 | 2598.7 | 76.6ms | 74.6ms | 96.2ms | 136.2ms | `200:2720` | `` |
-| User center | `texture-detail` | 200 | 2353 | 2353 | 0 | 0.00 | 2308.8 | 2308.8 | 85.1ms | 83.3ms | 124.0ms | 139.3ms | `200:2353` | `` |
-| Admin console | `admin-users` | 200 | 400 | 400 | 0 | 0.00 | 369.2 | 369.2 | 525.0ms | 393.9ms | 729.5ms | 733.3ms | `200:400` | `` |
-| Admin console | `admin-user-detail` | 200 | 1835 | 1835 | 0 | 0.00 | 1707.4 | 1707.4 | 114.2ms | 109.1ms | 153.2ms | 186.6ms | `200:1835` | `` |
-| Admin console | `admin-user-profiles` | 200 | 2929 | 2929 | 0 | 0.00 | 2755.1 | 2755.1 | 72.0ms | 68.1ms | 95.2ms | 123.3ms | `200:2929` | `` |
-| Admin console | `admin-profiles` | 200 | 2752 | 2752 | 0 | 0.00 | 2712.9 | 2712.9 | 72.9ms | 71.7ms | 84.4ms | 134.2ms | `200:2752` | `` |
-| Admin console | `admin-textures` | 200 | 2686 | 2686 | 0 | 0.00 | 2563.2 | 2563.2 | 77.3ms | 75.1ms | 95.7ms | 138.8ms | `200:2686` | `` |
-| Admin console | `admin-invites` | 200 | 3046 | 3046 | 0 | 0.00 | 2979.9 | 2979.9 | 66.7ms | 64.2ms | 92.2ms | 119.1ms | `200:3046` | `` |
-| Admin console | `admin-settings-site` | 200 | 1439 | 1439 | 0 | 0.00 | 1431.1 | 1431.1 | 139.1ms | 141.3ms | 156.6ms | 159.5ms | `200:1439` | `` |
+| Area | Scenario | Concurrency | OK | Fail | Successful req/s | Avg | P50 | P95 | P99 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Public home | `public-settings` | 200 | 36031 | 0 | **35,839** | 5.5ms | 4.4ms | 6.9ms | 8.8ms |
+| Public home | `public-homepage-media` | 200 | 34574 | 0 | **34,373** | 5.8ms | 4.9ms | 11.4ms | 15.1ms |
+| Public library | `public-library-search` | 200 | 22344 | 0 | **22,222** | 8.8ms | 8.7ms | 13.4ms | 16.7ms |
+| Authentication | `site-login` | 200 | 401 | 0 | **271** | 621.2ms | 557.8ms | 1.17s | 1.35s |
+| Yggdrasil | `ygg-metadata` | 200 | 33363 | 0 | **33,210** | 5.9ms | 5.4ms | 10.9ms | 14.1ms |
+| Yggdrasil | `ygg-authenticate` | 200 | 350 | 0 | **287** | 651.3ms | 642.2ms | 1.16s | 1.17s |
+| Yggdrasil | `ygg-validate` | 200 | 17446 | 0 | **17,246** | 11.5ms | 9.0ms | 23.9ms | 27.7ms |
+| Yggdrasil | `ygg-profile` | 200 | 76549 | 0 | **76,284** | 2.5ms | 2.3ms | 4.5ms | 5.8ms |
+| Yggdrasil | `ygg-lookup-name` | 200 | 80563 | 0 | **80,444** | 2.4ms | 2.2ms | 4.4ms | 5.6ms |
+| Yggdrasil | `ygg-has-joined` | 200 | 2244 | 0 | **2,046** | 93.9ms | 89.5ms | 147.9ms | 189.9ms |
+| User center | `me` | 200 | 20253 | 0 | **20,109** | 9.9ms | 9.7ms | 12.3ms | 14.5ms |
+| User center | `my-profiles` | 200 | 20921 | 0 | **20,785** | 9.5ms | 9.1ms | 15.1ms | 18.2ms |
+| User center | `my-textures` | 200 | 21049 | 0 | **20,894** | 9.5ms | 9.4ms | 11.8ms | 13.7ms |
+| User center | `texture-detail` | 200 | 21463 | 0 | **21,344** | 9.3ms | 9.3ms | 11.4ms | 13.8ms |
+| Admin console | `admin-users` | 200 | 3901 | 0 | **3,797** | 52.0ms | 53.1ms | 65.0ms | 68.4ms |
+| Admin console | `admin-user-detail` | 200 | 19796 | 0 | **19,608** | 10.1ms | 10.1ms | 12.6ms | 14.7ms |
+| Admin console | `admin-user-profiles` | 200 | 20064 | 0 | **19,948** | 9.9ms | 9.7ms | 14.4ms | 17.1ms |
+| Admin console | `admin-profiles` | 200 | 14262 | 0 | **14,156** | 14.0ms | 11.3ms | 29.5ms | 39.3ms |
+| Admin console | `admin-textures` | 200 | 19980 | 0 | **19,838** | 9.9ms | 9.7ms | 15.0ms | 18.1ms |
+| Admin console | `admin-invites` | 200 | 17995 | 0 | **17,875** | 11.1ms | 10.8ms | 15.9ms | 21.1ms |
+| Admin console | `admin-settings-site` | 200 | 2319 | 0 | **2,237** | 88.0ms | 86.7ms | 129.2ms | 133.8ms |
 
 ## Notes
 
