@@ -55,18 +55,18 @@ func TestFallbackStatusHTTPSurfacesProbeHistory(t *testing.T) {
 		t.Fatalf("append samples: %v", err)
 	}
 
-	rec := doJSON(t, h, http.MethodGet, "/public/fallback-status", nil)
+	rec := doJSON(t, h, http.MethodGet, "/v1/public/fallback-status", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
 	}
 
 	var body struct {
 		Endpoints []struct {
-			ID      int    `json:"id"`
-			Note    string `json:"note"`
-			Latest  *struct {
-				Session string `json:"session"`
-				Account string `json:"account"`
+			ID     int    `json:"id"`
+			Note   string `json:"note"`
+			Latest *struct {
+				Session  string `json:"session"`
+				Account  string `json:"account"`
 				Services string `json:"services"`
 			} `json:"latest"`
 			History []struct {
@@ -98,22 +98,22 @@ func TestFallbackStatusHTTPSurfacesProbeHistory(t *testing.T) {
 }
 
 func findEndpointByID(list []struct {
-	ID      int    `json:"id"`
-	Note    string `json:"note"`
-	Latest  *struct {
-		Session string `json:"session"`
-		Account string `json:"account"`
+	ID     int    `json:"id"`
+	Note   string `json:"note"`
+	Latest *struct {
+		Session  string `json:"session"`
+		Account  string `json:"account"`
 		Services string `json:"services"`
 	} `json:"latest"`
 	History []struct {
 		Session string `json:"session"`
 	} `json:"history"`
 }, id int) *struct {
-	ID      int    `json:"id"`
-	Note    string `json:"note"`
-	Latest  *struct {
-		Session string `json:"session"`
-		Account string `json:"account"`
+	ID     int    `json:"id"`
+	Note   string `json:"note"`
+	Latest *struct {
+		Session  string `json:"session"`
+		Account  string `json:"account"`
 		Services string `json:"services"`
 	} `json:"latest"`
 	History []struct {

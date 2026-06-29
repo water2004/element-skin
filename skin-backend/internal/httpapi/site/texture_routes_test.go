@@ -30,7 +30,7 @@ func TestTextureRoutesListAndDetailExactResponses(t *testing.T) {
 	if err := db.Textures.AddToLibrary(context.Background(), user.ID, "site_route_hash", "skin", "Site Route Texture", true, "default"); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/me/textures?texture_type=skin", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/me/textures?texture_type=skin", nil)
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.ListMyTextures(rec, req)
@@ -38,7 +38,7 @@ func TestTextureRoutesListAndDetailExactResponses(t *testing.T) {
 		t.Fatalf("list textures response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/me/textures/site_route_hash/skin", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/users/me/textures/site_route_hash/skin", nil)
 	req.SetPathValue("hash", "site_route_hash")
 	req.SetPathValue("texture_type", "skin")
 	req = withUserActor(req, user.ID)
@@ -57,7 +57,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 	user := testutil.CreateUser(t, db, "site-texture-upload@test.com", "Password123", "SiteTextureUpload", false)
 	profile := testutil.CreateProfile(t, db, user.ID, "site_texture_upload_apply", "SiteTextureUploadApply")
 
-	req := textureMultipartRequest(t, "/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
 		"texture_type": "skin",
 		"note":         "Uploaded Route Texture",
 		"is_public":    "true",
@@ -88,7 +88,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req = textureMultipartRequest(t, "/textures/upload", map[string]string{
+	req = textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{
 		"uuid":         profile.ID,
 		"texture_type": "skin",
 		"model":        "slim",
@@ -175,7 +175,7 @@ func TestTextureRoutesAddUpdateDeleteAndApplyExactResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/me/textures/site_route_public_hash/add?texture_type=skin", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/users/me/textures/site_route_public_hash/wardrobe?texture_type=skin", nil)
 	req.SetPathValue("hash", "site_route_public_hash")
 	req = withUserActor(req, other.ID)
 	rec := httptest.NewRecorder()
@@ -188,7 +188,7 @@ func TestTextureRoutesAddUpdateDeleteAndApplyExactResponses(t *testing.T) {
 		t.Fatalf("wardrobe add should persist copied texture: info=%#v err=%v", info, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/me/textures/site_route_public_hash/skin", strings.NewReader(`{"note":"Mine","model":"slim","is_public":false}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v1/users/me/textures/site_route_public_hash/skin", strings.NewReader(`{"note":"Mine","model":"slim","is_public":false}`))
 	req.SetPathValue("hash", "site_route_public_hash")
 	req.SetPathValue("texture_type", "skin")
 	req = withUserActor(req, other.ID)
@@ -198,7 +198,7 @@ func TestTextureRoutesAddUpdateDeleteAndApplyExactResponses(t *testing.T) {
 		t.Fatalf("update texture response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/me/textures/site_route_public_hash/apply", strings.NewReader(`{"profile_id":"`+profile.ID+`","texture_type":"skin"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/users/me/textures/site_route_public_hash/apply", strings.NewReader(`{"profile_id":"`+profile.ID+`","texture_type":"skin"}`))
 	req.SetPathValue("hash", "site_route_public_hash")
 	req = withUserActor(req, other.ID)
 	rec = httptest.NewRecorder()
@@ -211,7 +211,7 @@ func TestTextureRoutesAddUpdateDeleteAndApplyExactResponses(t *testing.T) {
 		t.Fatalf("apply texture should persist profile skin: profile=%#v err=%v", applied, err)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/me/textures/site_route_public_hash/skin", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/users/me/textures/site_route_public_hash/skin", nil)
 	req.SetPathValue("hash", "site_route_public_hash")
 	req.SetPathValue("texture_type", "skin")
 	req = withUserActor(req, other.ID)
@@ -234,7 +234,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	user := testutil.CreateUser(t, db, "site-texture-errors@test.com", "Password123", "SiteTextureErrors", false)
 	profile := testutil.CreateProfile(t, db, user.ID, "site_texture_errors_profile", "SiteTextureErrorsProfile")
 
-	req := textureMultipartRequest(t, "/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
 		"texture_type": "elytra",
 	}, "file", "invalid-type.png", routePNG(t, 64, 64))
 	req = withUserActor(req, user.ID)
@@ -244,7 +244,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 		t.Fatalf("invalid upload texture_type mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = textureMultipartRequest(t, "/textures/upload", map[string]string{
+	req = textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{
 		"uuid":         profile.ID,
 		"texture_type": "elytra",
 	}, "file", "invalid-apply-type.png", routePNG(t, 64, 64))
@@ -258,7 +258,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 		t.Fatalf("invalid upload apply should not persist texture rows: count=%d err=%v", count, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/me/textures/missing_hash/add?texture_type=skin", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v1/users/me/textures/missing_hash/wardrobe?texture_type=skin", nil)
 	req.SetPathValue("hash", "missing_hash")
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
@@ -270,7 +270,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 		t.Fatalf("failed wardrobe add should not persist texture rows: count=%d err=%v", count, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/me/textures/missing_hash/apply", strings.NewReader(`{"profile_id":"`+profile.ID+`","texture_type":"skin"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/users/me/textures/missing_hash/apply", strings.NewReader(`{"profile_id":"`+profile.ID+`","texture_type":"skin"}`))
 	req.SetPathValue("hash", "missing_hash")
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
@@ -279,7 +279,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 		t.Fatalf("apply missing texture mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/me/textures/missing_hash/skin", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPatch, "/v1/users/me/textures/missing_hash/skin", strings.NewReader(`{`))
 	req.SetPathValue("hash", "missing_hash")
 	req.SetPathValue("texture_type", "skin")
 	req = withUserActor(req, user.ID)
@@ -289,7 +289,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 		t.Fatalf("bad update json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/me/textures/missing_hash/skin", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/users/me/textures/missing_hash/skin", nil)
 	req.SetPathValue("hash", "missing_hash")
 	req.SetPathValue("texture_type", "skin")
 	req = withUserActor(req, user.ID)
@@ -307,7 +307,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	h := site.New(cfg, db, sitesvc.Site{DB: db, Cfg: cfg}, nil)
 	user := testutil.CreateUser(t, db, "site-texture-upload-errors@test.com", "Password123", "SiteTextureUploadErrors", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/me/textures", strings.NewReader("not multipart"))
+	req := httptest.NewRequest(http.MethodPost, "/v1/users/me/textures", strings.NewReader("not multipart"))
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing")
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
@@ -316,7 +316,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 		t.Fatalf("malformed upload multipart mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = textureMultipartRequest(t, "/me/textures", map[string]string{"texture_type": "skin"}, "not_file", "skin.png", routePNG(t, 64, 64))
+	req = textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{"texture_type": "skin"}, "not_file", "skin.png", routePNG(t, 64, 64))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
@@ -324,7 +324,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 		t.Fatalf("missing upload file mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = textureMultipartRequest(t, "/textures/upload", map[string]string{"texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
+	req = textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{"texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
@@ -346,7 +346,7 @@ func TestTextureRoutesUploadApplyFailureKeepsUploadedLibraryRow(t *testing.T) {
 	other := testutil.CreateUser(t, db, "site-texture-apply-foreign@test.com", "Password123", "SiteTextureApplyForeign", false)
 	foreignProfile := testutil.CreateProfile(t, db, other.ID, "site_texture_foreign_apply", "SiteTextureForeignApply")
 
-	req := textureMultipartRequest(t, "/textures/upload", map[string]string{
+	req := textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{
 		"uuid":         foreignProfile.ID,
 		"texture_type": "skin",
 		"model":        "slim",
@@ -382,7 +382,7 @@ func TestTextureUploadRemovesNewFileWhenDatabaseInsertFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := textureMultipartRequest(t, "/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "skin.png", routePNG(t, 64, 64))
 	req = withUserActor(req, user.ID)
@@ -420,7 +420,7 @@ func TestTextureUploadKeepsNewFileWhenAnotherTextureTypeReferencesHash(t *testin
 		t.Fatal(err)
 	}
 
-	req := textureMultipartRequest(t, "/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "skin.png", data)
 	req = withUserActor(req, uploader.ID)
@@ -454,7 +454,7 @@ func TestTextureRoutesDeleteMissingWardrobeRowDoesNotClearAppliedProfile(t *test
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, "/me/textures/site_route_delete_foreign/skin", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/textures/site_route_delete_foreign/skin", nil)
 	req.SetPathValue("hash", "site_route_delete_foreign")
 	req.SetPathValue("texture_type", "skin")
 	req = withUserActor(req, other.ID)
@@ -482,7 +482,7 @@ func TestTextureRoutesIsPublicWithoutPermissionReturns403(t *testing.T) {
 	profile := testutil.CreateProfile(t, db, user.ID, "site_texture_no_vis", "SiteTextureNoVis")
 
 	// UploadMyTexture with is_public=true but without texture.update_visibility.owned
-	req := textureMultipartRequest(t, "/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
 		"texture_type": "skin",
 		"is_public":    "true",
 	}, "file", "skin.png", routePNG(t, 64, 64))
@@ -494,7 +494,7 @@ func TestTextureRoutesIsPublicWithoutPermissionReturns403(t *testing.T) {
 	}
 
 	// UploadAndApplyTexture with is_public=true but without texture.update_visibility.owned
-	req = textureMultipartRequest(t, "/textures/upload", map[string]string{
+	req = textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{
 		"uuid":         profile.ID,
 		"texture_type": "skin",
 		"is_public":    "true",
@@ -518,7 +518,7 @@ func TestTextureRoutesInvalidImageReturns400(t *testing.T) {
 	h := site.New(cfg, db, sitesvc.Site{DB: db, Cfg: cfg}, nil)
 	user := testutil.CreateUser(t, db, "site-texture-invalid-img@test.com", "Password123", "SiteTextureInvalidImg", false)
 
-	req := textureMultipartRequest(t, "/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "bad.png", []byte("not a valid png image"))
 	req = withUserActor(req, user.ID)

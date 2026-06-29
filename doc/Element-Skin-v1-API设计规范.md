@@ -2487,11 +2487,23 @@ notice.delete.any
 DELETE /admin/notices/{id}
 ```
 
-### 23.4 通知替换规则
+### 23.4 替换通知
 
-v1 不提供修改通知的 PATCH API。
+```http
+PATCH /v1/admin/notifications/{notification_id}
+```
 
-修改通知必须通过以下流程表达：
+权限：
+
+```text
+notice.update.any
+```
+
+请求：同创建通知，所有字段均可选。
+
+语义：
+
+`PATCH` 不是原地修改通知，而是执行一次替换发布。服务端必须按以下流程处理：
 
 ```text
 DELETE /v1/admin/notifications/{old_id}
@@ -2510,7 +2522,7 @@ POST   /v1/admin/notifications
 PATCH /admin/notices/{id}
 ```
 
-不进入 v1。
+迁移为 `PATCH /v1/admin/notifications/{notification_id}`，但 v1 的语义必须是替换发布，不允许保留旧通知记录并直接覆盖内容字段。
 
 ## 24. 管理员设置 API
 
@@ -2843,7 +2855,7 @@ GET /v1/permissions/catalog
 | `DELETE /admin/homepage-media/{id}` | `DELETE /v1/admin/homepage-media/{id}` |
 | `GET /admin/notices` | `GET /v1/admin/notifications` |
 | `POST /admin/notices` | `POST /v1/admin/notifications` |
-| `PATCH /admin/notices/{id}` | 不进入 v1，使用删除旧通知后创建新通知 |
+| `PATCH /admin/notices/{id}` | `PATCH /v1/admin/notifications/{notification_id}`，语义为删除旧通知后创建替代通知 |
 | `DELETE /admin/notices/{id}` | `DELETE /v1/admin/notifications/{notification_id}` |
 | `GET /admin/settings/site` | `GET /v1/admin/settings/site` |
 | `POST /admin/settings/site` | `POST /v1/admin/settings/site` |
@@ -2935,14 +2947,15 @@ oauth_token.introspect.any
 
 这些权限名应进入权限模型文档，并通过 catalog 测试固定。
 
-## 31. 审阅重点
+## 31. 迁移确认项
 
-请重点审阅以下设计是否需要调整：
+本规范确认以下 breaking change：
 
-1. 是否接受 `/v1/users/me/*` 作为当前用户资源路径。
-2. 是否接受 `/v1/notifications` 取代 `/notices`。
-3. 是否接受 `/v1/imports/microsoft/*` 与 `/v1/imports/remote-ygg/*`。
-4. 是否接受管理员通知不提供 PATCH。
-5. 是否接受 OAuth 标准端点不放入 `/v1`。
-6. 是否接受 `/v1/permissions/catalog` 作为 OAuth scope 发现基础。
-7. 是否接受旧站点 API 不长期保留。
+1. 当前用户资源统一迁移到 `/v1/users/me/*`。
+2. 用户通知统一迁移到 `/v1/notifications/*`。
+3. Microsoft 导入统一迁移到 `/v1/imports/microsoft/*`。
+4. 远端 Yggdrasil 导入统一迁移到 `/v1/imports/remote-ygg/*`。
+5. 管理员通知的 `PATCH` 保留为 v1 端点，但语义固定为替换发布。
+6. OAuth 标准端点不放入 `/v1`。
+7. `/v1/permissions/catalog` 作为未来 OAuth scope 发现基础。
+8. 旧站点 API 不长期保留；Yggdrasil 与 Mojang 兼容端点不在本次迁移范围内。

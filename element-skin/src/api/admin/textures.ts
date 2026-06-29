@@ -9,13 +9,13 @@ export function getAdminTextures(params: {
 }): Promise<{
   data: { items: Texture[]; has_next: boolean; next_cursor: string | null; page_size: number }
 }> {
-  return client.get('/admin/textures', { params })
+  return client.get('/v1/admin/textures', { params })
 }
 
 export function patchAdminTexture(hash: string, data: { type: string; model?: string; note?: string; is_public?: boolean | number }): Promise<{ data: { ok: boolean } }> {
-  return client.patch(`/admin/textures/${hash}`, data)
+  return client.patch(`/v1/admin/textures/${hash}`, data)
 }
 
 export function deleteAdminTexture(hash: string, params: { type?: string; user_id?: string; force?: boolean }): Promise<{ data: { ok: boolean } }> {
-  return client.delete(`/admin/textures/${hash}`, { params })
+  return client.delete(`/v1/admin/textures/${hash}`, { params })
 }

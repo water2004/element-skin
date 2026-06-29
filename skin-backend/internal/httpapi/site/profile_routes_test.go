@@ -17,7 +17,7 @@ func TestProfileRoutesCreateAndListExactResponses(t *testing.T) {
 	h := site.New(cfg, db, sitesvc.Site{DB: db, Cfg: cfg}, nil)
 	user := testutil.CreateUser(t, db, "site-profile@test.com", "Password123", "SiteProfile", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/me/profiles", strings.NewReader(`{"name":"RouteRole","model":"slim"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/users/me/profiles", strings.NewReader(`{"name":"RouteRole","model":"slim"}`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.CreateProfile(rec, req)
@@ -25,7 +25,7 @@ func TestProfileRoutesCreateAndListExactResponses(t *testing.T) {
 		t.Fatalf("create profile response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/me/profiles?limit=1", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/users/me/profiles?limit=1", nil)
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ListMyProfiles(rec, req)
@@ -49,7 +49,7 @@ func TestProfileRoutesUpdateClearAndDeleteExactState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPatch, "/me/profiles/"+profile.ID, strings.NewReader(`{"name":"NewRouteRole"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/v1/users/me/profiles/"+profile.ID, strings.NewReader(`{"name":"NewRouteRole"}`))
 	req.SetPathValue("pid", profile.ID)
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
@@ -62,7 +62,7 @@ func TestProfileRoutesUpdateClearAndDeleteExactState(t *testing.T) {
 		t.Fatalf("profile rename should persist exactly: profile=%#v err=%v", updated, err)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/me/profiles/"+profile.ID+"/skin", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/users/me/profiles/"+profile.ID+"/skin", nil)
 	req.SetPathValue("pid", profile.ID)
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
@@ -75,7 +75,7 @@ func TestProfileRoutesUpdateClearAndDeleteExactState(t *testing.T) {
 		t.Fatalf("clear skin should clear only skin: profile=%#v err=%v", updated, err)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/me/profiles/"+profile.ID+"/cape", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/users/me/profiles/"+profile.ID+"/cape", nil)
 	req.SetPathValue("pid", profile.ID)
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
@@ -88,7 +88,7 @@ func TestProfileRoutesUpdateClearAndDeleteExactState(t *testing.T) {
 		t.Fatalf("clear cape should clear cape: profile=%#v err=%v", updated, err)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/me/profiles/"+profile.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/users/me/profiles/"+profile.ID, nil)
 	req.SetPathValue("pid", profile.ID)
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
@@ -110,7 +110,7 @@ func TestProfileRoutesRejectForeignProfileExactly(t *testing.T) {
 	other := testutil.CreateUser(t, db, "site-profile-foreign@test.com", "Password123", "SiteProfileForeign", false)
 	profile := testutil.CreateProfile(t, db, owner.ID, "site_profile_foreign", "ForeignRouteRole")
 
-	req := httptest.NewRequest(http.MethodPatch, "/me/profiles/"+profile.ID, strings.NewReader(`{"name":"Stolen"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/v1/users/me/profiles/"+profile.ID, strings.NewReader(`{"name":"Stolen"}`))
 	req.SetPathValue("pid", profile.ID)
 	req = withUserActor(req, other.ID)
 	rec := httptest.NewRecorder()
@@ -132,7 +132,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	existing := testutil.CreateProfile(t, db, user.ID, "site_profile_existing", "ExistingRole")
 	target := testutil.CreateProfile(t, db, user.ID, "site_profile_target", "TargetRole")
 
-	req := httptest.NewRequest(http.MethodPost, "/me/profiles", strings.NewReader(`{`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/users/me/profiles", strings.NewReader(`{`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.CreateProfile(rec, req)
@@ -140,7 +140,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 		t.Fatalf("create bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/me/profiles", strings.NewReader(`{"name":"bad-name!"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/users/me/profiles", strings.NewReader(`{"name":"bad-name!"}`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.CreateProfile(rec, req)
@@ -148,7 +148,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 		t.Fatalf("create invalid name mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/me/profiles/"+target.ID, strings.NewReader(`{"name":"ExistingRole"}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v1/users/me/profiles/"+target.ID, strings.NewReader(`{"name":"ExistingRole"}`))
 	req.SetPathValue("pid", target.ID)
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
@@ -161,7 +161,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 		t.Fatalf("conflicting rename should not mutate profile: profile=%#v err=%v", unchanged, err)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/me/profiles?cursor=not-base64", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/users/me/profiles?cursor=not-base64", nil)
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ListMyProfiles(rec, req)
@@ -169,7 +169,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 		t.Fatalf("list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/me/profiles/missing", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/users/me/profiles/missing", nil)
 	req.SetPathValue("pid", "missing")
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
@@ -208,7 +208,7 @@ func TestProfileRoutesRejectForeignTextureClearsWithoutMutation(t *testing.T) {
 		{name: "cape", call: h.ClearProfileCape},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodDelete, "/me/profiles/"+profile.ID+"/"+tc.name, nil)
+			req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/profiles/"+profile.ID+"/"+tc.name, nil)
 			req.SetPathValue("pid", profile.ID)
 			req = withUserActor(req, other.ID)
 			rec := httptest.NewRecorder()

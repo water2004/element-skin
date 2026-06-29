@@ -23,7 +23,7 @@ func TestAppNewWithDBUsesRealRedisAndCloseReleasesDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/public/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/public/settings", nil)
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
@@ -68,7 +68,7 @@ func TestAppNewCleansExpiredRefreshAndServesRequests(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	application.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/public/settings", nil))
+	application.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/public/settings", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("fully constructed app handler status=%d body=%q", rec.Code, rec.Body.String())
 	}

@@ -24,12 +24,12 @@ func TestAuthRejectsMissingInvalidAndNonAdminExactly(t *testing.T) {
 	router := httpapi.NewRouter(cfg, db, sitesvc.Site{DB: db, Cfg: cfg}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/me", nil))
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/users/me", nil))
 	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "not authenticated") {
 		t.Fatalf("missing cookie auth mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: "not-a-jwt"})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -41,7 +41,7 @@ func TestAuthRejectsMissingInvalidAndNonAdminExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -61,7 +61,7 @@ func TestAuthRedisErrorDoesNotFallBackToDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -84,7 +84,7 @@ func TestAuthUsesRedisCachedSubjectIDButRecomputesPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -104,7 +104,7 @@ func TestAuthFailsClosedWhenColdCacheCannotBePopulated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -134,7 +134,7 @@ func TestAuthCachesBanStateWithoutBlockingWebDashboard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

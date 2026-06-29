@@ -12,19 +12,19 @@ export function publicApiCases(): ApiCase[] {
       name: 'getPublicSettings gets public settings',
       method: 'get',
       call: getPublicSettings,
-      args: ['/public/settings'],
+      args: ['/v1/public/settings'],
     },
     {
       name: 'getPublicHomepageMedia gets public homepage media',
       method: 'get',
       call: getPublicHomepageMedia,
-      args: ['/public/homepage-media'],
+      args: ['/v1/public/homepage-media'],
     },
     {
       name: 'getPublicFallbackStatus gets fallback status',
       method: 'get',
       call: getPublicFallbackStatus,
-      args: ['/public/fallback-status'],
+      args: ['/v1/public/fallback-status'],
     },
     {
       name: 'getPublicSkinLibrary gets exact library params',
@@ -38,7 +38,7 @@ export function publicApiCases(): ApiCase[] {
           sort: 'most_used',
         }),
       args: [
-        '/public/skin-library',
+        '/v1/public/skin-library',
         {
           params: {
             cursor: 'cursor-2',

@@ -38,15 +38,15 @@ func TestRouterServeHTTPAddsAuthlibHeaderAndAuthRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: userToken})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte(`"id":"`+user.ID+`"`)) || !bytes.Contains(rec.Body.Bytes(), []byte(`"permissions":[`)) {
-		t.Fatalf("/me auth response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+		t.Fatalf("/v1/users/me auth response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/admin/users", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: userToken})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -54,7 +54,7 @@ func TestRouterServeHTTPAddsAuthlibHeaderAndAuthRoutes(t *testing.T) {
 		t.Fatalf("non-admin should be forbidden: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/admin/users?limit=1", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users?limit=1", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: adminToken})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -63,7 +63,7 @@ func TestRouterServeHTTPAddsAuthlibHeaderAndAuthRoutes(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/me", nil))
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/users/me", nil))
 	if rec.Code != http.StatusUnauthorized || !bytes.Contains(rec.Body.Bytes(), []byte("not authenticated")) {
 		t.Fatalf("missing cookie should be unauthorized: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -94,11 +94,11 @@ func TestRouterRegistersRepresentativeRouteGroups(t *testing.T) {
 		wantBody   string
 	}{
 		{name: "metadata", method: http.MethodGet, path: "/", wantStatus: http.StatusOK, wantBody: "implementationName"},
-		{name: "public settings", method: http.MethodGet, path: "/public/settings", wantStatus: http.StatusOK, wantBody: "site_name"},
-		{name: "me route", method: http.MethodGet, path: "/me", token: userToken, wantStatus: http.StatusOK, wantBody: user.ID},
-		{name: "admin settings", method: http.MethodGet, path: "/admin/settings/site", token: adminToken, wantStatus: http.StatusOK, wantBody: "site_name"},
+		{name: "public settings", method: http.MethodGet, path: "/v1/public/settings", wantStatus: http.StatusOK, wantBody: "site_name"},
+		{name: "me route", method: http.MethodGet, path: "/v1/users/me", token: userToken, wantStatus: http.StatusOK, wantBody: user.ID},
+		{name: "admin settings", method: http.MethodGet, path: "/v1/admin/settings/site", token: adminToken, wantStatus: http.StatusOK, wantBody: "site_name"},
 		{name: "ygg validate invalid", method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, wantStatus: http.StatusForbidden, wantBody: "Invalid token"},
-		{name: "remote ygg", method: http.MethodPost, path: "/remote-ygg/get-profiles", token: userToken, body: `{}`, wantStatus: http.StatusOK, wantBody: `"profiles":[]`},
+		{name: "remote ygg", method: http.MethodPost, path: "/v1/imports/remote-ygg/profiles/preview", token: userToken, body: `{}`, wantStatus: http.StatusOK, wantBody: `"profiles":[]`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

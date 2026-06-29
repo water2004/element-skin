@@ -19,14 +19,14 @@ func TestRedisBackedPublicSettingsAndHomepageMediaHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first := doJSON(t, h, "GET", "/public/settings", nil)
+	first := doJSON(t, h, "GET", "/v1/public/settings", nil)
 	if first.Code != 200 || parseJSON(t, first)["site_name"] != "Redis Public" {
 		t.Fatalf("first public settings mismatch: %d %s", first.Code, first.Body.String())
 	}
 	if err := db.Settings.Set(ctx, "site_name", "DB Changed Without Invalidation"); err != nil {
 		t.Fatal(err)
 	}
-	cached := doJSON(t, h, "GET", "/public/settings", nil)
+	cached := doJSON(t, h, "GET", "/v1/public/settings", nil)
 	if cached.Code != 200 || parseJSON(t, cached)["site_name"] != "Redis Public" {
 		t.Fatalf("public settings should be served from redis cache: %d %s", cached.Code, cached.Body.String())
 	}
@@ -36,7 +36,7 @@ func TestRedisBackedPublicSettingsAndHomepageMediaHTTP(t *testing.T) {
 	if err := redis.InvalidateSettings(ctx); err != nil {
 		t.Fatal(err)
 	}
-	refreshed := doJSON(t, h, "GET", "/public/settings", nil)
+	refreshed := doJSON(t, h, "GET", "/v1/public/settings", nil)
 	if refreshed.Code != 200 || parseJSON(t, refreshed)["site_name"] != "DB Changed Without Invalidation" {
 		t.Fatalf("public settings should refresh after invalidation: %d %s", refreshed.Code, refreshed.Body.String())
 	}
@@ -44,7 +44,7 @@ func TestRedisBackedPublicSettingsAndHomepageMediaHTTP(t *testing.T) {
 	if err := redis.SetPublicHomepageMedia(ctx, []model.HomepageMedia{{ID: "cached", Type: "image", StoragePath: "cached.png", Enabled: true}}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	homepageMedia := doJSON(t, h, "GET", "/public/homepage-media", nil)
+	homepageMedia := doJSON(t, h, "GET", "/v1/public/homepage-media", nil)
 	if homepageMedia.Code != 200 || !strings.Contains(homepageMedia.Body.String(), "cached.png") {
 		t.Fatalf("public homepage media should be served from redis cache: %d %s", homepageMedia.Code, homepageMedia.Body.String())
 	}
@@ -66,21 +66,21 @@ func TestAdminSettingsInvalidatePublicCacheAndApplySecurityImmediately(t *testin
 	if _, err := redis.GetSetting(ctx, "site_name"); err == nil {
 		t.Fatal("site_name setting should not be cached before first read")
 	}
-	first := doJSON(t, h, "GET", "/public/settings", nil)
+	first := doJSON(t, h, "GET", "/v1/public/settings", nil)
 	if first.Code != 200 || parseJSON(t, first)["site_name"] != "Cached Site" {
 		t.Fatalf("prime public settings cache failed: %d %s", first.Code, first.Body.String())
 	}
 	if cachedSetting, err := redis.GetSetting(ctx, "site_name"); err != nil || cachedSetting != "Cached Site" {
 		t.Fatalf("site_name should be cached after public settings read: %q err=%v", cachedSetting, err)
 	}
-	saveSite := doJSON(t, h, "POST", "/admin/settings/site", map[string]any{"site_name": "Admin Saved Site"}, adminCookie)
+	saveSite := doJSON(t, h, "POST", "/v1/admin/settings/site", map[string]any{"site_name": "Admin Saved Site"}, adminCookie)
 	if saveSite.Code != 200 {
 		t.Fatalf("save site settings status=%d body=%s", saveSite.Code, saveSite.Body.String())
 	}
 	if _, err := redis.GetSetting(ctx, "site_name"); err == nil {
 		t.Fatal("admin settings save should invalidate settings key cache")
 	}
-	afterSite := doJSON(t, h, "GET", "/public/settings", nil)
+	afterSite := doJSON(t, h, "GET", "/v1/public/settings", nil)
 	if afterSite.Code != 200 || parseJSON(t, afterSite)["site_name"] != "Admin Saved Site" {
 		t.Fatalf("public settings cache should be invalidated by admin site save: %d %s", afterSite.Code, afterSite.Body.String())
 	}
@@ -95,7 +95,7 @@ func TestAdminSettingsInvalidatePublicCacheAndApplySecurityImmediately(t *testin
 	}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	saveFallback := doJSON(t, h, "POST", "/admin/settings/fallback", map[string]any{
+	saveFallback := doJSON(t, h, "POST", "/v1/admin/settings/fallback", map[string]any{
 		"fallbacks": []map[string]any{{
 			"priority":     1,
 			"session_url":  "https://session.cache",
@@ -107,13 +107,13 @@ func TestAdminSettingsInvalidatePublicCacheAndApplySecurityImmediately(t *testin
 	if saveFallback.Code != 200 {
 		t.Fatalf("save fallback settings status=%d body=%s", saveFallback.Code, saveFallback.Body.String())
 	}
-	afterFallback := parseJSON(t, doJSON(t, h, "GET", "/public/settings", nil))
+	afterFallback := parseJSON(t, doJSON(t, h, "GET", "/v1/public/settings", nil))
 	status := afterFallback["mojang_status_urls"].(map[string]any)
 	if status["session"] != "https://session.cache" || status["account"] != "https://account.cache" || status["services"] != "https://services.cache" {
 		t.Fatalf("fallback save should invalidate public settings cache: %#v", status)
 	}
 
-	saveSecurity := doJSON(t, h, "POST", "/admin/settings/security", map[string]any{
+	saveSecurity := doJSON(t, h, "POST", "/v1/admin/settings/security", map[string]any{
 		"rate_limit_enabled":       true,
 		"rate_limit_auth_attempts": 1,
 		"rate_limit_auth_window":   1,
@@ -121,20 +121,20 @@ func TestAdminSettingsInvalidatePublicCacheAndApplySecurityImmediately(t *testin
 	if saveSecurity.Code != 200 {
 		t.Fatalf("save security settings status=%d body=%s", saveSecurity.Code, saveSecurity.Body.String())
 	}
-	firstLogin := doJSONFromIP(t, h, "POST", "/site-login", map[string]any{"email": "missing@test.com", "password": "bad"}, "203.0.113.77:10000")
+	firstLogin := doJSONFromIP(t, h, "POST", "/v1/auth/login", map[string]any{"email": "missing@test.com", "password": "bad"}, "203.0.113.77:10000")
 	if firstLogin.Code != 401 {
 		t.Fatalf("first login should reach auth path, got %d %s", firstLogin.Code, firstLogin.Body.String())
 	}
-	limited := doJSONFromIP(t, h, "POST", "/site-login", map[string]any{"email": "missing@test.com", "password": "bad"}, "203.0.113.77:10000")
+	limited := doJSONFromIP(t, h, "POST", "/v1/auth/login", map[string]any{"email": "missing@test.com", "password": "bad"}, "203.0.113.77:10000")
 	if limited.Code != http.StatusTooManyRequests {
 		t.Fatalf("security settings should apply immediately to rate limiter, got %d %s", limited.Code, limited.Body.String())
 	}
 
-	saveAuth := doJSON(t, h, "POST", "/admin/settings/auth", map[string]any{"jwt_expire_days": 2}, adminCookie)
+	saveAuth := doJSON(t, h, "POST", "/v1/admin/settings/auth", map[string]any{"jwt_expire_days": 2}, adminCookie)
 	if saveAuth.Code != 200 {
 		t.Fatalf("save auth settings status=%d body=%s", saveAuth.Code, saveAuth.Body.String())
 	}
-	login := doJSON(t, h, "POST", "/site-login", map[string]any{"email": admin.Email, "password": "Password123"})
+	login := doJSON(t, h, "POST", "/v1/auth/login", map[string]any{"email": admin.Email, "password": "Password123"})
 	if login.Code != 200 {
 		t.Fatalf("login after auth settings status=%d body=%s", login.Code, login.Body.String())
 	}
@@ -157,12 +157,12 @@ func TestRedisBackedRateLimitAndVerificationHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i := 0; i < 2; i++ {
-		resp := doJSONFromIP(t, h, "POST", "/site-login", map[string]any{"email": "missing@test.com", "password": "bad"}, "198.51.100.10:10000")
+		resp := doJSONFromIP(t, h, "POST", "/v1/auth/login", map[string]any{"email": "missing@test.com", "password": "bad"}, "198.51.100.10:10000")
 		if resp.Code != 401 {
 			t.Fatalf("login attempt %d should reach auth path, got %d %s", i+1, resp.Code, resp.Body.String())
 		}
 	}
-	limited := doJSONFromIP(t, h, "POST", "/site-login", map[string]any{"email": "missing@test.com", "password": "bad"}, "198.51.100.10:10000")
+	limited := doJSONFromIP(t, h, "POST", "/v1/auth/login", map[string]any{"email": "missing@test.com", "password": "bad"}, "198.51.100.10:10000")
 	if limited.Code != http.StatusTooManyRequests || limited.Result().Header.Get("Retry-After") == "" {
 		t.Fatalf("third login should be rate limited by redis, got %d %s", limited.Code, limited.Body.String())
 	}
@@ -176,7 +176,7 @@ func TestRedisBackedRateLimitAndVerificationHTTP(t *testing.T) {
 	if err := redis.InvalidateSettings(ctx); err != nil {
 		t.Fatal(err)
 	}
-	send := doJSON(t, h, "POST", "/send-verification-code", map[string]any{"email": "redis-register@test.com", "type": "register"})
+	send := doJSON(t, h, "POST", "/v1/auth/verification-code", map[string]any{"email": "redis-register@test.com", "type": "register"})
 	if send.Code != 200 {
 		t.Fatalf("send verification status=%d body=%s", send.Code, send.Body.String())
 	}
@@ -187,7 +187,7 @@ func TestRedisBackedRateLimitAndVerificationHTTP(t *testing.T) {
 	if _, _, ok, err := db.Verifications.GetCode(ctx, "redis-register@test.com", "register"); err != nil || ok {
 		t.Fatalf("verification code must not be persisted in database: ok=%v err=%v", ok, err)
 	}
-	register := doJSON(t, h, "POST", "/register", map[string]any{
+	register := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{
 		"email": "redis-register@test.com", "password": "Password123!", "username": "RedisRegister", "code": strings.ToLower(code),
 	})
 	if register.Code != 200 {
@@ -207,7 +207,7 @@ func TestRedisBackedAuthCacheAndInvalidationHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	cookie := &http.Cookie{Name: "access_token", Value: token}
-	users := doJSON(t, h, "GET", "/admin/users", nil, cookie)
+	users := doJSON(t, h, "GET", "/v1/admin/users", nil, cookie)
 	if users.Code != 200 {
 		t.Fatalf("admin users status=%d body=%s", users.Code, users.Body.String())
 	}
@@ -218,14 +218,14 @@ func TestRedisBackedAuthCacheAndInvalidationHTTP(t *testing.T) {
 	if _, err := db.Permissions.RevokeRole(ctx, admin.ID, "admin"); err != nil {
 		t.Fatal(err)
 	}
-	revoked := doJSON(t, h, "GET", "/admin/users", nil, cookie)
+	revoked := doJSON(t, h, "GET", "/v1/admin/users", nil, cookie)
 	if revoked.Code != 403 {
 		t.Fatalf("revoked admin role should be forbidden immediately, got %d %s", revoked.Code, revoked.Body.String())
 	}
 	if err := redis.InvalidateAuthUser(ctx, admin.ID); err != nil {
 		t.Fatal(err)
 	}
-	demoted := doJSON(t, h, "GET", "/admin/users", nil, cookie)
+	demoted := doJSON(t, h, "GET", "/v1/admin/users", nil, cookie)
 	if demoted.Code != 403 {
 		t.Fatalf("demoted admin should be forbidden after redis invalidation, got %d %s", demoted.Code, demoted.Body.String())
 	}

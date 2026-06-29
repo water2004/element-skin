@@ -25,22 +25,22 @@ func TestRemoteYggRoutesValidateAndReturnExactBodies(t *testing.T) {
 	}
 	router := httpapi.NewRouter(cfg, db, sitesvc.Site{DB: db, Cfg: cfg}, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 
-	rec := authedJSON(t, router, token, "/remote-ygg/get-profiles", map[string]any{"profiles": []any{map[string]any{"id": "p1", "name": "One"}}})
+	rec := authedJSON(t, router, token, "/v1/imports/remote-ygg/profiles/preview", map[string]any{"profiles": []any{map[string]any{"id": "p1", "name": "One"}}})
 	if rec.Code != http.StatusOK || rec.Body.String() != "{\"profiles\":[{\"id\":\"p1\",\"name\":\"One\"}]}\n" {
 		t.Fatalf("get-profiles response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	rec = authedJSON(t, router, token, "/remote-ygg/import-profile", map[string]any{"profile_id": "", "profile_name": "Missing"})
+	rec = authedJSON(t, router, token, "/v1/imports/remote-ygg/profiles/import", map[string]any{"profile_id": "", "profile_name": "Missing"})
 	if rec.Code != http.StatusBadRequest || !bytes.Contains(rec.Body.Bytes(), []byte("profile_id and profile_name are required")) {
 		t.Fatalf("import-profile should validate required fields: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	rec = authedJSON(t, router, token, "/remote-ygg/import-profiles", map[string]any{"profiles": []any{}})
+	rec = authedJSON(t, router, token, "/v1/imports/remote-ygg/profiles/import-batch", map[string]any{"profiles": []any{}})
 	if rec.Code != http.StatusBadRequest || !bytes.Contains(rec.Body.Bytes(), []byte("profiles cannot be empty")) {
 		t.Fatalf("import-profiles should reject empty list: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	rec = authedJSON(t, router, token, "/remote-ygg/get-profiles", map[string]any{})
+	rec = authedJSON(t, router, token, "/v1/imports/remote-ygg/profiles/preview", map[string]any{})
 	if rec.Code != http.StatusOK || rec.Body.String() != "{\"profiles\":[]}\n" {
 		t.Fatalf("missing profiles should normalize to empty list: status=%d body=%q", rec.Code, rec.Body.String())
 	}

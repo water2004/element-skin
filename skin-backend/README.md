@@ -52,14 +52,14 @@ PostgreSQL, and network path rather than a stable unit-test invariant.
 To measure a manually started backend, start the backend first, then run:
 
 ```powershell
-go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /public/settings -concurrency 1,5,10,25,50,100 -duration 10s
+go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /v1/public/settings -concurrency 1,5,10,25,50,100 -duration 10s
 ```
 
 For authenticated frontend endpoints, let the tool log in once and reuse the
 returned cookies:
 
 ```powershell
-go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /me -login-email user@example.com -login-password Password123 -concurrency 1,5,10,25,50 -duration 10s
+go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /v1/users/me -login-email user@example.com -login-password Password123 -concurrency 1,5,10,25,50 -duration 10s
 ```
 
 The detailed test harness below measures every frontend-facing endpoint at the
@@ -97,7 +97,7 @@ paths used by the current frontend and Yggdrasil clients.
   request only on Redis auth-cache misses. Admin/user mutations invalidate the
   auth cache; Redis errors fail protected requests instead of falling back to
   stale or database-only behavior.
-- `/public/settings` and `/public/homepage-media` are served through Redis caches.
+- `/v1/public/settings` and `/v1/public/homepage-media` are served through Redis caches.
   Cache misses rebuild from PostgreSQL/filesystem, while Redis command failures
   fail the request instead of silently falling back.
 - Verification codes, rate-limit counters, and auth snapshots are temporary

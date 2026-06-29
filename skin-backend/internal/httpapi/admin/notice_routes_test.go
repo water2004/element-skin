@@ -19,7 +19,7 @@ func TestNoticeAdminRoutesCreateReplaceListDeleteExactFlow(t *testing.T) {
 	adminUser := testutil.CreateUser(t, db, "admin-notice-route@test.com", "Password123", "AdminNoticeRoute", true)
 	reader := testutil.CreateUser(t, db, "admin-notice-reader@test.com", "Password123", "AdminNoticeReader", false)
 
-	req := adminNoticeRequest(http.MethodPost, "/admin/notices", `{
+	req := adminNoticeRequest(http.MethodPost, "/v1/admin/notifications", `{
 		"title":"Route notice",
 		"summary":"Route summary",
 		"content_markdown":"Route **body**",
@@ -55,7 +55,7 @@ func TestNoticeAdminRoutesCreateReplaceListDeleteExactFlow(t *testing.T) {
 		t.Fatalf("created notice body mismatch: %#v", created)
 	}
 
-	listReq := adminNoticeRequest(http.MethodGet, "/admin/notices?type=announcement&status=enabled&limit=10", "", adminUser.ID)
+	listReq := adminNoticeRequest(http.MethodGet, "/v1/admin/notifications?type=announcement&status=enabled&limit=10", "", adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.Notices(rec, listReq)
 	if rec.Code != http.StatusOK {
@@ -70,7 +70,7 @@ func TestNoticeAdminRoutesCreateReplaceListDeleteExactFlow(t *testing.T) {
 	if err := db.Notices.MarkRead(context.Background(), oldID, reader.ID, 1700000000000); err != nil {
 		t.Fatal(err)
 	}
-	patchReq := adminNoticeRequest(http.MethodPatch, "/admin/notices/"+oldID, `{
+	patchReq := adminNoticeRequest(http.MethodPatch, "/v1/admin/notifications/"+oldID, `{
 		"title":"Route replacement",
 		"summary":"Route replacement summary",
 		"content_markdown":"",
@@ -108,7 +108,7 @@ func TestNoticeAdminRoutesCreateReplaceListDeleteExactFlow(t *testing.T) {
 		t.Fatalf("old notice receipts should be cascaded")
 	}
 
-	disabledReq := adminNoticeRequest(http.MethodGet, "/admin/notices?type=announcement&status=disabled&limit=10", "", adminUser.ID)
+	disabledReq := adminNoticeRequest(http.MethodGet, "/v1/admin/notifications?type=announcement&status=disabled&limit=10", "", adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.Notices(rec, disabledReq)
 	if rec.Code != http.StatusOK {
@@ -120,7 +120,7 @@ func TestNoticeAdminRoutesCreateReplaceListDeleteExactFlow(t *testing.T) {
 		t.Fatalf("disabled list mismatch: %#v", disabled)
 	}
 
-	deleteReq := adminNoticeRequest(http.MethodDelete, "/admin/notices/"+newID, "", adminUser.ID)
+	deleteReq := adminNoticeRequest(http.MethodDelete, "/v1/admin/notifications/"+newID, "", adminUser.ID)
 	deleteReq.SetPathValue("id", newID)
 	rec = httptest.NewRecorder()
 	h.DeleteNotice(rec, deleteReq)
@@ -138,18 +138,18 @@ func TestNoticeAdminRoutesRejectInvalidInputsExactly(t *testing.T) {
 	adminUser := testutil.CreateUser(t, db, "admin-notice-errors@test.com", "Password123", "AdminNoticeErrors", true)
 
 	rec := httptest.NewRecorder()
-	h.CreateNotice(rec, adminNoticeRequest(http.MethodPost, "/admin/notices", `{`, adminUser.ID))
+	h.CreateNotice(rec, adminNoticeRequest(http.MethodPost, "/v1/admin/notifications", `{`, adminUser.ID))
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
 		t.Fatalf("bad create json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
-	h.CreateNotice(rec, adminNoticeRequest(http.MethodPost, "/admin/notices", `{"title":"Broken","summary":"Summary","display_mode":"detail"}`, adminUser.ID))
+	h.CreateNotice(rec, adminNoticeRequest(http.MethodPost, "/v1/admin/notifications", `{"title":"Broken","summary":"Summary","display_mode":"detail"}`, adminUser.ID))
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"content_markdown is required for detail notices\"}\n" {
 		t.Fatalf("bad create validation mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	createReq := adminNoticeRequest(http.MethodPost, "/admin/notices", `{"title":"Valid","summary":"Valid summary","display_mode":"inline"}`, adminUser.ID)
+	createReq := adminNoticeRequest(http.MethodPost, "/v1/admin/notifications", `{"title":"Valid","summary":"Valid summary","display_mode":"inline"}`, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.CreateNotice(rec, createReq)
 	if rec.Code != http.StatusOK {
@@ -158,7 +158,7 @@ func TestNoticeAdminRoutesRejectInvalidInputsExactly(t *testing.T) {
 	created := decodeAdminNoticeBody(t, rec)
 	id := created["id"].(string)
 
-	patchReq := adminNoticeRequest(http.MethodPatch, "/admin/notices/"+id, `{"enabled":"yes"}`, adminUser.ID)
+	patchReq := adminNoticeRequest(http.MethodPatch, "/v1/admin/notifications/"+id, `{"enabled":"yes"}`, adminUser.ID)
 	patchReq.SetPathValue("id", id)
 	rec = httptest.NewRecorder()
 	h.PatchNotice(rec, patchReq)
@@ -166,7 +166,7 @@ func TestNoticeAdminRoutesRejectInvalidInputsExactly(t *testing.T) {
 		t.Fatalf("bad patch bool mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	patchReq = adminNoticeRequest(http.MethodPatch, "/admin/notices/"+id, `{"link_text":"Open","link_url":"javascript:alert(1)"}`, adminUser.ID)
+	patchReq = adminNoticeRequest(http.MethodPatch, "/v1/admin/notifications/"+id, `{"link_text":"Open","link_url":"javascript:alert(1)"}`, adminUser.ID)
 	patchReq.SetPathValue("id", id)
 	rec = httptest.NewRecorder()
 	h.PatchNotice(rec, patchReq)
@@ -178,7 +178,7 @@ func TestNoticeAdminRoutesRejectInvalidInputsExactly(t *testing.T) {
 		t.Fatalf("invalid patch should not mutate or replace notice: row=%#v err=%v", row, err)
 	}
 
-	missingReq := adminNoticeRequest(http.MethodPatch, "/admin/notices/missing", `{"title":"Missing"}`, adminUser.ID)
+	missingReq := adminNoticeRequest(http.MethodPatch, "/v1/admin/notifications/missing", `{"title":"Missing"}`, adminUser.ID)
 	missingReq.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.PatchNotice(rec, missingReq)

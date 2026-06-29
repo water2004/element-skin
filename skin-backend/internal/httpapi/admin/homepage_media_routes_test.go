@@ -30,7 +30,7 @@ func TestListHomepageMedia(t *testing.T) {
 	h := admin.NewWithRedis(cfg, db, cache, nil)
 
 	t.Run("empty list", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/admin/homepage-media", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/admin/homepage-media", nil)
 		req = withAdminActor(req, "admin-test-user")
 		rec := httptest.NewRecorder()
 		h.ListHomepageMedia(rec, req)
@@ -43,7 +43,7 @@ func TestListHomepageMedia(t *testing.T) {
 	})
 
 	t.Run("permission denied", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/admin/homepage-media", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v1/admin/homepage-media", nil)
 		rec := httptest.NewRecorder()
 		h.ListHomepageMedia(rec, req)
 		if rec.Code != http.StatusForbidden {
@@ -61,7 +61,7 @@ func TestHomepageMediaUploadFailsWhenRedisInvalidateFails(t *testing.T) {
 	cfg.CarouselDir = t.TempDir()
 	h := admin.NewWithRedis(cfg, db, &homepageInvalidateFailRedis{Store: testutil.NewMemoryRedis()}, nil)
 
-	req := multipartUploadRequest(t, "/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64))
+	req := multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64))
 	rec := httptest.NewRecorder()
 	h.UploadHomepageImage(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -99,7 +99,7 @@ func TestHomepageMediaImageUploadPatchReorderDeleteExactState(t *testing.T) {
 	h := admin.NewWithRedis(cfg, db, cache, nil)
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64)))
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("image upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -118,7 +118,7 @@ func TestHomepageMediaImageUploadPatchReorderDeleteExactState(t *testing.T) {
 	}
 
 	body := strings.NewReader(`{"title":"Hero","enabled":false,"duration_ms":7000,"overlay_opacity_light":0.38,"overlay_opacity_dark":0.62}`)
-	req := httptest.NewRequest(http.MethodPatch, "/admin/homepage-media/"+item.ID, body)
+	req := httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/"+item.ID, body)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
@@ -135,13 +135,13 @@ func TestHomepageMediaImageUploadPatchReorderDeleteExactState(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/admin/homepage-media/image", "file", "second.png", pngBytes(t, 32, 32)))
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "second.png", pngBytes(t, 32, 32)))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("second upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	second := decodeMedia(t, rec.Body.Bytes())
 	reorderBody := strings.NewReader(`{"ids":["` + second.ID + `","` + item.ID + `"]}`)
-	req = httptest.NewRequest(http.MethodPatch, "/admin/homepage-media/reorder", reorderBody)
+	req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/reorder", reorderBody)
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.ReorderHomepageMedia(rec, req)
@@ -156,7 +156,7 @@ func TestHomepageMediaImageUploadPatchReorderDeleteExactState(t *testing.T) {
 		t.Fatalf("reorder did not persist exact order: %#v", items)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/admin/homepage-media/"+item.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/homepage-media/"+item.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
@@ -196,7 +196,7 @@ func TestHomepageMediaPanoramaUploadUsesGeneratedStandardZipAndYawPitchFields(t 
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/homepage-media/panorama", &body)
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec := httptest.NewRecorder()
@@ -230,13 +230,13 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	h := admin.NewWithRedis(testutil.TestConfig(), db, testutil.NewMemoryRedis(), nil)
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/admin/homepage-media/panorama", "file", "bad.txt", []byte("x")))
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "bad.txt", []byte("x")))
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Unsupported file format\"}\n" {
 		t.Fatalf("bad extension mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/admin/homepage-media/panorama", "file", "bad.zip", invalidPanoramaZip(t)))
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "bad.zip", invalidPanoramaZip(t)))
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"missing panorama_5.png\"}\n" {
 		t.Fatalf("missing face mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -256,7 +256,7 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/admin/homepage-media/panorama", &body)
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
@@ -280,7 +280,7 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/admin/homepage-media/panorama", &body)
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
@@ -304,7 +304,7 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/admin/homepage-media/panorama", &body)
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()

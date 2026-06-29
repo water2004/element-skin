@@ -49,10 +49,10 @@ func TestParseFlagsAppliesEveryCommandLineOverrideExactly(t *testing.T) {
 	os.Args = []string{
 		"loadtest",
 		"-target=https://backend.example/base",
-		"-path=/admin/users?limit=7",
+		"-path=/v1/admin/users?limit=7",
 		"-method=patch",
 		`-body={"name":"Updated"}`,
-		"-content-type=application/merge-patch+json",
+		"-content-type=application/v1/users/merge-patch+json",
 		"-concurrency=2,4,8",
 		"-duration=3s",
 		"-timeout=750ms",
@@ -68,10 +68,10 @@ func TestParseFlagsAppliesEveryCommandLineOverrideExactly(t *testing.T) {
 	got := parseFlags()
 	want := options{
 		target:          "https://backend.example/base",
-		path:            "/admin/users?limit=7",
+		path:            "/v1/admin/users?limit=7",
 		method:          "patch",
 		body:            `{"name":"Updated"}`,
-		contentType:     "application/merge-patch+json",
+		contentType:     "application/v1/users/merge-patch+json",
 		concurrencyList: "2,4,8",
 		duration:        3 * time.Second,
 		timeout:         750 * time.Millisecond,
@@ -216,28 +216,28 @@ func TestRunReportsSuccessfulAndFailedCapacityExactly(t *testing.T) {
 }
 
 func TestBuildURL(t *testing.T) {
-	got, err := buildURL("http://127.0.0.1:8000/api", "/public/settings")
+	got, err := buildURL("http://127.0.0.1:8000/api", "/v1/public/settings")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "http://127.0.0.1:8000/api/public/settings" {
+	if got != "http://127.0.0.1:8000/api/v1/public/settings" {
 		t.Fatalf("unexpected URL: %s", got)
 	}
-	got, err = buildURL("http://127.0.0.1:8000/api", "/admin/users?limit=20&q=Load")
+	got, err = buildURL("http://127.0.0.1:8000/api", "/v1/admin/users?limit=20&q=Load")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "http://127.0.0.1:8000/api/admin/users?limit=20&q=Load" {
+	if got != "http://127.0.0.1:8000/api/v1/admin/users?limit=20&q=Load" {
 		t.Fatalf("query string should stay as query, got: %s", got)
 	}
-	got, err = buildURL("http://ignored", "https://example.com/me")
+	got, err = buildURL("http://ignored", "https://example.com/v1/users/me")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != "https://example.com/me" {
+	if got != "https://example.com/v1/users/me" {
 		t.Fatalf("absolute URL should pass through: %s", got)
 	}
-	if _, err := buildURL("127.0.0.1:8000", "/me"); err == nil {
+	if _, err := buildURL("127.0.0.1:8000", "/v1/users/me"); err == nil {
 		t.Fatal("target without scheme should fail")
 	}
 	if _, err := buildURL("http://127.0.0.1:8000", "://bad path"); err == nil {
@@ -311,8 +311,8 @@ func TestLoginSendsExactCredentialsAndReturnsCookieHeader(t *testing.T) {
 	var calls atomic.Int64
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		calls.Add(1)
-		if req.Method != http.MethodPost || req.URL.Path != "/api/site-login" {
-			t.Fatalf("login request=%s %s; want POST /api/site-login", req.Method, req.URL.Path)
+		if req.Method != http.MethodPost || req.URL.Path != "/api/v1/auth/login" {
+			t.Fatalf("login request=%s %s; want POST /api/v1/auth/login", req.Method, req.URL.Path)
 		}
 		if req.Header.Get("Content-Type") != "application/json" {
 			t.Fatalf("login content type=%q; want application/json", req.Header.Get("Content-Type"))
@@ -330,7 +330,7 @@ func TestLoginSendsExactCredentialsAndReturnsCookieHeader(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cookies, err := login(server.Client(), server.URL+"/api", "/site-login", "load@example.com", "Secret123")
+	cookies, err := login(server.Client(), server.URL+"/api", "/v1/auth/login", "load@example.com", "Secret123")
 	if err != nil || cookies != "access=access-value; refresh=refresh-value" {
 		t.Fatalf("login cookies=%q err=%v; want exact joined cookie header", cookies, err)
 	}
@@ -370,7 +370,7 @@ func TestDoRequestForwardsExactRequestAndClassifiesResponse(t *testing.T) {
 			t.Fatal(err)
 		}
 		if req.Method != http.MethodPatch ||
-			req.Header.Get("Content-Type") != "application/merge-patch+json" ||
+			req.Header.Get("Content-Type") != "application/v1/users/merge-patch+json" ||
 			req.Header.Get("Cookie") != "access=abc; refresh=def" ||
 			string(body) != `{"name":"Updated"}` {
 			t.Fatalf("request mismatch: method=%s content-type=%q cookie=%q body=%q",
@@ -388,7 +388,7 @@ func TestDoRequestForwardsExactRequestAndClassifiesResponse(t *testing.T) {
 	opts := options{
 		method:      http.MethodPatch,
 		body:        `{"name":"Updated"}`,
-		contentType: "application/merge-patch+json",
+		contentType: "application/v1/users/merge-patch+json",
 	}
 
 	success := doRequest(server.Client(), server.URL, opts, "access=abc; refresh=def")

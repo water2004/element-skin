@@ -21,11 +21,11 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 
 	profile := testutil.CreateProfile(t, db, user.ID, "admin_profile", "AdminList1")
 	otherProfile := testutil.CreateProfile(t, db, user.ID, "admin_profile_other", "OtherName")
-	forbiddenProfiles := doJSON(t, h, "GET", "/admin/profiles", nil, userCookie)
+	forbiddenProfiles := doJSON(t, h, "GET", "/v1/admin/profiles", nil, userCookie)
 	if forbiddenProfiles.Code != 403 {
 		t.Fatalf("non-admin profiles list should be 403, got %d", forbiddenProfiles.Code)
 	}
-	profiles := doJSON(t, h, "GET", "/admin/profiles?q=AdminList1", nil, adminCookie)
+	profiles := doJSON(t, h, "GET", "/v1/admin/profiles?q=AdminList1", nil, adminCookie)
 	if profiles.Code != 200 {
 		t.Fatalf("admin profiles status=%d body=%s", profiles.Code, profiles.Body.String())
 	}
@@ -34,7 +34,7 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 		t.Fatalf("unexpected admin profiles: %#v", items)
 	}
 
-	patchProfile := doJSON(t, h, "PATCH", "/admin/profiles/"+profile.ID, map[string]any{"name": "AdminRenamed"}, adminCookie)
+	patchProfile := doJSON(t, h, "PATCH", "/v1/admin/profiles/"+profile.ID, map[string]any{"name": "AdminRenamed"}, adminCookie)
 	if patchProfile.Code != 200 {
 		t.Fatalf("admin patch profile status=%d body=%s", patchProfile.Code, patchProfile.Body.String())
 	}
@@ -42,15 +42,15 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if p.Name != "AdminRenamed" {
 		t.Fatal("admin profile rename did not persist")
 	}
-	duplicateProfile := doJSON(t, h, "PATCH", "/admin/profiles/"+profile.ID, map[string]any{"name": otherProfile.Name}, adminCookie)
+	duplicateProfile := doJSON(t, h, "PATCH", "/v1/admin/profiles/"+profile.ID, map[string]any{"name": otherProfile.Name}, adminCookie)
 	if duplicateProfile.Code != 409 {
 		t.Fatalf("admin duplicate profile name should be 409, got %d body=%s", duplicateProfile.Code, duplicateProfile.Body.String())
 	}
-	forbiddenPatchProfile := doJSON(t, h, "PATCH", "/admin/profiles/"+profile.ID, map[string]any{"name": "Nope"}, userCookie)
+	forbiddenPatchProfile := doJSON(t, h, "PATCH", "/v1/admin/profiles/"+profile.ID, map[string]any{"name": "Nope"}, userCookie)
 	if forbiddenPatchProfile.Code != 403 {
 		t.Fatalf("non-admin profile patch should be 403, got %d", forbiddenPatchProfile.Code)
 	}
-	missingProfileDelete := doJSON(t, h, "DELETE", "/admin/profiles/missing-profile", nil, adminCookie)
+	missingProfileDelete := doJSON(t, h, "DELETE", "/v1/admin/profiles/missing-profile", nil, adminCookie)
 	if missingProfileDelete.Code != 404 {
 		t.Fatalf("missing admin profile delete should be 404, got %d", missingProfileDelete.Code)
 	}
@@ -62,11 +62,11 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if err := db.Profiles.UpdateCape(context.Background(), profile.ID, &capeHash); err != nil {
 		t.Fatal(err)
 	}
-	forbiddenClearSkin := doJSON(t, h, "PATCH", "/admin/profiles/"+profile.ID+"/skin", map[string]any{"hash": nil}, userCookie)
+	forbiddenClearSkin := doJSON(t, h, "PATCH", "/v1/admin/profiles/"+profile.ID+"/skin", map[string]any{"hash": nil}, userCookie)
 	if forbiddenClearSkin.Code != 403 {
 		t.Fatalf("non-admin clear skin should be 403, got %d", forbiddenClearSkin.Code)
 	}
-	clearSkin := doJSON(t, h, "PATCH", "/admin/profiles/"+profile.ID+"/skin", map[string]any{"hash": nil}, adminCookie)
+	clearSkin := doJSON(t, h, "PATCH", "/v1/admin/profiles/"+profile.ID+"/skin", map[string]any{"hash": nil}, adminCookie)
 	if clearSkin.Code != 200 {
 		t.Fatalf("admin clear skin status=%d body=%s", clearSkin.Code, clearSkin.Body.String())
 	}
@@ -74,7 +74,7 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if p.SkinHash != nil || p.CapeHash == nil || *p.CapeHash != capeHash {
 		t.Fatalf("clearing skin should not affect cape: %#v", p)
 	}
-	clearCape := doJSON(t, h, "PATCH", "/admin/profiles/"+profile.ID+"/cape", map[string]any{"hash": nil}, adminCookie)
+	clearCape := doJSON(t, h, "PATCH", "/v1/admin/profiles/"+profile.ID+"/cape", map[string]any{"hash": nil}, adminCookie)
 	if clearCape.Code != 200 {
 		t.Fatalf("admin clear cape status=%d body=%s", clearCape.Code, clearCape.Body.String())
 	}
@@ -82,7 +82,7 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if p.CapeHash != nil {
 		t.Fatal("admin cape clear did not persist")
 	}
-	missingClearCape := doJSON(t, h, "PATCH", "/admin/profiles/missing-profile/cape", map[string]any{"hash": nil}, adminCookie)
+	missingClearCape := doJSON(t, h, "PATCH", "/v1/admin/profiles/missing-profile/cape", map[string]any{"hash": nil}, adminCookie)
 	if missingClearCape.Code != 404 {
 		t.Fatalf("missing clear cape should be 404, got %d", missingClearCape.Code)
 	}
@@ -90,11 +90,11 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if err := db.Textures.AddToLibrary(context.Background(), user.ID, "adm_hash", "skin", "AdminTexture", true, "default"); err != nil {
 		t.Fatal(err)
 	}
-	forbiddenTextures := doJSON(t, h, "GET", "/admin/textures", nil, userCookie)
+	forbiddenTextures := doJSON(t, h, "GET", "/v1/admin/textures", nil, userCookie)
 	if forbiddenTextures.Code != 403 {
 		t.Fatalf("non-admin textures list should be 403, got %d", forbiddenTextures.Code)
 	}
-	textures := doJSON(t, h, "GET", "/admin/textures?q=AdminTexture", nil, adminCookie)
+	textures := doJSON(t, h, "GET", "/v1/admin/textures?q=AdminTexture", nil, adminCookie)
 	if textures.Code != 200 {
 		t.Fatalf("admin textures status=%d body=%s", textures.Code, textures.Body.String())
 	}
@@ -102,7 +102,7 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if len(textureItems) != 1 || textureItems[0].(map[string]any)["hash"] != "adm_hash" {
 		t.Fatalf("unexpected admin textures: %#v", textureItems)
 	}
-	patchTex := doJSON(t, h, "PATCH", "/admin/textures/adm_hash", map[string]any{"type": "skin", "is_public": 0, "note": "AdminRenamedTexture"}, adminCookie)
+	patchTex := doJSON(t, h, "PATCH", "/v1/admin/textures/adm_hash", map[string]any{"type": "skin", "is_public": 0, "note": "AdminRenamedTexture"}, adminCookie)
 	if patchTex.Code != 200 {
 		t.Fatalf("admin patch texture status=%d body=%s", patchTex.Code, patchTex.Body.String())
 	}
@@ -110,15 +110,15 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if info["is_public"].(int) != 0 || info["note"] != "AdminRenamedTexture" {
 		t.Fatalf("admin texture patch did not persist: %#v", info)
 	}
-	forbiddenPatchTexture := doJSON(t, h, "PATCH", "/admin/textures/adm_hash", map[string]any{"type": "skin", "is_public": 1}, userCookie)
+	forbiddenPatchTexture := doJSON(t, h, "PATCH", "/v1/admin/textures/adm_hash", map[string]any{"type": "skin", "is_public": 1}, userCookie)
 	if forbiddenPatchTexture.Code != 403 {
 		t.Fatalf("non-admin texture patch should be 403, got %d", forbiddenPatchTexture.Code)
 	}
-	forbiddenDeleteTexture := doJSON(t, h, "DELETE", "/admin/textures/adm_hash?user_id="+user.ID+"&type=skin", nil, userCookie)
+	forbiddenDeleteTexture := doJSON(t, h, "DELETE", "/v1/admin/textures/adm_hash?user_id="+user.ID+"&type=skin", nil, userCookie)
 	if forbiddenDeleteTexture.Code != 403 {
 		t.Fatalf("non-admin texture delete should be 403, got %d", forbiddenDeleteTexture.Code)
 	}
-	delTex := doJSON(t, h, "DELETE", "/admin/textures/adm_hash?user_id="+user.ID+"&type=skin", nil, adminCookie)
+	delTex := doJSON(t, h, "DELETE", "/v1/admin/textures/adm_hash?user_id="+user.ID+"&type=skin", nil, adminCookie)
 	if delTex.Code != 200 {
 		t.Fatalf("admin delete texture status=%d body=%s", delTex.Code, delTex.Body.String())
 	}
@@ -127,18 +127,18 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 		t.Fatal("texture should be deleted from user library")
 	}
 
-	createInvite := doJSON(t, h, "POST", "/admin/invites", map[string]any{"code": "INV_HTTP", "total_uses": 5, "note": "API Code"}, adminCookie)
+	createInvite := doJSON(t, h, "POST", "/v1/admin/invites", map[string]any{"code": "INV_HTTP", "total_uses": 5, "note": "API Code"}, adminCookie)
 	if createInvite.Code != 200 {
 		t.Fatalf("create invite status=%d body=%s", createInvite.Code, createInvite.Body.String())
 	}
-	badInvite := doRawJSON(t, h, "POST", "/admin/invites", `{"code":"BAD_INVITE"`, adminCookie)
+	badInvite := doRawJSON(t, h, "POST", "/v1/admin/invites", `{"code":"BAD_INVITE"`, adminCookie)
 	if badInvite.Code != 400 {
 		t.Fatalf("malformed invite JSON should be 400, got %d body=%s", badInvite.Code, badInvite.Body.String())
 	}
 	if inv, err := db.Invites.Get(context.Background(), "BAD_INVITE"); err != nil || inv != nil {
 		t.Fatalf("malformed invite JSON must not create invite: invite=%#v err=%v", inv, err)
 	}
-	invites := doJSON(t, h, "GET", "/admin/invites", nil, adminCookie)
+	invites := doJSON(t, h, "GET", "/v1/admin/invites", nil, adminCookie)
 	if invites.Code != 200 {
 		t.Fatalf("list invites status=%d body=%s", invites.Code, invites.Body.String())
 	}
@@ -151,7 +151,7 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if !found {
 		t.Fatal("created invite not listed")
 	}
-	delInvite := doJSON(t, h, "DELETE", "/admin/invites/INV_HTTP", nil, adminCookie)
+	delInvite := doJSON(t, h, "DELETE", "/v1/admin/invites/INV_HTTP", nil, adminCookie)
 	if delInvite.Code != 200 {
 		t.Fatalf("delete invite status=%d body=%s", delInvite.Code, delInvite.Body.String())
 	}
@@ -168,7 +168,7 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	adminToken, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, admin.ID, time.Hour)
 	adminCookie := &http.Cookie{Name: "access_token", Value: adminToken}
 
-	search := doJSON(t, h, "GET", "/admin/users?q=NormalControls", nil, adminCookie)
+	search := doJSON(t, h, "GET", "/v1/admin/users?q=NormalControls", nil, adminCookie)
 	if search.Code != 200 {
 		t.Fatalf("admin user search status=%d body=%s", search.Code, search.Body.String())
 	}
@@ -176,7 +176,7 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	if len(items) != 1 || items[0].(map[string]any)["id"] != user.ID {
 		t.Fatalf("unexpected user search result: %#v", items)
 	}
-	detail := doJSON(t, h, "GET", "/admin/users/"+user.ID, nil, adminCookie)
+	detail := doJSON(t, h, "GET", "/v1/admin/users/"+user.ID, nil, adminCookie)
 	if detail.Code != 200 {
 		t.Fatalf("admin user detail status=%d body=%s", detail.Code, detail.Body.String())
 	}
@@ -187,28 +187,28 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	if _, ok := detailBody["password"]; ok {
 		t.Fatalf("admin user detail should not expose password: %#v", detailBody)
 	}
-	missingDetail := doJSON(t, h, "GET", "/admin/users/missing-user", nil, adminCookie)
+	missingDetail := doJSON(t, h, "GET", "/v1/admin/users/missing-user", nil, adminCookie)
 	if missingDetail.Code != 404 {
 		t.Fatalf("missing admin user detail should be 404, got %d body=%s", missingDetail.Code, missingDetail.Body.String())
 	}
 
-	invalidCursor := doJSON(t, h, "GET", "/admin/users?cursor=garbage!!", nil, adminCookie)
+	invalidCursor := doJSON(t, h, "GET", "/v1/admin/users?cursor=garbage!!", nil, adminCookie)
 	if invalidCursor.Code != 400 {
 		t.Fatalf("invalid admin user cursor should be 400, got %d", invalidCursor.Code)
 	}
 
-	selfGrant := doJSON(t, h, "PUT", "/admin/users/"+admin.ID+"/roles/super_admin", nil, adminCookie)
+	selfGrant := doJSON(t, h, "PUT", "/v1/admin/users/"+admin.ID+"/roles/super_admin", nil, adminCookie)
 	if selfGrant.Code != 403 {
 		t.Fatalf("self protected role grant should be 403, got %d body=%s", selfGrant.Code, selfGrant.Body.String())
 	}
-	granted := doJSON(t, h, "PUT", "/admin/users/"+user.ID+"/roles/admin", nil, adminCookie)
+	granted := doJSON(t, h, "PUT", "/v1/admin/users/"+user.ID+"/roles/admin", nil, adminCookie)
 	if granted.Code != 200 || parseJSON(t, granted)["role_id"] != "admin" {
 		t.Fatalf("grant admin role status=%d body=%s", granted.Code, granted.Body.String())
 	}
 	if hasRole, err := db.Permissions.UserHasRole(context.Background(), user.ID, "admin"); err != nil || !hasRole {
 		t.Fatalf("user should now have admin role: hasRole=%v err=%v", hasRole, err)
 	}
-	revoked := doJSON(t, h, "DELETE", "/admin/users/"+user.ID+"/roles/admin", nil, adminCookie)
+	revoked := doJSON(t, h, "DELETE", "/v1/admin/users/"+user.ID+"/roles/admin", nil, adminCookie)
 	if revoked.Code != 200 || parseJSON(t, revoked)["role_id"] != "admin" {
 		t.Fatalf("revoke admin role status=%d body=%s", revoked.Code, revoked.Body.String())
 	}
@@ -217,14 +217,14 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	}
 
 	bannedUntil := time.Now().Add(time.Hour).UnixMilli()
-	ban := doJSON(t, h, "POST", "/admin/users/"+user.ID+"/ban", map[string]any{"banned_until": bannedUntil}, adminCookie)
+	ban := doJSON(t, h, "POST", "/v1/admin/users/"+user.ID+"/ban", map[string]any{"banned_until": bannedUntil}, adminCookie)
 	if ban.Code != 200 {
 		t.Fatalf("ban status=%d body=%s", ban.Code, ban.Body.String())
 	}
 	if banned, _ := db.Users.IsBanned(context.Background(), user.ID); !banned {
 		t.Fatal("user should be banned")
 	}
-	unban := doJSON(t, h, "POST", "/admin/users/"+user.ID+"/unban", nil, adminCookie)
+	unban := doJSON(t, h, "POST", "/v1/admin/users/"+user.ID+"/unban", nil, adminCookie)
 	if unban.Code != 200 {
 		t.Fatalf("unban status=%d body=%s", unban.Code, unban.Body.String())
 	}
@@ -239,7 +239,7 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	reset := doJSON(t, h, "POST", "/admin/users/reset-password", map[string]any{"user_id": user.ID, "new_password": "NewStr0ngPass!"}, adminCookie)
+	reset := doJSON(t, h, "POST", "/v1/admin/users/password/reset", map[string]any{"user_id": user.ID, "new_password": "NewStr0ngPass!"}, adminCookie)
 	if reset.Code != 200 {
 		t.Fatalf("reset password status=%d body=%s", reset.Code, reset.Body.String())
 	}
@@ -252,7 +252,7 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 			t.Fatal("admin reset should revoke refresh tokens")
 		}
 	}
-	missingReset := doJSON(t, h, "POST", "/admin/users/reset-password", map[string]any{"user_id": "missing", "new_password": "x"}, adminCookie)
+	missingReset := doJSON(t, h, "POST", "/v1/admin/users/password/reset", map[string]any{"user_id": "missing", "new_password": "x"}, adminCookie)
 	if missingReset.Code != 404 {
 		t.Fatalf("missing reset should be 404, got %d", missingReset.Code)
 	}
@@ -261,7 +261,7 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	if err := db.Textures.AddToLibrary(context.Background(), user.ID, "delete_user_texture", "skin", "DeleteUserTex", true, "default"); err != nil {
 		t.Fatal(err)
 	}
-	del := doJSON(t, h, "DELETE", "/admin/users/"+user.ID, nil, adminCookie)
+	del := doJSON(t, h, "DELETE", "/v1/admin/users/"+user.ID, nil, adminCookie)
 	if del.Code != 200 {
 		t.Fatalf("delete user status=%d body=%s", del.Code, del.Body.String())
 	}
@@ -274,7 +274,7 @@ func TestAdminUserControlsHTTP(t *testing.T) {
 	if ok, _ := db.Textures.VerifyOwnership(context.Background(), user.ID, "delete_user_texture", "skin"); ok {
 		t.Fatal("user textures should be deleted")
 	}
-	missingDelete := doJSON(t, h, "DELETE", "/admin/users/"+user.ID, nil, adminCookie)
+	missingDelete := doJSON(t, h, "DELETE", "/v1/admin/users/"+user.ID, nil, adminCookie)
 	if missingDelete.Code != 404 {
 		t.Fatalf("missing delete should be 404, got %d", missingDelete.Code)
 	}
@@ -286,27 +286,27 @@ func TestAdminTextureValidationEdges(t *testing.T) {
 	adminToken, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, admin.ID, time.Hour)
 	adminCookie := &http.Cookie{Name: "access_token", Value: adminToken}
 
-	invalidPublic := doJSON(t, h, "PATCH", "/admin/textures/somehash", map[string]any{"is_public": 2}, adminCookie)
+	invalidPublic := doJSON(t, h, "PATCH", "/v1/admin/textures/somehash", map[string]any{"is_public": 2}, adminCookie)
 	if invalidPublic.Code != 400 {
 		t.Fatalf("invalid is_public should be 400, got %d body=%s", invalidPublic.Code, invalidPublic.Body.String())
 	}
-	missingPublic := doJSON(t, h, "PATCH", "/admin/textures/nonexistent-hash", map[string]any{"is_public": 0}, adminCookie)
+	missingPublic := doJSON(t, h, "PATCH", "/v1/admin/textures/nonexistent-hash", map[string]any{"is_public": 0}, adminCookie)
 	if missingPublic.Code != 404 {
 		t.Fatalf("missing texture public update should be 404, got %d body=%s", missingPublic.Code, missingPublic.Body.String())
 	}
-	missingNote := doJSON(t, h, "PATCH", "/admin/textures/nonexistent-hash", map[string]any{"note": "missing"}, adminCookie)
+	missingNote := doJSON(t, h, "PATCH", "/v1/admin/textures/nonexistent-hash", map[string]any{"note": "missing"}, adminCookie)
 	if missingNote.Code != 404 {
 		t.Fatalf("missing texture note update should be 404, got %d body=%s", missingNote.Code, missingNote.Body.String())
 	}
-	invalidModel := doJSON(t, h, "PATCH", "/admin/textures/somehash", map[string]any{"model": "invalid"}, adminCookie)
+	invalidModel := doJSON(t, h, "PATCH", "/v1/admin/textures/somehash", map[string]any{"model": "invalid"}, adminCookie)
 	if invalidModel.Code != 400 {
 		t.Fatalf("invalid model should be 400, got %d body=%s", invalidModel.Code, invalidModel.Body.String())
 	}
-	missingModel := doJSON(t, h, "PATCH", "/admin/textures/nonexistent-hash", map[string]any{"model": "slim"}, adminCookie)
+	missingModel := doJSON(t, h, "PATCH", "/v1/admin/textures/nonexistent-hash", map[string]any{"model": "slim"}, adminCookie)
 	if missingModel.Code != 404 {
 		t.Fatalf("missing texture model update should be 404, got %d body=%s", missingModel.Code, missingModel.Body.String())
 	}
-	missingUser := doJSON(t, h, "DELETE", "/admin/textures/somehash?type=skin", nil, adminCookie)
+	missingUser := doJSON(t, h, "DELETE", "/v1/admin/textures/somehash?type=skin", nil, adminCookie)
 	if missingUser.Code != 400 {
 		t.Fatalf("per-user delete without user_id should be 400, got %d body=%s", missingUser.Code, missingUser.Body.String())
 	}
@@ -319,7 +319,7 @@ func TestAdminTextureValidationEdges(t *testing.T) {
 	if err := db.Textures.AddToLibrary(context.Background(), user2.ID, "force_hash", "skin", "Copy", true, "default"); err != nil {
 		t.Fatal(err)
 	}
-	force := doJSON(t, h, "DELETE", "/admin/textures/force_hash?type=skin&force=true", nil, adminCookie)
+	force := doJSON(t, h, "DELETE", "/v1/admin/textures/force_hash?type=skin&force=true", nil, adminCookie)
 	if force.Code != 200 {
 		t.Fatalf("force delete status=%d body=%s", force.Code, force.Body.String())
 	}

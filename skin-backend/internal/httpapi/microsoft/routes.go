@@ -28,7 +28,7 @@ func (h Handler) AuthURL(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	redirectURI, err := h.settings.Get(req.Context(), "microsoft_redirect_uri", strings.TrimRight(h.cfg.APIURL, "/")+"/microsoft/callback")
+	redirectURI, err := h.settings.Get(req.Context(), "microsoft_redirect_uri", strings.TrimRight(h.cfg.APIURL, "/")+"/v1/imports/microsoft/callback")
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -73,7 +73,7 @@ func (h Handler) Callback(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	redirectURI, err := h.settings.Get(req.Context(), "microsoft_redirect_uri", strings.TrimRight(h.cfg.APIURL, "/")+"/microsoft/callback")
+	redirectURI, err := h.settings.Get(req.Context(), "microsoft_redirect_uri", strings.TrimRight(h.cfg.APIURL, "/")+"/v1/imports/microsoft/callback")
 	if err != nil {
 		util.Error(w, err)
 		return

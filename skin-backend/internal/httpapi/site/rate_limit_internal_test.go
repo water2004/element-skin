@@ -31,7 +31,7 @@ func TestCheckAuthRateLimitFailsClosedOnEachSettingsReadError(t *testing.T) {
 				settings: settings.Settings{Redis: store},
 			}
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest("POST", "/site-login", nil)
+			req := httptest.NewRequest("POST", "/v1/auth/login", nil)
 
 			if allowed := h.checkAuthRateLimit(rec, req, "login"); allowed {
 				t.Fatal("settings read failure must reject the authentication attempt")

@@ -129,7 +129,7 @@ func run(opts options, stdout, stderr io.Writer) int {
 func parseFlags() options {
 	var opts options
 	flag.StringVar(&opts.target, "target", "http://127.0.0.1:8000", "backend base URL")
-	flag.StringVar(&opts.path, "path", "/public/settings", "request path, or absolute URL")
+	flag.StringVar(&opts.path, "path", "/v1/public/settings", "request path, or absolute URL")
 	flag.StringVar(&opts.method, "method", http.MethodGet, "HTTP method")
 	flag.StringVar(&opts.body, "body", "", "request body")
 	flag.StringVar(&opts.contentType, "content-type", "application/json", "request Content-Type")
@@ -140,7 +140,7 @@ func parseFlags() options {
 	flag.DurationVar(&opts.maxP95, "max-p95", 0, "optional maximum acceptable p95 latency; 0 disables this check")
 	flag.StringVar(&opts.loginEmail, "login-email", "", "email used to log in before the test")
 	flag.StringVar(&opts.loginPassword, "login-password", "", "password used to log in before the test")
-	flag.StringVar(&opts.loginPath, "login-path", "/site-login", "login path")
+	flag.StringVar(&opts.loginPath, "login-path", "/v1/auth/login", "login path")
 	flag.StringVar(&opts.cookieHeader, "cookie", "", "Cookie header to send with every request")
 	flag.BoolVar(&opts.insecureTLS, "insecure", false, "skip TLS certificate verification")
 	flag.Parse()

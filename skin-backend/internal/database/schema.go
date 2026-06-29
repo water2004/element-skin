@@ -356,7 +356,7 @@ CREATE INDEX IF NOT EXISTS idx_delegated_permission_grants_user_client ON delega
 INSERT INTO settings (key, value) VALUES
 ('microsoft_client_id', ''),
 ('microsoft_client_secret', ''),
-('microsoft_redirect_uri', 'http://localhost:8000/microsoft/callback'),
+('microsoft_redirect_uri', 'http://localhost:8000/v1/imports/microsoft/callback'),
 ('fallback_strategy', 'serial'),
 ('profile_uuid_mode', 'random'),
 ('enable_skin_library', 'true'),

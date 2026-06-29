@@ -240,7 +240,7 @@
         <el-form-item label="Redirect URI">
           <el-input
             v-model="settings.microsoft.microsoft_redirect_uri"
-            placeholder="https://your-skin-site.com/auth/microsoft/callback"
+            placeholder="https://your-skin-site.com/v1/imports/microsoft/callback"
           />
         </el-form-item>
       </el-form>

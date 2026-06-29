@@ -31,7 +31,7 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 		},
 	})
 
-	resp := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{
+	resp := doJSON(t, h, "POST", "/v1/imports/microsoft/profile/import", map[string]any{
 		"ms_token":     importToken,
 		"profile_id":   "forged_id",
 		"profile_name": "ForgedName",
@@ -52,7 +52,7 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 		t.Fatal("verified profile should be persisted")
 	}
 
-	replay := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": importToken}, cookie)
+	replay := doJSON(t, h, "POST", "/v1/imports/microsoft/profile/import", map[string]any{"ms_token": importToken}, cookie)
 	if replay.Code != 400 {
 		t.Fatalf("import token should be one-time, got %d body=%s", replay.Code, replay.Body.String())
 	}
@@ -63,7 +63,7 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 		"kind":    "import",
 		"profile": map[string]any{"id": "x_id", "name": "X"},
 	})
-	other := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": otherUserToken}, cookie)
+	other := doJSON(t, h, "POST", "/v1/imports/microsoft/profile/import", map[string]any{"ms_token": otherUserToken}, cookie)
 	if other.Code != 403 {
 		t.Fatalf("other user's token should be 403, got %d body=%s", other.Code, other.Body.String())
 	}
@@ -74,12 +74,12 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 		"kind":    "profile",
 		"profile": map[string]any{"id": "wrong_kind_id", "name": "WrongKind"},
 	})
-	wrongKind := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": wrongKindToken}, cookie)
+	wrongKind := doJSON(t, h, "POST", "/v1/imports/microsoft/profile/import", map[string]any{"ms_token": wrongKindToken}, cookie)
 	if wrongKind.Code != 400 {
 		t.Fatalf("wrong kind token should be 400, got %d body=%s", wrongKind.Code, wrongKind.Body.String())
 	}
 
-	missing := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": "does-not-exist"}, cookie)
+	missing := doJSON(t, h, "POST", "/v1/imports/microsoft/profile/import", map[string]any{"ms_token": "does-not-exist"}, cookie)
 	if missing.Code != 400 {
 		t.Fatalf("missing token should be 400, got %d body=%s", missing.Code, missing.Body.String())
 	}
@@ -91,7 +91,7 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 		"kind":    "import",
 		"profile": map[string]any{"id": "conflict_ms_id", "name": "ConflictMsPlayer", "skins": []any{}, "capes": []any{}},
 	})
-	conflict := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": conflictToken}, cookie)
+	conflict := doJSON(t, h, "POST", "/v1/imports/microsoft/profile/import", map[string]any{"ms_token": conflictToken}, cookie)
 	if conflict.Code != 400 || !strings.Contains(conflict.Body.String(), "UUID") {
 		t.Fatalf("uuid conflict should be 400 with UUID detail, got %d body=%s", conflict.Code, conflict.Body.String())
 	}
@@ -103,7 +103,7 @@ func TestMicrosoftImportProfileTokenSemantics(t *testing.T) {
 		"kind":    "import",
 		"profile": map[string]any{"id": "new_ms_id", "name": "TakenMsName", "skins": []any{}, "capes": []any{}},
 	})
-	dedup := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": nameDedupToken}, cookie)
+	dedup := doJSON(t, h, "POST", "/v1/imports/microsoft/profile/import", map[string]any{"ms_token": nameDedupToken}, cookie)
 	if dedup.Code != 200 {
 		t.Fatalf("name dedup import status=%d body=%s", dedup.Code, dedup.Body.String())
 	}
@@ -125,7 +125,7 @@ func TestMicrosoftAuthURLAndGetProfileTokenSemantics(t *testing.T) {
 	cookie := &http.Cookie{Name: "access_token", Value: token}
 	otherCookie := &http.Cookie{Name: "access_token", Value: otherToken}
 
-	authURL := doJSON(t, h, "GET", "/microsoft/auth-url", nil, cookie)
+	authURL := doJSON(t, h, "GET", "/v1/imports/microsoft/auth-url", nil, cookie)
 	if authURL.Code != 200 {
 		t.Fatalf("auth-url status=%d body=%s", authURL.Code, authURL.Body.String())
 	}
@@ -151,7 +151,7 @@ func TestMicrosoftAuthURLAndGetProfileTokenSemantics(t *testing.T) {
 			},
 		},
 	})
-	getProfileOther := doJSON(t, h, "POST", "/microsoft/get-profile", map[string]any{"ms_token": profileToken}, otherCookie)
+	getProfileOther := doJSON(t, h, "POST", "/v1/imports/microsoft/profile", map[string]any{"ms_token": profileToken}, otherCookie)
 	if getProfileOther.Code != 403 {
 		t.Fatalf("other user's profile token should be 403, got %d body=%s", getProfileOther.Code, getProfileOther.Body.String())
 	}
@@ -164,7 +164,7 @@ func TestMicrosoftAuthURLAndGetProfileTokenSemantics(t *testing.T) {
 			"profile":  map[string]any{"id": "ms_flow_profile", "name": "MsFlowPlayer", "skins": []any{}, "capes": []any{}},
 		},
 	})
-	getProfile := doJSON(t, h, "POST", "/microsoft/get-profile", map[string]any{"ms_token": profileToken}, cookie)
+	getProfile := doJSON(t, h, "POST", "/v1/imports/microsoft/profile", map[string]any{"ms_token": profileToken}, cookie)
 	if getProfile.Code != 200 {
 		t.Fatalf("get-profile status=%d body=%s", getProfile.Code, getProfile.Body.String())
 	}
@@ -173,11 +173,11 @@ func TestMicrosoftAuthURLAndGetProfileTokenSemantics(t *testing.T) {
 	if importToken == "" || getBody["has_game"] != true {
 		t.Fatalf("unexpected get-profile body: %#v", getBody)
 	}
-	replay := doJSON(t, h, "POST", "/microsoft/get-profile", map[string]any{"ms_token": profileToken}, cookie)
+	replay := doJSON(t, h, "POST", "/v1/imports/microsoft/profile", map[string]any{"ms_token": profileToken}, cookie)
 	if replay.Code != 400 {
 		t.Fatalf("profile token should be one-shot, got %d body=%s", replay.Code, replay.Body.String())
 	}
-	importResp := doJSON(t, h, "POST", "/microsoft/import-profile", map[string]any{"ms_token": importToken}, cookie)
+	importResp := doJSON(t, h, "POST", "/v1/imports/microsoft/profile/import", map[string]any{"ms_token": importToken}, cookie)
 	if importResp.Code != 200 {
 		t.Fatalf("import issued token status=%d body=%s", importResp.Code, importResp.Body.String())
 	}

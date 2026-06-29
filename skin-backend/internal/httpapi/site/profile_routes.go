@@ -44,7 +44,7 @@ func (h Handler) UpdateProfile(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
 		return
 	}
-	if err := h.site.UpdateProfile(req.Context(), shared.CurrentActor(req), req.PathValue("pid"), body["name"]); err != nil {
+	if err := h.site.UpdateProfile(req.Context(), shared.CurrentActor(req), profilePathID(req), body["name"]); err != nil {
 		util.Error(w, err)
 		return
 	}
@@ -56,7 +56,7 @@ func (h Handler) DeleteProfile(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	if err := h.site.DeleteProfile(req.Context(), shared.CurrentActor(req), req.PathValue("pid")); err != nil {
+	if err := h.site.DeleteProfile(req.Context(), shared.CurrentActor(req), profilePathID(req)); err != nil {
 		util.Error(w, err)
 		return
 	}
@@ -68,7 +68,7 @@ func (h Handler) ClearProfileSkin(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	if err := h.site.ClearProfileTexture(req.Context(), shared.CurrentActor(req), req.PathValue("pid"), "skin"); err != nil {
+	if err := h.site.ClearProfileTexture(req.Context(), shared.CurrentActor(req), profilePathID(req), "skin"); err != nil {
 		util.Error(w, err)
 		return
 	}
@@ -80,11 +80,18 @@ func (h Handler) ClearProfileCape(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	if err := h.site.ClearProfileTexture(req.Context(), shared.CurrentActor(req), req.PathValue("pid"), "cape"); err != nil {
+	if err := h.site.ClearProfileTexture(req.Context(), shared.CurrentActor(req), profilePathID(req), "cape"); err != nil {
 		util.Error(w, err)
 		return
 	}
 	util.JSON(w, 200, map[string]any{"ok": true})
+}
+
+func profilePathID(req *http.Request) string {
+	if id := req.PathValue("profile_id"); id != "" {
+		return id
+	}
+	return req.PathValue("pid")
 }
 
 func (h Handler) ListMyProfiles(w http.ResponseWriter, req *http.Request) {

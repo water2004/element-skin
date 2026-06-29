@@ -25,7 +25,7 @@ func TestRoutesRegistersPublicAndYggdrasilEntrypointsExactly(t *testing.T) {
 		want   string
 	}{
 		{method: http.MethodGet, path: "/", status: http.StatusOK, want: "implementationName"},
-		{method: http.MethodGet, path: "/public/settings", status: http.StatusOK, want: "site_name"},
+		{method: http.MethodGet, path: "/v1/public/settings", status: http.StatusOK, want: "site_name"},
 		{method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, status: http.StatusForbidden, want: "Invalid token"},
 	}
 	for _, tc := range cases {

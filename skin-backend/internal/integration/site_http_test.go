@@ -18,7 +18,7 @@ func TestSiteLoginMeAndRefresh(t *testing.T) {
 	db, h := testutil.NewTestApp(t)
 	user := testutil.CreateUser(t, db, "api_login@test.com", "ApiPassword123", "LoginUser", false)
 
-	login := doJSON(t, h, "POST", "/site-login", map[string]any{"email": user.Email, "password": "ApiPassword123"})
+	login := doJSON(t, h, "POST", "/v1/auth/login", map[string]any{"email": user.Email, "password": "ApiPassword123"})
 	if login.Code != 200 {
 		t.Fatalf("login status=%d body=%s", login.Code, login.Body.String())
 	}
@@ -32,7 +32,7 @@ func TestSiteLoginMeAndRefresh(t *testing.T) {
 		t.Fatalf("missing session cookies: %#v", login.Result().Cookies())
 	}
 
-	me := doJSON(t, h, "GET", "/me", nil, access)
+	me := doJSON(t, h, "GET", "/v1/users/me", nil, access)
 	if me.Code != 200 {
 		t.Fatalf("me status=%d body=%s", me.Code, me.Body.String())
 	}
@@ -41,15 +41,15 @@ func TestSiteLoginMeAndRefresh(t *testing.T) {
 		t.Fatalf("unexpected me body: %#v", meBody)
 	}
 	if _, ok := meBody["profiles"]; ok {
-		t.Fatalf("/me should not inline profiles: %#v", meBody)
+		t.Fatalf("/v1/users/me should not inline profiles: %#v", meBody)
 	}
 	if meBody["profile_count"] != float64(0) || meBody["texture_count"] != float64(0) {
-		t.Fatalf("/me counts should start at zero: %#v", meBody)
+		t.Fatalf("/v1/users/me counts should start at zero: %#v", meBody)
 	}
 	if err := db.Users.Ban(context.Background(), user.ID, time.Now().Add(time.Hour).UnixMilli()); err != nil {
 		t.Fatal(err)
 	}
-	bannedMe := doJSON(t, h, "GET", "/me", nil, access)
+	bannedMe := doJSON(t, h, "GET", "/v1/users/me", nil, access)
 	if bannedMe.Code != 200 {
 		t.Fatalf("banned user should still access site API, got %d body=%s", bannedMe.Code, bannedMe.Body.String())
 	}
@@ -57,7 +57,7 @@ func TestSiteLoginMeAndRefresh(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rotated := doJSON(t, h, "POST", "/me/refresh-token", nil, refresh)
+	rotated := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil, refresh)
 	if rotated.Code != 200 {
 		t.Fatalf("refresh status=%d body=%s", rotated.Code, rotated.Body.String())
 	}
@@ -65,65 +65,65 @@ func TestSiteLoginMeAndRefresh(t *testing.T) {
 	if newRefresh == nil || newRefresh.Value == refresh.Value {
 		t.Fatal("refresh token was not rotated")
 	}
-	replay := doJSON(t, h, "POST", "/me/refresh-token", nil, refresh)
+	replay := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil, refresh)
 	if replay.Code != 401 {
 		t.Fatalf("old refresh should be rejected, got %d", replay.Code)
 	}
-	missingRefresh := doJSON(t, h, "POST", "/me/refresh-token", nil)
+	missingRefresh := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil)
 	if missingRefresh.Code != 401 {
 		t.Fatalf("missing refresh should be 401, got %d", missingRefresh.Code)
 	}
 
-	noAccessLogin := doJSON(t, h, "POST", "/site-login", map[string]any{"email": user.Email, "password": "ApiPassword123"})
+	noAccessLogin := doJSON(t, h, "POST", "/v1/auth/login", map[string]any{"email": user.Email, "password": "ApiPassword123"})
 	noAccessRefresh := cookieNamed(noAccessLogin, "refresh_token")
 	expiredAccess, err := util.CreateAccessToken(testutil.TestConfig().JWTSecret, user.ID, -time.Minute)
 	if err != nil {
 		t.Fatal(err)
 	}
-	meExpired := doJSON(t, h, "GET", "/me", nil, &http.Cookie{Name: "access_token", Value: expiredAccess})
+	meExpired := doJSON(t, h, "GET", "/v1/users/me", nil, &http.Cookie{Name: "access_token", Value: expiredAccess})
 	if meExpired.Code != 401 {
 		t.Fatalf("expired access should be rejected, got %d", meExpired.Code)
 	}
-	refreshWithoutAccess := doJSON(t, h, "POST", "/me/refresh-token", nil, noAccessRefresh)
+	refreshWithoutAccess := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil, noAccessRefresh)
 	if refreshWithoutAccess.Code != 200 {
 		t.Fatalf("refresh should work without valid access, got %d body=%s", refreshWithoutAccess.Code, refreshWithoutAccess.Body.String())
 	}
 
-	logoutLogin := doJSON(t, h, "POST", "/site-login", map[string]any{"email": user.Email, "password": "ApiPassword123"})
+	logoutLogin := doJSON(t, h, "POST", "/v1/auth/login", map[string]any{"email": user.Email, "password": "ApiPassword123"})
 	logoutRefresh := cookieNamed(logoutLogin, "refresh_token")
-	logout := doJSON(t, h, "POST", "/site-logout", nil, logoutRefresh)
+	logout := doJSON(t, h, "POST", "/v1/auth/logout", nil, logoutRefresh)
 	if logout.Code != 200 {
 		t.Fatalf("logout status=%d body=%s", logout.Code, logout.Body.String())
 	}
-	afterLogout := doJSON(t, h, "POST", "/me/refresh-token", nil, logoutRefresh)
+	afterLogout := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil, logoutRefresh)
 	if afterLogout.Code != 401 {
 		t.Fatalf("refresh after logout should be 401, got %d", afterLogout.Code)
 	}
 
-	chpwLogin := doJSON(t, h, "POST", "/site-login", map[string]any{"email": user.Email, "password": "ApiPassword123"})
+	chpwLogin := doJSON(t, h, "POST", "/v1/auth/login", map[string]any{"email": user.Email, "password": "ApiPassword123"})
 	chpwAccess := cookieNamed(chpwLogin, "access_token")
 	chpwRefresh := cookieNamed(chpwLogin, "refresh_token")
-	chpw := doJSON(t, h, "POST", "/me/password", map[string]any{"old_password": "ApiPassword123", "new_password": "NewPassword456!"}, chpwAccess)
+	chpw := doJSON(t, h, "POST", "/v1/users/me/password", map[string]any{"old_password": "ApiPassword123", "new_password": "NewPassword456!"}, chpwAccess)
 	if chpw.Code != 200 {
 		t.Fatalf("change password status=%d body=%s", chpw.Code, chpw.Body.String())
 	}
-	afterPasswordChange := doJSON(t, h, "POST", "/me/refresh-token", nil, chpwRefresh)
+	afterPasswordChange := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil, chpwRefresh)
 	if afterPasswordChange.Code != 401 {
 		t.Fatalf("refresh after password change should be 401, got %d", afterPasswordChange.Code)
 	}
 
 	deletedUser := testutil.CreateUser(t, db, "refresh_deleted@test.com", "Password123", "RefreshDeleted", false)
-	deletedLogin := doJSON(t, h, "POST", "/site-login", map[string]any{"email": deletedUser.Email, "password": "Password123"})
+	deletedLogin := doJSON(t, h, "POST", "/v1/auth/login", map[string]any{"email": deletedUser.Email, "password": "Password123"})
 	deletedRefresh := cookieNamed(deletedLogin, "refresh_token")
 	if ok, err := db.Users.Delete(context.Background(), deletedUser.ID); err != nil || !ok {
 		t.Fatalf("delete refresh test user ok=%v err=%v", ok, err)
 	}
-	afterDelete := doJSON(t, h, "POST", "/me/refresh-token", nil, deletedRefresh)
+	afterDelete := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil, deletedRefresh)
 	if afterDelete.Code != 401 {
 		t.Fatalf("refresh after user deletion should be 401, got %d", afterDelete.Code)
 	}
 	deletedAccess, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, deletedUser.ID, time.Hour)
-	deletedMe := doJSON(t, h, "GET", "/me", nil, &http.Cookie{Name: "access_token", Value: deletedAccess})
+	deletedMe := doJSON(t, h, "GET", "/v1/users/me", nil, &http.Cookie{Name: "access_token", Value: deletedAccess})
 	if deletedMe.Code != 401 {
 		t.Fatalf("access token for deleted user should be rejected, got %d", deletedMe.Code)
 	}
@@ -134,7 +134,7 @@ func TestPublicSettingsAndAuthlibHeader(t *testing.T) {
 	if err := db.Settings.Set(context.Background(), "site_name", "Public Name"); err != nil {
 		t.Fatal(err)
 	}
-	resp := doJSON(t, h, "GET", "/public/settings", nil)
+	resp := doJSON(t, h, "GET", "/v1/public/settings", nil)
 	if resp.Code != 200 {
 		t.Fatalf("public settings status=%d body=%s", resp.Code, resp.Body.String())
 	}
@@ -176,7 +176,7 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 		t.Fatalf("wardrobe add for second most_used setup ok=%v err=%v", ok, err)
 	}
 
-	resp := doJSON(t, h, "GET", "/public/skin-library?q=MagicSword", nil)
+	resp := doJSON(t, h, "GET", "/v1/public/skin-library?q=MagicSword", nil)
 	if resp.Code != 200 {
 		t.Fatalf("library status=%d body=%s", resp.Code, resp.Body.String())
 	}
@@ -184,33 +184,33 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 	if len(items) != 1 || items[0].(map[string]any)["hash"] != "aaaa" || items[0].(map[string]any)["uploader_name"] != "ApiSearchAlice" {
 		t.Fatalf("unexpected name search items: %#v", items)
 	}
-	if byHash := parseJSON(t, doJSON(t, h, "GET", "/public/skin-library?q=bbb", nil))["items"].([]any); len(byHash) != 1 || byHash[0].(map[string]any)["hash"] != "bbbb" {
+	if byHash := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=bbb", nil))["items"].([]any); len(byHash) != 1 || byHash[0].(map[string]any)["hash"] != "bbbb" {
 		t.Fatalf("hash search should return bob texture only: %#v", byHash)
 	}
-	if byUploader := parseJSON(t, doJSON(t, h, "GET", "/public/skin-library?q=ApiSearchCharlie", nil))["items"].([]any); len(byUploader) != 2 {
+	if byUploader := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=ApiSearchCharlie", nil))["items"].([]any); len(byUploader) != 2 {
 		t.Fatalf("uploader search should return both charlie textures: %#v", byUploader)
 	}
-	if lower := parseJSON(t, doJSON(t, h, "GET", "/public/skin-library?q=magicsword", nil))["items"].([]any); len(lower) != 1 || lower[0].(map[string]any)["hash"] != "aaaa" {
+	if lower := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=magicsword", nil))["items"].([]any); len(lower) != 1 || lower[0].(map[string]any)["hash"] != "aaaa" {
 		t.Fatalf("search should be case-insensitive: %#v", lower)
 	}
-	if none := parseJSON(t, doJSON(t, h, "GET", "/public/skin-library?q=ZZZ_no_such_token", nil))["items"].([]any); len(none) != 0 {
+	if none := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=ZZZ_no_such_token", nil))["items"].([]any); len(none) != 0 {
 		t.Fatalf("miss search should be empty: %#v", none)
 	}
-	if priv := parseJSON(t, doJSON(t, h, "GET", "/public/skin-library?q=UniquePrivateTex", nil))["items"].([]any); len(priv) != 0 {
+	if priv := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=UniquePrivateTex", nil))["items"].([]any); len(priv) != 0 {
 		t.Fatalf("private matching texture should be excluded: %#v", priv)
 	}
-	mostUsed := parseJSON(t, doJSON(t, h, "GET", "/public/skin-library?sort=most_used&texture_type=skin&limit=2", nil))["items"].([]any)
+	mostUsed := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?sort=most_used&texture_type=skin&limit=2", nil))["items"].([]any)
 	if len(mostUsed) != 2 || mostUsed[0].(map[string]any)["hash"] != "aaaa" || mostUsed[0].(map[string]any)["usage_count"] != float64(3) || mostUsed[1].(map[string]any)["hash"] != "bbbb" || mostUsed[1].(map[string]any)["usage_count"] != float64(2) {
 		t.Fatalf("most_used sort should order by personal library user count: %#v", mostUsed)
 	}
-	if skins := parseJSON(t, doJSON(t, h, "GET", "/public/skin-library?q=SharedName&texture_type=skin", nil))["items"].([]any); len(skins) != 0 {
+	if skins := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=SharedName&texture_type=skin", nil))["items"].([]any); len(skins) != 0 {
 		t.Fatalf("skin filter should exclude matching cape: %#v", skins)
 	}
-	if capes := parseJSON(t, doJSON(t, h, "GET", "/public/skin-library?q=SharedName&texture_type=cape", nil))["items"].([]any); len(capes) != 1 || capes[0].(map[string]any)["hash"] != "dddd" {
+	if capes := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=SharedName&texture_type=cape", nil))["items"].([]any); len(capes) != 1 || capes[0].(map[string]any)["hash"] != "dddd" {
 		t.Fatalf("cape filter should include matching cape only: %#v", capes)
 	}
 	for _, badLimit := range []string{"-1", "0", "99999999"} {
-		clamped := doJSON(t, h, "GET", "/public/skin-library?limit="+badLimit, nil)
+		clamped := doJSON(t, h, "GET", "/v1/public/skin-library?limit="+badLimit, nil)
 		if clamped.Code != 200 {
 			t.Fatalf("public library limit=%s should be clamped, got %d body=%s", badLimit, clamped.Code, clamped.Body.String())
 		}
@@ -223,7 +223,7 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 	seen := map[string]bool{}
 	cursor := ""
 	for i := 0; i < 10; i++ {
-		path := "/public/skin-library?limit=2"
+		path := "/v1/public/skin-library?limit=2"
 		if cursor != "" {
 			path += "&cursor=" + cursor
 		}
@@ -248,14 +248,14 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 			t.Fatalf("public library pagination missed %s, saw %#v", hash, seen)
 		}
 	}
-	if badCursor := doJSON(t, h, "GET", "/public/skin-library?cursor=garbage!!", nil); badCursor.Code != 400 {
+	if badCursor := doJSON(t, h, "GET", "/v1/public/skin-library?cursor=garbage!!", nil); badCursor.Code != 400 {
 		t.Fatalf("invalid public library cursor should be 400, got %d body=%s", badCursor.Code, badCursor.Body.String())
 	}
 	if err := db.Settings.Set(context.Background(), "enable_skin_library", false); err != nil {
 		t.Fatal(err)
 	}
 	invalidateSettings(t, redis)
-	if disabled := doJSON(t, h, "GET", "/public/skin-library", nil); disabled.Code != 403 {
+	if disabled := doJSON(t, h, "GET", "/v1/public/skin-library", nil); disabled.Code != 403 {
 		t.Fatalf("disabled public library should be 403, got %d body=%s", disabled.Code, disabled.Body.String())
 	}
 }
@@ -266,11 +266,11 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 	token, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, user.ID, time.Hour)
 	cookie := &http.Cookie{Name: "access_token", Value: token}
 
-	updateMe := doJSON(t, h, "PATCH", "/me", map[string]any{"display_name": "UpdatedDisplayName", "avatar_hash": "fake_avatar_hash_123"}, cookie)
+	updateMe := doJSON(t, h, "PATCH", "/v1/users/me", map[string]any{"display_name": "UpdatedDisplayName", "avatar_hash": "fake_avatar_hash_123"}, cookie)
 	if updateMe.Code != 200 {
 		t.Fatalf("update me status=%d body=%s", updateMe.Code, updateMe.Body.String())
 	}
-	me := parseJSON(t, doJSON(t, h, "GET", "/me", nil, cookie))
+	me := parseJSON(t, doJSON(t, h, "GET", "/v1/users/me", nil, cookie))
 	if me["display_name"] != "UpdatedDisplayName" || me["avatar_hash"] != "fake_avatar_hash_123" {
 		t.Fatalf("update me did not persist: %#v", me)
 	}
@@ -279,7 +279,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalidateSettings(t, redis)
-	offline := doJSON(t, h, "POST", "/me/profiles", map[string]any{"name": "OfflinePlayerA", "model": "default"}, cookie)
+	offline := doJSON(t, h, "POST", "/v1/users/me/profiles", map[string]any{"name": "OfflinePlayerA", "model": "default"}, cookie)
 	if offline.Code != 200 {
 		t.Fatalf("offline profile status=%d body=%s", offline.Code, offline.Body.String())
 	}
@@ -291,7 +291,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 	}
 	invalidateSettings(t, redis)
 
-	create := doJSON(t, h, "POST", "/me/profiles", map[string]any{"name": "ApiPlayer", "model": "default"}, cookie)
+	create := doJSON(t, h, "POST", "/v1/users/me/profiles", map[string]any{"name": "ApiPlayer", "model": "default"}, cookie)
 	if create.Code != 200 {
 		t.Fatalf("create profile status=%d body=%s", create.Code, create.Body.String())
 	}
@@ -304,7 +304,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 	seenProfiles := map[string]bool{}
 	profileCursor := ""
 	for i := 0; i < 20; i++ {
-		path := "/me/profiles?limit=2"
+		path := "/v1/users/me/profiles?limit=2"
 		if profileCursor != "" {
 			path += "&cursor=" + url.QueryEscape(profileCursor)
 		}
@@ -316,7 +316,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		for _, raw := range page["items"].([]any) {
 			id := raw.(map[string]any)["id"].(string)
 			if seenProfiles[id] {
-				t.Fatalf("duplicate /me/profiles item %q", id)
+				t.Fatalf("duplicate /v1/users/me/profiles item %q", id)
 			}
 			seenProfiles[id] = true
 		}
@@ -325,17 +325,17 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		}
 		profileCursor = page["next_cursor"].(string)
 		if profileCursor == "" {
-			t.Fatalf("has_next /me/profiles response should include next_cursor: %#v", page)
+			t.Fatalf("has_next /v1/users/me/profiles response should include next_cursor: %#v", page)
 		}
 	}
 	for i := 0; i < 5; i++ {
 		id := "http_profile_" + strconv.Itoa(i)
 		if !seenProfiles[id] {
-			t.Fatalf("/me/profiles pagination missed %s, saw %#v", id, seenProfiles)
+			t.Fatalf("/v1/users/me/profiles pagination missed %s, saw %#v", id, seenProfiles)
 		}
 	}
 
-	rename := doJSON(t, h, "PATCH", "/me/profiles/"+profileID, map[string]any{"name": "NewFancyName"}, cookie)
+	rename := doJSON(t, h, "PATCH", "/v1/users/me/profiles/"+profileID, map[string]any{"name": "NewFancyName"}, cookie)
 	if rename.Code != 200 {
 		t.Fatalf("rename status=%d body=%s", rename.Code, rename.Body.String())
 	}
@@ -359,7 +359,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 	seenTextures := map[string]bool{}
 	textureCursor := ""
 	for i := 0; i < 20; i++ {
-		path := "/me/textures?limit=2"
+		path := "/v1/users/me/textures?limit=2"
 		if textureCursor != "" {
 			path += "&cursor=" + url.QueryEscape(textureCursor)
 		}
@@ -372,10 +372,10 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 			item := raw.(map[string]any)
 			hash := item["hash"].(string)
 			if !expectedTextures[hash] {
-				t.Fatalf("/me/textures returned unexpected hash %q in item %#v; expected one of %#v", hash, item, expectedTextures)
+				t.Fatalf("/v1/users/me/textures returned unexpected hash %q in item %#v; expected one of %#v", hash, item, expectedTextures)
 			}
 			if seenTextures[hash] {
-				t.Fatalf("duplicate /me/textures item %q", hash)
+				t.Fatalf("duplicate /v1/users/me/textures item %q", hash)
 			}
 			seenTextures[hash] = true
 		}
@@ -384,25 +384,25 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		}
 		textureCursor = page["next_cursor"].(string)
 		if textureCursor == "" {
-			t.Fatalf("has_next /me/textures response should include next_cursor: %#v", page)
+			t.Fatalf("has_next /v1/users/me/textures response should include next_cursor: %#v", page)
 		}
 	}
 	if len(seenTextures) != len(expectedTextures) {
-		t.Fatalf("/me/textures pagination saw %d textures, want %d: saw=%#v want=%#v", len(seenTextures), len(expectedTextures), seenTextures, expectedTextures)
+		t.Fatalf("/v1/users/me/textures pagination saw %d textures, want %d: saw=%#v want=%#v", len(seenTextures), len(expectedTextures), seenTextures, expectedTextures)
 	}
 	for hash := range expectedTextures {
 		if !seenTextures[hash] {
-			t.Fatalf("/me/textures pagination missed %s, saw %#v", hash, seenTextures)
+			t.Fatalf("/v1/users/me/textures pagination missed %s, saw %#v", hash, seenTextures)
 		}
 	}
 	for _, badLimit := range []string{"-1", "0", "99999999"} {
-		clamped := doJSON(t, h, "GET", "/me/textures?limit="+badLimit, nil, cookie)
+		clamped := doJSON(t, h, "GET", "/v1/users/me/textures?limit="+badLimit, nil, cookie)
 		if clamped.Code != 200 {
-			t.Fatalf("/me/textures limit=%s should be clamped, got %d body=%s", badLimit, clamped.Code, clamped.Body.String())
+			t.Fatalf("/v1/users/me/textures limit=%s should be clamped, got %d body=%s", badLimit, clamped.Code, clamped.Body.String())
 		}
 		items := parseJSON(t, clamped)["items"].([]any)
 		if len(items) > util.MaxLimit {
-			t.Fatalf("/me/textures limit=%s returned too many items: %d", badLimit, len(items))
+			t.Fatalf("/v1/users/me/textures limit=%s returned too many items: %d", badLimit, len(items))
 		}
 	}
 
@@ -410,11 +410,11 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 	if err := db.Textures.AddToLibrary(context.Background(), libraryOwner.ID, "lib_tex_hash_123", "skin", "Epic Skin Name", true, "default"); err != nil {
 		t.Fatal(err)
 	}
-	addMissing := doJSON(t, h, "POST", "/me/textures/nonexistent_hash/add", nil, cookie)
+	addMissing := doJSON(t, h, "POST", "/v1/users/me/textures/nonexistent_hash/wardrobe", nil, cookie)
 	if addMissing.Code != 404 {
 		t.Fatalf("adding missing library texture should be 404, got %d body=%s", addMissing.Code, addMissing.Body.String())
 	}
-	addLibrary := doJSON(t, h, "POST", "/me/textures/lib_tex_hash_123/add", nil, cookie)
+	addLibrary := doJSON(t, h, "POST", "/v1/users/me/textures/lib_tex_hash_123/wardrobe", nil, cookie)
 	if addLibrary.Code != 200 {
 		t.Fatalf("add library texture status=%d body=%s", addLibrary.Code, addLibrary.Body.String())
 	}
@@ -422,12 +422,12 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 	if addedInfo == nil || addedInfo["note"] != "Epic Skin Name" {
 		t.Fatalf("added library texture should preserve name: %#v", addedInfo)
 	}
-	missingDetail := doJSON(t, h, "GET", "/me/textures/nope/skin", nil, cookie)
+	missingDetail := doJSON(t, h, "GET", "/v1/users/me/textures/nope/skin", nil, cookie)
 	if missingDetail.Code != 404 {
 		t.Fatalf("missing texture detail should be 404, got %d body=%s", missingDetail.Code, missingDetail.Body.String())
 	}
 
-	apply := doJSON(t, h, "POST", "/me/textures/apply_hash/apply", map[string]any{"profile_id": profileID, "texture_type": "skin"}, cookie)
+	apply := doJSON(t, h, "POST", "/v1/users/me/textures/apply_hash/apply", map[string]any{"profile_id": profileID, "texture_type": "skin"}, cookie)
 	if apply.Code != 200 {
 		t.Fatalf("apply status=%d body=%s", apply.Code, apply.Body.String())
 	}
@@ -436,7 +436,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		t.Fatalf("texture not applied: %#v", p)
 	}
 
-	detail := doJSON(t, h, "GET", "/me/textures/apply_hash/skin", nil, cookie)
+	detail := doJSON(t, h, "GET", "/v1/users/me/textures/apply_hash/skin", nil, cookie)
 	if detail.Code != 200 {
 		t.Fatalf("detail status=%d body=%s", detail.Code, detail.Body.String())
 	}
@@ -444,7 +444,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		t.Fatalf("unexpected detail: %s", detail.Body.String())
 	}
 
-	update := doJSON(t, h, "PATCH", "/me/textures/apply_hash/skin", map[string]any{"note": "RenamedSkin", "is_public": true}, cookie)
+	update := doJSON(t, h, "PATCH", "/v1/users/me/textures/apply_hash/skin", map[string]any{"note": "RenamedSkin", "is_public": true}, cookie)
 	if update.Code != 200 {
 		t.Fatalf("update texture status=%d body=%s", update.Code, update.Body.String())
 	}
@@ -453,7 +453,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		t.Fatalf("texture update did not persist: %#v", info)
 	}
 
-	clear := doJSON(t, h, "DELETE", "/me/profiles/"+profileID+"/skin", nil, cookie)
+	clear := doJSON(t, h, "DELETE", "/v1/users/me/profiles/"+profileID+"/skin", nil, cookie)
 	if clear.Code != 200 {
 		t.Fatalf("clear status=%d body=%s", clear.Code, clear.Body.String())
 	}
@@ -462,7 +462,7 @@ func TestSiteProfileTextureHTTPFlows(t *testing.T) {
 		t.Fatalf("skin should be cleared: %#v", p)
 	}
 
-	del := doJSON(t, h, "DELETE", "/me/profiles/"+profileID, nil, cookie)
+	del := doJSON(t, h, "DELETE", "/v1/users/me/profiles/"+profileID, nil, cookie)
 	if del.Code != 200 {
 		t.Fatalf("delete profile status=%d body=%s", del.Code, del.Body.String())
 	}
@@ -479,7 +479,7 @@ func TestSelfDeleteAndDirectTextureUploadHTTP(t *testing.T) {
 	access, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, user.ID, time.Hour)
 	cookie := &http.Cookie{Name: "access_token", Value: access}
 
-	direct := doMultipart(t, h, "POST", "/textures/upload", map[string]string{
+	direct := doMultipart(t, h, "POST", "/v1/users/me/textures/upload-and-apply", map[string]string{
 		"uuid":         profile.ID,
 		"texture_type": "skin",
 		"model":        "slim",
@@ -496,7 +496,7 @@ func TestSelfDeleteAndDirectTextureUploadHTTP(t *testing.T) {
 	if err := db.Tokens.AddRefresh(context.Background(), "self_delete_refresh", user.ID, database.NowMS()+3600*1000, database.NowMS()); err != nil {
 		t.Fatal(err)
 	}
-	del := doJSON(t, h, "DELETE", "/me", nil, cookie)
+	del := doJSON(t, h, "DELETE", "/v1/users/me", nil, cookie)
 	if del.Code != 200 {
 		t.Fatalf("self delete status=%d body=%s", del.Code, del.Body.String())
 	}
@@ -509,7 +509,7 @@ func TestSelfDeleteAndDirectTextureUploadHTTP(t *testing.T) {
 
 	admin := testutil.CreateUser(t, db, "selfadmin@test.com", "Password123", "SelfAdmin", true, true)
 	adminAccess, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, admin.ID, time.Hour)
-	adminDel := doJSON(t, h, "DELETE", "/me", nil, &http.Cookie{Name: "access_token", Value: adminAccess})
+	adminDel := doJSON(t, h, "DELETE", "/v1/users/me", nil, &http.Cookie{Name: "access_token", Value: adminAccess})
 	if adminDel.Code != 403 {
 		t.Fatalf("admin self delete should be 403, got %d", adminDel.Code)
 	}
@@ -518,7 +518,7 @@ func TestSelfDeleteAndDirectTextureUploadHTTP(t *testing.T) {
 func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	db, h, redis := testutil.NewTestAppWithRedisTB(t)
 	ctx := context.Background()
-	first := doJSON(t, h, "POST", "/register", map[string]any{"email": "admin-first@test.com", "password": "Password123", "username": "FirstAdmin"})
+	first := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "admin-first@test.com", "password": "Password123", "username": "FirstAdmin"})
 	if first.Code != 200 {
 		t.Fatalf("first register status=%d body=%s", first.Code, first.Body.String())
 	}
@@ -529,7 +529,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	if hasRole, err := db.Permissions.UserHasRole(ctx, firstUser.ID, "super_admin"); err != nil || !hasRole {
 		t.Fatalf("first registered user should have super_admin role: hasRole=%v err=%v", hasRole, err)
 	}
-	secondRegister := doJSON(t, h, "POST", "/register", map[string]any{"email": "second-normal@test.com", "password": "Password123", "username": "SecondNormal"})
+	secondRegister := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "second-normal@test.com", "password": "Password123", "username": "SecondNormal"})
 	if secondRegister.Code != 200 {
 		t.Fatalf("second register status=%d body=%s", secondRegister.Code, secondRegister.Body.String())
 	}
@@ -540,7 +540,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	if hasRole, err := db.Permissions.UserHasRole(ctx, secondUser.ID, "super_admin"); err != nil || hasRole {
 		t.Fatalf("second registered user should not have super_admin role: hasRole=%v err=%v", hasRole, err)
 	}
-	duplicateEmail := doJSON(t, h, "POST", "/register", map[string]any{"email": "second-normal@test.com", "password": "Password123", "username": "DuplicateEmailUser"})
+	duplicateEmail := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "second-normal@test.com", "password": "Password123", "username": "DuplicateEmailUser"})
 	if duplicateEmail.Code != 400 || !strings.Contains(duplicateEmail.Body.String(), "Email already registered") {
 		t.Fatalf("duplicate email should be rejected, got %d body=%s", duplicateEmail.Code, duplicateEmail.Body.String())
 	}
@@ -549,12 +549,12 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	}
 	invalidateSettings(t, redis)
 	for _, weak := range []string{"12345", "simplepass"} {
-		resp := doJSON(t, h, "POST", "/register", map[string]any{"email": "weak_" + weak + "@test.com", "password": weak, "username": "Weak" + weak})
+		resp := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "weak_" + weak + "@test.com", "password": weak, "username": "Weak" + weak})
 		if resp.Code != 400 {
 			t.Fatalf("weak password %q should be rejected, got %d body=%s", weak, resp.Code, resp.Body.String())
 		}
 	}
-	strong := doJSON(t, h, "POST", "/register", map[string]any{"email": "strong@test.com", "password": "StrongP@ss1", "username": "StrongUser"})
+	strong := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "strong@test.com", "password": "StrongP@ss1", "username": "StrongUser"})
 	if strong.Code != 200 {
 		t.Fatalf("strong password should register, got %d body=%s", strong.Code, strong.Body.String())
 	}
@@ -563,7 +563,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	}
 	invalidateSettings(t, redis)
 	for _, badEmail := range []string{"a@b", "a@x.com\r\nBcc: x@y.com", "notanemail"} {
-		bad := doJSON(t, h, "POST", "/register", map[string]any{"email": badEmail, "password": "Password123!", "username": "SomeUser"})
+		bad := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": badEmail, "password": "Password123!", "username": "SomeUser"})
 		if bad.Code != 400 || !strings.Contains(bad.Body.String(), "Invalid email format") {
 			t.Fatalf("invalid email %q should be rejected, got %d %s", badEmail, bad.Code, bad.Body.String())
 		}
@@ -575,7 +575,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalidateSettings(t, redis)
-	disabled := doJSON(t, h, "POST", "/register", map[string]any{"email": "x@test.com", "password": "Password123", "username": "XUser"})
+	disabled := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "x@test.com", "password": "Password123", "username": "XUser"})
 	if disabled.Code != 403 {
 		t.Fatalf("disabled register should be 403, got %d body=%s", disabled.Code, disabled.Body.String())
 	}
@@ -586,18 +586,18 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalidateSettings(t, redis)
-	missingInvite := doJSON(t, h, "POST", "/register", map[string]any{"email": "x@test.com", "password": "Password123", "username": "XUser"})
+	missingInvite := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "x@test.com", "password": "Password123", "username": "XUser"})
 	if missingInvite.Code != 400 {
 		t.Fatalf("missing invite should be 400, got %d", missingInvite.Code)
 	}
 	if err := db.Invites.Create(ctx, "VALID_CODE", 1, "once"); err != nil {
 		t.Fatal(err)
 	}
-	ok := doJSON(t, h, "POST", "/register", map[string]any{"email": "first@test.com", "password": "Password123", "username": "FirstUser", "invite": "VALID_CODE"})
+	ok := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "first@test.com", "password": "Password123", "username": "FirstUser", "invite": "VALID_CODE"})
 	if ok.Code != 200 {
 		t.Fatalf("valid invite register status=%d body=%s", ok.Code, ok.Body.String())
 	}
-	overuse := doJSON(t, h, "POST", "/register", map[string]any{"email": "second@test.com", "password": "Password123", "username": "SecondUser", "invite": "VALID_CODE"})
+	overuse := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "second@test.com", "password": "Password123", "username": "SecondUser", "invite": "VALID_CODE"})
 	if overuse.Code != 400 {
 		t.Fatalf("overused invite should be 400, got %d body=%s", overuse.Code, overuse.Body.String())
 	}
@@ -611,7 +611,7 @@ func TestVerificationCodeRegisterAndResetPasswordHTTP(t *testing.T) {
 	db, h, redis := testutil.NewTestAppWithRedisTB(t)
 	ctx := context.Background()
 
-	disabled := doJSON(t, h, "POST", "/send-verification-code", map[string]any{"email": "verify@test.com", "type": "register"})
+	disabled := doJSON(t, h, "POST", "/v1/auth/verification-code", map[string]any{"email": "verify@test.com", "type": "register"})
 	if disabled.Code != 400 {
 		t.Fatalf("verification disabled should be 400, got %d body=%s", disabled.Code, disabled.Body.String())
 	}
@@ -623,7 +623,7 @@ func TestVerificationCodeRegisterAndResetPasswordHTTP(t *testing.T) {
 	}
 	invalidateSettings(t, redis)
 
-	send := doJSON(t, h, "POST", "/send-verification-code", map[string]any{"email": "verify@test.com", "type": "register"})
+	send := doJSON(t, h, "POST", "/v1/auth/verification-code", map[string]any{"email": "verify@test.com", "type": "register"})
 	if send.Code != 200 {
 		t.Fatalf("send verification status=%d body=%s", send.Code, send.Body.String())
 	}
@@ -647,11 +647,11 @@ func TestVerificationCodeRegisterAndResetPasswordHTTP(t *testing.T) {
 		}
 	}
 
-	badRegister := doJSON(t, h, "POST", "/register", map[string]any{"email": "verify@test.com", "password": "Password123!", "username": "VerifyUser", "code": "WRONG"})
+	badRegister := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "verify@test.com", "password": "Password123!", "username": "VerifyUser", "code": "WRONG"})
 	if badRegister.Code != 400 {
 		t.Fatalf("wrong verification code should be 400, got %d body=%s", badRegister.Code, badRegister.Body.String())
 	}
-	register := doJSON(t, h, "POST", "/register", map[string]any{"email": "verify@test.com", "password": "Password123!", "username": "VerifyUser", "code": strings.ToLower(code)})
+	register := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "verify@test.com", "password": "Password123!", "username": "VerifyUser", "code": strings.ToLower(code)})
 	if register.Code != 200 {
 		t.Fatalf("verified register status=%d body=%s", register.Code, register.Body.String())
 	}
@@ -660,16 +660,16 @@ func TestVerificationCodeRegisterAndResetPasswordHTTP(t *testing.T) {
 	}
 
 	user := testutil.CreateUser(t, db, "reset@test.com", "OldPassword123!", "ResetUser", false)
-	login := doJSON(t, h, "POST", "/site-login", map[string]any{"email": user.Email, "password": "OldPassword123!"})
+	login := doJSON(t, h, "POST", "/v1/auth/login", map[string]any{"email": user.Email, "password": "OldPassword123!"})
 	refresh := cookieNamed(login, "refresh_token")
 	if refresh == nil {
 		t.Fatal("missing refresh cookie")
 	}
-	sendResetMissing := doJSON(t, h, "POST", "/send-verification-code", map[string]any{"email": "missing-reset@test.com", "type": "reset"})
+	sendResetMissing := doJSON(t, h, "POST", "/v1/auth/verification-code", map[string]any{"email": "missing-reset@test.com", "type": "reset"})
 	if sendResetMissing.Code != 200 || parseJSON(t, sendResetMissing)["ttl"] != float64(0) {
 		t.Fatalf("missing reset target should return ok ttl=0, got %d %s", sendResetMissing.Code, sendResetMissing.Body.String())
 	}
-	sendReset := doJSON(t, h, "POST", "/send-verification-code", map[string]any{"email": user.Email, "type": "reset"})
+	sendReset := doJSON(t, h, "POST", "/v1/auth/verification-code", map[string]any{"email": user.Email, "type": "reset"})
 	if sendReset.Code != 200 {
 		t.Fatalf("send reset status=%d body=%s", sendReset.Code, sendReset.Body.String())
 	}
@@ -677,7 +677,7 @@ func TestVerificationCodeRegisterAndResetPasswordHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reset code missing err=%v", err)
 	}
-	reset := doJSON(t, h, "POST", "/reset-password", map[string]any{"email": user.Email, "password": "NewPassword456!", "code": resetCode})
+	reset := doJSON(t, h, "POST", "/v1/auth/password/reset", map[string]any{"email": user.Email, "password": "NewPassword456!", "code": resetCode})
 	if reset.Code != 200 {
 		t.Fatalf("reset status=%d body=%s", reset.Code, reset.Body.String())
 	}
@@ -685,7 +685,7 @@ func TestVerificationCodeRegisterAndResetPasswordHTTP(t *testing.T) {
 	if !util.VerifyPassword("NewPassword456!", updated.Password) {
 		t.Fatal("reset password did not update password")
 	}
-	reuseRefresh := doJSON(t, h, "POST", "/me/refresh-token", nil, refresh)
+	reuseRefresh := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil, refresh)
 	if reuseRefresh.Code != 401 {
 		t.Fatalf("old refresh should be revoked after reset, got %d", reuseRefresh.Code)
 	}

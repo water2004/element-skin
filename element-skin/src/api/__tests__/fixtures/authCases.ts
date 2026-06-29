@@ -4,13 +4,13 @@ import type { ApiCase } from './types'
 export function authApiCases(): ApiCase[] {
   return [
     {
-      name: 'siteLogin posts credentials to /site-login',
+      name: 'siteLogin posts credentials to /v1/auth/login',
       method: 'post',
       call: () => siteLogin({ email: 'user@example.com', password: 'Password123' }),
-      args: ['/site-login', { email: 'user@example.com', password: 'Password123' }],
+      args: ['/v1/auth/login', { email: 'user@example.com', password: 'Password123' }],
     },
     {
-      name: 'register posts account payload to /register',
+      name: 'register posts account payload to /v1/auth/register',
       method: 'post',
       call: () =>
         register({
@@ -21,7 +21,7 @@ export function authApiCases(): ApiCase[] {
           code: 'CODE1234',
         }),
       args: [
-        '/register',
+        '/v1/auth/register',
         {
           email: 'new@example.com',
           password: 'Password123',
@@ -35,7 +35,7 @@ export function authApiCases(): ApiCase[] {
       name: 'sendVerificationCode posts verification request',
       method: 'post',
       call: () => sendVerificationCode({ email: 'user@example.com', type: 'reset' }),
-      args: ['/send-verification-code', { email: 'user@example.com', type: 'reset' }],
+      args: ['/v1/auth/verification-code', { email: 'user@example.com', type: 'reset' }],
     },
     {
       name: 'resetPassword posts reset payload',
@@ -43,15 +43,15 @@ export function authApiCases(): ApiCase[] {
       call: () =>
         resetPassword({ email: 'user@example.com', password: 'NewPassword123', code: 'RESET123' }),
       args: [
-        '/reset-password',
+        '/v1/auth/password/reset',
         { email: 'user@example.com', password: 'NewPassword123', code: 'RESET123' },
       ],
     },
     {
-      name: 'siteLogout posts to /site-logout',
+      name: 'siteLogout posts to /v1/auth/logout',
       method: 'post',
       call: siteLogout,
-      args: ['/site-logout'],
+      args: ['/v1/auth/logout'],
     },
   ]
 }

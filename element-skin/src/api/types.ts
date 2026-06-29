@@ -7,7 +7,7 @@ export interface CursorPageResponse<T> {
   total?: number
 }
 
-// User (returned by GET /me, GET /admin/users)
+// User (returned by GET /v1/users/me, GET /v1/admin/users)
 export interface User {
   id: string
   email: string

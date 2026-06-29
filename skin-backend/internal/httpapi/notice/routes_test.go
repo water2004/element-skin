@@ -36,7 +36,7 @@ func TestNoticeRoutesListDetailReadDismissExactFlow(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	h.List(rec, userRequest(http.MethodGet, "/notices?limit=1&include_read=false&type=announcement", user.ID, false))
+	h.List(rec, userRequest(http.MethodGet, "/v1/notifications?limit=1&include_read=false&type=announcement", user.ID, false))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list status=%d body=%s", rec.Code, rec.Body.String())
 	}
@@ -50,7 +50,7 @@ func TestNoticeRoutesListDetailReadDismissExactFlow(t *testing.T) {
 		t.Fatalf("list item mismatch: %#v", item)
 	}
 
-	req := userRequest(http.MethodGet, "/notices/"+first.ID, user.ID, false)
+	req := userRequest(http.MethodGet, "/v1/notifications/"+first.ID, user.ID, false)
 	req.SetPathValue("id", first.ID)
 	rec = httptest.NewRecorder()
 	h.Detail(rec, req)
@@ -66,7 +66,7 @@ func TestNoticeRoutesListDetailReadDismissExactFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req = userRequest(http.MethodPost, "/notices/"+second.ID+"/read", user.ID, false)
+	req = userRequest(http.MethodPost, "/v1/notifications/"+second.ID+"/read", user.ID, false)
 	req.SetPathValue("id", second.ID)
 	rec = httptest.NewRecorder()
 	h.MarkRead(rec, req)
@@ -81,7 +81,7 @@ func TestNoticeRoutesListDetailReadDismissExactFlow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req = userRequest(http.MethodPost, "/notices/"+third.ID+"/dismiss", user.ID, false)
+	req = userRequest(http.MethodPost, "/v1/notifications/"+third.ID+"/dismiss", user.ID, false)
 	req.SetPathValue("id", third.ID)
 	rec = httptest.NewRecorder()
 	h.Dismiss(rec, req)
@@ -92,7 +92,7 @@ func TestNoticeRoutesListDetailReadDismissExactFlow(t *testing.T) {
 		t.Fatalf("dismiss should create exactly one dismissed receipt")
 	}
 	rec = httptest.NewRecorder()
-	h.List(rec, userRequest(http.MethodGet, "/notices?include_read=true", user.ID, false))
+	h.List(rec, userRequest(http.MethodGet, "/v1/notifications?include_read=true", user.ID, false))
 	if rec.Code != http.StatusOK || strings.Contains(rec.Body.String(), "Dismiss me") {
 		t.Fatalf("dismissed notice should be hidden from list: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -113,18 +113,18 @@ func TestNoticeRoutesErrorsAndAuthWrapperExactly(t *testing.T) {
 	})
 
 	rec := httptest.NewRecorder()
-	h.Auth(h.List)(rec, httptest.NewRequest(http.MethodGet, "/notices?limit=1", nil))
+	h.Auth(h.List)(rec, httptest.NewRequest(http.MethodGet, "/v1/notifications?limit=1", nil))
 	if !calledAuth || rec.Code != http.StatusOK {
 		t.Fatalf("auth wrapper mismatch: called=%v status=%d body=%q", calledAuth, rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
-	h.List(rec, userRequest(http.MethodGet, "/notices?type=bogus", user.ID, false))
+	h.List(rec, userRequest(http.MethodGet, "/v1/notifications?type=bogus", user.ID, false))
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid type\"}\n" {
 		t.Fatalf("invalid list type mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req := userRequest(http.MethodGet, "/notices/missing", user.ID, false)
+	req := userRequest(http.MethodGet, "/v1/notifications/missing", user.ID, false)
 	req.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.Detail(rec, req)
@@ -133,12 +133,12 @@ func TestNoticeRoutesErrorsAndAuthWrapperExactly(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.List(rec, httptest.NewRequest(http.MethodGet, "/notices", nil).WithContext(shared.WithActorPermissions(context.Background(), user.ID)))
+	h.List(rec, httptest.NewRequest(http.MethodGet, "/v1/notifications", nil).WithContext(shared.WithActorPermissions(context.Background(), user.ID)))
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
 		t.Fatalf("list without notice.read.owned mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/notices/missing/dismiss", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v1/notifications/missing/dismiss", nil)
 	req.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.Dismiss(rec, req.WithContext(shared.WithActorPermissions(context.Background(), user.ID, permission.MustDefinitionByCode("notice.read.owned"))))

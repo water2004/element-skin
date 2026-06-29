@@ -22,7 +22,7 @@ func TestAccountRoutesMeAndAdminSelfDeleteExactResponses(t *testing.T) {
 	h := site.New(cfg, db, sitesvc.Site{DB: db, Cfg: cfg}, nil)
 	user := testutil.CreateUser(t, db, "site-account@test.com", "Password123", "SiteAccount", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.Me(rec, req)
@@ -31,7 +31,7 @@ func TestAccountRoutesMeAndAdminSelfDeleteExactResponses(t *testing.T) {
 	}
 
 	adminUser := testutil.CreateUser(t, db, "site-admin-delete@test.com", "Password123", "SiteAdminDelete", true, true)
-	req = httptest.NewRequest(http.MethodDelete, "/me", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/users/me", nil)
 	req = withUserActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteMe(rec, req)
@@ -53,7 +53,7 @@ func TestAccountRoutesUpdateMeAndChangePasswordExactResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPatch, "/me", strings.NewReader(`{"display_name":"UpdatedAccount","preferred_language":"en_US"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/v1/users/me", strings.NewReader(`{"display_name":"UpdatedAccount","preferred_language":"en_US"}`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UpdateMe(rec, req)
@@ -67,7 +67,7 @@ func TestAccountRoutesUpdateMeAndChangePasswordExactResponses(t *testing.T) {
 	if _, err := redis.GetAuthUser(t.Context(), user.ID); !errors.Is(err, redisstore.ErrCacheMiss) {
 		t.Fatalf("update me should invalidate auth cache, got %v", err)
 	}
-	loginReq := httptest.NewRequest(http.MethodPost, "/site-login", strings.NewReader(`{"email":"site-account-update@test.com","password":"Password123"}`))
+	loginReq := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"site-account-update@test.com","password":"Password123"}`))
 	loginRec := httptest.NewRecorder()
 	h.Login(loginRec, loginReq)
 	if loginRec.Code != http.StatusOK {
@@ -81,7 +81,7 @@ func TestAccountRoutesUpdateMeAndChangePasswordExactResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/me/password", strings.NewReader(`{"old_password":"Password123","new_password":"NewPassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/users/me/password", strings.NewReader(`{"old_password":"Password123","new_password":"NewPassword123"}`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ChangePassword(rec, req)
@@ -113,7 +113,7 @@ func TestAccountRoutesDeleteMeRemovesUserAndInvalidatesCacheExactly(t *testing.T
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, "/me", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me", nil)
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.DeleteMe(rec, req)
@@ -141,7 +141,7 @@ func TestAccountRoutesRejectConflictsAndWrongOldPasswordExactly(t *testing.T) {
 	user := testutil.CreateUser(t, db, "site-account-conflict@test.com", "Password123", "SiteAccountConflict", false)
 	other := testutil.CreateUser(t, db, "site-account-other@test.com", "Password123", "SiteAccountOther", false)
 
-	req := httptest.NewRequest(http.MethodPatch, "/me", strings.NewReader(`{"email":"site-account-other@test.com"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/v1/users/me", strings.NewReader(`{"email":"site-account-other@test.com"}`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UpdateMe(rec, req)
@@ -153,7 +153,7 @@ func TestAccountRoutesRejectConflictsAndWrongOldPasswordExactly(t *testing.T) {
 		t.Fatalf("email conflict should not mutate user: user=%#v err=%v other=%#v", unchanged, err, other)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/me/password", strings.NewReader(`{"old_password":"WrongPassword","new_password":"NewPassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/users/me/password", strings.NewReader(`{"old_password":"WrongPassword","new_password":"NewPassword123"}`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ChangePassword(rec, req)
@@ -171,14 +171,14 @@ func TestAccountRoutesRejectMissingPrincipalAndMalformedPayloadsExactly(t *testi
 	cfg := testutil.TestConfig()
 	h := site.New(cfg, db, sitesvc.Site{DB: db, Cfg: cfg}, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
 	rec := httptest.NewRecorder()
 	h.Me(rec, req)
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
 		t.Fatalf("me without principal mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/me", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/users/me", nil)
 	rec = httptest.NewRecorder()
 	h.DeleteMe(rec, req)
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
@@ -193,7 +193,7 @@ func TestAccountRoutesRejectMissingPrincipalAndMalformedPayloadsExactly(t *testi
 		{name: "change password", call: h.ChangePassword},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodPost, "/me", strings.NewReader(`{`))
+			req := httptest.NewRequest(http.MethodPost, "/v1/users/me", strings.NewReader(`{`))
 			req = withUserActor(req, "malformed-user")
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
@@ -218,7 +218,7 @@ func TestDeleteMeErrorPaths(t *testing.T) {
 	// DB error on UserHasProtectedRole: cancelled context causes query failure
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	req := httptest.NewRequest(http.MethodDelete, "/me", nil).WithContext(ctx)
+	req := httptest.NewRequest(http.MethodDelete, "/v1/users/me", nil).WithContext(ctx)
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.DeleteMe(rec, req)
@@ -233,7 +233,7 @@ func TestDeleteMeErrorPaths(t *testing.T) {
 	if _, err := db.Users.Delete(context.Background(), user.ID); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodDelete, "/me", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/users/me", nil)
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteMe(rec, req)

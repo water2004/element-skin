@@ -53,7 +53,7 @@ func TestUserRoutesListAndProtectCurrentUserExactly(t *testing.T) {
 	adminUser := testutil.CreateUser(t, db, "admin-users@test.com", "Password123", "AdminUsers", true)
 	other := testutil.CreateUser(t, db, "listed-users@test.com", "Password123", "ListedUsers", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users?limit=1&q=Listed", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users?limit=1&q=Listed", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec := httptest.NewRecorder()
@@ -65,7 +65,7 @@ func TestUserRoutesListAndProtectCurrentUserExactly(t *testing.T) {
 		t.Fatalf("admin user list mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/admin/users/"+adminUser.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+adminUser.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", adminUser.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -75,7 +75,7 @@ func TestUserRoutesListAndProtectCurrentUserExactly(t *testing.T) {
 		t.Fatalf("self delete should be forbidden exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+adminUser.ID+"/roles/super_admin", nil)
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+adminUser.ID+"/roles/super_admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", adminUser.ID)
 	req.SetPathValue("role_id", permission.RoleSuperAdmin)
@@ -95,7 +95,7 @@ func TestRoleGrantAndRevokeControlsExactPermissions(t *testing.T) {
 	plainAdmin := testutil.CreateUser(t, db, "plain-role@test.com", "Password123", "PlainRole", true)
 	target := testutil.CreateUser(t, db, "target-role@test.com", "Password123", "TargetRole", false)
 
-	req := httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/roles/admin", nil)
+	req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/roles/admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("role_id", permission.RoleAdmin)
@@ -109,7 +109,7 @@ func TestRoleGrantAndRevokeControlsExactPermissions(t *testing.T) {
 		t.Fatalf("target admin role after grant = %v, %v; want true, nil", hasRole, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/roles/super_admin", nil)
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/roles/super_admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("role_id", permission.RoleSuperAdmin)
@@ -120,7 +120,7 @@ func TestRoleGrantAndRevokeControlsExactPermissions(t *testing.T) {
 		t.Fatalf("plain admin protected role grant mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/roles/super_admin", nil)
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/roles/super_admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("role_id", permission.RoleSuperAdmin)
@@ -134,7 +134,7 @@ func TestRoleGrantAndRevokeControlsExactPermissions(t *testing.T) {
 		t.Fatalf("target super admin role after grant = %v, %v; want true, nil", hasRole, err)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/admin/users/"+target.ID+"/roles/admin", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID+"/roles/admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("role_id", permission.RoleAdmin)
@@ -171,7 +171,7 @@ func TestUserPermissionRoutesExposeCatalogAndOverrideExactly(t *testing.T) {
 	}
 
 	cacheTarget(t)
-	req := httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/permissions/texture.update_visibility.owned", strings.NewReader(`{"effect":"deny"}`))
+	req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/permissions/texture.update_visibility.owned", strings.NewReader(`{"effect":"deny"}`))
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("permission_code", "texture.update_visibility.owned")
@@ -182,7 +182,7 @@ func TestUserPermissionRoutesExposeCatalogAndOverrideExactly(t *testing.T) {
 	}
 	assertTargetCacheMiss(t, "deny permission override")
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/permissions/notice.create.any", strings.NewReader(`{"effect":"allow"}`))
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/permissions/notice.create.any", strings.NewReader(`{"effect":"allow"}`))
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("permission_code", "notice.create.any")
@@ -192,7 +192,7 @@ func TestUserPermissionRoutesExposeCatalogAndOverrideExactly(t *testing.T) {
 		t.Fatalf("allow override response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/admin/users/"+target.ID+"/permissions", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users/"+target.ID+"/permissions", nil)
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", target.ID)
 	rec = httptest.NewRecorder()
@@ -257,7 +257,7 @@ func TestUserPermissionRoutesExposeCatalogAndOverrideExactly(t *testing.T) {
 	}
 
 	cacheTarget(t)
-	req = httptest.NewRequest(http.MethodDelete, "/admin/users/"+target.ID+"/permissions/texture.update_visibility.owned", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID+"/permissions/texture.update_visibility.owned", nil)
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("permission_code", "texture.update_visibility.owned")
@@ -283,7 +283,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	superAdmin := testutil.CreateUser(t, db, "super-permission-reject@test.com", "Password123", "SuperPermissionReject", true, true)
 	target := testutil.CreateUser(t, db, "target-permission-reject@test.com", "Password123", "TargetPermissionReject", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users/missing-user/permissions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users/missing-user/permissions", nil)
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", "missing-user")
 	rec := httptest.NewRecorder()
@@ -292,7 +292,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 		t.Fatalf("missing user permissions mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/permissions/nope.nope.nope", strings.NewReader(`{"effect":"allow"}`))
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/permissions/nope.nope.nope", strings.NewReader(`{"effect":"allow"}`))
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("permission_code", "nope.nope.nope")
@@ -302,7 +302,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 		t.Fatalf("unknown permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/permissions/notice.create.any", strings.NewReader(`{"effect":"inherit"}`))
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/permissions/notice.create.any", strings.NewReader(`{"effect":"inherit"}`))
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("permission_code", "notice.create.any")
@@ -312,7 +312,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 		t.Fatalf("invalid effect mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/permissions/permission_protected.manage.any", strings.NewReader(`{"effect":"allow"}`))
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/permissions/permission_protected.manage.any", strings.NewReader(`{"effect":"allow"}`))
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("permission_code", "permission_protected.manage.any")
@@ -322,7 +322,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 		t.Fatalf("plain admin protected permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/permissions/permission_protected.manage.any", strings.NewReader(`{"effect":"allow"}`))
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/permissions/permission_protected.manage.any", strings.NewReader(`{"effect":"allow"}`))
 	req = withProtectedActor(req, superAdmin.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("permission_code", "permission_protected.manage.any")
@@ -332,7 +332,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 		t.Fatalf("protected actor grant protected permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/"+superAdmin.ID+"/permissions/permission_protected.manage.any", strings.NewReader(`{"effect":"deny"}`))
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+superAdmin.ID+"/permissions/permission_protected.manage.any", strings.NewReader(`{"effect":"deny"}`))
 	req = withProtectedActor(req, superAdmin.ID)
 	req.SetPathValue("user_id", superAdmin.ID)
 	req.SetPathValue("permission_code", "permission_protected.manage.any")
@@ -342,7 +342,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 		t.Fatalf("self protected override mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/admin/users/"+target.ID+"/permissions/notice.create.any", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID+"/permissions/notice.create.any", nil)
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("permission_code", "notice.create.any")
@@ -377,7 +377,7 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 	target := testutil.CreateUser(t, db, "target-user-actions@test.com", "Password123", "TargetUserActions", false)
 	profile := testutil.CreateProfile(t, db, target.ID, "target_user_profile", "TargetUserProfile")
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users/"+target.ID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users/"+target.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -387,7 +387,7 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 		t.Fatalf("user detail response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/admin/users/"+target.ID+"/profiles", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users/"+target.ID+"/profiles", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -398,7 +398,7 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 	}
 
 	banUntil := time.Now().Add(time.Hour).UnixMilli()
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(banUntil)+`}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(banUntil)+`}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -411,7 +411,7 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 		t.Fatalf("target should be banned: banned=%v err=%v", banned, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/unban", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/unban", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -424,7 +424,7 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 		t.Fatalf("target should be unbanned: banned=%v err=%v", banned, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/reset-password", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
@@ -447,7 +447,7 @@ func TestUserProfilesPaginatesEncodedCursorWithoutRepeatingRows(t *testing.T) {
 	secondProfile := testutil.CreateProfile(t, db, target.ID, "admin_user_profile_page_b", "ProfilePageB")
 
 	requestPage := func(cursor string) *httptest.ResponseRecorder {
-		targetURL := "/admin/users/" + target.ID + "/profiles?limit=1"
+		targetURL := "/v1/admin/users/" + target.ID + "/profiles?limit=1"
 		if cursor != "" {
 			targetURL += "&cursor=" + cursor
 		}
@@ -524,7 +524,7 @@ func TestUserRoutesMutationsInvalidateAuthCacheExactly(t *testing.T) {
 	}
 
 	cacheTarget(t)
-	req := httptest.NewRequest(http.MethodPut, "/admin/users/"+target.ID+"/roles/admin", nil)
+	req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/roles/admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("role_id", permission.RoleAdmin)
@@ -538,7 +538,7 @@ func TestUserRoutesMutationsInvalidateAuthCacheExactly(t *testing.T) {
 
 	cacheTarget(t)
 	banUntil := time.Now().Add(time.Hour).UnixMilli()
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(banUntil)+`}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(banUntil)+`}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -550,7 +550,7 @@ func TestUserRoutesMutationsInvalidateAuthCacheExactly(t *testing.T) {
 	assertTargetCacheMiss(t, "ban user")
 
 	cacheTarget(t)
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/unban", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/unban", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -565,7 +565,7 @@ func TestUserRoutesMutationsInvalidateAuthCacheExactly(t *testing.T) {
 	if err := redis.SetYggToken(t.Context(), model.Token{AccessToken: "admin_reset_ygg", UserID: target.ID, CreatedAt: time.Now().UnixMilli()}, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/reset-password", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminCachePassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminCachePassword123"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
@@ -586,7 +586,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	adminUser := testutil.CreateUser(t, db, "admin-user-errors@test.com", "Password123", "AdminUserErrors", true)
 	target := testutil.CreateUser(t, db, "target-user-errors@test.com", "Password123", "TargetUserErrors", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/ban", strings.NewReader(`{`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -596,7 +596,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 		t.Fatalf("ban bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":1}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":1}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -609,7 +609,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 		t.Fatalf("invalid ban should not change user state: banned=%v err=%v", banned, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/missing-user/unban", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/missing-user/unban", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", "missing-user")
 	req = withAdminActor(req, adminUser.ID)
@@ -619,7 +619,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 		t.Fatalf("unban missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/reset-password", strings.NewReader(`{"user_id":"`+target.ID+`"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
@@ -628,7 +628,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 		t.Fatalf("reset missing password mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/reset-password", strings.NewReader(`{"user_id":"missing-user","new_password":"AdminNewPassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"missing-user","new_password":"AdminNewPassword123"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
@@ -657,7 +657,7 @@ func TestUnbanReturnsNotFoundWhenUserIsDeletedAfterAuthorizationCheck(t *testing
 
 	result := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
-		req := httptest.NewRequest(http.MethodPost, "/admin/users/"+target.ID+"/unban", nil)
+		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/unban", nil)
 		req = withAdminActor(req, "admin-test-user")
 		req.SetPathValue("user_id", target.ID)
 		req = withAdminActor(req, adminUser.ID)
@@ -728,7 +728,7 @@ func TestUserRoutesDeleteUserAndInvalidateAuthCacheExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+target.ID, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -750,7 +750,7 @@ func TestUserRoutesDeleteUserAndInvalidateAuthCacheExactly(t *testing.T) {
 		t.Fatalf("delete user should revoke existing ygg tokens, got %v", err)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/admin/users/"+target.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -768,7 +768,7 @@ func TestUserRoutesProtectSuperAdminFromPlainAdminExactly(t *testing.T) {
 	plainAdmin := testutil.CreateUser(t, db, "plain-protect@test.com", "Password123", "PlainProtect", true)
 	superAdmin := testutil.CreateUser(t, db, "super-protect@test.com", "Password123", "SuperProtect", true, true)
 
-	req := httptest.NewRequest(http.MethodDelete, "/admin/users/"+superAdmin.ID, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+superAdmin.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", superAdmin.ID)
 	req = withAdminActor(req, plainAdmin.ID)
@@ -778,7 +778,7 @@ func TestUserRoutesProtectSuperAdminFromPlainAdminExactly(t *testing.T) {
 		t.Fatalf("plain admin deleting super admin mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/"+superAdmin.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+superAdmin.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", superAdmin.ID)
 	req = withAdminActor(req, plainAdmin.ID)
@@ -788,7 +788,7 @@ func TestUserRoutesProtectSuperAdminFromPlainAdminExactly(t *testing.T) {
 		t.Fatalf("plain admin banning super admin mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/"+superAdmin.ID+"/unban", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+superAdmin.ID+"/unban", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", superAdmin.ID)
 	req = withAdminActor(req, plainAdmin.ID)
@@ -806,7 +806,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	superAdmin := testutil.CreateUser(t, db, "admin-missing-super@test.com", "Password123", "AdminMissingSuper", true, true)
 	target := testutil.CreateUser(t, db, "admin-reset-unchanged@test.com", "Password123", "AdminResetUnchanged", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/users?cursor=not-base64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users?cursor=not-base64", nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.Users(rec, req)
@@ -815,7 +815,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	}
 
 	incompleteCursor := util.EncodeCursor(map[string]any{"unexpected": "value"})
-	req = httptest.NewRequest(http.MethodGet, "/admin/users?cursor="+incompleteCursor, nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users?cursor="+incompleteCursor, nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.Users(rec, req)
@@ -823,7 +823,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("user list incomplete cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/admin/users/missing-user", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users/missing-user", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", "missing-user")
 	rec = httptest.NewRecorder()
@@ -832,7 +832,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("missing user detail mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/admin/users/missing-user/roles/admin", nil)
+	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/missing-user/roles/admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", "missing-user")
 	req.SetPathValue("role_id", permission.RoleAdmin)
@@ -843,7 +843,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("missing role grant target mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/users/reset-password", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withProtectedActor(req, superAdmin.ID)
 	rec = httptest.NewRecorder()
@@ -871,7 +871,7 @@ func TestAdminResetPasswordPreservesCredentialsAndRefreshWhenYggRevocationFails(
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/users/reset-password", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec := httptest.NewRecorder()

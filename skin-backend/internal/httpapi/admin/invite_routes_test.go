@@ -17,7 +17,7 @@ func TestInviteRoutesCreateInvitePersistsExactState(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/invites", strings.NewReader(`{"code":"route-invite","total_uses":2,"note":"Route Invite"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(`{"code":"route-invite","total_uses":2,"note":"Route Invite"}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.CreateInvite(rec, req)
@@ -29,7 +29,7 @@ func TestInviteRoutesCreateInvitePersistsExactState(t *testing.T) {
 		t.Fatalf("created invite state mismatch: invite=%#v err=%v", invite, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/invites", strings.NewReader(`{"code":"max-total-invite","total_uses":2147483647}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(`{"code":"max-total-invite","total_uses":2147483647}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.CreateInvite(rec, req)
@@ -46,7 +46,7 @@ func TestInviteRoutesGenerateCodeWithExactShapeAndDefaults(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/invites", strings.NewReader(`{"note":"Generated Invite"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(`{"note":"Generated Invite"}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.CreateInvite(rec, req)
@@ -72,7 +72,7 @@ func TestInviteRoutesListAndDeleteExactState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/invites?limit=1", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/invites?limit=1", nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.Invites(rec, req)
@@ -80,7 +80,7 @@ func TestInviteRoutesListAndDeleteExactState(t *testing.T) {
 		t.Fatalf("invite list response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/admin/invites/route-list-invite", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/invites/route-list-invite", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("code", "route-list-invite")
 	rec = httptest.NewRecorder()
@@ -97,7 +97,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/invites?cursor=not-base64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/invites?cursor=not-base64", nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.Invites(rec, req)
@@ -108,7 +108,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 		util.EncodeCursor(map[string]any{"last_created_at": 1}),
 		util.EncodeCursor(map[string]any{"last_created_at": 1.5, "last_code": "invite"}),
 	} {
-		req = httptest.NewRequest(http.MethodGet, "/admin/invites?cursor="+cursor, nil)
+		req = httptest.NewRequest(http.MethodGet, "/v1/admin/invites?cursor="+cursor, nil)
 		req = withAdminActor(req, "admin-test-user")
 		rec = httptest.NewRecorder()
 		h.Invites(rec, req)
@@ -117,7 +117,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 		}
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/invites", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(`{`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.CreateInvite(rec, req)
@@ -125,7 +125,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 		t.Fatalf("invite create bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/invites", strings.NewReader(`{"code":"abc","total_uses":5,"note":"too short"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(`{"code":"abc","total_uses":5,"note":"too short"}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.CreateInvite(rec, req)
@@ -145,7 +145,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 		`{"code":"invalid-inexact","total_uses":9007199254740993}`,
 		`{"code":"invalid-overflow","total_uses":9223372036854775808}`,
 	} {
-		req = httptest.NewRequest(http.MethodPost, "/admin/invites", strings.NewReader(body))
+		req = httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(body))
 		req = withAdminActor(req, "admin-test-user")
 		rec = httptest.NewRecorder()
 		h.CreateInvite(rec, req)
@@ -160,7 +160,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 	if err := db.Invites.Create(context.Background(), "existing-invite", 1, "Existing"); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/admin/invites", strings.NewReader(`{"code":"existing-invite","total_uses":2}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(`{"code":"existing-invite","total_uses":2}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.CreateInvite(rec, req)
@@ -177,7 +177,7 @@ func TestInviteRoutesDeleteMissingInviteIsIdempotent(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
 
-	req := httptest.NewRequest(http.MethodDelete, "/admin/invites/missing-invite", nil)
+	req := httptest.NewRequest(http.MethodDelete, "/v1/admin/invites/missing-invite", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("code", "missing-invite")
 	rec := httptest.NewRecorder()

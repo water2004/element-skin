@@ -28,7 +28,7 @@ func TestWhitelistRoutesAddOfficialWhitelistPersistsUser(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/admin/official-whitelist", strings.NewReader(`{"username":"Steve","endpoint_id":1}`))
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/official-whitelist", strings.NewReader(`{"username":"Steve","endpoint_id":1}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.AddOfficialWhitelist(rec, req)
@@ -40,7 +40,7 @@ func TestWhitelistRoutesAddOfficialWhitelistPersistsUser(t *testing.T) {
 		t.Fatalf("whitelist row should exist exactly: ok=%v err=%v", ok, err)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/admin/official-whitelist?endpoint_id=1", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/official-whitelist?endpoint_id=1", nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.OfficialWhitelist(rec, req)
@@ -48,7 +48,7 @@ func TestWhitelistRoutesAddOfficialWhitelistPersistsUser(t *testing.T) {
 		t.Fatalf("whitelist list response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/admin/official-whitelist/Steve?endpoint_id=1", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/official-whitelist/Steve?endpoint_id=1", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("username", "Steve")
 	rec = httptest.NewRecorder()
@@ -61,7 +61,7 @@ func TestWhitelistRoutesAddOfficialWhitelistPersistsUser(t *testing.T) {
 		t.Fatalf("whitelist row should be removed exactly: ok=%v err=%v", ok, err)
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/admin/official-whitelist?endpoint_id=1", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v1/admin/official-whitelist?endpoint_id=1", nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.OfficialWhitelist(rec, req)
@@ -74,7 +74,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/admin/official-whitelist", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v1/admin/official-whitelist", nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.OfficialWhitelist(rec, req)
@@ -82,7 +82,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 		t.Fatalf("missing endpoint id list mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/official-whitelist", strings.NewReader(`{"username":" ","endpoint_id":1}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/official-whitelist", strings.NewReader(`{"username":" ","endpoint_id":1}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.AddOfficialWhitelist(rec, req)
@@ -90,7 +90,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 		t.Fatalf("missing username add mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/admin/official-whitelist/Steve", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/official-whitelist/Steve", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("username", "Steve")
 	rec = httptest.NewRecorder()
@@ -99,7 +99,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 		t.Fatalf("missing endpoint id remove mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/admin/official-whitelist", strings.NewReader(`{"username":"Alex","endpoint_id":999}`))
+	req = httptest.NewRequest(http.MethodPost, "/v1/admin/official-whitelist", strings.NewReader(`{"username":"Alex","endpoint_id":999}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.AddOfficialWhitelist(rec, req)

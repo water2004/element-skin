@@ -235,27 +235,27 @@ func TestAdminAccessUsesDatabaseState(t *testing.T) {
 	}
 	adminCookie := &http.Cookie{Name: "access_token", Value: token}
 
-	users := doJSON(t, h, "GET", "/admin/users", nil, adminCookie)
+	users := doJSON(t, h, "GET", "/v1/admin/users", nil, adminCookie)
 	if users.Code != 200 {
 		t.Fatalf("admin users status=%d body=%s", users.Code, users.Body.String())
 	}
 	if _, err := db.Permissions.RevokeRole(context.Background(), admin.ID, "admin"); err != nil {
 		t.Fatal(err)
 	}
-	revoked := doJSON(t, h, "GET", "/admin/users", nil, adminCookie)
+	revoked := doJSON(t, h, "GET", "/v1/admin/users", nil, adminCookie)
 	if revoked.Code != 403 {
 		t.Fatalf("revoked admin role should be forbidden immediately, got %d %s", revoked.Code, revoked.Body.String())
 	}
 	if err := redis.InvalidateAuthUser(context.Background(), admin.ID); err != nil {
 		t.Fatal(err)
 	}
-	demoted := doJSON(t, h, "GET", "/admin/users", nil, adminCookie)
+	demoted := doJSON(t, h, "GET", "/v1/admin/users", nil, adminCookie)
 	if demoted.Code != 403 {
 		t.Fatalf("demoted admin should be forbidden after auth cache invalidation, got %d", demoted.Code)
 	}
 
 	normalToken, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, normal.ID, time.Hour)
-	forbidden := doJSON(t, h, "GET", "/admin/users", nil, &http.Cookie{Name: "access_token", Value: normalToken})
+	forbidden := doJSON(t, h, "GET", "/v1/admin/users", nil, &http.Cookie{Name: "access_token", Value: normalToken})
 	if forbidden.Code != 403 {
 		t.Fatalf("normal user should be forbidden, got %d", forbidden.Code)
 	}
@@ -304,7 +304,7 @@ func TestTextureUploadAndYggdrasilTextureRoutes(t *testing.T) {
 	access, _ := util.CreateAccessToken(testutil.TestConfig().JWTSecret, user.ID, time.Hour)
 	cookie := &http.Cookie{Name: "access_token", Value: access}
 
-	upload := doMultipart(t, h, "POST", "/me/textures", map[string]string{
+	upload := doMultipart(t, h, "POST", "/v1/users/me/textures", map[string]string{
 		"texture_type": "skin",
 		"note":         "API Upload",
 		"is_public":    "true",
@@ -319,7 +319,7 @@ func TestTextureUploadAndYggdrasilTextureRoutes(t *testing.T) {
 		t.Fatalf("uploaded texture not persisted: %#v", info)
 	}
 
-	oversized := doMultipart(t, h, "POST", "/me/textures", map[string]string{
+	oversized := doMultipart(t, h, "POST", "/v1/users/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "too-large.png", bytes.Repeat([]byte("x"), 16<<20+1), cookie)
 	if oversized.Code != 400 || !strings.Contains(oversized.Body.String(), "File too large") {
