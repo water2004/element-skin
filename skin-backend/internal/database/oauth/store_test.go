@@ -122,85 +122,6 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	}
 }
 
-func TestClientAccessTokenLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
-	db, _ := testutil.NewTestAppTB(t)
-	ctx := context.Background()
-	user := testutil.CreateUser(t, db, "oauth-client-token@test.com", "pw", "OAuthClientToken", false)
-	clientPermissions := permissionIDs("minecraft_profile.read.public", "minecraft_session.hasjoined.server")
-	client := model.OAuthClient{
-		ID:          "app-token-client",
-		OwnerUserID: user.ID,
-		Name:        "App-only client",
-		Description: "App-only token test",
-		RedirectURI: "https://app.example/callback",
-		WebsiteURL:  "https://app.example",
-		ClientType:  "confidential",
-		SecretHash:  "secret-hash",
-		Status:      "active",
-		CreatedAt:   1000,
-		UpdatedAt:   1000,
-	}
-	if err := db.OAuth.CreateClient(ctx, client, clientPermissions); err != nil {
-		t.Fatal(err)
-	}
-
-	token := model.OAuthClientAccessToken{
-		TokenHash: "client-access-1",
-		ClientID:  client.ID,
-		ExpiresAt: 5000,
-		CreatedAt: 1100,
-	}
-	tokenPermissions := permissionIDs("minecraft_session.hasjoined.server")
-	if err := db.OAuth.CreateClientAccessToken(ctx, token, tokenPermissions); err != nil {
-		t.Fatal(err)
-	}
-	got, gotPermissions, err := db.OAuth.GetClientAccessToken(ctx, token.TokenHash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(got, &token) {
-		t.Fatalf("client access token mismatch:\n got=%#v\nwant=%#v", got, &token)
-	}
-	if !reflect.DeepEqual(gotPermissions, tokenPermissions) {
-		t.Fatalf("client token permissions=%v want=%v", gotPermissions, tokenPermissions)
-	}
-
-	revokedAt := int64(1200)
-	revoked, err := db.OAuth.RevokeClientAccessToken(ctx, token.TokenHash, revokedAt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !revoked {
-		t.Fatal("RevokeClientAccessToken should revoke active client access token")
-	}
-	got, gotPermissions, err = db.OAuth.GetClientAccessToken(ctx, token.TokenHash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := token
-	want.RevokedAt = &revokedAt
-	if !reflect.DeepEqual(got, &want) {
-		t.Fatalf("revoked client access token mismatch:\n got=%#v\nwant=%#v", got, &want)
-	}
-	if !reflect.DeepEqual(gotPermissions, tokenPermissions) {
-		t.Fatalf("revoked client token permissions=%v want=%v", gotPermissions, tokenPermissions)
-	}
-	revoked, err = db.OAuth.RevokeClientAccessToken(ctx, token.TokenHash, 1300)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if revoked {
-		t.Fatal("RevokeClientAccessToken should reject already revoked client access token")
-	}
-	missing, missingPermissions, err := db.OAuth.GetClientAccessToken(ctx, "missing-token")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if missing != nil || missingPermissions != nil {
-		t.Fatalf("missing client token should return nils: token=%#v permissions=%v", missing, missingPermissions)
-	}
-}
-
 func TestDeviceCodeLifecyclePreservesExactFieldsPermissionsAndStates(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
@@ -401,17 +322,9 @@ func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 		t.Fatalf("expired authorization code should return nils: code=%#v permissions=%v", gotCode, gotCodePermissions)
 	}
 
-	access := model.OAuthToken{TokenHash: "access-1", ClientID: client.ID, UserID: user.ID, GrantID: grant.ID, ExpiresAt: 9000, CreatedAt: 2000}
 	refresh := model.OAuthToken{TokenHash: "refresh-1", ClientID: client.ID, UserID: user.ID, GrantID: grant.ID, ExpiresAt: 19000, CreatedAt: 2000}
-	if err := db.OAuth.CreateTokens(ctx, access, refresh); err != nil {
+	if err := db.OAuth.CreateRefreshToken(ctx, refresh); err != nil {
 		t.Fatal(err)
-	}
-	gotAccess, err := db.OAuth.GetAccessToken(ctx, access.TokenHash)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(gotAccess, &access) {
-		t.Fatalf("access token mismatch:\n got=%#v\nwant=%#v", gotAccess, &access)
 	}
 	gotRefresh, err := db.OAuth.GetRefreshToken(ctx, refresh.TokenHash)
 	if err != nil {
@@ -421,9 +334,8 @@ func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 		t.Fatalf("refresh token mismatch:\n got=%#v\nwant=%#v", gotRefresh, &refresh)
 	}
 
-	newAccess := model.OAuthToken{TokenHash: "access-2", ClientID: client.ID, UserID: user.ID, GrantID: grant.ID, ExpiresAt: 10000, CreatedAt: 3000}
 	newRefresh := model.OAuthToken{TokenHash: "refresh-2", ClientID: client.ID, UserID: user.ID, GrantID: grant.ID, ExpiresAt: 20000, CreatedAt: 3000}
-	rotated, err := db.OAuth.RotateRefreshToken(ctx, refresh.TokenHash, newAccess, newRefresh, 3100)
+	rotated, err := db.OAuth.RotateRefreshToken(ctx, refresh.TokenHash, newRefresh, 3100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -437,31 +349,23 @@ func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 	if gotRefresh.RevokedAt == nil || *gotRefresh.RevokedAt != 3100 {
 		t.Fatalf("old refresh revoked_at mismatch: %#v", gotRefresh)
 	}
-	rotated, err = db.OAuth.RotateRefreshToken(ctx, refresh.TokenHash, model.OAuthToken{TokenHash: "access-3"}, model.OAuthToken{TokenHash: "refresh-3"}, 3200)
+	gotRefresh, err = db.OAuth.GetRefreshToken(ctx, newRefresh.TokenHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotRefresh, &newRefresh) {
+		t.Fatalf("new refresh token mismatch:\n got=%#v\nwant=%#v", gotRefresh, &newRefresh)
+	}
+	rotated, err = db.OAuth.RotateRefreshToken(ctx, refresh.TokenHash, model.OAuthToken{TokenHash: "refresh-3"}, 3200)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if rotated {
 		t.Fatal("RotateRefreshToken should reject reused refresh token")
 	}
-	revoked, err := db.OAuth.RevokeAccessToken(ctx, access.TokenHash, 4000)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !revoked {
-		t.Fatal("RevokeAccessToken should revoke active access token")
-	}
-	revoked, err = db.OAuth.RevokeAccessToken(ctx, access.TokenHash, 4100)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if revoked {
-		t.Fatal("RevokeAccessToken should reject already revoked access token")
-	}
-	if revoked, err = db.OAuth.RevokeGrant(ctx, grant.ID, user.ID, 5000); err != nil || !revoked {
+	if revoked, err := db.OAuth.RevokeGrant(ctx, grant.ID, user.ID, 5000); err != nil || !revoked {
 		t.Fatalf("RevokeGrant should revoke active grant: revoked=%v err=%v", revoked, err)
-	}
-	if revoked, err = db.OAuth.RevokeGrant(ctx, grant.ID, user.ID, 5100); err != nil || revoked {
+	} else if revoked, err = db.OAuth.RevokeGrant(ctx, grant.ID, user.ID, 5100); err != nil || revoked {
 		t.Fatalf("RevokeGrant should reject already revoked grant: revoked=%v err=%v", revoked, err)
 	}
 }

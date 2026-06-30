@@ -35,6 +35,16 @@ type RateLimitResult struct {
 	RetryAfter time.Duration
 }
 
+type OAuthAccessToken struct {
+	TokenHash     string  `json:"token_hash"`
+	ClientID      string  `json:"client_id"`
+	UserID        string  `json:"user_id,omitempty"`
+	GrantID       string  `json:"grant_id,omitempty"`
+	PermissionIDs []int64 `json:"permission_ids"`
+	ExpiresAt     int64   `json:"expires_at"`
+	CreatedAt     int64   `json:"created_at"`
+}
+
 type Store interface {
 	Close() error
 	GetSetting(context.Context, string) (string, error)
@@ -74,6 +84,9 @@ type Store interface {
 	GetPermissionCache(ctx context.Context, subjectID string) (string, bool, error)
 	SetPermissionCache(ctx context.Context, subjectID string, encoded string, ttl time.Duration) error
 	DeletePermissionCache(ctx context.Context, subjectID string) error
+	SetOAuthAccessToken(context.Context, OAuthAccessToken, time.Duration) error
+	GetOAuthAccessToken(context.Context, string) (OAuthAccessToken, error)
+	DeleteOAuthAccessToken(context.Context, string) error
 }
 
 type RedisStore struct {

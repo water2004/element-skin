@@ -11,6 +11,7 @@ import (
 	"element-skin/backend/internal/database"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/permission"
+	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/oauth"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
@@ -24,7 +25,7 @@ func TestServiceAuthorizationCodeFlowNarrowsActorExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := oauth.Service{DB: db}
+	svc := newOAuthService(db)
 
 	clientRes, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
 		Name:            "Service app",
@@ -39,6 +40,7 @@ func TestServiceAuthorizationCodeFlowNarrowsActorExactly(t *testing.T) {
 	}
 	clientID := clientRes["client_id"].(string)
 	clientSecret := clientRes["client_secret"].(string)
+	activateOAuthClient(t, db, clientID)
 	if clientID == "" || clientSecret == "" {
 		t.Fatalf("client response should include exact credentials: %#v", clientRes)
 	}
@@ -113,7 +115,7 @@ func TestServiceRejectsInvalidAuthorizationRequestExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := oauth.Service{DB: db}
+	svc := newOAuthService(db)
 	_, err = svc.CreateClient(ctx, actor, oauth.ClientInput{
 		Name:            "Invalid app",
 		RedirectURI:     "https://client.example/callback",
@@ -138,7 +140,7 @@ func TestServiceClientCredentialsIssueAppOnlyActorExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := oauth.Service{DB: db}
+	svc := newOAuthService(db)
 	clientRes, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
 		Name:            "Server plugin",
 		RedirectURI:     "https://server.example/callback",
@@ -150,6 +152,7 @@ func TestServiceClientCredentialsIssueAppOnlyActorExactly(t *testing.T) {
 	}
 	clientID := clientRes["client_id"].(string)
 	clientSecret := clientRes["client_secret"].(string)
+	activateOAuthClient(t, db, clientID)
 	if clientID == "" || clientSecret == "" {
 		t.Fatalf("client credentials response missing secret: %#v", clientRes)
 	}
@@ -207,7 +210,7 @@ func TestServiceClientCredentialsRejectsPublicClientAndExcessScopeExactly(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := oauth.Service{DB: db}
+	svc := newOAuthService(db)
 	publicClient, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
 		Name:            "Public app",
 		RedirectURI:     "https://public.example/callback",
@@ -217,6 +220,7 @@ func TestServiceClientCredentialsRejectsPublicClientAndExcessScopeExactly(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	activateOAuthClient(t, db, publicClient["client_id"].(string))
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType: "client_credentials",
 		ClientID:  publicClient["client_id"].(string),
@@ -232,6 +236,7 @@ func TestServiceClientCredentialsRejectsPublicClientAndExcessScopeExactly(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
+	activateOAuthClient(t, db, confidential["client_id"].(string))
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "client_credentials",
 		ClientID:     confidential["client_id"].(string),
@@ -249,7 +254,7 @@ func TestServiceDeviceCodeFlowIssuesDelegatedTokenExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := oauth.Service{DB: db}
+	svc := newOAuthService(db)
 	clientRes, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
 		Name:            "Device app",
 		RedirectURI:     "https://device.example/callback",
@@ -260,6 +265,7 @@ func TestServiceDeviceCodeFlowIssuesDelegatedTokenExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 	clientID := clientRes["client_id"].(string)
+	activateOAuthClient(t, db, clientID)
 	started, err := svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{
 		ClientID: clientID,
 		Scope:    "account.read.self",
@@ -323,7 +329,7 @@ func TestServiceDeviceCodeFlowRejectsDeniedAndUnauthorizedScopesExactly(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := oauth.Service{DB: db}
+	svc := newOAuthService(db)
 	clientRes, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
 		Name:            "Denied device app",
 		RedirectURI:     "https://device.example/callback",
@@ -334,6 +340,7 @@ func TestServiceDeviceCodeFlowRejectsDeniedAndUnauthorizedScopesExactly(t *testi
 		t.Fatal(err)
 	}
 	clientID := clientRes["client_id"].(string)
+	activateOAuthClient(t, db, clientID)
 	_, err = svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{
 		ClientID: clientID,
 		Scope:    "account.update.self",
@@ -362,11 +369,22 @@ func pkceChallenge(verifier string) string {
 	return base64.RawURLEncoding.EncodeToString(sum[:])
 }
 
+func newOAuthService(db *database.DB) oauth.Service {
+	return oauth.Service{DB: db, Redis: redisstore.NewMemoryStore()}
+}
+
 func grantClientPermission(t *testing.T, db *database.DB, clientID, code string) {
 	t.Helper()
 	def := permission.MustDefinitionByCode(code)
 	if err := db.Permissions.SetPermissionOverrideForSubject(context.Background(), permissiondb.SubjectIDForClient(clientID), def, "allow", ""); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func activateOAuthClient(t *testing.T, db *database.DB, clientID string) {
+	t.Helper()
+	if ok, err := db.OAuth.UpdateClientStatus(context.Background(), clientID, oauth.StatusActive, database.NowMS()); err != nil || !ok {
+		t.Fatalf("activate oauth client: ok=%v err=%v", ok, err)
 	}
 }
 

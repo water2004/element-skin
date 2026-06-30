@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"element-skin/backend/internal/database"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/httpapi"
 	"element-skin/backend/internal/permission"
@@ -43,6 +44,7 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 	app := decodeMap(t, createRes.Body.Bytes())
 	clientID := app["client_id"].(string)
 	clientSecret := app["client_secret"].(string)
+	activateOAuthClient(t, db, clientID)
 	if clientID == "" || clientSecret == "" || app["secret_hash"] != nil {
 		t.Fatalf("client response should expose id and one-time secret only: %#v", app)
 	}
@@ -171,6 +173,7 @@ func TestOAuthClientCredentialsTokenWorksForMinecraftOnly(t *testing.T) {
 	app := decodeMap(t, createRes.Body.Bytes())
 	clientID := app["client_id"].(string)
 	clientSecret := app["client_secret"].(string)
+	activateOAuthClient(t, db, clientID)
 	if err := db.Permissions.SetPermissionOverrideForSubject(
 		t.Context(),
 		permissiondb.SubjectIDForClient(clientID),
@@ -227,6 +230,7 @@ func TestOAuthDeviceCodeFlowRoutesIssueDelegatedBearer(t *testing.T) {
 		t.Fatalf("create app status=%d body=%s", createRes.Code, createRes.Body.String())
 	}
 	clientID := decodeMap(t, createRes.Body.Bytes())["client_id"].(string)
+	activateOAuthClient(t, db, clientID)
 
 	form := url.Values{}
 	form.Set("client_id", clientID)
@@ -338,6 +342,13 @@ func webCookie(t *testing.T, secret, userID string) *http.Cookie {
 		t.Fatal(err)
 	}
 	return &http.Cookie{Name: "access_token", Value: token}
+}
+
+func activateOAuthClient(t *testing.T, db *database.DB, clientID string) {
+	t.Helper()
+	if ok, err := db.OAuth.UpdateClientStatus(t.Context(), clientID, "active", database.NowMS()); err != nil || !ok {
+		t.Fatalf("activate oauth client: ok=%v err=%v", ok, err)
+	}
 }
 
 func doJSON(t *testing.T, router http.Handler, method, path string, body any, cookie *http.Cookie, bearer string) *httptest.ResponseRecorder {

@@ -40,8 +40,7 @@ func TestInitSQLExecutesSuccessfullyAgainstRealDatabase(t *testing.T) {
 		"permission_subjects", "permission_resources", "permission_actions",
 		"permission_scopes", "permissions", "roles", "role_permissions",
 		"subject_roles", "subject_permission_overrides",
-		"session_permission_policies", "oauth_client_server_bindings",
-		"oauth_client_access_tokens", "oauth_client_access_token_permissions",
+		"session_permission_policies",
 		"oauth_device_codes", "oauth_device_code_permissions",
 	}
 	for _, table := range expectedTables {

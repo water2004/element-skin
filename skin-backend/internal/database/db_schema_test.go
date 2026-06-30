@@ -34,7 +34,6 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		"delegated_grant_permissions",
 		"oauth_authorization_codes",
 		"oauth_authorization_code_permissions",
-		"oauth_access_tokens",
 		"oauth_refresh_tokens",
 		"permission_audit_logs",
 	} {
@@ -133,10 +132,8 @@ func TestInitSQLContainsExpectedConstraintsAndIndexes(t *testing.T) {
 		"idx_site_refresh_expires",
 		"CREATE TABLE IF NOT EXISTS oauth_authorization_codes",
 		"CREATE TABLE IF NOT EXISTS oauth_authorization_code_permissions",
-		"CREATE TABLE IF NOT EXISTS oauth_access_tokens",
 		"CREATE TABLE IF NOT EXISTS oauth_refresh_tokens",
 		"idx_oauth_authorization_codes_client_user",
-		"idx_oauth_access_tokens_user_client",
 		"idx_oauth_refresh_tokens_user_client",
 		"client_type TEXT NOT NULL DEFAULT 'confidential'",
 		"secret_hash TEXT NOT NULL DEFAULT ''",

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"errors"
 	"net/http"
 	"net/url"
 	"sort"
@@ -15,6 +16,7 @@ import (
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/permission"
+	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/util"
 )
 
@@ -34,7 +36,8 @@ const (
 )
 
 type Service struct {
-	DB *database.DB
+	DB    *database.DB
+	Redis redisstore.Store
 }
 
 type ClientInput struct {
@@ -649,14 +652,13 @@ func (s Service) RevokeToken(ctx context.Context, clientID, clientSecret, token 
 		return err
 	}
 	tokenHash := util.HashRefreshToken(token)
-	if access, err := s.DB.OAuth.GetAccessToken(ctx, tokenHash); err != nil {
+	if access, err := s.Redis.GetOAuthAccessToken(ctx, tokenHash); err != nil && !errors.Is(err, redisstore.ErrCacheMiss) {
 		return err
-	} else if access != nil {
+	} else if err == nil {
 		if access.ClientID != client.ID {
 			return forbidden()
 		}
-		_, err = s.DB.OAuth.RevokeAccessToken(ctx, tokenHash, database.NowMS())
-		return err
+		return s.Redis.DeleteOAuthAccessToken(ctx, tokenHash)
 	}
 	if refresh, err := s.DB.OAuth.GetRefreshToken(ctx, tokenHash); err != nil {
 		return err
@@ -667,15 +669,6 @@ func (s Service) RevokeToken(ctx context.Context, clientID, clientSecret, token 
 		_, err = s.DB.OAuth.RevokeRefreshToken(ctx, tokenHash, database.NowMS())
 		return err
 	}
-	if clientAccess, _, err := s.DB.OAuth.GetClientAccessToken(ctx, tokenHash); err != nil {
-		return err
-	} else if clientAccess != nil {
-		if clientAccess.ClientID != client.ID {
-			return forbidden()
-		}
-		_, err = s.DB.OAuth.RevokeClientAccessToken(ctx, tokenHash, database.NowMS())
-		return err
-	}
 	return nil
 }
 
@@ -684,31 +677,26 @@ func (s Service) Introspect(ctx context.Context, actor permission.Actor, token s
 		return nil, forbidden()
 	}
 	tokenHash := util.HashRefreshToken(token)
-	access, err := s.DB.OAuth.GetAccessToken(ctx, tokenHash)
+	access, err := s.Redis.GetOAuthAccessToken(ctx, tokenHash)
+	if errors.Is(err, redisstore.ErrCacheMiss) {
+		return map[string]any{"active": false}, nil
+	}
 	if err != nil {
 		return nil, err
 	}
-	if access == nil || access.RevokedAt != nil || access.ExpiresAt <= database.NowMS() {
-		clientAccess, permissionIDs, err := s.DB.OAuth.GetClientAccessToken(ctx, tokenHash)
-		if err != nil {
-			return nil, err
-		}
-		if clientAccess == nil || clientAccess.RevokedAt != nil || clientAccess.ExpiresAt <= database.NowMS() {
-			return map[string]any{"active": false}, nil
-		}
-		codes := permissionCodesFromIDs(permissionIDs)
+	if access.ExpiresAt <= database.NowMS() {
+		return map[string]any{"active": false}, nil
+	}
+	codes := permissionCodesFromIDs(access.PermissionIDs)
+	if access.UserID == "" {
 		return map[string]any{
 			"active":      true,
-			"client_id":   clientAccess.ClientID,
-			"subject_id":  permissiondb.SubjectIDForClient(clientAccess.ClientID),
-			"exp":         clientAccess.ExpiresAt / 1000,
+			"client_id":   access.ClientID,
+			"subject_id":  permissiondb.SubjectIDForClient(access.ClientID),
+			"exp":         access.ExpiresAt / 1000,
 			"scope":       strings.Join(codes, " "),
 			"permissions": codes,
 		}, nil
-	}
-	codes, err := s.grantPermissionCodes(ctx, access.GrantID)
-	if err != nil {
-		return nil, err
 	}
 	return map[string]any{
 		"active":      true,
@@ -723,11 +711,17 @@ func (s Service) Introspect(ctx context.Context, actor permission.Actor, token s
 
 func (s Service) ActorForBearer(ctx context.Context, bearer string) (permission.Actor, bool, error) {
 	tokenHash := util.HashRefreshToken(bearer)
-	token, err := s.DB.OAuth.GetAccessToken(ctx, tokenHash)
+	token, err := s.Redis.GetOAuthAccessToken(ctx, tokenHash)
+	if errors.Is(err, redisstore.ErrCacheMiss) {
+		return permission.Actor{}, false, nil
+	}
 	if err != nil {
 		return permission.Actor{}, false, err
 	}
-	if token != nil && token.RevokedAt == nil && token.ExpiresAt > database.NowMS() {
+	if token.ExpiresAt <= database.NowMS() {
+		return permission.Actor{}, false, nil
+	}
+	if token.UserID != "" {
 		actor, err := s.DB.Permissions.ActorForUser(ctx, token.UserID, permissiondb.EffectiveOptions{
 			SessionKind:       permission.SessionKindDelegated,
 			Entrypoint:        permission.EntrypointDashboard,
@@ -738,32 +732,26 @@ func (s Service) ActorForBearer(ctx context.Context, bearer string) (permission.
 			return permission.Actor{}, false, err
 		}
 		actor.SessionID = token.TokenHash
+		actor.Permissions = actor.Permissions.And(bitSetFromPermissionIDs(token.PermissionIDs))
 		return actor, true, nil
 	}
 
-	clientToken, permissionIDs, err := s.DB.OAuth.GetClientAccessToken(ctx, tokenHash)
-	if err != nil {
-		return permission.Actor{}, false, err
-	}
-	if clientToken == nil || clientToken.RevokedAt != nil || clientToken.ExpiresAt <= database.NowMS() {
-		return permission.Actor{}, false, nil
-	}
-	client, err := s.DB.OAuth.GetClient(ctx, clientToken.ClientID)
+	client, err := s.DB.OAuth.GetClient(ctx, token.ClientID)
 	if err != nil {
 		return permission.Actor{}, false, err
 	}
 	if client == nil || client.Status != StatusActive {
 		return permission.Actor{}, false, nil
 	}
-	actor, err := s.DB.Permissions.ActorForClient(ctx, clientToken.ClientID, permissiondb.EffectiveOptions{
+	actor, err := s.DB.Permissions.ActorForClient(ctx, token.ClientID, permissiondb.EffectiveOptions{
 		SessionKind: permission.SessionKindClient,
 		Entrypoint:  permission.EntrypointAPI,
 	})
 	if err != nil {
 		return permission.Actor{}, false, err
 	}
-	actor.SessionID = clientToken.TokenHash
-	actor.Permissions = actor.Permissions.And(bitSetFromPermissionIDs(permissionIDs))
+	actor.SessionID = token.TokenHash
+	actor.Permissions = actor.Permissions.And(bitSetFromPermissionIDs(token.PermissionIDs))
 	return actor, true, nil
 }
 
@@ -808,14 +796,24 @@ func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenRespo
 		return TokenResponse{}, err
 	}
 	now := database.NowMS()
-	access := model.OAuthToken{TokenHash: accessHash, ClientID: client.ID, UserID: old.UserID, GrantID: old.GrantID, ExpiresAt: now + int64(accessTokenTTL/time.Millisecond), CreatedAt: now}
 	refresh := model.OAuthToken{TokenHash: refreshHash, ClientID: client.ID, UserID: old.UserID, GrantID: old.GrantID, ExpiresAt: now + int64(refreshTokenTTL/time.Millisecond), CreatedAt: now}
-	ok, err := s.DB.OAuth.RotateRefreshToken(ctx, oldHash, access, refresh, now)
+	ok, err := s.DB.OAuth.RotateRefreshToken(ctx, oldHash, refresh, now)
 	if err != nil {
 		return TokenResponse{}, err
 	}
 	if !ok {
 		return TokenResponse{}, badRequest("invalid refresh_token")
+	}
+	if err := s.storeAccessToken(ctx, redisstore.OAuthAccessToken{
+		TokenHash:     accessHash,
+		ClientID:      client.ID,
+		UserID:        old.UserID,
+		GrantID:       old.GrantID,
+		PermissionIDs: permissionIDsFromCodes(codes),
+		ExpiresAt:     now + int64(accessTokenTTL/time.Millisecond),
+		CreatedAt:     now,
+	}); err != nil {
+		return TokenResponse{}, err
 	}
 	return tokenResponse(accessRaw, refreshRaw, codes), nil
 }
@@ -847,13 +845,13 @@ func (s Service) clientCredentialsToken(ctx context.Context, req TokenRequest) (
 		return TokenResponse{}, err
 	}
 	now := database.NowMS()
-	token := model.OAuthClientAccessToken{
-		TokenHash: tokenHash,
-		ClientID:  client.ID,
-		ExpiresAt: now + int64(accessTokenTTL/time.Millisecond),
-		CreatedAt: now,
-	}
-	if err := s.DB.OAuth.CreateClientAccessToken(ctx, token, permissionIDsFromCodes(codes)); err != nil {
+	if err := s.storeAccessToken(ctx, redisstore.OAuthAccessToken{
+		TokenHash:     tokenHash,
+		ClientID:      client.ID,
+		PermissionIDs: permissionIDsFromCodes(codes),
+		ExpiresAt:     now + int64(accessTokenTTL/time.Millisecond),
+		CreatedAt:     now,
+	}); err != nil {
 		return TokenResponse{}, err
 	}
 	return TokenResponse{
@@ -931,12 +929,26 @@ func (s Service) issueTokens(ctx context.Context, clientID, userID, grantID stri
 		return TokenResponse{}, err
 	}
 	now := database.NowMS()
-	access := model.OAuthToken{TokenHash: accessHash, ClientID: clientID, UserID: userID, GrantID: grantID, ExpiresAt: now + int64(accessTokenTTL/time.Millisecond), CreatedAt: now}
 	refresh := model.OAuthToken{TokenHash: refreshHash, ClientID: clientID, UserID: userID, GrantID: grantID, ExpiresAt: now + int64(refreshTokenTTL/time.Millisecond), CreatedAt: now}
-	if err := s.DB.OAuth.CreateTokens(ctx, access, refresh); err != nil {
+	if err := s.DB.OAuth.CreateRefreshToken(ctx, refresh); err != nil {
+		return TokenResponse{}, err
+	}
+	if err := s.storeAccessToken(ctx, redisstore.OAuthAccessToken{
+		TokenHash:     accessHash,
+		ClientID:      clientID,
+		UserID:        userID,
+		GrantID:       grantID,
+		PermissionIDs: permissionIDsFromCodes(codes),
+		ExpiresAt:     now + int64(accessTokenTTL/time.Millisecond),
+		CreatedAt:     now,
+	}); err != nil {
 		return TokenResponse{}, err
 	}
 	return tokenResponse(accessRaw, refreshRaw, codes), nil
+}
+
+func (s Service) storeAccessToken(ctx context.Context, token redisstore.OAuthAccessToken) error {
+	return s.Redis.SetOAuthAccessToken(ctx, token, accessTokenTTL)
 }
 
 func (s Service) validAuthorizationRequest(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (model.OAuthClient, []string, error) {

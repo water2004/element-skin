@@ -17,7 +17,7 @@ func (r *Router) routes() {
 	yggRoutes := yggdrasil.New(r.cfg, r.db, r.redis, r.settings, r.ygg)
 	microsoftRoutes := microsoft.New(r.cfg, r.db, r.settings, r.auth, r.redis)
 	noticeRoutes := notice.New(r.db, r.auth)
-	oauthRoutes := oauth.New(r.cfg, r.db, r.auth)
+	oauthRoutes := oauth.New(r.cfg, r.db, r.redis, r.auth)
 	minecraftRoutes := minecraft.New(r.db, r.auth, r.ygg)
 	remoteRoutes := remote.New(r.db, r.auth)
 	adminRoutes := admin.NewWithRedis(r.cfg, r.db, r.redis, r.auth)

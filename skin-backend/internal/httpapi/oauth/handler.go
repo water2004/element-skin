@@ -8,6 +8,7 @@ import (
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/httpapi/shared"
 	"element-skin/backend/internal/permission"
+	"element-skin/backend/internal/redisstore"
 	oauthsvc "element-skin/backend/internal/service/oauth"
 	"element-skin/backend/internal/util"
 )
@@ -19,8 +20,8 @@ type Handler struct {
 	oauth oauthsvc.Service
 }
 
-func New(cfg config.Config, db *database.DB, auth shared.AuthFunc) Handler {
-	return Handler{cfg: cfg, db: db, auth: auth, oauth: oauthsvc.Service{DB: db}}
+func New(cfg config.Config, db *database.DB, redis redisstore.Store, auth shared.AuthFunc) Handler {
+	return Handler{cfg: cfg, db: db, auth: auth, oauth: oauthsvc.Service{DB: db, Redis: redis}}
 }
 
 func (h Handler) Auth(next http.HandlerFunc) http.HandlerFunc {

@@ -16,7 +16,7 @@ import (
 func (r *Router) auth(next http.HandlerFunc, required ...permission.Definition) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if bearer, ok := shared.BearerToken(req); ok {
-			actor, authenticated, err := (oauthsvc.Service{DB: r.db}).ActorForBearer(req.Context(), bearer)
+			actor, authenticated, err := (oauthsvc.Service{DB: r.db, Redis: r.redis}).ActorForBearer(req.Context(), bearer)
 			if err != nil {
 				util.Error(w, err)
 				return
