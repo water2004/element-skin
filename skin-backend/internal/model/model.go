@@ -149,6 +149,7 @@ type OAuthDeviceCode struct {
 	DeviceCodeHash string
 	UserCodeHash   string
 	ClientID       string
+	UserID         *string
 	SubjectID      *string
 	Status         string
 	ExpiresAt      int64

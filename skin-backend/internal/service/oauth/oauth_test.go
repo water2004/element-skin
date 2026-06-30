@@ -241,6 +241,122 @@ func TestServiceClientCredentialsRejectsPublicClientAndExcessScopeExactly(t *tes
 	assertHTTPError(t, err, 403, "permission denied")
 }
 
+func TestServiceDeviceCodeFlowIssuesDelegatedTokenExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oauth-device-flow@test.com", "Password123", "OAuthDeviceFlow", false)
+	actor, err := db.Permissions.ActorForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := oauth.Service{DB: db}
+	clientRes, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
+		Name:            "Device app",
+		RedirectURI:     "https://device.example/callback",
+		ClientType:      oauth.ClientTypePublic,
+		PermissionCodes: []string{"account.read.self"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientID := clientRes["client_id"].(string)
+	started, err := svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{
+		ClientID: clientID,
+		Scope:    "account.read.self",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if started.DeviceCode == "" || started.UserCode == "" || started.ExpiresIn != 600 || started.Interval != 5 ||
+		started.Scope != "account.read.self" || len(started.Permissions) != 1 || started.Permissions[0] != "account.read.self" {
+		t.Fatalf("device authorization response mismatch: %#v", started)
+	}
+	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:  "urn:ietf:params:oauth:grant-type:device_code",
+		ClientID:   clientID,
+		DeviceCode: started.DeviceCode,
+	})
+	assertHTTPError(t, err, 400, "authorization_pending")
+
+	details, err := svc.DeviceAuthorizationDetails(ctx, actor, started.UserCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if details.Status != "pending" || details.Client["client_id"] != clientID || len(details.Scopes) != 1 {
+		t.Fatalf("device details mismatch: %#v", details)
+	}
+	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: started.UserCode, Approve: true}); err != nil {
+		t.Fatal(err)
+	}
+	token, err := svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:  "urn:ietf:params:oauth:grant-type:device_code",
+		ClientID:   clientID,
+		DeviceCode: started.DeviceCode,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token.AccessToken == "" || token.RefreshToken == "" || token.Scope != "account.read.self" ||
+		len(token.Permissions) != 1 || token.Permissions[0] != "account.read.self" {
+		t.Fatalf("device token response mismatch: %#v", token)
+	}
+	delegated, ok, err := svc.ActorForBearer(ctx, token.AccessToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || delegated.UserID != user.ID || !delegated.Has(permission.MustDefinitionByCode("account.read.self")) {
+		t.Fatalf("device delegated actor mismatch: ok=%v actor=%#v", ok, delegated)
+	}
+	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:  "urn:ietf:params:oauth:grant-type:device_code",
+		ClientID:   clientID,
+		DeviceCode: started.DeviceCode,
+	})
+	assertHTTPError(t, err, 400, "invalid_grant")
+}
+
+func TestServiceDeviceCodeFlowRejectsDeniedAndUnauthorizedScopesExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oauth-device-deny@test.com", "Password123", "OAuthDeviceDeny", false)
+	actor, err := db.Permissions.ActorForUser(ctx, user.ID, permissiondb.EffectiveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := oauth.Service{DB: db}
+	clientRes, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
+		Name:            "Denied device app",
+		RedirectURI:     "https://device.example/callback",
+		ClientType:      oauth.ClientTypePublic,
+		PermissionCodes: []string{"account.read.self"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	clientID := clientRes["client_id"].(string)
+	_, err = svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{
+		ClientID: clientID,
+		Scope:    "account.update.self",
+	})
+	assertHTTPError(t, err, 400, "scope exceeds client permission limit")
+	started, err := svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{
+		ClientID: clientID,
+		Scope:    "account.read.self",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: started.UserCode, Approve: false}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:  "urn:ietf:params:oauth:grant-type:device_code",
+		ClientID:   clientID,
+		DeviceCode: started.DeviceCode,
+	})
+	assertHTTPError(t, err, 400, "access_denied")
+}
+
 func pkceChallenge(verifier string) string {
 	sum := sha256.Sum256([]byte(verifier))
 	return base64.RawURLEncoding.EncodeToString(sum[:])

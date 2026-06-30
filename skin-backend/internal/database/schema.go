@@ -382,6 +382,7 @@ CREATE TABLE IF NOT EXISTS oauth_device_codes (
     device_code_hash TEXT PRIMARY KEY,
     user_code_hash TEXT NOT NULL UNIQUE,
     client_id TEXT NOT NULL,
+    user_id TEXT,
     subject_id TEXT,
     status TEXT NOT NULL CHECK(status IN ('pending', 'approved', 'denied', 'consumed', 'expired')),
     expires_at BIGINT NOT NULL,
@@ -391,6 +392,7 @@ CREATE TABLE IF NOT EXISTS oauth_device_codes (
     consumed_at BIGINT,
     last_polled_at BIGINT,
     FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
     FOREIGN KEY(subject_id) REFERENCES permission_subjects(id) ON DELETE SET NULL
 );
 
@@ -439,6 +441,9 @@ ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS redirect_uri TEXT NOT NUL
 ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS website_url TEXT NOT NULL DEFAULT '';
 ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS client_type TEXT NOT NULL DEFAULT 'confidential';
 ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS secret_hash TEXT NOT NULL DEFAULT '';
+ALTER TABLE oauth_device_codes ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE oauth_device_codes DROP CONSTRAINT IF EXISTS oauth_device_codes_user_id_fkey;
+ALTER TABLE oauth_device_codes ADD CONSTRAINT oauth_device_codes_user_id_fkey FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL;
 ALTER TABLE permission_subjects DROP CONSTRAINT IF EXISTS permission_subjects_kind_check;
 ALTER TABLE permission_subjects ADD CONSTRAINT permission_subjects_kind_check CHECK(kind IN ('user', 'client', 'system'));
 UPDATE users SET created_at = 0 WHERE created_at IS NULL;

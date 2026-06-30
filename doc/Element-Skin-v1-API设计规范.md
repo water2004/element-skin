@@ -2840,6 +2840,9 @@ GET  /.well-known/oauth-authorization-server
 GET  /.well-known/oauth-protected-resource
 GET  /oauth/authorize
 POST /oauth/authorize
+POST /oauth/device/code
+GET  /oauth/device
+POST /oauth/device
 POST /oauth/token
 POST /oauth/revoke
 POST /oauth/introspect
@@ -2850,6 +2853,8 @@ POST /oauth/introspect
 ```text
 authorization_code
 refresh_token
+client_credentials
+urn:ietf:params:oauth:grant-type:device_code
 ```
 
 不支持：
@@ -2859,7 +2864,7 @@ password
 implicit
 ```
 
-Device Authorization Grant、Client Credentials、DPoP、PAR、JAR、RAR 等扩展见 `doc/OAuth2.1标准与扩展参考.md`。
+DPoP、PAR、JAR、RAR 等扩展见 `doc/OAuth2.1标准与扩展参考.md`。Device Authorization Grant 与 Client Credentials Grant 已作为站点开放能力的一部分落地。
 
 ## 27. OAuth 应用与授权管理 API
 
@@ -2988,7 +2993,7 @@ POST /oauth/token
 Content-Type: application/x-www-form-urlencoded
 ```
 
-支持 `authorization_code` 与 `refresh_token`。
+支持 `authorization_code`、`refresh_token`、`client_credentials` 与 `urn:ietf:params:oauth:grant-type:device_code`。
 
 授权码换 token：
 
@@ -3010,6 +3015,38 @@ client_secret=client_secret
 refresh_token=refresh_token
 ```
 
+Client Credentials 换 app-only token：
+
+```text
+grant_type=client_credentials
+client_id=app_id
+client_secret=client_secret
+scope=minecraft_session.hasjoined.server
+```
+
+约束：
+
+- 仅 confidential client 可使用。
+- token 权限来自 `client:{client_id}` 权限主体。
+- token 写入 `oauth_client_access_tokens`，不写入用户 OAuth access token 表。
+- 不签发 refresh token。
+
+Device Code 轮询换 token：
+
+```text
+grant_type=urn:ietf:params:oauth:grant-type:device_code
+client_id=app_id
+device_code=opaque_device_code
+```
+
+轮询错误使用站点统一错误结构，`detail` 为 OAuth 设备流错误码：
+
+```json
+{"detail":"authorization_pending"}
+{"detail":"access_denied"}
+{"detail":"expired_token"}
+```
+
 响应：
 
 ```json
@@ -3020,6 +3057,87 @@ refresh_token=refresh_token
   "refresh_token": "opaque_refresh_token",
   "scope": "account.read.self",
   "permissions": ["account.read.self"]
+}
+```
+
+```http
+POST /oauth/device/code
+Content-Type: application/x-www-form-urlencoded
+```
+
+请求：
+
+```text
+client_id=app_id
+client_secret=client_secret
+scope=account.read.self
+```
+
+响应：
+
+```json
+{
+  "device_code": "opaque_device_code",
+  "user_code": "ABCD-1234",
+  "verification_uri": "https://skin.example/oauth/device",
+  "verification_uri_complete": "https://skin.example/oauth/device?user_code=ABCD-1234",
+  "expires_in": 600,
+  "interval": 5,
+  "scope": "account.read.self",
+  "permissions": ["account.read.self"]
+}
+```
+
+```http
+GET /oauth/device?user_code=ABCD-1234
+```
+
+认证：站点登录 Cookie。
+
+响应：
+
+```json
+{
+  "client": {
+    "client_id": "app_id",
+    "name": "Device App",
+    "client_type": "public",
+    "status": "active"
+  },
+  "scopes": [
+    {
+      "code": "account.read.self",
+      "description": "读取自己的账号资料",
+      "resource": "account",
+      "action": "read",
+      "scope": "self"
+    }
+  ],
+  "expires_at": 1710000000000,
+  "status": "pending"
+}
+```
+
+```http
+POST /oauth/device
+```
+
+认证：站点登录 Cookie。
+
+请求：
+
+```json
+{
+  "user_code": "ABCD-1234",
+  "approve": true
+}
+```
+
+响应：
+
+```json
+{
+  "ok": true
 }
 ```
 
@@ -3087,7 +3205,8 @@ GET /v1/capabilities
     "skin_library": true,
     "minecraft_api": true,
     "oauth": true,
-    "device_code": false,
+    "device_code": true,
+    "minecraft_api": true,
     "microsoft_import": true,
     "remote_ygg_import": true
   },

@@ -32,11 +32,12 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 	util.JSON(w, http.StatusOK, map[string]any{
 		"issuer":                                         base,
 		"authorization_endpoint":                         base + "/oauth/authorize",
+		"device_authorization_endpoint":                  base + "/oauth/device/code",
 		"token_endpoint":                                 base + "/oauth/token",
 		"revocation_endpoint":                            base + "/oauth/revoke",
 		"introspection_endpoint":                         base + "/oauth/introspect",
 		"response_types_supported":                       []string{"code"},
-		"grant_types_supported":                          []string{"authorization_code", "refresh_token", "client_credentials"},
+		"grant_types_supported":                          []string{"authorization_code", "refresh_token", "client_credentials", "urn:ietf:params:oauth:grant-type:device_code"},
 		"code_challenge_methods_supported":               []string{"S256"},
 		"token_endpoint_auth_methods_supported":          []string{"client_secret_basic", "client_secret_post", "none"},
 		"revocation_endpoint_auth_methods_supported":     []string{"client_secret_basic", "client_secret_post", "none"},
@@ -50,7 +51,6 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 		"require_pushed_authorization_requests":          false,
 		"tls_client_certificate_bound_access_tokens":     false,
 		"dpop_signing_alg_values_supported":              []string{},
-		"device_authorization_endpoint":                  nil,
 		"backchannel_authentication_endpoint":            nil,
 		"authorization_details_types_supported":          []string{},
 		"protected_resources":                            []string{base + "/v1"},
@@ -172,6 +172,63 @@ func (h Handler) ApproveAuthorization(w http.ResponseWriter, req *http.Request) 
 	util.JSON(w, http.StatusOK, res)
 }
 
+func (h Handler) DeviceCode(w http.ResponseWriter, req *http.Request) {
+	if err := req.ParseForm(); err != nil {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid form"})
+		return
+	}
+	clientID, clientSecret := clientCredentials(req)
+	res, err := h.oauth.StartDeviceAuthorization(req.Context(), oauthsvc.DeviceAuthorizationRequest{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Scope:        req.Form.Get("scope"),
+	})
+	if err != nil {
+		util.Error(w, err)
+		return
+	}
+	base := strings.TrimRight(h.cfg.SiteURL, "/")
+	if base == "" {
+		base = h.baseURL()
+	}
+	out := map[string]any{
+		"device_code":               res.DeviceCode,
+		"user_code":                 res.UserCode,
+		"verification_uri":          base + "/oauth/device",
+		"verification_uri_complete": base + "/oauth/device?user_code=" + res.UserCode,
+		"expires_in":                res.ExpiresIn,
+		"interval":                  res.Interval,
+		"scope":                     res.Scope,
+		"permissions":               res.Permissions,
+	}
+	util.JSON(w, http.StatusOK, out)
+}
+
+func (h Handler) DeviceInfo(w http.ResponseWriter, req *http.Request) {
+	res, err := h.oauth.DeviceAuthorizationDetails(req.Context(), shared.CurrentActor(req), req.URL.Query().Get("user_code"))
+	if err != nil {
+		util.Error(w, err)
+		return
+	}
+	util.JSON(w, http.StatusOK, res)
+}
+
+func (h Handler) DeviceDecision(w http.ResponseWriter, req *http.Request) {
+	var body deviceDecisionBody
+	if err := shared.DecodeJSON(req, &body); err != nil {
+		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		return
+	}
+	if err := h.oauth.DecideDeviceAuthorization(req.Context(), shared.CurrentActor(req), oauthsvc.DeviceDecisionRequest{
+		UserCode: body.UserCode,
+		Approve:  body.Approve,
+	}); err != nil {
+		util.Error(w, err)
+		return
+	}
+	util.JSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h Handler) Token(w http.ResponseWriter, req *http.Request) {
 	if err := req.ParseForm(); err != nil {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid form"})
@@ -187,6 +244,7 @@ func (h Handler) Token(w http.ResponseWriter, req *http.Request) {
 		CodeVerifier: req.Form.Get("code_verifier"),
 		RefreshToken: req.Form.Get("refresh_token"),
 		Scope:        req.Form.Get("scope"),
+		DeviceCode:   req.Form.Get("device_code"),
 	})
 	if err != nil {
 		util.Error(w, err)
@@ -267,6 +325,11 @@ type authorizeBody struct {
 	State               string `json:"state"`
 	CodeChallenge       string `json:"code_challenge"`
 	CodeChallengeMethod string `json:"code_challenge_method"`
+}
+
+type deviceDecisionBody struct {
+	UserCode string `json:"user_code"`
+	Approve  bool   `json:"approve"`
 }
 
 func (b authorizeBody) request() oauthsvc.AuthorizationRequest {
