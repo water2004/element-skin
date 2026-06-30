@@ -38,6 +38,7 @@ const dashboardLinks: NavLink[] = [
   { path: '/dashboard/wardrobe', title: '我的衣柜', icon: Box },
   { path: '/dashboard/roles', title: '角色管理', icon: User },
   { path: '/dashboard/profile', title: '个人资料', icon: Setting },
+  { path: '/dashboard/oauth', title: '开发者应用', icon: Link },
 ]
 
 const adminNavLinks: NavLink[] = [

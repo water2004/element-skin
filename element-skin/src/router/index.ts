@@ -7,12 +7,14 @@ import ResetPassword from '../views/ResetPassword.vue'
 import UserDashboard from '../views/UserDashboard.vue'
 import SkinLibraryView from '../views/SkinLibraryView.vue'
 import NotificationsView from '../views/NotificationsView.vue'
+import OAuthDeviceView from '../views/OAuthDeviceView.vue'
 
 // Dashboard Components
 import DashboardWardrobe from '@/components/dashboard/DashboardWardrobe.vue'
 import DashboardRoles from '@/components/dashboard/DashboardRoles.vue'
 import DashboardProfile from '@/components/dashboard/DashboardProfile.vue'
 import DashboardHome from '@/components/dashboard/DashboardHome.vue'
+import DashboardOAuthApps from '@/components/dashboard/DashboardOAuthApps.vue'
 
 // Admin Components
 import AdminSettings from '@/components/admin/AdminSettings.vue'
@@ -134,6 +136,11 @@ const router = createRouter({
           name: 'dashboard-profile',
           component: DashboardProfile,
         },
+        {
+          path: 'oauth',
+          name: 'dashboard-oauth',
+          component: DashboardOAuthApps,
+        },
       ],
     },
     {
@@ -150,6 +157,11 @@ const router = createRouter({
       path: '/notifications/:id',
       name: 'notification-detail',
       component: NotificationsView,
+    },
+    {
+      path: '/oauth/device',
+      name: 'oauth-device',
+      component: OAuthDeviceView,
     },
   ],
 })

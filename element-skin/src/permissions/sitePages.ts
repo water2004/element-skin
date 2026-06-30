@@ -61,9 +61,24 @@ export const sitePageAccess: SitePageAccess[] = [
       'account.delete.self',
     ],
   },
+  {
+    path: '/dashboard/oauth',
+    permissions: [
+      'oauth_app.read.owned',
+      'oauth_app.create.owned',
+      'oauth_app.update.owned',
+      'oauth_app.delete.owned',
+      'permission.read.any',
+      'permission.grant.any',
+    ],
+  },
+  {
+    path: '/oauth/device',
+    permissions: ['oauth_grant.read.owned', 'account.read.self'],
+  },
 ]
 
-export const protectedSitePrefixes = ['/dashboard', '/skin-library', '/notifications']
+export const protectedSitePrefixes = ['/dashboard', '/skin-library', '/notifications', '/oauth/device']
 
 export function isProtectedSitePath(path: string) {
   return protectedSitePrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
