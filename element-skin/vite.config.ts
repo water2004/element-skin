@@ -59,6 +59,12 @@ export default defineConfig({
   server: {
     // 开发时将常用后端路由代理到本地后端，避免跨域或错发到 Vite dev server
     proxy: {
+      // Versioned site APIs
+      '^/v1': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        rewrite: (path) => path,
+      },
       // Yggdrasil / auth APIs
       '^/authserver': {
         target: 'http://127.0.0.1:8000',
