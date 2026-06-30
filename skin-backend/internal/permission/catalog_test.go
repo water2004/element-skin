@@ -97,8 +97,8 @@ func TestUserRoleDoesNotIncludeAdminScopedPermissions(t *testing.T) {
 	if userRole == nil {
 		t.Fatal("user role not found")
 	}
-	if len(userRole.Permissions) != 40 {
-		t.Fatalf("user role has %d permissions, want 40", len(userRole.Permissions))
+	if len(userRole.Permissions) != 47 {
+		t.Fatalf("user role has %d permissions, want 47", len(userRole.Permissions))
 	}
 	expectedCodes := []string{
 		"account.read.self",
@@ -141,6 +141,13 @@ func TestUserRoleDoesNotIncludeAdminScopedPermissions(t *testing.T) {
 		"microsoft_import.start.owned",
 		"microsoft_import.read_profile.owned",
 		"microsoft_import.create_profile.owned",
+		"oauth_app.read.owned",
+		"oauth_app.create.owned",
+		"oauth_app.update.owned",
+		"oauth_app.delete.owned",
+		"oauth_grant.read.owned",
+		"oauth_grant.revoke.owned",
+		"oauth_token.revoke.owned",
 	}
 	roleCodes := make(map[string]bool, len(userRole.Permissions))
 	for _, def := range userRole.Permissions {
@@ -152,23 +159,23 @@ func TestUserRoleDoesNotIncludeAdminScopedPermissions(t *testing.T) {
 		}
 	}
 	adminCodes := map[string]bool{
-		"account.ban.any":             true,
-		"account.unban.any":           true,
-		"account.read.any":            true,
-		"account.update.any":          true,
-		"account.delete.any":          true,
-		"profile.read.any":            true,
-		"profile.update.any":          true,
-		"profile.delete.any":          true,
-		"texture.read.any":            true,
-		"texture.update_metadata.any": true,
+		"account.ban.any":               true,
+		"account.unban.any":             true,
+		"account.read.any":              true,
+		"account.update.any":            true,
+		"account.delete.any":            true,
+		"profile.read.any":              true,
+		"profile.update.any":            true,
+		"profile.delete.any":            true,
+		"texture.read.any":              true,
+		"texture.update_metadata.any":   true,
 		"texture.update_visibility.any": true,
-		"texture.delete.any":          true,
-		"notice.create.any":           true,
-		"notice.update.any":           true,
-		"notice.delete.any":           true,
-		"permission.grant.any":        true,
-		"permission.revoke.any":       true,
+		"texture.delete.any":            true,
+		"notice.create.any":             true,
+		"notice.update.any":             true,
+		"notice.delete.any":             true,
+		"permission.grant.any":          true,
+		"permission.revoke.any":         true,
 	}
 	for _, def := range userRole.Permissions {
 		if adminCodes[def.Code] {
@@ -182,8 +189,8 @@ func TestAdminRoleDoesNotIncludeSuperAdminOrSystemPermissions(t *testing.T) {
 	if adminRole == nil {
 		t.Fatal("admin role not found")
 	}
-	if len(adminRole.Permissions) != 38 {
-		t.Fatalf("admin role has %d permissions, want 38", len(adminRole.Permissions))
+	if len(adminRole.Permissions) != 43 {
+		t.Fatalf("admin role has %d permissions, want 43", len(adminRole.Permissions))
 	}
 	expectedCodes := []string{
 		"account.ban.any",
@@ -224,6 +231,11 @@ func TestAdminRoleDoesNotIncludeSuperAdminOrSystemPermissions(t *testing.T) {
 		"permission_audit.read.any",
 		"audit.read.any",
 		"cache.invalidate.any",
+		"oauth_app.read.any",
+		"oauth_app.update.any",
+		"oauth_grant.read.any",
+		"oauth_grant.revoke.any",
+		"oauth_token.introspect.any",
 	}
 	roleCodes := make(map[string]bool, len(adminRole.Permissions))
 	for _, def := range adminRole.Permissions {
@@ -279,6 +291,31 @@ func TestWebSessionPolicyIncludesAllNonSystemDefinitions(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestDelegatedDashboardSessionPolicyIncludesAllNonSystemDefinitions(t *testing.T) {
+	for _, policy := range permission.SessionPolicies {
+		if policy.SessionKind != permission.SessionKindDelegated || policy.Entrypoint != permission.EntrypointDashboard {
+			continue
+		}
+		policyCodes := make(map[string]bool, len(policy.Permissions))
+		for _, def := range policy.Permissions {
+			policyCodes[def.Code] = true
+		}
+		for _, def := range permission.Definitions {
+			if def.Scope.ID == permission.ScopeSystem {
+				if policyCodes[def.Code] {
+					t.Fatalf("delegated dashboard session policy should not include system permission %q", def.Code)
+				}
+				continue
+			}
+			if !policyCodes[def.Code] {
+				t.Fatalf("delegated dashboard session policy missing non-system permission %q", def.Code)
+			}
+		}
+		return
+	}
+	t.Fatal("delegated dashboard session policy not found")
 }
 
 func TestYggdrasilSessionPolicyOnlyIncludesYggdrasilOperations(t *testing.T) {

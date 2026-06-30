@@ -52,6 +52,9 @@ const (
 	ResourceInvite
 	ResourceHomepageMedia
 	ResourceOfficialWhitelist
+	ResourceOAuthApp
+	ResourceOAuthGrant
+	ResourceOAuthToken
 )
 
 const (
@@ -82,6 +85,7 @@ const (
 	ActionBan
 	ActionUnban
 	ActionReview
+	ActionIntrospect
 )
 
 const (
@@ -117,6 +121,9 @@ var Resources = []Resource{
 	{ResourceInvite, "invite", "邀请码"},
 	{ResourceHomepageMedia, "homepage_media", "首页媒体"},
 	{ResourceOfficialWhitelist, "official_whitelist", "官方白名单"},
+	{ResourceOAuthApp, "oauth_app", "OAuth 应用"},
+	{ResourceOAuthGrant, "oauth_grant", "OAuth 授权"},
+	{ResourceOAuthToken, "oauth_token", "OAuth 令牌"},
 }
 
 var Actions = []Action{
@@ -147,6 +154,7 @@ var Actions = []Action{
 	{ActionBan, "ban", "封禁"},
 	{ActionUnban, "unban", "解封"},
 	{ActionReview, "review", "审核"},
+	{ActionIntrospect, "introspect", "检查"},
 }
 
 var Scopes = []Scope{
@@ -250,6 +258,18 @@ var Definitions = definitions(
 	def(ResourceAudit, ActionArchive, ScopeSystem, "系统归档审计日志"),
 	def(ResourceCache, ActionInvalidate, ScopeSystem, "系统失效缓存"),
 	def(ResourceCache, ActionInvalidate, ScopeAny, "管理员失效缓存"),
+	def(ResourceOAuthApp, ActionRead, ScopeOwned, "读取自己的 OAuth 应用"),
+	def(ResourceOAuthApp, ActionCreate, ScopeOwned, "创建自己的 OAuth 应用"),
+	def(ResourceOAuthApp, ActionUpdate, ScopeOwned, "修改自己的 OAuth 应用"),
+	def(ResourceOAuthApp, ActionDelete, ScopeOwned, "删除自己的 OAuth 应用"),
+	def(ResourceOAuthApp, ActionRead, ScopeAny, "管理后台读取 OAuth 应用"),
+	def(ResourceOAuthApp, ActionUpdate, ScopeAny, "管理后台修改 OAuth 应用"),
+	def(ResourceOAuthGrant, ActionRead, ScopeOwned, "读取授予自己的 OAuth 授权"),
+	def(ResourceOAuthGrant, ActionRevoke, ScopeOwned, "撤销授予自己的 OAuth 授权"),
+	def(ResourceOAuthGrant, ActionRead, ScopeAny, "管理后台读取 OAuth 授权"),
+	def(ResourceOAuthGrant, ActionRevoke, ScopeAny, "管理后台撤销 OAuth 授权"),
+	def(ResourceOAuthToken, ActionRevoke, ScopeOwned, "撤销自己的 OAuth 令牌"),
+	def(ResourceOAuthToken, ActionIntrospect, ScopeAny, "检查 OAuth 令牌"),
 )
 
 type defInput struct {

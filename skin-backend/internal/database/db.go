@@ -14,6 +14,7 @@ import (
 	"element-skin/backend/internal/database/homepage"
 	"element-skin/backend/internal/database/invite"
 	"element-skin/backend/internal/database/notice"
+	"element-skin/backend/internal/database/oauth"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/database/setting"
@@ -39,6 +40,7 @@ type DB struct {
 	HomepageMedia homepage.Store
 	Verifications verification.Store
 	Notices       notice.Store
+	OAuth         oauth.Store
 	Permissions   permissiondb.Store
 }
 
@@ -77,6 +79,7 @@ func New(pool *pgxpool.Pool) *DB {
 		HomepageMedia: homepage.Store{Pool: pool},
 		Verifications: verification.Store{Pool: pool},
 		Notices:       notice.Store{Pool: pool},
+		OAuth:         oauth.Store{Pool: pool},
 		Permissions:   permissiondb.Store{Pool: pool},
 	}
 }

@@ -17,7 +17,27 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 	if err := db.Init(ctx); err != nil {
 		t.Fatalf("Init should be idempotent: %v", err)
 	}
-	for _, table := range []string{"users", "profiles", "site_refresh_tokens", "invites", "settings", "user_textures", "skin_library", "fallback_endpoints", "whitelisted_users", "verification_codes"} {
+	for _, table := range []string{
+		"users",
+		"profiles",
+		"site_refresh_tokens",
+		"invites",
+		"settings",
+		"user_textures",
+		"skin_library",
+		"fallback_endpoints",
+		"whitelisted_users",
+		"verification_codes",
+		"delegated_clients",
+		"delegated_client_permissions",
+		"delegated_permission_grants",
+		"delegated_grant_permissions",
+		"oauth_authorization_codes",
+		"oauth_authorization_code_permissions",
+		"oauth_access_tokens",
+		"oauth_refresh_tokens",
+		"permission_audit_logs",
+	} {
 		var exists bool
 		if err := db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=$1)`, table).Scan(&exists); err != nil {
 			t.Fatal(err)
@@ -111,6 +131,15 @@ func TestInitSQLContainsExpectedConstraintsAndIndexes(t *testing.T) {
 		"UNIQUE(username, endpoint_id)",
 		"idx_profiles_user_id",
 		"idx_site_refresh_expires",
+		"CREATE TABLE IF NOT EXISTS oauth_authorization_codes",
+		"CREATE TABLE IF NOT EXISTS oauth_authorization_code_permissions",
+		"CREATE TABLE IF NOT EXISTS oauth_access_tokens",
+		"CREATE TABLE IF NOT EXISTS oauth_refresh_tokens",
+		"idx_oauth_authorization_codes_client_user",
+		"idx_oauth_access_tokens_user_client",
+		"idx_oauth_refresh_tokens_user_client",
+		"client_type TEXT NOT NULL DEFAULT 'confidential'",
+		"secret_hash TEXT NOT NULL DEFAULT ''",
 		"ON CONFLICT (key) DO NOTHING",
 	}
 	for _, fragment := range required {

@@ -255,6 +255,11 @@ CREATE TABLE IF NOT EXISTS delegated_clients (
     id TEXT PRIMARY KEY,
     owner_user_id TEXT NOT NULL,
     name TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    redirect_uri TEXT NOT NULL DEFAULT '',
+    website_url TEXT NOT NULL DEFAULT '',
+    client_type TEXT NOT NULL DEFAULT 'confidential' CHECK(client_type IN ('public', 'confidential')),
+    secret_hash TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL CHECK(status IN ('active', 'disabled')),
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
@@ -292,6 +297,57 @@ CREATE TABLE IF NOT EXISTS delegated_grant_permissions (
     FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
+    code_hash TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    grant_id TEXT NOT NULL,
+    redirect_uri TEXT NOT NULL,
+    code_challenge TEXT NOT NULL,
+    code_challenge_method TEXT NOT NULL CHECK(code_challenge_method IN ('S256')),
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    consumed_at BIGINT,
+    FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(grant_id) REFERENCES delegated_permission_grants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS oauth_authorization_code_permissions (
+    code_hash TEXT NOT NULL,
+    permission_id BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY(code_hash, permission_id),
+    FOREIGN KEY(code_hash) REFERENCES oauth_authorization_codes(code_hash) ON DELETE CASCADE,
+    FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS oauth_access_tokens (
+    token_hash TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    grant_id TEXT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    revoked_at BIGINT,
+    FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(grant_id) REFERENCES delegated_permission_grants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
+    token_hash TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    grant_id TEXT NOT NULL,
+    expires_at BIGINT NOT NULL,
+    created_at BIGINT NOT NULL,
+    revoked_at BIGINT,
+    FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(grant_id) REFERENCES delegated_permission_grants(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS permission_audit_logs (
     id TEXT PRIMARY KEY,
     actor_subject_id TEXT,
@@ -323,6 +379,11 @@ ALTER TABLE homepage_media ADD COLUMN IF NOT EXISTS start_pitch DOUBLE PRECISION
 ALTER TABLE homepage_media ADD COLUMN IF NOT EXISTS yaw_speed_dps DOUBLE PRECISION NOT NULL DEFAULT 4;
 ALTER TABLE homepage_media ADD COLUMN IF NOT EXISTS pitch_speed_dps DOUBLE PRECISION NOT NULL DEFAULT 0;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT '';
+ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS redirect_uri TEXT NOT NULL DEFAULT '';
+ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS website_url TEXT NOT NULL DEFAULT '';
+ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS client_type TEXT NOT NULL DEFAULT 'confidential';
+ALTER TABLE delegated_clients ADD COLUMN IF NOT EXISTS secret_hash TEXT NOT NULL DEFAULT '';
 UPDATE users SET created_at = 0 WHERE created_at IS NULL;
 UPDATE skin_library sl SET usage_count = CASE sl.texture_type
     WHEN 'skin' THEN (SELECT COUNT(*) FROM user_textures ut WHERE ut.hash = sl.skin_hash AND ut.texture_type = 'skin')
@@ -352,6 +413,9 @@ CREATE INDEX IF NOT EXISTS idx_subject_permission_overrides_permission ON subjec
 CREATE INDEX IF NOT EXISTS idx_session_permission_policies_permission ON session_permission_policies (permission_id, session_kind, entrypoint);
 CREATE INDEX IF NOT EXISTS idx_delegated_clients_owner ON delegated_clients (owner_user_id);
 CREATE INDEX IF NOT EXISTS idx_delegated_permission_grants_user_client ON delegated_permission_grants (user_id, client_id, status);
+CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_client_user ON oauth_authorization_codes (client_id, user_id, expires_at);
+CREATE INDEX IF NOT EXISTS idx_oauth_access_tokens_user_client ON oauth_access_tokens (user_id, client_id, expires_at);
+CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user_client ON oauth_refresh_tokens (user_id, client_id, expires_at);
 
 INSERT INTO settings (key, value) VALUES
 ('microsoft_client_id', ''),

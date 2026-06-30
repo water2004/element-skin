@@ -39,4 +39,62 @@ func TestModelStructsPreserveExactFields(t *testing.T) {
 		invite.TotalUses == nil || *invite.TotalUses != 3 || invite.UsedCount != 2 || invite.Note != "note" {
 		t.Fatalf("Invite fields mismatch: %#v", invite)
 	}
+
+	oauthClient := OAuthClient{
+		ID:          "client",
+		OwnerUserID: "uid",
+		Name:        "Client",
+		Description: "Description",
+		RedirectURI: "https://app.example/callback",
+		WebsiteURL:  "https://app.example",
+		ClientType:  "confidential",
+		SecretHash:  "secret",
+		Status:      "active",
+		CreatedAt:   111,
+		UpdatedAt:   222,
+	}
+	if oauthClient.ID != "client" || oauthClient.OwnerUserID != "uid" || oauthClient.Name != "Client" ||
+		oauthClient.Description != "Description" || oauthClient.RedirectURI != "https://app.example/callback" ||
+		oauthClient.WebsiteURL != "https://app.example" || oauthClient.ClientType != "confidential" ||
+		oauthClient.SecretHash != "secret" || oauthClient.Status != "active" ||
+		oauthClient.CreatedAt != 111 || oauthClient.UpdatedAt != 222 {
+		t.Fatalf("OAuthClient fields mismatch: %#v", oauthClient)
+	}
+
+	revokedAt := int64(333)
+	oauthGrant := OAuthGrant{ID: "grant", UserID: "uid", SubjectID: "user:uid", ClientID: "client", Status: "revoked", CreatedAt: 444, RevokedAt: &revokedAt}
+	if oauthGrant.ID != "grant" || oauthGrant.UserID != "uid" || oauthGrant.SubjectID != "user:uid" ||
+		oauthGrant.ClientID != "client" || oauthGrant.Status != "revoked" || oauthGrant.CreatedAt != 444 ||
+		oauthGrant.RevokedAt == nil || *oauthGrant.RevokedAt != 333 {
+		t.Fatalf("OAuthGrant fields mismatch: %#v", oauthGrant)
+	}
+
+	consumedAt := int64(555)
+	oauthCode := OAuthAuthorizationCode{
+		CodeHash:            "code",
+		ClientID:            "client",
+		UserID:              "uid",
+		GrantID:             "grant",
+		RedirectURI:         "https://app.example/callback",
+		CodeChallenge:       "challenge",
+		CodeChallengeMethod: "S256",
+		ExpiresAt:           666,
+		CreatedAt:           777,
+		ConsumedAt:          &consumedAt,
+	}
+	if oauthCode.CodeHash != "code" || oauthCode.ClientID != "client" || oauthCode.UserID != "uid" ||
+		oauthCode.GrantID != "grant" || oauthCode.RedirectURI != "https://app.example/callback" ||
+		oauthCode.CodeChallenge != "challenge" || oauthCode.CodeChallengeMethod != "S256" ||
+		oauthCode.ExpiresAt != 666 || oauthCode.CreatedAt != 777 ||
+		oauthCode.ConsumedAt == nil || *oauthCode.ConsumedAt != 555 {
+		t.Fatalf("OAuthAuthorizationCode fields mismatch: %#v", oauthCode)
+	}
+
+	tokenRevokedAt := int64(888)
+	oauthToken := OAuthToken{TokenHash: "token", ClientID: "client", UserID: "uid", GrantID: "grant", ExpiresAt: 999, CreatedAt: 1000, RevokedAt: &tokenRevokedAt}
+	if oauthToken.TokenHash != "token" || oauthToken.ClientID != "client" || oauthToken.UserID != "uid" ||
+		oauthToken.GrantID != "grant" || oauthToken.ExpiresAt != 999 || oauthToken.CreatedAt != 1000 ||
+		oauthToken.RevokedAt == nil || *oauthToken.RevokedAt != 888 {
+		t.Fatalf("OAuthToken fields mismatch: %#v", oauthToken)
+	}
 }

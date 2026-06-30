@@ -73,6 +73,13 @@ var Roles = []Role{
 			"microsoft_import.start.owned",
 			"microsoft_import.read_profile.owned",
 			"microsoft_import.create_profile.owned",
+			"oauth_app.read.owned",
+			"oauth_app.create.owned",
+			"oauth_app.update.owned",
+			"oauth_app.delete.owned",
+			"oauth_grant.read.owned",
+			"oauth_grant.revoke.owned",
+			"oauth_token.revoke.owned",
 		),
 	},
 	{
@@ -131,6 +138,11 @@ var Roles = []Role{
 			"permission_audit.read.any",
 			"audit.read.any",
 			"cache.invalidate.any",
+			"oauth_app.read.any",
+			"oauth_app.update.any",
+			"oauth_grant.read.any",
+			"oauth_grant.revoke.any",
+			"oauth_token.introspect.any",
 		),
 	},
 	{
@@ -178,6 +190,7 @@ var SessionPolicies = []SessionPolicy{
 		),
 	},
 	{SessionKind: SessionKindSystem, Entrypoint: EntrypointMaintenance, Permissions: systemDefinitions()},
+	{SessionKind: SessionKindDelegated, Entrypoint: EntrypointDashboard, Permissions: nonSystemDefinitions()},
 }
 
 func DefinitionByCode(code string) (Definition, bool) {

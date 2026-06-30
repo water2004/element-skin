@@ -89,3 +89,50 @@ type NoticeView struct {
 	ReadAt      *int64 `json:"read_at"`
 	DismissedAt *int64 `json:"dismissed_at"`
 }
+
+type OAuthClient struct {
+	ID          string `json:"client_id"`
+	OwnerUserID string `json:"owner_user_id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	RedirectURI string `json:"redirect_uri"`
+	WebsiteURL  string `json:"website_url"`
+	ClientType  string `json:"client_type"`
+	SecretHash  string `json:"-"`
+	Status      string `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+}
+
+type OAuthGrant struct {
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	SubjectID string `json:"subject_id"`
+	ClientID  string `json:"client_id"`
+	Status    string `json:"status"`
+	CreatedAt int64  `json:"created_at"`
+	RevokedAt *int64 `json:"revoked_at"`
+}
+
+type OAuthAuthorizationCode struct {
+	CodeHash            string
+	ClientID            string
+	UserID              string
+	GrantID             string
+	RedirectURI         string
+	CodeChallenge       string
+	CodeChallengeMethod string
+	ExpiresAt           int64
+	CreatedAt           int64
+	ConsumedAt          *int64
+}
+
+type OAuthToken struct {
+	TokenHash string
+	ClientID  string
+	UserID    string
+	GrantID   string
+	ExpiresAt int64
+	CreatedAt int64
+	RevokedAt *int64
+}
