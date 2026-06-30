@@ -272,7 +272,6 @@ var Definitions = definitions(
 	def(ResourceOAuthApp, ActionDelete, ScopeOwned, "删除自己的 OAuth 应用"),
 	def(ResourceOAuthApp, ActionRead, ScopeAny, "管理后台读取 OAuth 应用"),
 	def(ResourceOAuthApp, ActionUpdate, ScopeAny, "管理后台修改 OAuth 应用"),
-	def(ResourceOAuthApp, ActionDelete, ScopeAny, "管理后台删除 OAuth 应用"),
 	def(ResourceOAuthGrant, ActionRead, ScopeOwned, "读取授予自己的 OAuth 授权"),
 	def(ResourceOAuthGrant, ActionRevoke, ScopeOwned, "撤销授予自己的 OAuth 授权"),
 	def(ResourceOAuthGrant, ActionRead, ScopeAny, "管理后台读取 OAuth 授权"),
@@ -282,6 +281,7 @@ var Definitions = definitions(
 	def(ResourceMinecraftProfile, ActionRead, ScopePublic, "读取公开 Minecraft 角色资料"),
 	def(ResourceMinecraftTextureProperty, ActionRead, ScopePublic, "读取公开 Minecraft 材质属性"),
 	def(ResourceMinecraftSession, ActionHasJoined, ScopeServer, "查询授权服务器的加入结果"),
+	def(ResourceOAuthApp, ActionDelete, ScopeAny, "管理后台删除 OAuth 应用"),
 )
 
 type defInput struct {

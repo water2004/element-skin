@@ -57,6 +57,16 @@ func TestCatalogCodesAreStrictTriplesAndIDsMatchParts(t *testing.T) {
 	}
 }
 
+func TestNewOAuthAppDeleteAnyPermissionIsAppendedForStableBitIndexes(t *testing.T) {
+	last := permission.Definitions[len(permission.Definitions)-1]
+	if last.Code != "oauth_app.delete.any" {
+		t.Fatalf("last permission code = %q, want oauth_app.delete.any", last.Code)
+	}
+	if last.BitIndex != len(permission.Definitions)-1 {
+		t.Fatalf("last permission bit index = %d, want %d", last.BitIndex, len(permission.Definitions)-1)
+	}
+}
+
 func TestRolesOnlyReferenceKnownDefinitions(t *testing.T) {
 	for _, role := range permission.Roles {
 		for _, def := range role.Permissions {
