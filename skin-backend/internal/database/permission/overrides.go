@@ -43,13 +43,17 @@ func (s Store) SubjectPermissionOverridesForUser(ctx context.Context, userID str
 	if err := s.EnsureUserSubject(ctx, userID); err != nil {
 		return nil, err
 	}
+	return s.SubjectPermissionOverridesForSubject(ctx, SubjectIDForUser(userID))
+}
+
+func (s Store) SubjectPermissionOverridesForSubject(ctx context.Context, subjectID string) ([]SubjectPermissionOverride, error) {
 	rows, err := s.conn().Query(ctx, `
 		SELECT p.id,p.code,spo.effect,spo.created_at
 		FROM subject_permission_overrides spo
 		JOIN permissions p ON p.id=spo.permission_id
 		WHERE spo.subject_id=$1
 		ORDER BY p.code
-	`, SubjectIDForUser(userID))
+	`, subjectID)
 	if err != nil {
 		return nil, err
 	}

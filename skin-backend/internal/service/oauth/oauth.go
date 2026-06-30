@@ -254,6 +254,97 @@ func (s Service) DeleteClient(ctx context.Context, actor permission.Actor, clien
 	return nil
 }
 
+func (s Service) ClientPermissions(ctx context.Context, actor permission.Actor, clientID string) (map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("permission.read.any")); err != nil {
+		return nil, forbidden()
+	}
+	client, err := s.DB.OAuth.GetClient(ctx, clientID)
+	if err != nil {
+		return nil, err
+	}
+	if client == nil {
+		return nil, notFound("oauth client not found")
+	}
+	subjectID := permissiondb.SubjectIDForClient(client.ID)
+	effective, err := s.DB.Permissions.EffectivePermissionsForClient(ctx, client.ID, permissiondb.EffectiveOptions{})
+	if err != nil {
+		return nil, err
+	}
+	overrides, err := s.DB.Permissions.SubjectPermissionOverridesForSubject(ctx, subjectID)
+	if err != nil {
+		return nil, err
+	}
+	clientScopes, err := s.clientPermissionCodes(ctx, client.ID)
+	if err != nil {
+		return nil, err
+	}
+	overrideItems := make([]map[string]any, 0, len(overrides))
+	for _, item := range overrides {
+		overrideItems = append(overrideItems, map[string]any{
+			"permission_code": item.PermissionCode,
+			"effect":          item.Effect,
+			"created_at":      item.CreatedAt,
+		})
+	}
+	return map[string]any{
+		"subject_id":             subjectID,
+		"client":                 publicClient(*client),
+		"effective_permissions":  permissionCodesFromBitSet(effective),
+		"overrides":              overrideItems,
+		"client_allowed_scopes":  clientScopes,
+		"session_allowed_scopes": clientCredentialsPolicyCodes(),
+	}, nil
+}
+
+func (s Service) SetClientPermissionOverride(ctx context.Context, actor permission.Actor, clientID, code, effect string) error {
+	if effect == "allow" {
+		if err := actor.Require(permission.MustDefinitionByCode("permission.grant.any")); err != nil {
+			return forbidden()
+		}
+	} else {
+		if err := actor.Require(permission.MustDefinitionByCode("permission.revoke.any")); err != nil {
+			return forbidden()
+		}
+	}
+	client, err := s.DB.OAuth.GetClient(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	if client == nil {
+		return notFound("oauth client not found")
+	}
+	def, ok := permission.DefinitionByCode(code)
+	if !ok || def.Scope.ID == permission.ScopeSystem {
+		return badRequest("invalid permission")
+	}
+	return s.DB.Permissions.SetPermissionOverrideForSubject(ctx, permissiondb.SubjectIDForClient(client.ID), def, effect, actor.SubjectID)
+}
+
+func (s Service) ClearClientPermissionOverride(ctx context.Context, actor permission.Actor, clientID, code string) error {
+	if err := actor.Require(permission.MustDefinitionByCode("permission.revoke.any")); err != nil {
+		return forbidden()
+	}
+	client, err := s.DB.OAuth.GetClient(ctx, clientID)
+	if err != nil {
+		return err
+	}
+	if client == nil {
+		return notFound("oauth client not found")
+	}
+	def, ok := permission.DefinitionByCode(code)
+	if !ok {
+		return badRequest("invalid permission")
+	}
+	ok, err = s.DB.Permissions.ClearPermissionOverrideForSubject(ctx, permissiondb.SubjectIDForClient(client.ID), def)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return notFound("permission override not found")
+	}
+	return nil
+}
+
 func (s Service) ListGrants(ctx context.Context, actor permission.Actor, limit int) ([]map[string]any, error) {
 	if err := actor.Require(permission.MustDefinitionByCode("oauth_grant.read.owned")); err != nil {
 		return nil, forbidden()
@@ -1004,6 +1095,31 @@ func permissionCodesFromIDs(ids []int64) []string {
 	}
 	sort.Strings(codes)
 	return codes
+}
+
+func permissionCodesFromBitSet(bits permission.BitSet) []string {
+	codes := make([]string, 0, len(permission.Definitions))
+	for _, def := range permission.Definitions {
+		if bits.Has(def.BitIndex) {
+			codes = append(codes, def.Code)
+		}
+	}
+	sort.Strings(codes)
+	return codes
+}
+
+func clientCredentialsPolicyCodes() []string {
+	for _, policy := range permission.SessionPolicies {
+		if policy.SessionKind == permission.SessionKindClient && policy.Entrypoint == permission.EntrypointAPI {
+			codes := make([]string, 0, len(policy.Permissions))
+			for _, def := range policy.Permissions {
+				codes = append(codes, def.Code)
+			}
+			sort.Strings(codes)
+			return codes
+		}
+	}
+	return []string{}
 }
 
 func bitSetFromPermissionIDs(ids []int64) permission.BitSet {
