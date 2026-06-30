@@ -141,16 +141,10 @@ func (s Service) CreateClient(ctx context.Context, actor permission.Actor, input
 }
 
 func (s Service) ListClients(ctx context.Context, actor permission.Actor, limit int) ([]map[string]any, error) {
-	var clients []model.OAuthClient
-	var err error
-	if actor.Has(permission.MustDefinitionByCode("oauth_app.read.any")) {
-		clients, err = s.DB.OAuth.ListClients(ctx, limit)
-	} else {
-		if err := actor.Require(permission.MustDefinitionByCode("oauth_app.read.owned")); err != nil {
-			return nil, forbidden()
-		}
-		clients, err = s.DB.OAuth.ListClientsByOwner(ctx, actor.UserID, limit)
+	if err := actor.Require(permission.MustDefinitionByCode("oauth_app.read.owned")); err != nil {
+		return nil, forbidden()
 	}
+	clients, err := s.DB.OAuth.ListClientsByOwner(ctx, actor.UserID, limit)
 	if err != nil {
 		return nil, err
 	}
