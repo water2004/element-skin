@@ -152,6 +152,15 @@ CREATE TABLE IF NOT EXISTS notice_receipts (
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS notice_targets (
+    notice_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY(notice_id, user_id),
+    FOREIGN KEY(notice_id) REFERENCES notices(id) ON DELETE CASCADE,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS permission_subjects (
     id TEXT PRIMARY KEY,
     user_id TEXT UNIQUE,
@@ -426,6 +435,7 @@ CREATE INDEX IF NOT EXISTS idx_homepage_media_public_order ON homepage_media (en
 CREATE INDEX IF NOT EXISTS idx_notices_active ON notices (enabled, audience, pinned, starts_at, ends_at, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_notices_cleanup ON notices (ends_at) WHERE ends_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_notice_receipts_user ON notice_receipts (user_id, read_at, dismissed_at);
+CREATE INDEX IF NOT EXISTS idx_notice_targets_user ON notice_targets (user_id, notice_id);
 CREATE INDEX IF NOT EXISTS idx_permission_subjects_user ON permission_subjects (user_id);
 CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON role_permissions (permission_id, role_id);
 CREATE INDEX IF NOT EXISTS idx_subject_roles_role ON subject_roles (role_id, subject_id);

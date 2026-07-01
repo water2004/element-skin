@@ -82,6 +82,122 @@ func TestNoticeServiceValidatesInputsWithoutPersistingInvalidRows(t *testing.T) 
 	}
 }
 
+func TestNoticeServiceTargetedAudienceOnlyVisibleToTargets(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	svc := noticesvc.Service{DB: db}
+	ctx := context.Background()
+	admin := testutil.CreateUser(t, db, "notice-target-admin@test.com", "Password123", "NoticeTargetAdmin", true)
+	target := testutil.CreateUser(t, db, "notice-target-user@test.com", "Password123", "NoticeTargetUser", false)
+	other := testutil.CreateUser(t, db, "notice-target-other@test.com", "Password123", "NoticeTargetOther", false)
+
+	if created, err := svc.Create(ctx, noticesvc.CreateInput{
+		Title:           "Invalid targeted",
+		Summary:         "Missing targets",
+		ContentMarkdown: "Body",
+		DisplayMode:     noticesvc.DisplayDetail,
+		Audience:        noticesvc.AudienceTargeted,
+	}, admin.ID); created != nil || !httpError(err, 400, "target_user_ids are required for targeted notices") {
+		t.Fatalf("targeted without targets mismatch: created=%#v err=%#v", created, err)
+	}
+	if created, err := svc.Create(ctx, noticesvc.CreateInput{
+		Title:         "Invalid audience targets",
+		Summary:       "Wrong audience",
+		Audience:      noticesvc.AudienceUsers,
+		TargetUserIDs: []string{target.ID},
+	}, admin.ID); created != nil || !httpError(err, 400, "target_user_ids require targeted audience") {
+		t.Fatalf("non-targeted with targets mismatch: created=%#v err=%#v", created, err)
+	}
+
+	created, err := svc.Create(ctx, noticesvc.CreateInput{
+		Type:            noticesvc.TypeSystem,
+		Title:           "Targeted notice",
+		Summary:         "Only one user should see this",
+		ContentMarkdown: "Targeted **body**",
+		DisplayMode:     noticesvc.DisplayDetail,
+		Level:           noticesvc.LevelSuccess,
+		Audience:        noticesvc.AudienceTargeted,
+		TargetUserIDs:   []string{target.ID, target.ID, " "},
+	}, admin.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Audience != noticesvc.AudienceTargeted || created.Type != noticesvc.TypeSystem || created.Level != noticesvc.LevelSuccess {
+		t.Fatalf("created targeted notice mismatch: %#v", created)
+	}
+	var targetRows int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM notice_targets WHERE notice_id=$1 AND user_id=$2`, created.ID, target.ID).Scan(&targetRows); err != nil {
+		t.Fatal(err)
+	}
+	if targetRows != 1 {
+		t.Fatalf("target rows=%d want 1", targetRows)
+	}
+
+	targetPage, err := svc.ListForUser(ctx, noticesvc.CurrentUser{ID: target.ID}, noticesvc.ListParams{Type: noticesvc.TypeSystem, IncludeRead: true, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	targetItems := targetPage["items"].([]model.NoticeView)
+	if len(targetItems) != 1 || targetItems[0].ID != created.ID || targetItems[0].Read || targetItems[0].Audience != noticesvc.AudienceTargeted {
+		t.Fatalf("target user list mismatch: %#v", targetItems)
+	}
+	otherPage, err := svc.ListForUser(ctx, noticesvc.CurrentUser{ID: other.ID}, noticesvc.ListParams{Type: noticesvc.TypeSystem, IncludeRead: true, Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if items := otherPage["items"].([]model.NoticeView); len(items) != 0 {
+		t.Fatalf("other user should not see targeted notice: %#v", items)
+	}
+	if _, err := svc.GetForUser(ctx, created.ID, noticesvc.CurrentUser{ID: other.ID}); !httpError(err, 404, "notice not found") {
+		t.Fatalf("other user targeted detail mismatch: %#v", err)
+	}
+	got, err := svc.GetForUser(ctx, created.ID, noticesvc.CurrentUser{ID: target.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got == nil || got.ID != created.ID || !got.Read || got.ContentMarkdown != "Targeted **body**" {
+		t.Fatalf("targeted detail mismatch: %#v", got)
+	}
+
+	replaced, err := svc.Patch(ctx, created.ID, noticesvc.PatchInput{
+		Title:           ptrString("Targeted notice replaced"),
+		Summary:         ptrString("Replacement summary"),
+		ContentMarkdown: ptrString("Replacement body"),
+	}, admin.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replaced.ID == created.ID || replaced.Audience != noticesvc.AudienceTargeted || replaced.Title != "Targeted notice replaced" {
+		t.Fatalf("replaced targeted notice mismatch: %#v", replaced)
+	}
+	var oldTargets int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM notice_targets WHERE notice_id=$1`, created.ID).Scan(&oldTargets); err != nil {
+		t.Fatal(err)
+	}
+	if oldTargets != 0 {
+		t.Fatalf("old target rows=%d want 0", oldTargets)
+	}
+	var replacedTargets int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM notice_targets WHERE notice_id=$1 AND user_id=$2`, replaced.ID, target.ID).Scan(&replacedTargets); err != nil {
+		t.Fatal(err)
+	}
+	if replacedTargets != 1 {
+		t.Fatalf("replaced target rows=%d want 1", replacedTargets)
+	}
+	if _, err := svc.GetForUser(ctx, created.ID, noticesvc.CurrentUser{ID: target.ID}); !httpError(err, 404, "notice not found") {
+		t.Fatalf("old targeted detail mismatch after replace: %#v", err)
+	}
+	replacedView, err := svc.GetForUser(ctx, replaced.ID, noticesvc.CurrentUser{ID: target.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if replacedView.Title != "Targeted notice replaced" || replacedView.ContentMarkdown != "Replacement body" {
+		t.Fatalf("replaced targeted detail mismatch: %#v", replacedView)
+	}
+	if _, err := svc.GetForUser(ctx, replaced.ID, noticesvc.CurrentUser{ID: other.ID}); !httpError(err, 404, "notice not found") {
+		t.Fatalf("other user replaced targeted detail mismatch: %#v", err)
+	}
+}
+
 func TestNoticeServiceUserVisibilityReadDismissAndPatchExactState(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	svc := noticesvc.Service{DB: db}
@@ -303,7 +419,7 @@ func TestNoticeServiceAdminListMarkReadDeleteAndCursorErrorsExactly(t *testing.T
 	if err := svc.MarkRead(ctx, enabled.ID, noticesvc.CurrentUser{ID: user.ID}); err != nil {
 		t.Fatal(err)
 	}
-	view, err := db.Notices.GetForUser(ctx, enabled.ID, user.ID)
+	view, err := db.Notices.GetForUser(ctx, enabled.ID, user.ID, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -37,6 +37,9 @@ func (s Service) CreateClient(ctx context.Context, actor permission.Actor, input
 	if err := s.DB.OAuth.CreateClient(ctx, client, permissionIDs); err != nil {
 		return nil, err
 	}
+	if err := s.notifyAdminsClientSubmitted(ctx, actor.UserID, client); err != nil {
+		return nil, err
+	}
 	return clientResponse(client, permissionCodes, secret), nil
 }
 
@@ -138,6 +141,9 @@ func (s Service) SubmitClientForReview(ctx context.Context, actor permission.Act
 	if !ok {
 		return nil, notFound("oauth client not found")
 	}
+	if err := s.notifyAdminsClientSubmitted(ctx, actor.UserID, *client); err != nil {
+		return nil, err
+	}
 	codes, err := s.clientPermissionCodes(ctx, client.ID)
 	if err != nil {
 		return nil, err
@@ -145,12 +151,16 @@ func (s Service) SubmitClientForReview(ctx context.Context, actor permission.Act
 	return clientResponse(*client, codes, ""), nil
 }
 
-func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clientID, status string) (map[string]any, error) {
+func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clientID, status, reason string) (map[string]any, error) {
 	if err := actor.Require(permission.MustDefinitionByCode("oauth_app.update.any")); err != nil {
 		return nil, forbidden()
 	}
 	if !validClientStatus(status) || status == StatusPending {
 		return nil, badRequest("invalid status")
+	}
+	reason, err := validateReviewReason(status, reason)
+	if err != nil {
+		return nil, err
 	}
 	client, err := s.DB.OAuth.GetClient(ctx, clientID)
 	if err != nil {
@@ -167,6 +177,9 @@ func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clien
 	}
 	if !ok {
 		return nil, notFound("oauth client not found")
+	}
+	if err := s.notifyOwnerReviewResult(ctx, actor.UserID, *client, status, reason); err != nil {
+		return nil, err
 	}
 	codes, err := s.clientPermissionCodes(ctx, client.ID)
 	if err != nil {

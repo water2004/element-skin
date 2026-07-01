@@ -134,8 +134,12 @@ export function getAdminOAuthApp(clientId: string) {
 export function reviewAdminOAuthApp(
   clientId: string,
   status: Exclude<OAuthClientStatus, 'pending'>,
+  reason = '',
 ) {
-  return apiClient.patch<OAuthClient>(`/v1/admin/oauth/apps/${clientId}/review`, { status })
+  return apiClient.patch<OAuthClient>(`/v1/admin/oauth/apps/${clientId}/review`, {
+    status,
+    reason,
+  })
 }
 
 export function getDeviceAuthorization(userCode: string) {

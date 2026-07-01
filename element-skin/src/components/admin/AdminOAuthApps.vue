@@ -87,7 +87,7 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Link, Refresh } from '@element-plus/icons-vue'
 import {
   getAdminOAuthApp,
@@ -142,9 +142,11 @@ async function loadApps() {
 }
 
 async function review(clientId: string, nextStatus: Exclude<OAuthClientStatus, 'pending'>) {
+  const reason = await reviewReason(nextStatus)
+  if (reason === null) return
   reviewingId.value = clientId
   try {
-    const res = await reviewAdminOAuthApp(clientId, nextStatus)
+    const res = await reviewAdminOAuthApp(clientId, nextStatus, reason)
     apps.value = apps.value.map((app) =>
       app.client_id === clientId ? summaryFromClient(res.data) : app,
     )
@@ -156,6 +158,31 @@ async function review(clientId: string, nextStatus: Exclude<OAuthClientStatus, '
     ElMessage.error(getErrorMessage(error, '更新应用状态失败'))
   } finally {
     reviewingId.value = ''
+  }
+}
+
+async function reviewReason(nextStatus: Exclude<OAuthClientStatus, 'pending'>) {
+  if (nextStatus === 'active') return ''
+  try {
+    const promptResult = (await ElMessageBox.prompt(
+      nextStatus === 'rejected' ? '请填写驳回原因' : '请填写停用原因',
+      nextStatus === 'rejected' ? '驳回第三方应用' : '停用第三方应用',
+      {
+        confirmButtonText: nextStatus === 'rejected' ? '确认驳回' : '确认停用',
+        cancelButtonText: '取消',
+        inputType: 'textarea',
+        inputPlaceholder: '原因会发送给应用开发者',
+        inputValidator: (value) => {
+          const trimmed = value.trim()
+          if (!trimmed) return '原因不能为空'
+          if ([...trimmed].length > 500) return '原因不能超过 500 个字符'
+          return true
+        },
+      },
+    )) as { value: string }
+    return promptResult.value.trim()
+  } catch {
+    return null
   }
 }
 

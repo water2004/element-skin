@@ -140,7 +140,7 @@ func (h Handler) ReviewApp(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
 		return
 	}
-	res, err := h.oauth.ReviewClient(req.Context(), shared.CurrentActor(req), req.PathValue("client_id"), body.Status)
+	res, err := h.oauth.ReviewClient(req.Context(), shared.CurrentActor(req), req.PathValue("client_id"), body.Status, body.Reason)
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -375,6 +375,7 @@ type permissionOverrideBody struct {
 
 type appReviewBody struct {
 	Status string `json:"status"`
+	Reason string `json:"reason"`
 }
 
 func (b appBody) input() oauthsvc.ClientInput {

@@ -49,6 +49,33 @@ func (s Store) Create(ctx context.Context, n model.Notice) error {
 	return err
 }
 
+func (s Store) CreateWithTargets(ctx context.Context, n model.Notice, targetUserIDs []string) error {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO notices (
+			id,type,title,summary,content_markdown,display_mode,level,link_text,link_url,
+			audience,enabled,pinned,dismissible,starts_at,ends_at,created_by,created_at,updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+	`, n.ID, n.Type, n.Title, n.Summary, n.ContentMarkdown, n.DisplayMode, n.Level, n.LinkText, n.LinkURL,
+		n.Audience, n.Enabled, n.Pinned, n.Dismissible, n.StartsAt, n.EndsAt, n.CreatedBy, n.CreatedAt, n.UpdatedAt); err != nil {
+		return err
+	}
+	for _, userID := range targetUserIDs {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO notice_targets (notice_id,user_id,created_at)
+			VALUES ($1,$2,$3)
+		`, n.ID, userID, n.CreatedAt); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func (s Store) Get(ctx context.Context, id string) (*model.Notice, error) {
 	row := s.Pool.QueryRow(ctx, noticeSelectSQL()+` WHERE id=$1`, id)
 	n, err := scanNotice(row)
@@ -61,8 +88,14 @@ func (s Store) Get(ctx context.Context, id string) (*model.Notice, error) {
 	return &n, nil
 }
 
-func (s Store) GetForUser(ctx context.Context, id, userID string) (*model.NoticeView, error) {
-	row := s.Pool.QueryRow(ctx, noticeViewSelectSQL("$2")+` WHERE n.id=$1`, id, userID)
+func (s Store) GetForUser(ctx context.Context, id, userID string, canReadAdminAudience bool) (*model.NoticeView, error) {
+	args := []any{id, userID}
+	where := `n.id=$1 AND (n.audience='users'`
+	if canReadAdminAudience {
+		where += ` OR n.audience='admins'`
+	}
+	where += ` OR (n.audience='targeted' AND EXISTS (SELECT 1 FROM notice_targets nt WHERE nt.notice_id=n.id AND nt.user_id=$2)))`
+	row := s.Pool.QueryRow(ctx, noticeViewSelectSQL("$2")+` WHERE `+where, args...)
 	n, err := scanNoticeView(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -80,7 +113,7 @@ func (s Store) ListForUser(ctx context.Context, opts UserListOptions) (map[strin
 	if opts.CanReadAdminAudience {
 		where += ` OR n.audience='admins'`
 	}
-	where += `) AND r.dismissed_at IS NULL`
+	where += ` OR (n.audience='targeted' AND EXISTS (SELECT 1 FROM notice_targets nt WHERE nt.notice_id=n.id AND nt.user_id=$1))) AND r.dismissed_at IS NULL`
 	if opts.Type != "" {
 		args = append(args, opts.Type)
 		where += ` AND n.type=$` + strconv.Itoa(len(args))
@@ -174,6 +207,26 @@ func (s Store) Replace(ctx context.Context, oldID string, n model.Notice) (bool,
 	}
 	defer tx.Rollback(ctx)
 
+	targetUserIDs := []string{}
+	if n.Audience == "targeted" {
+		rows, err := tx.Query(ctx, `SELECT user_id FROM notice_targets WHERE notice_id=$1 ORDER BY user_id`, oldID)
+		if err != nil {
+			return false, err
+		}
+		for rows.Next() {
+			var userID string
+			if err := rows.Scan(&userID); err != nil {
+				rows.Close()
+				return false, err
+			}
+			targetUserIDs = append(targetUserIDs, userID)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return false, err
+		}
+		rows.Close()
+	}
 	tag, err := tx.Exec(ctx, `DELETE FROM notices WHERE id=$1`, oldID)
 	if err != nil {
 		return false, err
@@ -189,6 +242,14 @@ func (s Store) Replace(ctx context.Context, oldID string, n model.Notice) (bool,
 	`, n.ID, n.Type, n.Title, n.Summary, n.ContentMarkdown, n.DisplayMode, n.Level, n.LinkText, n.LinkURL,
 		n.Audience, n.Enabled, n.Pinned, n.Dismissible, n.StartsAt, n.EndsAt, n.CreatedBy, n.CreatedAt, n.UpdatedAt); err != nil {
 		return false, err
+	}
+	for _, userID := range targetUserIDs {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO notice_targets (notice_id,user_id,created_at)
+			VALUES ($1,$2,$3)
+		`, n.ID, userID, n.CreatedAt); err != nil {
+			return false, err
+		}
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return false, err

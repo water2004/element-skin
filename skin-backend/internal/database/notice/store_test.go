@@ -104,7 +104,7 @@ func TestNoticeStoreFiltersReceiptsPaginationAndCleanupExactly(t *testing.T) {
 	if len(unreadItems) != 2 || unreadItems[0].ID != "users-pinned" || unreadItems[1].ID != "users-old" {
 		t.Fatalf("unread page should exclude read notice: %#v", unreadItems)
 	}
-	readView, err := db.Notices.GetForUser(ctx, "users-new", user.ID)
+	readView, err := db.Notices.GetForUser(ctx, "users-new", user.ID, false)
 	if err != nil || readView == nil || !readView.Read || readView.ReadAt == nil || *readView.ReadAt != now+1 {
 		t.Fatalf("read receipt mismatch: view=%#v err=%v", readView, err)
 	}
@@ -120,7 +120,7 @@ func TestNoticeStoreFiltersReceiptsPaginationAndCleanupExactly(t *testing.T) {
 	if len(dismissedItems) != 2 || dismissedItems[0].ID != "users-pinned" || dismissedItems[1].ID != "users-old" {
 		t.Fatalf("dismissed notice should be hidden: %#v", dismissedItems)
 	}
-	dismissedView, err := db.Notices.GetForUser(ctx, "users-new", user.ID)
+	dismissedView, err := db.Notices.GetForUser(ctx, "users-new", user.ID, false)
 	if err != nil || dismissedView == nil || dismissedView.DismissedAt == nil || *dismissedView.DismissedAt != now+2 {
 		t.Fatalf("dismiss receipt mismatch: view=%#v err=%v", dismissedView, err)
 	}

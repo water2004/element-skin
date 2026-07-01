@@ -100,8 +100,11 @@ export function oauthApiCases(): ApiCase[] {
     {
       name: 'reviewAdminOAuthApp patches admin review status',
       method: 'patch',
-      call: () => reviewAdminOAuthApp('client-1', 'active'),
-      args: ['/v1/admin/oauth/apps/client-1/review', { status: 'active' }],
+      call: () => reviewAdminOAuthApp('client-1', 'rejected', 'Missing support contact'),
+      args: [
+        '/v1/admin/oauth/apps/client-1/review',
+        { status: 'rejected', reason: 'Missing support contact' },
+      ],
     },
     {
       name: 'getDeviceAuthorization gets user code details',

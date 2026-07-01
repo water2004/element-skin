@@ -586,6 +586,10 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 	if reviewRes.Code != http.StatusBadRequest || reviewRes.Body.String() != "{\"detail\":\"invalid status\"}\n" {
 		t.Fatalf("invalid review status mismatch: status=%d body=%s", reviewRes.Code, reviewRes.Body.String())
 	}
+	rejectWithoutReason := doJSON(t, router, http.MethodPatch, "/v1/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "rejected"}, adminSession, "")
+	if rejectWithoutReason.Code != http.StatusBadRequest || rejectWithoutReason.Body.String() != "{\"detail\":\"reason is required\"}\n" {
+		t.Fatalf("reject without reason mismatch: status=%d body=%s", rejectWithoutReason.Code, rejectWithoutReason.Body.String())
+	}
 	grantRes := doJSON(t, router, http.MethodPut, "/v1/oauth/apps/"+clientID+"/permissions/nope.nope.nope", map[string]any{"effect": "allow"}, adminSession, "")
 	if grantRes.Code != http.StatusBadRequest || grantRes.Body.String() != "{\"detail\":\"invalid permission\"}\n" {
 		t.Fatalf("invalid client permission mismatch: status=%d body=%s", grantRes.Code, grantRes.Body.String())

@@ -405,7 +405,7 @@ func TestServiceOAuthPermissionCodeDependencyErrorsExactly(t *testing.T) {
 			return err
 		}},
 		{name: "review client", call: func() error {
-			_, err := svc.ReviewClient(ctx, adminActor, clientID, oauth.StatusActive)
+			_, err := svc.ReviewClient(ctx, adminActor, clientID, oauth.StatusActive, "")
 			return err
 		}},
 		{name: "rotate secret", call: func() error {

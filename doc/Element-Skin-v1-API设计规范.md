@@ -317,6 +317,12 @@ slim
 }
 ```
 
+`audience` 取值：
+
+- `users`: 所有登录用户可见。
+- `admins`: 具有管理员通知读取权限的用户可见。
+- `targeted`: 仅 `notice_targets` 中的指定用户可见。API 响应不暴露目标用户列表。
+
 ### 7.5 HomepageMedia
 
 ```json
@@ -2435,6 +2441,7 @@ notice.create.any
   "link_text": "",
   "link_url": "",
   "audience": "users",
+  "target_user_ids": [],
   "enabled": true,
   "pinned": false,
   "dismissible": true,
@@ -2453,7 +2460,8 @@ notice.create.any
 | `content_markdown` | 最多 20 KiB；长公告必填，短公告可为空 |
 | `display_mode` | `inline` 或 `detail`，默认 `inline` |
 | `level` | `info`、`success`、`warning`、`danger`，默认 `info` |
-| `audience` | `users` 或 `admins`，默认 `users` |
+| `audience` | `users`、`admins` 或 `targeted`，默认 `users` |
+| `target_user_ids` | 仅 `audience=targeted` 时允许且必填；结构化写入 `notice_targets` |
 | `link_text` / `link_url` | 必须同时提供或同时为空 |
 | `link_url` | 仅允许站内 `/path`、`http://` 或 `https://` |
 | `starts_at` | Unix 毫秒或 null |
@@ -3269,11 +3277,20 @@ oauth_app.update.any
 
 ```json
 {
-  "status": "active"
+  "status": "rejected",
+  "reason": "缺少有效的支持联系方式"
 }
 ```
 
 `status` 只能为 `active`、`rejected` 或 `disabled`，不能通过审核接口写回 `pending`。
+`reason` 在 `status=rejected` 或 `status=disabled` 时必填，最多 500 个 Unicode 字符；`status=active` 时可为空。
+
+副作用：
+
+- `status=active`、`rejected`、`disabled` 都会向应用 owner 投递 `type=system`、`audience=targeted` 通知。
+- `rejected` 和 `disabled` 通知正文必须包含管理员填写的原因。
+- 审核结果通知 `ends_at` 固定为发布后 30 天。
+- 开发者提交或重新提交应用审核时，系统向 `audience=admins` 投递待审核通知，`ends_at` 固定为发布后 30 天。
 
 响应：
 
@@ -3286,7 +3303,7 @@ oauth_app.update.any
   "redirect_uri": "https://app.example/callback",
   "website_url": "https://app.example",
   "client_type": "confidential",
-  "status": "active",
+  "status": "rejected",
   "created_at": 1710000000000,
   "updated_at": 1710000000000,
   "permissions": ["account.read.self"]

@@ -25,8 +25,9 @@ const (
 	LevelWarning = "warning"
 	LevelDanger  = "danger"
 
-	AudienceUsers  = "users"
-	AudienceAdmins = "admins"
+	AudienceUsers    = "users"
+	AudienceAdmins   = "admins"
+	AudienceTargeted = "targeted"
 
 	StatusAll       = "all"
 	StatusEnabled   = "enabled"
@@ -58,20 +59,21 @@ type ListParams struct {
 }
 
 type CreateInput struct {
-	Type            string `json:"type"`
-	Title           string `json:"title"`
-	Summary         string `json:"summary"`
-	ContentMarkdown string `json:"content_markdown"`
-	DisplayMode     string `json:"display_mode"`
-	Level           string `json:"level"`
-	LinkText        string `json:"link_text"`
-	LinkURL         string `json:"link_url"`
-	Audience        string `json:"audience"`
-	Enabled         *bool  `json:"enabled"`
-	Pinned          *bool  `json:"pinned"`
-	Dismissible     *bool  `json:"dismissible"`
-	StartsAt        *int64 `json:"starts_at"`
-	EndsAt          *int64 `json:"ends_at"`
+	Type            string   `json:"type"`
+	Title           string   `json:"title"`
+	Summary         string   `json:"summary"`
+	ContentMarkdown string   `json:"content_markdown"`
+	DisplayMode     string   `json:"display_mode"`
+	Level           string   `json:"level"`
+	LinkText        string   `json:"link_text"`
+	LinkURL         string   `json:"link_url"`
+	Audience        string   `json:"audience"`
+	Enabled         *bool    `json:"enabled"`
+	Pinned          *bool    `json:"pinned"`
+	Dismissible     *bool    `json:"dismissible"`
+	StartsAt        *int64   `json:"starts_at"`
+	EndsAt          *int64   `json:"ends_at"`
+	TargetUserIDs   []string `json:"target_user_ids"`
 }
 
 type PatchInput struct {
@@ -125,7 +127,7 @@ func (s Service) ListForUser(ctx context.Context, user CurrentUser, params ListP
 }
 
 func (s Service) GetForUser(ctx context.Context, id string, user CurrentUser) (*model.NoticeView, error) {
-	item, err := s.DB.Notices.GetForUser(ctx, id, user.ID)
+	item, err := s.DB.Notices.GetForUser(ctx, id, user.ID, user.CanReadAdminAudience)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +146,7 @@ func (s Service) GetForUser(ctx context.Context, id string, user CurrentUser) (*
 }
 
 func (s Service) MarkRead(ctx context.Context, id string, user CurrentUser) error {
-	item, err := s.DB.Notices.GetForUser(ctx, id, user.ID)
+	item, err := s.DB.Notices.GetForUser(ctx, id, user.ID, user.CanReadAdminAudience)
 	if err != nil {
 		return err
 	}
@@ -155,7 +157,7 @@ func (s Service) MarkRead(ctx context.Context, id string, user CurrentUser) erro
 }
 
 func (s Service) Dismiss(ctx context.Context, id string, user CurrentUser) error {
-	item, err := s.DB.Notices.GetForUser(ctx, id, user.ID)
+	item, err := s.DB.Notices.GetForUser(ctx, id, user.ID, user.CanReadAdminAudience)
 	if err != nil {
 		return err
 	}
@@ -200,7 +202,16 @@ func (s Service) Create(ctx context.Context, input CreateInput, createdBy string
 	if err != nil {
 		return nil, err
 	}
-	if err := s.DB.Notices.Create(ctx, notice); err != nil {
+	targets, err := normalizedTargetUserIDs(input.TargetUserIDs, notice.Audience)
+	if err != nil {
+		return nil, err
+	}
+	if notice.Audience == AudienceTargeted {
+		err = s.DB.Notices.CreateWithTargets(ctx, notice, targets)
+	} else {
+		err = s.DB.Notices.Create(ctx, notice)
+	}
+	if err != nil {
 		return nil, err
 	}
 	return &notice, nil
@@ -227,6 +238,9 @@ func (s Service) Patch(ctx context.Context, id string, input PatchInput, created
 	updated.CreatedBy = &createdBy
 	if err := validateNotice(updated); err != nil {
 		return nil, err
+	}
+	if updated.Audience == AudienceTargeted && existing.Audience != AudienceTargeted {
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "target_user_ids are required for targeted notices"}
 	}
 	ok, err := s.DB.Notices.Replace(ctx, id, updated)
 	if err != nil {
@@ -387,7 +401,7 @@ func validateNotice(notice model.Notice) error {
 	if !validLevel(notice.Level) {
 		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid level"}
 	}
-	if notice.Audience != AudienceUsers && notice.Audience != AudienceAdmins {
+	if notice.Audience != AudienceUsers && notice.Audience != AudienceAdmins && notice.Audience != AudienceTargeted {
 		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid audience"}
 	}
 	if (notice.LinkText == "") != (notice.LinkURL == "") {
@@ -415,7 +429,30 @@ func visibleToUser(item model.NoticeView, user CurrentUser, now int64) bool {
 	if item.Audience == AudienceAdmins && !user.CanReadAdminAudience {
 		return false
 	}
-	return item.Audience == AudienceUsers || item.Audience == AudienceAdmins
+	return item.Audience == AudienceUsers || item.Audience == AudienceAdmins || item.Audience == AudienceTargeted
+}
+
+func normalizedTargetUserIDs(ids []string, audience string) ([]string, error) {
+	seen := map[string]bool{}
+	targets := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		targets = append(targets, id)
+	}
+	if audience == AudienceTargeted {
+		if len(targets) == 0 {
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "target_user_ids are required for targeted notices"}
+		}
+		return targets, nil
+	}
+	if len(targets) > 0 {
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "target_user_ids require targeted audience"}
+	}
+	return nil, nil
 }
 
 func parseCursor(raw string) (cursorState, error) {
