@@ -1,15 +1,8 @@
 <template>
   <div class="mx-auto max-w-[1200px] py-5 animate-fade-in">
-    <PageHeader title="第三方应用" subtitle="审核应用申请，管理全站 OAuth 应用状态">
+    <PageHeader title="第三方应用" subtitle="查看、审核和停用全站已注册的第三方应用">
       <template #icon><Link /></template>
       <template #actions>
-        <el-select v-model="status" class="w-[150px]" @change="loadApps">
-          <el-option label="全部状态" value="all" />
-          <el-option label="待审核" value="pending" />
-          <el-option label="已通过" value="active" />
-          <el-option label="已驳回" value="rejected" />
-          <el-option label="已停用" value="disabled" />
-        </el-select>
         <el-button :icon="Refresh" plain class="hover-lift" :loading="loading" @click="loadApps">
           刷新
         </el-button>
@@ -17,6 +10,19 @@
     </PageHeader>
 
     <UiCard shadow="never">
+      <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <UiSegmented v-model="status" @change="loadApps">
+          <el-radio-button
+            v-for="option in statusOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </el-radio-button>
+        </UiSegmented>
+        <span class="text-sm text-[var(--color-text-light)]"> 当前 {{ apps.length }} 个应用 </span>
+      </div>
+
       <el-table
         :data="apps"
         class="modern-table w-full"
@@ -65,7 +71,7 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-empty v-if="!loading && apps.length === 0" description="暂无第三方应用申请" />
+      <el-empty v-if="!loading && apps.length === 0" description="暂无第三方应用" />
     </UiCard>
 
     <AdminOAuthAppDetailDialog
@@ -94,10 +100,11 @@ import {
 } from '@/api/oauth'
 import type { PermissionDefinition } from '@/api/types'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiSegmented from '@/components/ui/UiSegmented.vue'
 import AdminOAuthAppDetailDialog from '@/components/admin/oauth/AdminOAuthAppDetailDialog.vue'
 import { getErrorMessage } from '@/utils/error'
 
-const status = ref<OAuthClientStatus | 'all'>('pending')
+const status = ref<OAuthClientStatus | 'all'>('all')
 const apps = ref<OAuthClientSummary[]>([])
 const catalog = ref<PermissionDefinition[]>([])
 const loading = ref(false)
@@ -105,6 +112,13 @@ const detailLoading = ref(false)
 const reviewingId = ref('')
 const detailVisible = ref(false)
 const selectedApp = ref<OAuthClient | null>(null)
+const statusOptions: Array<{ label: string; value: OAuthClientStatus | 'all' }> = [
+  { label: '全部应用', value: 'all' },
+  { label: '待审核', value: 'pending' },
+  { label: '已通过', value: 'active' },
+  { label: '已驳回', value: 'rejected' },
+  { label: '已停用', value: 'disabled' },
+]
 
 onMounted(async () => {
   await Promise.all([loadCatalog(), loadApps()])
