@@ -3,6 +3,7 @@ package redisstore
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -153,6 +154,54 @@ func TestMemoryStoreYggIndexMutationsPreserveOriginalTTL(t *testing.T) {
 	trimNow = trimExpiry
 	if _, err := trimStore.yggTokenIndex("trim-user"); !errors.Is(err, ErrCacheMiss) {
 		t.Fatalf("trimmed-token index should expire at original boundary, got %v", err)
+	}
+}
+
+func TestMemoryStoreOAuthAccessTokenReadsStoredStructAndRawMapExactly(t *testing.T) {
+	ctx := context.Background()
+	store := NewMemoryStore()
+	structToken := OAuthAccessToken{
+		TokenHash:     "struct-token",
+		ClientID:      "client-struct",
+		UserID:        "user-struct",
+		GrantID:       "grant-struct",
+		PermissionIDs: []int64{7, 8},
+		ExpiresAt:     1700,
+		CreatedAt:     1100,
+	}
+	store.items["oauth:access:"+structToken.TokenHash] = memoryItem{value: structToken}
+	gotStruct, err := store.GetOAuthAccessToken(ctx, structToken.TokenHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(gotStruct, structToken) {
+		t.Fatalf("stored struct token mismatch:\n got=%#v\nwant=%#v", gotStruct, structToken)
+	}
+
+	store.items["oauth:access:raw-token"] = memoryItem{value: map[string]any{
+		"token_hash":     "raw-token",
+		"client_id":      42,
+		"user_id":        "raw-user",
+		"grant_id":       "raw-grant",
+		"permission_ids": []any{float64(10), int64(11), int(12), "bad"},
+		"expires_at":     int64(2600),
+		"created_at":     int(1200),
+	}}
+	gotRaw, err := store.GetOAuthAccessToken(ctx, "raw-token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRaw := OAuthAccessToken{
+		TokenHash:     "raw-token",
+		ClientID:      "",
+		UserID:        "raw-user",
+		GrantID:       "raw-grant",
+		PermissionIDs: []int64{10, 11, 12, 0},
+		ExpiresAt:     2600,
+		CreatedAt:     1200,
+	}
+	if !reflect.DeepEqual(gotRaw, wantRaw) {
+		t.Fatalf("raw map token mismatch:\n got=%#v\nwant=%#v", gotRaw, wantRaw)
 	}
 }
 

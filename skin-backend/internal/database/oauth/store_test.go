@@ -2,15 +2,19 @@ package oauth_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sort"
 	"strings"
 	"testing"
 
+	"element-skin/backend/internal/database"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/model"
 	core "element-skin/backend/internal/permission"
 	"element-skin/backend/internal/testutil"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
@@ -370,6 +374,154 @@ func TestStoreClosedPoolReturnsExactDependencyErrorsForEveryOAuthTable(t *testin
 				t.Fatalf("%s error mismatch: %v", tc.name, err)
 			}
 		})
+	}
+}
+
+func TestStoreRollsBackOAuthWritesOnExactForeignKeyFailures(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oauth-rollback@test.com", "pw", "OAuthRollback", false)
+	validClient := model.OAuthClient{
+		ID:          "rollback-client",
+		OwnerUserID: user.ID,
+		Name:        "Rollback client",
+		RedirectURI: "https://rollback.example/callback",
+		ClientType:  "confidential",
+		SecretHash:  "secret",
+		Status:      "active",
+		CreatedAt:   1000,
+		UpdatedAt:   1000,
+	}
+	if err := db.OAuth.CreateClient(ctx, validClient, []int64{}); err != nil {
+		t.Fatal(err)
+	}
+
+	duplicate := validClient
+	duplicate.Name = "Duplicate should not win"
+	err := db.OAuth.CreateClient(ctx, duplicate, []int64{})
+	assertPgCode(t, err, "23505")
+	stored, err := db.OAuth.GetClient(ctx, validClient.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(stored, &validClient) {
+		t.Fatalf("duplicate client failure mutated row:\n got=%#v\nwant=%#v", stored, &validClient)
+	}
+
+	invalidPermissionClient := model.OAuthClient{
+		ID:          "invalid-permission-client",
+		OwnerUserID: user.ID,
+		Name:        "Invalid permission client",
+		RedirectURI: "https://invalid.example/callback",
+		ClientType:  "public",
+		Status:      "pending",
+		CreatedAt:   1100,
+		UpdatedAt:   1100,
+	}
+	err = db.OAuth.CreateClient(ctx, invalidPermissionClient, []int64{9_999_999})
+	assertPgCode(t, err, "23503")
+	if got, err := db.OAuth.GetClient(ctx, invalidPermissionClient.ID); err != nil || got != nil {
+		t.Fatalf("client with invalid permission should roll back: client=%#v err=%v", got, err)
+	}
+	assertPermissionSubjectAbsent(t, db, permissiondb.SubjectIDForClient(invalidPermissionClient.ID))
+
+	grantWithMissingClient := model.OAuthGrant{
+		ID:        "grant-missing-client",
+		UserID:    user.ID,
+		SubjectID: permissiondb.SubjectIDForUser(user.ID),
+		ClientID:  "missing-client",
+		Status:    "active",
+		CreatedAt: 1200,
+	}
+	err = db.OAuth.CreateGrant(ctx, grantWithMissingClient, []int64{})
+	assertPgCode(t, err, "23503")
+	if grants, err := db.OAuth.ListGrantsByUser(ctx, user.ID, 10); err != nil || len(grants) != 0 {
+		t.Fatalf("grant with missing client should roll back: grants=%#v err=%v", grants, err)
+	}
+
+	grantWithInvalidPermission := grantWithMissingClient
+	grantWithInvalidPermission.ID = "grant-invalid-permission"
+	grantWithInvalidPermission.ClientID = validClient.ID
+	err = db.OAuth.CreateGrant(ctx, grantWithInvalidPermission, []int64{9_999_999})
+	assertPgCode(t, err, "23503")
+	if permissions, err := db.OAuth.GrantPermissionIDs(ctx, grantWithInvalidPermission.ID); err != nil || len(permissions) != 0 {
+		t.Fatalf("invalid grant permission should roll back permissions: permissions=%v err=%v", permissions, err)
+	}
+
+	validGrant := model.OAuthGrant{
+		ID:        "valid-grant",
+		UserID:    user.ID,
+		SubjectID: permissiondb.SubjectIDForUser(user.ID),
+		ClientID:  validClient.ID,
+		Status:    "active",
+		CreatedAt: 1300,
+	}
+	if err := db.OAuth.CreateGrant(ctx, validGrant, permissionIDs("account.read.self")); err != nil {
+		t.Fatal(err)
+	}
+
+	codeWithMissingGrant := model.OAuthAuthorizationCode{
+		CodeHash:            "code-missing-grant",
+		ClientID:            validClient.ID,
+		UserID:              user.ID,
+		GrantID:             "missing-grant",
+		RedirectURI:         validClient.RedirectURI,
+		CodeChallenge:       "challenge",
+		CodeChallengeMethod: "S256",
+		ExpiresAt:           5000,
+		CreatedAt:           1400,
+	}
+	err = db.OAuth.CreateAuthorizationCode(ctx, codeWithMissingGrant, []int64{})
+	assertPgCode(t, err, "23503")
+	if code, permissions, err := db.OAuth.ConsumeAuthorizationCode(ctx, codeWithMissingGrant.CodeHash, 1500); err != nil || code != nil || permissions != nil {
+		t.Fatalf("authorization code with missing grant should roll back: code=%#v permissions=%v err=%v", code, permissions, err)
+	}
+
+	codeWithInvalidPermission := codeWithMissingGrant
+	codeWithInvalidPermission.CodeHash = "code-invalid-permission"
+	codeWithInvalidPermission.GrantID = validGrant.ID
+	err = db.OAuth.CreateAuthorizationCode(ctx, codeWithInvalidPermission, []int64{9_999_999})
+	assertPgCode(t, err, "23503")
+	if code, permissions, err := db.OAuth.ConsumeAuthorizationCode(ctx, codeWithInvalidPermission.CodeHash, 1500); err != nil || code != nil || permissions != nil {
+		t.Fatalf("authorization code with invalid permission should roll back: code=%#v permissions=%v err=%v", code, permissions, err)
+	}
+
+	refreshWithMissingGrant := model.OAuthToken{
+		TokenHash: "refresh-missing-grant",
+		ClientID:  validClient.ID,
+		UserID:    user.ID,
+		GrantID:   "missing-grant",
+		ExpiresAt: 6000,
+		CreatedAt: 1500,
+	}
+	err = db.OAuth.CreateRefreshToken(ctx, refreshWithMissingGrant)
+	assertPgCode(t, err, "23503")
+	if refresh, err := db.OAuth.GetRefreshToken(ctx, refreshWithMissingGrant.TokenHash); err != nil || refresh != nil {
+		t.Fatalf("refresh token with missing grant should roll back: token=%#v err=%v", refresh, err)
+	}
+
+	deviceWithMissingClient := model.OAuthDeviceCode{
+		DeviceCodeHash: "device-missing-client",
+		UserCodeHash:   "user-code-missing-client",
+		ClientID:       "missing-client",
+		Status:         "pending",
+		ExpiresAt:      6000,
+		CreatedAt:      1600,
+	}
+	err = db.OAuth.CreateDeviceCode(ctx, deviceWithMissingClient, []int64{})
+	assertPgCode(t, err, "23503")
+	if device, permissions, err := db.OAuth.GetDeviceCodeByDeviceCodeHash(ctx, deviceWithMissingClient.DeviceCodeHash); err != nil || device != nil || permissions != nil {
+		t.Fatalf("device code with missing client should roll back: device=%#v permissions=%v err=%v", device, permissions, err)
+	}
+
+	deviceWithInvalidPermission := deviceWithMissingClient
+	deviceWithInvalidPermission.DeviceCodeHash = "device-invalid-permission"
+	deviceWithInvalidPermission.UserCodeHash = "user-code-invalid-permission"
+	deviceWithInvalidPermission.ClientID = validClient.ID
+	err = db.OAuth.CreateDeviceCode(ctx, deviceWithInvalidPermission, []int64{9_999_999})
+	assertPgCode(t, err, "23503")
+	if device, permissions, err := db.OAuth.GetDeviceCodeByDeviceCodeHash(ctx, deviceWithInvalidPermission.DeviceCodeHash); err != nil || device != nil || permissions != nil {
+		t.Fatalf("device code with invalid permission should roll back: device=%#v permissions=%v err=%v", device, permissions, err)
 	}
 }
 
@@ -736,4 +888,32 @@ func permissionIDs(codes ...string) []int64 {
 		return ids[i] < ids[j]
 	})
 	return ids
+}
+
+func assertPgCode(t *testing.T, err error, code string) {
+	t.Helper()
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != code {
+		t.Fatalf("PostgreSQL error code mismatch: err=%v code=%q want %q", err, pgErrCode(pgErr), code)
+	}
+}
+
+func pgErrCode(err *pgconn.PgError) string {
+	if err == nil {
+		return ""
+	}
+	return err.Code
+}
+
+func assertPermissionSubjectAbsent(t *testing.T, db *database.DB, subjectID string) {
+	t.Helper()
+	var count int
+	if err := db.Pool.QueryRow(context.Background(), `
+		SELECT COUNT(*) FROM permission_subjects WHERE id=$1
+	`, subjectID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("permission subject %q count=%d, want 0", subjectID, count)
+	}
 }
