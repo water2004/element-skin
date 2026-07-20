@@ -25,10 +25,12 @@ func (h Handler) CreateInvite(w http.ResponseWriter, req *http.Request) {
 	}
 	code, _ := body["code"].(string)
 	note, _ := body["note"].(string)
+	totalUses, totalUsesSet := body["total_uses"]
 	res, err := h.invites.Create(req.Context(), shared.CurrentActor(req), invitesvc.CreateInput{
-		Code:      code,
-		TotalUses: body["total_uses"],
-		Note:      note,
+		Code:         code,
+		TotalUses:    totalUses,
+		TotalUsesSet: totalUsesSet,
+		Note:         note,
 	})
 	if err != nil {
 		util.Error(w, err)

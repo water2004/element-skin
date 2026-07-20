@@ -44,7 +44,7 @@ func TestDatabaseCreateWithProfileConsumesInviteExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 
-	if err := db.Invites.Create(ctx, "GOOD_INVITE", 2, "good"); err != nil {
+	if err := db.Invites.Create(ctx, "GOOD_INVITE", testutil.Pointer(2), "good"); err != nil {
 		t.Fatal(err)
 	}
 	invitedUser := model.User{ID: "invited_user", Email: "invited@test.com", Password: "hash", DisplayName: "InvitedUser"}
@@ -60,7 +60,7 @@ func TestDatabaseCreateWithProfileConsumesInviteExactly(t *testing.T) {
 		t.Fatalf("invite should be consumed with used_by: %#v", goodInvite)
 	}
 
-	if err := db.Invites.Create(ctx, "FULL_INVITE", 1, "full"); err != nil {
+	if err := db.Invites.Create(ctx, "FULL_INVITE", testutil.Pointer(1), "full"); err != nil {
 		t.Fatal(err)
 	}
 	firstUser := model.User{ID: "first_invite_user", Email: "first@test.com", Password: "hash", DisplayName: "FirstInviteUser"}
@@ -85,7 +85,7 @@ func TestDatabaseCreateWithProfileAllowsSingleInviteRaceWinner(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 
-	if err := db.Invites.Create(ctx, "RACE_INVITE", 1, "race"); err != nil {
+	if err := db.Invites.Create(ctx, "RACE_INVITE", testutil.Pointer(1), "race"); err != nil {
 		t.Fatal(err)
 	}
 	wins := make(chan bool, 8)

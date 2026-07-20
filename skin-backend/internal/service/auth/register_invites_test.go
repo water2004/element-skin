@@ -22,7 +22,7 @@ func TestAuthRegisterConsumesVerificationAndInviteExactly(t *testing.T) {
 	if err := svc.Settings.InvalidateCache(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Invites.Create(ctx, "INVITE_ONCE", 1, "Invite Once"); err != nil {
+	if err := db.Invites.Create(ctx, "INVITE_ONCE", testutil.Pointer(1), "Invite Once"); err != nil {
 		t.Fatal(err)
 	}
 	if err := svc.Redis.SetVerificationCode(ctx, "verified-register@test.com", "register", "ABC12345", 0); err != nil {

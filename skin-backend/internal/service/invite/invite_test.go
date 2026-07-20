@@ -71,7 +71,7 @@ func TestInviteServiceGeneratedCodeAndCursorPaginationExactState(t *testing.T) {
 	if _, err := db.Pool.Exec(ctx, `UPDATE invites SET created_at=$1 WHERE code=$2`, int64(1000), code); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Invites.Create(ctx, "service_invite_cursor_a", 1, "Cursor A"); err != nil {
+	if err := db.Invites.Create(ctx, "service_invite_cursor_a", testutil.Pointer(1), "Cursor A"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `UPDATE invites SET created_at=$1 WHERE code=$2`, int64(900), "service_invite_cursor_a"); err != nil {
@@ -94,6 +94,41 @@ func TestInviteServiceGeneratedCodeAndCursorPaginationExactState(t *testing.T) {
 	secondItems := second["items"].([]map[string]any)
 	if len(secondItems) != 1 || secondItems[0]["code"] != "service_invite_cursor_a" || second["has_next"] != false || second["next_cursor"] != "" {
 		t.Fatalf("second invite page mismatch: %#v", second)
+	}
+}
+
+func TestInviteServiceDistinguishesOmittedAndUnlimitedTotalUses(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := invitesvc.Service{DB: db}
+	actor := inviteActor("invite.create.any")
+
+	unlimited, err := svc.Create(ctx, actor, invitesvc.CreateInput{
+		Code:         "service_unlimited_invite",
+		TotalUsesSet: true,
+		Note:         "Unlimited",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unlimited["code"] != "service_unlimited_invite" || unlimited["total_uses"] != nil || unlimited["note"] != "Unlimited" {
+		t.Fatalf("unlimited invite response mismatch: %#v", unlimited)
+	}
+	unlimitedRow, err := db.Invites.Get(ctx, "service_unlimited_invite")
+	if err != nil || unlimitedRow == nil || unlimitedRow.TotalUses != nil || unlimitedRow.UsedCount != 0 {
+		t.Fatalf("unlimited invite row mismatch: row=%#v err=%v", unlimitedRow, err)
+	}
+
+	defaulted, err := svc.Create(ctx, actor, invitesvc.CreateInput{Code: "service_default_invite"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if defaulted["total_uses"] != 1 {
+		t.Fatalf("default invite response mismatch: %#v", defaulted)
+	}
+	defaultedRow, err := db.Invites.Get(ctx, "service_default_invite")
+	if err != nil || defaultedRow == nil || defaultedRow.TotalUses == nil || *defaultedRow.TotalUses != 1 {
+		t.Fatalf("default invite row mismatch: row=%#v err=%v", defaultedRow, err)
 	}
 }
 

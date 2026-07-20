@@ -17,7 +17,7 @@ type Store struct {
 	Pool *pgxpool.Pool
 }
 
-func (s Store) Create(ctx context.Context, code string, totalUses int, note string) error {
+func (s Store) Create(ctx context.Context, code string, totalUses *int, note string) error {
 	_, err := s.Pool.Exec(ctx, `INSERT INTO invites (code,created_at,total_uses,used_count,note) VALUES ($1,$2,$3,0,$4)`, code, time.Now().UnixMilli(), totalUses, note)
 	return err
 }

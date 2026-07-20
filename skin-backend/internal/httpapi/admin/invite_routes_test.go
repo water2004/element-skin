@@ -65,10 +65,27 @@ func TestInviteRoutesGenerateCodeWithExactShapeAndDefaults(t *testing.T) {
 	}
 }
 
+func TestInviteRoutesCreateUnlimitedInvitePersistsNullExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	h := admin.New(testutil.TestConfig(), db, nil)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(`{"code":"route-unlimited","total_uses":null,"note":"No Limit"}`))
+	req = withAdminActor(req, "admin-test-user")
+	rec := httptest.NewRecorder()
+	h.CreateInvite(rec, req)
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"code\":\"route-unlimited\",\"note\":\"No Limit\",\"total_uses\":null}\n" {
+		t.Fatalf("unlimited invite response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	invite, err := db.Invites.Get(req.Context(), "route-unlimited")
+	if err != nil || invite == nil || invite.Code != "route-unlimited" || invite.TotalUses != nil || invite.UsedCount != 0 || invite.Note != "No Limit" {
+		t.Fatalf("unlimited invite state mismatch: invite=%#v err=%v", invite, err)
+	}
+}
+
 func TestInviteRoutesListAndDeleteExactState(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
-	if err := db.Invites.Create(context.Background(), "route-list-invite", 3, "List Invite"); err != nil {
+	if err := db.Invites.Create(context.Background(), "route-list-invite", testutil.Pointer(3), "List Invite"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -157,7 +174,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 		t.Fatalf("invalid invite requests must not persist rows: list=%#v err=%v", list, err)
 	}
 
-	if err := db.Invites.Create(context.Background(), "existing-invite", 1, "Existing"); err != nil {
+	if err := db.Invites.Create(context.Background(), "existing-invite", testutil.Pointer(1), "Existing"); err != nil {
 		t.Fatal(err)
 	}
 	req = httptest.NewRequest(http.MethodPost, "/v1/admin/invites", strings.NewReader(`{"code":"existing-invite","total_uses":2}`))
