@@ -2,7 +2,7 @@ name: Docker Publish
 
 on:
   push:
-    branches: [ 'dev', 'dev-next', 'main' ]
+    branches: [ 'dev' ]
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
@@ -37,7 +37,7 @@ jobs:
             should_build=true
           elif [ "${GITHUB_REF_TYPE}" = "branch" ]; then
             case "${GITHUB_REF_NAME}" in
-              dev|dev-next|main)
+              dev)
                 should_build=true
                 ;;
             esac
