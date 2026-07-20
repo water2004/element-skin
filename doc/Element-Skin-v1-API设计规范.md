@@ -2239,7 +2239,7 @@ Query：
 
 ```json
 {
-  "success": true
+  "ok": true
 }
 ```
 
@@ -2293,7 +2293,7 @@ invite.create.any
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `code` | 否 | 不传时服务端生成 |
-| `total_uses` | 否 | 正整数，默认 1 |
+| `total_uses` | 否 | 正整数；省略时默认 1，显式传入 `null` 表示不限次数 |
 | `note` | 否 | 备注 |
 
 响应：
@@ -3242,7 +3242,10 @@ client_id=app_id
 client_secret=client_secret
 code=one_time_authorization_code
 code_verifier=plain_pkce_verifier
+redirect_uri=https://app.example/callback
 ```
+
+`redirect_uri` 必须与创建授权码时使用的回调地址完全一致。
 
 说明：
 
