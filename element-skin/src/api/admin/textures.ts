@@ -16,6 +16,6 @@ export function patchAdminTexture(hash: string, data: { type: string; model?: st
   return client.patch(`/v1/admin/textures/${hash}`, data)
 }
 
-export function deleteAdminTexture(hash: string, params: { type?: string; user_id?: string; force?: boolean }): Promise<{ data: { ok: boolean } }> {
+export function deleteAdminTexture(hash: string, params: { type?: string; user_id?: string; force?: boolean }): Promise<{ data: { success: boolean } }> {
   return client.delete(`/v1/admin/textures/${hash}`, { params })
 }

@@ -112,7 +112,7 @@ func TestTextureRoutesListUpdateAndDeleteExactState(t *testing.T) {
 	req.SetPathValue("hash", "admin_state_hash")
 	rec = httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"success\":true}\n" {
 		t.Fatalf("texture delete response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	info, err = db.Textures.GetInfo(req.Context(), user.ID, "admin_state_hash", "skin")
@@ -177,7 +177,7 @@ func TestTextureRoutesRejectMalformedAndInvalidModelWithoutMutation(t *testing.T
 	req.SetPathValue("hash", "missing_hash")
 	rec = httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"success\":true}\n" {
 		t.Fatalf("force delete should be idempotent for a missing texture: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
