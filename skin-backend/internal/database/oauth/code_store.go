@@ -33,7 +33,7 @@ func (s Store) CreateAuthorizationCode(ctx context.Context, code model.OAuthAuth
 	return tx.Commit(ctx)
 }
 
-func (s Store) ConsumeAuthorizationCode(ctx context.Context, codeHash string, consumedAt int64) (*model.OAuthAuthorizationCode, []int64, error) {
+func (s Store) ConsumeAuthorizationCode(ctx context.Context, codeHash, clientID, redirectURI string, consumedAt int64) (*model.OAuthAuthorizationCode, []int64, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -41,10 +41,10 @@ func (s Store) ConsumeAuthorizationCode(ctx context.Context, codeHash string, co
 	defer tx.Rollback(ctx)
 	row := tx.QueryRow(ctx, `
 		UPDATE oauth_authorization_codes
-		SET consumed_at=$2
-		WHERE code_hash=$1 AND consumed_at IS NULL AND expires_at>$2
+		SET consumed_at=$4
+		WHERE code_hash=$1 AND client_id=$2 AND redirect_uri=$3 AND consumed_at IS NULL AND expires_at>$4
 		RETURNING code_hash, client_id, user_id, grant_id, redirect_uri, code_challenge, code_challenge_method, expires_at, created_at, consumed_at
-	`, codeHash, consumedAt)
+	`, codeHash, clientID, redirectURI, consumedAt)
 	code, err := scanAuthorizationCode(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, nil

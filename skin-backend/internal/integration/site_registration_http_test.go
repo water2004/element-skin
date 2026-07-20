@@ -83,7 +83,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	if missingInvite.Code != 400 {
 		t.Fatalf("missing invite should be 400, got %d", missingInvite.Code)
 	}
-	if err := db.Invites.Create(ctx, "VALID_CODE", 1, "once"); err != nil {
+	if err := db.Invites.Create(ctx, "VALID_CODE", testutil.Pointer(1), "once"); err != nil {
 		t.Fatal(err)
 	}
 	ok := doJSON(t, h, "POST", "/v1/auth/register", map[string]any{"email": "first@test.com", "password": "Password123", "username": "FirstUser", "invite": "VALID_CODE"})

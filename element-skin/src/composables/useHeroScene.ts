@@ -28,6 +28,8 @@ type PreparedMedia =
       ready: boolean
     }
 
+type PanoramaFace = { face: string; flip: 'none' | 'h' | 'v' | 'hv' }
+
 export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneController {
   const transition = options.transition ?? 900
   const minFrameInterval = 1000 / (options.maxFps ?? 60)
@@ -163,22 +165,42 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
   function prepare(item: HomepageMedia) {
     if (prepared.has(item.id)) return
     if (item.type === 'panorama') {
-      // CubeTextureLoader expects +X, -X, +Y, -Y, +Z, -Z.
-      // Uploaded panorama files are front, right, back, left, up, down.
-      const urls = [
-        mediaUrl(item, 'panorama_3.png'),
-        mediaUrl(item, 'panorama_1.png'),
-        mediaUrl(item, 'panorama_4.png'),
-        mediaUrl(item, 'panorama_5.png'),
-        mediaUrl(item, 'panorama_2.png'),
-        mediaUrl(item, 'panorama_0.png'),
+      // Uploaded panorama files (panorama_0..5) are front, right, back, left,
+      // top, bottom — authored as a camera at the cube center looking outward
+      // (Minecraft convention), but applied to the cube faces as textures on
+      // the OUTSIDE surface. Three.js CubeTexture / samplerCube samples from
+      // INSIDE the cube looking outward. The mismatch between "external
+      // texture" and "internal sampling" mirrors each face along its local
+      // axis, so each face image must be pre-flipped to appear correct.
+      //
+      // The flip direction depends on each face's UV axis orientation in the
+      // OpenGL CubeTexture convention:
+      //   - side faces (±X, ±Z): mismatch manifests as horizontal flip
+      //   - top/bottom (±Y): UV axes are rotated 90° relative to sides, so
+      //     the same mismatch manifests as vertical flip
+      //
+      // Slot assignment (CubeTextureLoader expects +X, -X, +Y, -Y, +Z, -Z):
+      //   +X <- right (panorama_1), -X <- left (panorama_3)
+      //   +Y <- top   (panorama_4), -Y <- bottom (panorama_5)
+      //   +Z <- back  (panorama_2), -Z <- front  (panorama_0)
+      // Camera looks down -Z, so panorama_0 (front) appears in front of the
+      // viewer.
+      const sources: PanoramaFace[] = [
+        { face: 'panorama_1.png', flip: 'h' }, // +X (right)
+        { face: 'panorama_3.png', flip: 'h' }, // -X (left)
+        { face: 'panorama_4.png', flip: 'v' }, // +Y (top)
+        { face: 'panorama_5.png', flip: 'v' }, // -Y (bottom)
+        { face: 'panorama_2.png', flip: 'h' }, // +Z (back)
+        { face: 'panorama_0.png', flip: 'h' }, // -Z (front)
       ]
       const entry: PreparedMedia = {
         item,
         kind: 'panorama',
-        texture: cubeLoader.load(urls, () => {
+        texture: new THREE.CubeTexture(loadFlippedCubeFaces(sources, (f) => mediaUrl(item, f), (canvases) => {
+          entry.texture.image = canvases
+          entry.texture.needsUpdate = true
           entry.ready = true
-        }),
+        })),
         ready: false,
       }
       entry.texture.colorSpace = THREE.SRGBColorSpace
@@ -426,6 +448,47 @@ function createSolidCanvas() {
     ctx.fillRect(0, 0, 1, 1)
   }
   return canvas
+}
+
+function flipCanvas(img: HTMLImageElement, flip: PanoramaFace['flip']): HTMLCanvasElement | null {
+  const canvas = document.createElement('canvas')
+  canvas.width = img.naturalWidth
+  canvas.height = img.naturalHeight
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  if (flip === 'h' || flip === 'hv') {
+    ctx.translate(canvas.width, 0)
+    ctx.scale(-1, 1)
+  }
+  if (flip === 'v' || flip === 'hv') {
+    ctx.translate(0, canvas.height)
+    ctx.scale(1, -1)
+  }
+  ctx.drawImage(img, 0, 0)
+  return canvas
+}
+
+function loadFlippedCubeFaces(
+  faces: PanoramaFace[],
+  buildUrl: (face: string) => string,
+  onReady: (canvases: HTMLCanvasElement[]) => void,
+): HTMLCanvasElement[] {
+  const canvases = Array.from({ length: faces.length }, () => createSolidCanvas())
+  let loaded = 0
+  faces.forEach((src, index) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => {
+      const flipped = flipCanvas(img, src.flip)
+      if (flipped) canvases[index] = flipped
+      if (++loaded === faces.length) onReady(canvases)
+    }
+    img.onerror = () => {
+      if (++loaded === faces.length) onReady(canvases)
+    }
+    img.src = buildUrl(src.face)
+  })
+  return canvases
 }
 
 function lerp(a: number, b: number, t: number) {

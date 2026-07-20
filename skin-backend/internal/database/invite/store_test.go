@@ -12,7 +12,7 @@ func TestStoreCreateGetListDeleteExactState(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 	store := invite.Store{Pool: db.Pool}
-	if err := store.Create(ctx, "sub_invite", 3, "Sub Invite"); err != nil {
+	if err := store.Create(ctx, "sub_invite", testutil.Pointer(3), "Sub Invite"); err != nil {
 		t.Fatal(err)
 	}
 	got, err := store.Get(ctx, "sub_invite")
@@ -32,5 +32,18 @@ func TestStoreCreateGetListDeleteExactState(t *testing.T) {
 	}
 	if got, err := store.Get(ctx, "sub_invite"); err != nil || got != nil {
 		t.Fatalf("invite should be deleted: invite=%#v err=%v", got, err)
+	}
+}
+
+func TestStoreCreatePersistsUnlimitedInviteExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	store := invite.Store{Pool: db.Pool}
+	if err := store.Create(ctx, "unlimited_invite", nil, "Unlimited Invite"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Get(ctx, "unlimited_invite")
+	if err != nil || got == nil || got.Code != "unlimited_invite" || got.TotalUses != nil || got.UsedCount != 0 || got.Note != "Unlimited Invite" {
+		t.Fatalf("unlimited invite mismatch: invite=%#v err=%v", got, err)
 	}
 }

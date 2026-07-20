@@ -8,7 +8,7 @@ export function getAdminInvites(params: { cursor?: string | null; limit?: number
 }
 
 export function createAdminInvite(data: { code?: string; total_uses?: number | null; note?: string }): Promise<{
-  data: { code: string; total_uses: number; note: string }
+  data: { code: string; total_uses: number | null; note: string }
 }> {
   return client.post('/v1/admin/invites', data)
 }

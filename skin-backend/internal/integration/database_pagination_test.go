@@ -90,7 +90,7 @@ func TestDatabaseCursorPaginationCoverage(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		code := "PAGE_INVITE_" + strconv.Itoa(i)
 		inviteCodes[code] = true
-		if err := db.Invites.Create(ctx, code, 1, "page"); err != nil {
+		if err := db.Invites.Create(ctx, code, testutil.Pointer(1), "page"); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := db.Pool.Exec(ctx, `UPDATE invites SET created_at=$1 WHERE code=$2`, baseTime-int64(i*1000), code); err != nil {

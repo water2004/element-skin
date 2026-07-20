@@ -295,8 +295,9 @@ func seedLoadTestData(tb testing.TB, db *database.DB, redis redisstore.Store) lo
 		tb.Fatalf("seed ygg token: %v", err)
 	}
 	refreshYggLoadSession(tb, redis, seed)
+	inviteTotalUses := 10
 	for i := 0; i < 50; i++ {
-		if err := db.Invites.Create(ctx, fmt.Sprintf("LOAD_INVITE_%03d", i), 10, "Load invite"); err != nil {
+		if err := db.Invites.Create(ctx, fmt.Sprintf("LOAD_INVITE_%03d", i), &inviteTotalUses, "Load invite"); err != nil {
 			tb.Fatalf("seed invite: %v", err)
 		}
 	}

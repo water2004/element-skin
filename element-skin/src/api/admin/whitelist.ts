@@ -1,7 +1,7 @@
 import client from '../client'
-import type { WhitelistEntry } from '../types'
+import type { WhitelistResponse } from '../types'
 
-export function getWhitelist(endpointId: number): Promise<{ data: WhitelistEntry[] }> {
+export function getWhitelist(endpointId: number): Promise<{ data: WhitelistResponse }> {
   return client.get('/v1/admin/official-whitelist', { params: { endpoint_id: endpointId } })
 }
 

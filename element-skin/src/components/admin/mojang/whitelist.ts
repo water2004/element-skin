@@ -10,6 +10,12 @@ export function hasWhitelistChanges(row: FallbackRow) {
   return changes.toAdd.length > 0 || changes.toRemove.length > 0
 }
 
+export function setLoadedWhitelist(row: FallbackRow, entries: WhitelistEntry[]): void {
+  row._whitelist = entries.map((entry) => ({ ...entry }))
+  row._initialWhitelist = entries.map((entry) => ({ ...entry }))
+  row._loaded = true
+}
+
 export function getWhitelistChanges(row: FallbackRow): {
   toAdd: WhitelistEntry[]
   toRemove: WhitelistEntry[]

@@ -42,6 +42,10 @@ tokens = oauth.exchange_code(
 )
 ```
 
+SDK 会把构造 `OAuthClient` 时配置的 `redirect_uri` 一并发送到 token 端点；它必须与
+生成授权请求时的回调地址完全一致。若一次流程临时使用了其他回调地址，也应在
+`exchange_code(..., redirect_uri="...")` 中传入同一个地址。
+
 机密客户端可以在构造函数或单次请求中传入 `client_secret`：
 
 ```python
@@ -57,24 +61,18 @@ tokens = oauth.exchange_code(
 自定义授权确认页面或编写集成测试时，可以调用：
 
 ```python
-info = oauth.authorization_info(
-    {
-        "client_id": "client-id",
-        "redirect_uri": "https://app.example.com/callback",
-        "scope": "account.read.self",
-        "state": "csrf-state",
-    }
-)
+request_params = {
+    "response_type": "code",
+    "client_id": "client-id",
+    "redirect_uri": "https://app.example.com/callback",
+    "scope": "account.read.self",
+    "state": session.state,
+    "code_challenge": session.code_challenge,
+    "code_challenge_method": "S256",
+}
 
-decision = oauth.approve_authorization(
-    {
-        "client_id": "client-id",
-        "redirect_uri": "https://app.example.com/callback",
-        "scope": "account.read.self",
-        "state": "csrf-state",
-        "approve": True,
-    }
-)
+info = oauth.authorization_info(request_params)
+decision = oauth.approve_authorization(request_params)
 ```
 
 这两个接口需要 SDK 持有已登录用户的 access token。

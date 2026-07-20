@@ -101,15 +101,20 @@ class OAuthClient:
         *,
         code: str,
         code_verifier: str,
+        redirect_uri: str | None = None,
         client_secret: str | None = None,
         store: bool = True,
     ) -> TokenSet:
+        final_redirect_uri = redirect_uri or self.redirect_uri
+        if not final_redirect_uri:
+            raise ValueError("redirect_uri is required for authorization code flow")
         tokens = self._token_request(
             {
                 "grant_type": "authorization_code",
                 "client_id": self.client_id,
                 "code": code,
                 "code_verifier": code_verifier,
+                "redirect_uri": final_redirect_uri,
                 **self._client_secret_payload(client_secret),
             }
         )

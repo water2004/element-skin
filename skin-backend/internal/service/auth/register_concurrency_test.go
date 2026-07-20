@@ -21,7 +21,7 @@ func TestConcurrentRegistrationsConsumeSingleUseInviteExactlyOnce(t *testing.T) 
 	if err := svc.Settings.InvalidateCache(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.Invites.Create(ctx, "INVITE_RACE_ONCE", 1, "Concurrent single use"); err != nil {
+	if err := db.Invites.Create(ctx, "INVITE_RACE_ONCE", testutil.Pointer(1), "Concurrent single use"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `

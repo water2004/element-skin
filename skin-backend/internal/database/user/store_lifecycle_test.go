@@ -18,7 +18,7 @@ func TestStoreCreateUpdateDeleteAndInviteExhaustion(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 	store := user.Store{Pool: db.Pool}
-	if err := db.Invites.Create(ctx, "domain_user_invite", 1, "domain user"); err != nil {
+	if err := db.Invites.Create(ctx, "domain_user_invite", testutil.Pointer(1), "domain user"); err != nil {
 		t.Fatal(err)
 	}
 	hash, err := util.HashPassword("Password123")

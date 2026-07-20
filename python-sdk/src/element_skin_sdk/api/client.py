@@ -65,7 +65,7 @@ class ElementSkinAPI:
         self._require(ProfileScopes.READ_OWNED)
         return self._http.get(
             "/v1/users/me/profiles",
-            params=_clean_params({"cursor": cursor, "page_size": page_size}),
+            params=_clean_params({"cursor": cursor, "limit": page_size}),
         )
 
     def create_profile(self, name: str, *, model: str = "default") -> dict[str, Any]:
@@ -91,7 +91,7 @@ class ElementSkinAPI:
         return self._http.get(
             "/v1/users/me/textures",
             params=_clean_params(
-                {"texture_type": texture_type, "cursor": cursor, "page_size": page_size},
+                {"texture_type": texture_type, "cursor": cursor, "limit": page_size},
             ),
         )
 

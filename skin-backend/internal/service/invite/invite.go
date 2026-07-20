@@ -21,9 +21,10 @@ type Service struct {
 }
 
 type CreateInput struct {
-	Code      string
-	TotalUses any
-	Note      string
+	Code         string
+	TotalUses    any
+	TotalUsesSet bool
+	Note         string
 }
 
 func (s Service) List(ctx context.Context, actor permission.Actor, cursor string, limit int) (map[string]any, error) {
@@ -58,18 +59,26 @@ func (s Service) Create(ctx context.Context, actor permission.Actor, input Creat
 	if len(code) < 4 {
 		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invite code too short"}
 	}
-	total := 1
-	if input.TotalUses != nil {
+	defaultTotal := 1
+	total := &defaultTotal
+	if input.TotalUsesSet && input.TotalUses == nil {
+		total = nil
+	} else if input.TotalUses != nil {
 		v, ok := input.TotalUses.(float64)
 		if !ok || v < 1 || v != math.Trunc(v) || v > float64(math.MaxInt32) {
 			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "total_uses must be a positive integer"}
 		}
-		total = int(v)
+		value := int(v)
+		total = &value
 	}
 	if err := s.DB.Invites.Create(ctx, code, total, input.Note); err != nil {
 		return nil, err
 	}
-	return map[string]any{"code": code, "total_uses": total, "note": input.Note}, nil
+	var responseTotal any
+	if total != nil {
+		responseTotal = *total
+	}
+	return map[string]any{"code": code, "total_uses": responseTotal, "note": input.Note}, nil
 }
 
 func (s Service) Delete(ctx context.Context, actor permission.Actor, code string) error {

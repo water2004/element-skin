@@ -5,6 +5,7 @@ import {
   createWhitelistEntryDraft,
   getWhitelistChanges,
   hasWhitelistChanges,
+  setLoadedWhitelist,
 } from '@/components/admin/mojang/whitelist'
 
 const baseRow: FallbackRow = {
@@ -41,7 +42,41 @@ function rowWithLists(initial: string[], current: string[], loaded = true): Fall
   }
 }
 
-describe('hasWhitelistChanges', () => {
+describe('whitelist state', () => {
+  it('loads response items into independent current and initial lists', () => {
+    const row = rowWithLists([], [], false)
+    const entries = [
+      { username: 'Steve', created_at: 1000 },
+      { username: 'Alex', created_at: 2000 },
+    ]
+
+    setLoadedWhitelist(row, entries)
+
+    expect(row._loaded).toBe(true)
+    expect(row._whitelist).toEqual(entries)
+    expect(row._initialWhitelist).toEqual(entries)
+    expect(row._whitelist).not.toBe(entries)
+    expect(row._initialWhitelist).not.toBe(entries)
+    expect(row._initialWhitelist).not.toBe(row._whitelist)
+
+    row._whitelist[0]!.username = 'Changed'
+    expect(entries[0]!.username).toBe('Steve')
+    expect(row._initialWhitelist[0]!.username).toBe('Steve')
+  })
+
+  it('loads an empty response as exact empty whitelist state', () => {
+    const row = rowWithLists(['Steve'], ['Alex'], false)
+
+    setLoadedWhitelist(row, [])
+
+    expect(row).toMatchObject({
+      _loaded: true,
+      _whitelist: [],
+      _initialWhitelist: [],
+    })
+    expect(hasWhitelistChanges(row)).toBe(false)
+  })
+
   it('does not report changes before whitelist is loaded', () => {
     const row = rowWithLists(['Steve'], ['Alex'], false)
 

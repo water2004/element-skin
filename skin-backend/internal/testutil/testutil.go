@@ -25,6 +25,10 @@ const testDBName = "elementskin_go_test"
 
 var dbCounter uint64
 
+func Pointer[T any](value T) *T {
+	return &value
+}
+
 func TestConfig() config.Config {
 	cfg := config.Config{
 		DatabaseHost:     "localhost",

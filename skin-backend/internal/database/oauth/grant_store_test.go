@@ -90,7 +90,18 @@ func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 	consumedAt := int64(1300)
 	wantCode := code
 	wantCode.ConsumedAt = &consumedAt
-	gotCode, gotCodePermissions, err := db.OAuth.ConsumeAuthorizationCode(ctx, code.CodeHash, consumedAt)
+	gotCode, gotCodePermissions, err := db.OAuth.ConsumeAuthorizationCode(ctx, code.CodeHash, code.ClientID, "https://wrong.example/callback", consumedAt)
+	if err != nil || gotCode != nil || gotCodePermissions != nil {
+		t.Fatalf("redirect mismatch must not consume code: code=%#v permissions=%v err=%v", gotCode, gotCodePermissions, err)
+	}
+	var storedConsumedAt *int64
+	if err := db.Pool.QueryRow(ctx, `SELECT consumed_at FROM oauth_authorization_codes WHERE code_hash=$1`, code.CodeHash).Scan(&storedConsumedAt); err != nil {
+		t.Fatal(err)
+	}
+	if storedConsumedAt != nil {
+		t.Fatalf("redirect mismatch persisted consumed_at=%d", *storedConsumedAt)
+	}
+	gotCode, gotCodePermissions, err = db.OAuth.ConsumeAuthorizationCode(ctx, code.CodeHash, code.ClientID, code.RedirectURI, consumedAt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +111,7 @@ func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 	if !reflect.DeepEqual(gotCodePermissions, grantPermissions) {
 		t.Fatalf("code permissions=%v want=%v", gotCodePermissions, grantPermissions)
 	}
-	gotCode, gotCodePermissions, err = db.OAuth.ConsumeAuthorizationCode(ctx, code.CodeHash, 1400)
+	gotCode, gotCodePermissions, err = db.OAuth.ConsumeAuthorizationCode(ctx, code.CodeHash, code.ClientID, code.RedirectURI, 1400)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +124,7 @@ func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 	if err := db.OAuth.CreateAuthorizationCode(ctx, expiredCode, grantPermissions); err != nil {
 		t.Fatal(err)
 	}
-	gotCode, gotCodePermissions, err = db.OAuth.ConsumeAuthorizationCode(ctx, expiredCode.CodeHash, 1600)
+	gotCode, gotCodePermissions, err = db.OAuth.ConsumeAuthorizationCode(ctx, expiredCode.CodeHash, expiredCode.ClientID, expiredCode.RedirectURI, 1600)
 	if err != nil {
 		t.Fatal(err)
 	}

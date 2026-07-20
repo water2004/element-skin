@@ -195,6 +195,12 @@ function inviteCases(): ApiCase[] {
       args: ['/v1/admin/invites', { code: 'WELCOME', total_uses: 10, note: 'Launch' }],
     },
     {
+      name: 'createAdminInvite preserves explicit unlimited usage',
+      method: 'post',
+      call: () => createAdminInvite({ code: 'UNLIMITED', total_uses: null, note: 'No limit' }),
+      args: ['/v1/admin/invites', { code: 'UNLIMITED', total_uses: null, note: 'No limit' }],
+    },
+    {
       name: 'deleteAdminInvite deletes invite code',
       method: 'delete',
       call: () => deleteAdminInvite('WELCOME'),

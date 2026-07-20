@@ -202,6 +202,7 @@ import {
   createWhitelistEntryDraft,
   getWhitelistChanges,
   hasWhitelistChanges,
+  setLoadedWhitelist,
 } from '@/components/admin/mojang/whitelist'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
@@ -299,9 +300,7 @@ async function fetchWhitelist(row: FallbackRow) {
   if (!row.id) return
   try {
     const res = await getWhitelist(row.id)
-    row._whitelist = JSON.parse(JSON.stringify(res.data))
-    row._initialWhitelist = JSON.parse(JSON.stringify(res.data))
-    row._loaded = true
+    setLoadedWhitelist(row, res.data.items)
   } catch {
     ElMessage.error(`白名单加载失败: ${row.note || '未命名端点'}`)
   }

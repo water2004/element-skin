@@ -346,6 +346,7 @@ func issueDelegatedCredentialForClient(t *testing.T, ctx context.Context, svc oa
 		ClientSecret: clientSecret,
 		Code:         approved["code"].(string),
 		CodeVerifier: verifier,
+		RedirectURI:  redirectURI,
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -136,6 +136,10 @@ export interface WhitelistEntry {
   created_at?: number
 }
 
+export interface WhitelistResponse {
+  items: WhitelistEntry[]
+}
+
 // Microsoft auth
 export interface MicrosoftAuthUrlResponse {
   auth_url: string
@@ -155,7 +159,7 @@ export interface MicrosoftProfileResponse {
 }
 
 export interface YggdrasilImportResult {
-  items: Array<{ id: string; name: string }>
+  items: Profile[]
   success_count: number
   failure_count: number
   failed: Array<{ profile_id: string; profile_name: string; detail: string }>
