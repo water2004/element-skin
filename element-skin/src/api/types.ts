@@ -136,6 +136,10 @@ export interface WhitelistEntry {
   created_at?: number
 }
 
+export interface WhitelistResponse {
+  items: WhitelistEntry[]
+}
+
 // Microsoft auth
 export interface MicrosoftAuthUrlResponse {
   auth_url: string
