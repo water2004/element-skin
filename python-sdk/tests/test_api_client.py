@@ -116,7 +116,7 @@ def test_list_profiles_uses_exact_cursor_params(response_json) -> None:
 
     assert body == PROFILE_PAGE_RESPONSE
     assert recorder.requests[0].path == "/v1/users/me/profiles"
-    assert recorder.requests[0].query == {"cursor": ["cursor-1"], "page_size": ["20"]}
+    assert recorder.requests[0].query == {"cursor": ["cursor-1"], "limit": ["20"]}
 
 
 def test_profile_mutations_use_exact_methods_paths_and_bodies(response_json) -> None:
@@ -174,7 +174,7 @@ def test_list_textures_uses_backend_texture_type_param(response_json) -> None:
     assert recorder.requests[0].query == {
         "texture_type": ["skin"],
         "cursor": ["texture-cursor"],
-        "page_size": ["10"],
+        "limit": ["10"],
     }
 
 
