@@ -159,7 +159,7 @@ export interface MicrosoftProfileResponse {
 }
 
 export interface YggdrasilImportResult {
-  items: Array<{ id: string; name: string }>
+  items: Profile[]
   success_count: number
   failure_count: number
   failed: Array<{ profile_id: string; profile_name: string; detail: string }>
