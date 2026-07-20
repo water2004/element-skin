@@ -57,7 +57,7 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 	assertHTTPError(t, err, 400, "unsupported grant_type")
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "client_credentials", ClientID: clientID, ClientSecret: "wrong"})
 	assertHTTPError(t, err, 400, "invalid client_secret")
-	_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "authorization_code", ClientID: clientID, ClientSecret: clientSecret, Code: "missing-code", CodeVerifier: "valid-verifier-abcdefghijklmnopqrstuvwxyz"})
+	_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "authorization_code", ClientID: clientID, ClientSecret: clientSecret, Code: "missing-code", CodeVerifier: "valid-verifier-abcdefghijklmnopqrstuvwxyz", RedirectURI: "https://token-errors.example/callback"})
 	assertHTTPError(t, err, 400, "invalid authorization code")
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "refresh_token", ClientID: clientID, ClientSecret: clientSecret, RefreshToken: "missing-refresh"})
 	assertHTTPError(t, err, 400, "invalid refresh_token")
@@ -87,6 +87,7 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 				ClientSecret: clientSecret,
 				Code:         approved["code"].(string),
 				CodeVerifier: tc.verifier,
+				RedirectURI:  "https://token-errors.example/callback",
 			})
 			assertHTTPError(t, err, 400, tc.detail)
 			_, err = svc.IssueToken(ctx, oauth.TokenRequest{
@@ -95,6 +96,7 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 				ClientSecret: clientSecret,
 				Code:         approved["code"].(string),
 				CodeVerifier: verifier,
+				RedirectURI:  "https://token-errors.example/callback",
 			})
 			assertHTTPError(t, err, 400, "invalid authorization code")
 		})
@@ -117,6 +119,7 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 		ClientSecret: clientSecret,
 		Code:         approved["code"].(string),
 		CodeVerifier: refreshVerifier,
+		RedirectURI:  "https://token-errors.example/callback",
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -64,9 +64,27 @@ def test_authorization_url_requires_redirect_uri() -> None:
 
 
 def test_authorization_info_and_approval_use_exact_authenticated_routes(response_json) -> None:
+    request_params = {
+        "response_type": "code",
+        "client_id": "client-1",
+        "redirect_uri": "https://app.example.test/callback",
+        "scope": AccountScopes.READ_SELF,
+        "state": "state-1",
+        "code_challenge": "challenge-1",
+        "code_challenge_method": "S256",
+    }
     responses = [
-        {"client": {"client_id": "client-1"}, "permissions": ["account.read.self"]},
-        {"redirect_uri": "https://app.example.test/callback?code=code-1&state=state-1"},
+        {
+            "client": {"client_id": "client-1"},
+            "scopes": [{"code": "account.read.self"}],
+            "redirect_uri": "https://app.example.test/callback",
+            "state": "state-1",
+        },
+        {
+            "code": "code-1",
+            "redirect_url": "https://app.example.test/callback?code=code-1&state=state-1",
+            "state": "state-1",
+        },
     ]
 
     def handler(request):
@@ -80,26 +98,20 @@ def test_authorization_info_and_approval_use_exact_authenticated_routes(response
         transport=recorder.transport(),
     )
 
-    info = oauth.authorization_info(
-        {
-            "client_id": "client-1",
-            "redirect_uri": "https://app.example.test/callback",
-            "scope": AccountScopes.READ_SELF,
-            "state": "state-1",
-        }
-    )
-    approval = oauth.approve_authorization(
-        {
-            "client_id": "client-1",
-            "redirect_uri": "https://app.example.test/callback",
-            "scope": AccountScopes.READ_SELF,
-            "state": "state-1",
-            "approve": True,
-        }
-    )
+    info = oauth.authorization_info(request_params)
+    approval = oauth.approve_authorization(request_params)
 
-    assert info == {"client": {"client_id": "client-1"}, "permissions": ["account.read.self"]}
-    assert approval == {"redirect_uri": "https://app.example.test/callback?code=code-1&state=state-1"}
+    assert info == {
+        "client": {"client_id": "client-1"},
+        "scopes": [{"code": "account.read.self"}],
+        "redirect_uri": "https://app.example.test/callback",
+        "state": "state-1",
+    }
+    assert approval == {
+        "code": "code-1",
+        "redirect_url": "https://app.example.test/callback?code=code-1&state=state-1",
+        "state": "state-1",
+    }
     assert [(request.method, request.path) for request in recorder.requests] == [
         ("GET", "/oauth/authorize"),
         ("POST", "/oauth/authorize"),
@@ -110,14 +122,11 @@ def test_authorization_info_and_approval_use_exact_authenticated_routes(response
         "redirect_uri": ["https://app.example.test/callback"],
         "scope": ["account.read.self"],
         "state": ["state-1"],
+        "response_type": ["code"],
+        "code_challenge": ["challenge-1"],
+        "code_challenge_method": ["S256"],
     }
-    assert recorder.requests[1].json_body == {
-        "client_id": "client-1",
-        "redirect_uri": "https://app.example.test/callback",
-        "scope": "account.read.self",
-        "state": "state-1",
-        "approve": True,
-    }
+    assert recorder.requests[1].json_body == request_params
 
 
 def test_exchange_code_posts_exact_form_and_saves_tokens(response_json) -> None:
@@ -126,6 +135,7 @@ def test_exchange_code_posts_exact_form_and_saves_tokens(response_json) -> None:
     oauth = OAuthClient(
         "https://skin.example.test",
         "client-1",
+        redirect_uri="https://app.example.test/callback",
         client_secret="secret-1",
         token_store=store,
         transport=recorder.transport(),
@@ -146,8 +156,24 @@ def test_exchange_code_posts_exact_form_and_saves_tokens(response_json) -> None:
         "client_id": ["client-1"],
         "code": ["auth-code-1"],
         "code_verifier": ["verifier-1"],
+        "redirect_uri": ["https://app.example.test/callback"],
         "client_secret": ["secret-1"],
     }
+
+
+def test_exchange_code_requires_redirect_uri_before_request() -> None:
+    recorder = RequestRecorder(lambda request: pytest.fail("token endpoint must not be called"))
+    oauth = OAuthClient(
+        "https://skin.example.test",
+        "client-1",
+        transport=recorder.transport(),
+    )
+
+    with pytest.raises(ValueError) as exc:
+        oauth.exchange_code(code="auth-code-1", code_verifier="verifier-1")
+
+    assert str(exc.value) == "redirect_uri is required for authorization code flow"
+    assert recorder.requests == []
 
 
 def test_refresh_posts_exact_form_without_scope_when_not_requested(response_json) -> None:
@@ -361,6 +387,7 @@ def test_oauth_context_manager_closes_wrapped_http_client(response_json) -> None
         assert oauth.exchange_code(
             code="auth-code-1",
             code_verifier="verifier-1",
+            redirect_uri="https://app.example.test/callback",
             store=False,
         ).access_token == "access-token-1"
 

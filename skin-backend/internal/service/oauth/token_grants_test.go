@@ -57,6 +57,7 @@ func TestServiceOAuthRevokedGrantRejectsAuthorizationCodeAndRefreshExactly(t *te
 		ClientSecret: clientSecret,
 		Code:         blockedApproval["code"].(string),
 		CodeVerifier: blockedVerifier,
+		RedirectURI:  "https://revoked-grant-token.example/callback",
 	})
 	assertHTTPError(t, err, 400, "invalid authorization code")
 
@@ -78,6 +79,7 @@ func TestServiceOAuthRevokedGrantRejectsAuthorizationCodeAndRefreshExactly(t *te
 		ClientSecret: clientSecret,
 		Code:         allowedApproval["code"].(string),
 		CodeVerifier: allowedVerifier,
+		RedirectURI:  "https://revoked-grant-token.example/callback",
 	})
 	if err != nil {
 		t.Fatal(err)

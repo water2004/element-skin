@@ -82,12 +82,22 @@ func TestServiceAuthorizationCodeFlowNarrowsActorExactly(t *testing.T) {
 	if code == "" || !strings.Contains(redirectURL, "state=state-service") {
 		t.Fatalf("approve response mismatch: %#v", approved)
 	}
+	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:    "authorization_code",
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		Code:         code,
+		CodeVerifier: verifier,
+		RedirectURI:  "https://client.example/wrong-callback",
+	})
+	assertHTTPError(t, err, 400, "invalid authorization code")
 	token, err := svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "authorization_code",
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Code:         code,
 		CodeVerifier: verifier,
+		RedirectURI:  "https://client.example/callback",
 	})
 	if err != nil {
 		t.Fatal(err)

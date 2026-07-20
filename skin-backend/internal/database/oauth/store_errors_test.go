@@ -128,7 +128,7 @@ func TestStoreClosedPoolReturnsExactDependencyErrorsForEveryOAuthTable(t *testin
 			return db.OAuth.CreateAuthorizationCode(ctx, code, permissionIDs("account.read.self"))
 		}},
 		{name: "consume authorization code", call: func() error {
-			_, _, err := db.OAuth.ConsumeAuthorizationCode(ctx, code.CodeHash, 1500)
+			_, _, err := db.OAuth.ConsumeAuthorizationCode(ctx, code.CodeHash, code.ClientID, code.RedirectURI, 1500)
 			return err
 		}},
 		{name: "create refresh token", call: func() error { return db.OAuth.CreateRefreshToken(ctx, refresh) }},
@@ -276,7 +276,7 @@ func TestStoreRollsBackOAuthWritesOnExactForeignKeyFailures(t *testing.T) {
 	}
 	err = db.OAuth.CreateAuthorizationCode(ctx, codeWithMissingGrant, []int64{})
 	assertPgCode(t, err, "23503")
-	if code, permissions, err := db.OAuth.ConsumeAuthorizationCode(ctx, codeWithMissingGrant.CodeHash, 1500); err != nil || code != nil || permissions != nil {
+	if code, permissions, err := db.OAuth.ConsumeAuthorizationCode(ctx, codeWithMissingGrant.CodeHash, codeWithMissingGrant.ClientID, codeWithMissingGrant.RedirectURI, 1500); err != nil || code != nil || permissions != nil {
 		t.Fatalf("authorization code with missing grant should roll back: code=%#v permissions=%v err=%v", code, permissions, err)
 	}
 
@@ -285,7 +285,7 @@ func TestStoreRollsBackOAuthWritesOnExactForeignKeyFailures(t *testing.T) {
 	codeWithInvalidPermission.GrantID = validGrant.ID
 	err = db.OAuth.CreateAuthorizationCode(ctx, codeWithInvalidPermission, []int64{9_999_999})
 	assertPgCode(t, err, "23503")
-	if code, permissions, err := db.OAuth.ConsumeAuthorizationCode(ctx, codeWithInvalidPermission.CodeHash, 1500); err != nil || code != nil || permissions != nil {
+	if code, permissions, err := db.OAuth.ConsumeAuthorizationCode(ctx, codeWithInvalidPermission.CodeHash, codeWithInvalidPermission.ClientID, codeWithInvalidPermission.RedirectURI, 1500); err != nil || code != nil || permissions != nil {
 		t.Fatalf("authorization code with invalid permission should roll back: code=%#v permissions=%v err=%v", code, permissions, err)
 	}
 

@@ -86,6 +86,12 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 	form.Set("client_secret", clientSecret)
 	form.Set("code", code)
 	form.Set("code_verifier", verifier)
+	form.Set("redirect_uri", "https://client.example/wrong-callback")
+	wrongRedirectRes := doForm(t, router, "/oauth/token", form, "", "")
+	if wrongRedirectRes.Code != http.StatusBadRequest || wrongRedirectRes.Body.String() != "{\"error\":\"invalid_grant\",\"error_description\":\"invalid authorization code\"}\n" {
+		t.Fatalf("wrong redirect token response mismatch: status=%d body=%s", wrongRedirectRes.Code, wrongRedirectRes.Body.String())
+	}
+	form.Set("redirect_uri", "https://client.example/callback")
 	tokenRes := doForm(t, router, "/oauth/token", form, "", "")
 	if tokenRes.Code != http.StatusOK {
 		t.Fatalf("token status=%d body=%s", tokenRes.Code, tokenRes.Body.String())

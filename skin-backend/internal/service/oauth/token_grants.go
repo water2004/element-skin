@@ -19,11 +19,11 @@ func (s Service) exchangeAuthorizationCode(ctx context.Context, req TokenRequest
 		return TokenResponse{}, err
 	}
 	codeHash := util.HashRefreshToken(req.Code)
-	code, _, err := s.DB.OAuth.ConsumeAuthorizationCode(ctx, codeHash, database.NowMS())
+	code, _, err := s.DB.OAuth.ConsumeAuthorizationCode(ctx, codeHash, client.ID, req.RedirectURI, database.NowMS())
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	if code == nil || code.ClientID != client.ID {
+	if code == nil {
 		return TokenResponse{}, badRequest("invalid authorization code")
 	}
 	if !validPKCE(req.CodeVerifier, code.CodeChallenge) {
