@@ -353,6 +353,209 @@ func TestSettingsFallbackUpdateInvalidatesPublicKeyCacheExactly(t *testing.T) {
 	}
 }
 
+func TestSettingsFallbackUpdateRejectsUnknownStableIDWithoutMutation(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}
+	if err := svc.SaveGroup(ctx, "fallback", map[string]any{
+		"fallback_strategy": "serial",
+		"fallbacks": []any{map[string]any{
+			"priority":     1,
+			"session_url":  "https://stable.example/session",
+			"account_url":  "https://stable.example/account",
+			"services_url": "https://stable.example/services",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := db.Fallbacks.ListEndpoints(ctx)
+	if err != nil || len(before) != 1 {
+		t.Fatalf("initial endpoints=%#v err=%v; want exactly one", before, err)
+	}
+	err = svc.SaveGroup(ctx, "fallback", map[string]any{
+		"fallback_strategy": "parallel",
+		"fallbacks": []any{map[string]any{
+			"id":           float64(before[0]["id"].(int) + 1000),
+			"priority":     1,
+			"session_url":  "https://missing.example/session",
+			"account_url":  "https://missing.example/account",
+			"services_url": "https://missing.example/services",
+		}},
+	})
+	if !settingsHTTPError(err, http.StatusBadRequest, "fallback endpoint not found") {
+		t.Fatalf("unknown stable endpoint error=%#v; want exact HTTP 400", err)
+	}
+	after, err := db.Fallbacks.ListEndpoints(ctx)
+	if err != nil || !reflect.DeepEqual(after, before) {
+		t.Fatalf("rejected stable ID changed endpoints: after=%#v before=%#v err=%v", after, before, err)
+	}
+	strategy, err := db.Settings.Get(ctx, "fallback_strategy", "")
+	if err != nil || strategy != "serial" {
+		t.Fatalf("rejected stable ID changed strategy: strategy=%q err=%v", strategy, err)
+	}
+}
+
+func TestSettingsFallbackSavePreservesIndependentEndpointStateExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}
+	initialPayload := map[string]any{
+		"fallback_strategy":       "serial",
+		"fallback_probe_interval": 600,
+		"fallbacks": []any{
+			map[string]any{"priority": 1, "session_url": "https://one.example/session", "account_url": "https://one.example/account", "services_url": "https://one.example/services", "cache_ttl": 60, "skin_domains": []any{"one.example"}, "enable_profile": true, "enable_hasjoined": true, "enable_whitelist": true, "note": "one"},
+			map[string]any{"priority": 2, "session_url": "https://two.example/session", "account_url": "https://two.example/account", "services_url": "https://two.example/services", "cache_ttl": 120, "skin_domains": []any{"two.example"}, "enable_profile": false, "enable_hasjoined": true, "enable_whitelist": true, "note": "two"},
+			map[string]any{"priority": 3, "session_url": "https://remove.example/session", "account_url": "https://remove.example/account", "services_url": "https://remove.example/services", "cache_ttl": 300, "skin_domains": []any{"remove.example"}, "enable_profile": true, "enable_hasjoined": false, "enable_whitelist": true, "note": "remove"},
+		},
+	}
+	if err := svc.SaveGroup(ctx, "fallback", initialPayload); err != nil {
+		t.Fatal(err)
+	}
+	initial, err := db.Fallbacks.ListEndpoints(ctx)
+	if err != nil || len(initial) != 3 {
+		t.Fatalf("initial endpoints=%#v err=%v; want exactly three", initial, err)
+	}
+	oneID := initial[0]["id"].(int)
+	twoID := initial[1]["id"].(int)
+	removeID := initial[2]["id"].(int)
+	for endpointID, username := range map[int]string{oneID: "OnePlayer", twoID: "TwoPlayer", removeID: "RemovedPlayer"} {
+		if err := db.Fallbacks.AddWhitelistUser(ctx, username, endpointID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	oneWhitelist, err := db.Fallbacks.ListWhitelistUsers(ctx, oneID)
+	if err != nil || len(oneWhitelist) != 1 {
+		t.Fatalf("endpoint one whitelist=%#v err=%v", oneWhitelist, err)
+	}
+	twoWhitelist, err := db.Fallbacks.ListWhitelistUsers(ctx, twoID)
+	if err != nil || len(twoWhitelist) != 1 {
+		t.Fatalf("endpoint two whitelist=%#v err=%v", twoWhitelist, err)
+	}
+
+	updatedPayload := map[string]any{
+		"fallback_strategy":       "parallel",
+		"fallback_probe_interval": 1800,
+		"fallbacks": []any{
+			map[string]any{"id": float64(twoID), "priority": 1, "session_url": "https://two.example/session-v2", "account_url": "https://two.example/account-v2", "services_url": "https://two.example/services-v2", "cache_ttl": 240, "skin_domains": []any{"two-v2.example", "cdn.two.example"}, "enable_profile": true, "enable_hasjoined": false, "enable_whitelist": true, "note": "two updated"},
+			map[string]any{"id": nil, "priority": 2, "session_url": "https://new.example/session", "account_url": "https://new.example/account", "services_url": "https://new.example/services", "cache_ttl": 90, "skin_domains": []any{"new.example"}, "enable_profile": false, "enable_hasjoined": true, "enable_whitelist": false, "note": "new"},
+			map[string]any{"id": float64(oneID), "priority": 3, "session_url": "https://one.example/session", "account_url": "https://one.example/account", "services_url": "https://one.example/services", "cache_ttl": 60, "skin_domains": []any{"one.example"}, "enable_profile": true, "enable_hasjoined": true, "enable_whitelist": true, "note": "one"},
+		},
+	}
+	if err := svc.SaveGroup(ctx, "fallback", updatedPayload); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := svc.GetGroup(ctx, "fallback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated["fallback_strategy"] != "parallel" || updated["fallback_probe_interval"] != 1800 {
+		t.Fatalf("updated fallback settings mismatch: %#v", updated)
+	}
+	endpoints, ok := updated["fallbacks"].([]map[string]any)
+	if !ok || len(endpoints) != 3 {
+		t.Fatalf("updated fallback endpoints=%#v; want exactly three", updated["fallbacks"])
+	}
+	newID := endpoints[1]["id"].(int)
+	if newID == oneID || newID == twoID || newID == removeID {
+		t.Fatalf("new endpoint reused an existing identity: %#v", endpoints[1])
+	}
+	expectedEndpoints := []map[string]any{
+		{"id": twoID, "priority": 1, "session_url": "https://two.example/session-v2", "account_url": "https://two.example/account-v2", "services_url": "https://two.example/services-v2", "cache_ttl": 240, "skin_domains": []string{"two-v2.example", "cdn.two.example"}, "enable_profile": true, "enable_hasjoined": false, "enable_whitelist": true, "note": "two updated"},
+		{"id": newID, "priority": 2, "session_url": "https://new.example/session", "account_url": "https://new.example/account", "services_url": "https://new.example/services", "cache_ttl": 90, "skin_domains": []string{"new.example"}, "enable_profile": false, "enable_hasjoined": true, "enable_whitelist": false, "note": "new"},
+		{"id": oneID, "priority": 3, "session_url": "https://one.example/session", "account_url": "https://one.example/account", "services_url": "https://one.example/services", "cache_ttl": 60, "skin_domains": []string{"one.example"}, "enable_profile": true, "enable_hasjoined": true, "enable_whitelist": true, "note": "one"},
+	}
+	if !reflect.DeepEqual(endpoints, expectedEndpoints) {
+		t.Fatalf("updated endpoint fields mismatch: got=%#v want=%#v", endpoints, expectedEndpoints)
+	}
+	if got, err := db.Fallbacks.ListWhitelistUsers(ctx, oneID); err != nil || !reflect.DeepEqual(got, oneWhitelist) {
+		t.Fatalf("endpoint one whitelist=%#v err=%v; want exact %#v", got, err, oneWhitelist)
+	}
+	if got, err := db.Fallbacks.ListWhitelistUsers(ctx, twoID); err != nil || !reflect.DeepEqual(got, twoWhitelist) {
+		t.Fatalf("endpoint two whitelist=%#v err=%v; want exact %#v", got, err, twoWhitelist)
+	}
+	if got, err := db.Fallbacks.ListWhitelistUsers(ctx, removeID); err != nil || len(got) != 0 {
+		t.Fatalf("removed endpoint whitelist=%#v err=%v; want empty", got, err)
+	}
+}
+
+func TestSettingsFallbackStrategyChangesPreserveEndpointsAndWhitelistsExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	svc := settings.Settings{DB: db, Redis: testutil.NewMemoryRedis()}
+	actor := settingsActor("site_settings.update.any")
+	if err := svc.UpdateGroup(ctx, actor, "fallback", map[string]any{
+		"fallback_strategy":       "serial",
+		"fallback_probe_interval": 600,
+		"fallbacks": []any{map[string]any{
+			"priority":         1,
+			"session_url":      "https://strategy.example/session",
+			"account_url":      "https://strategy.example/account",
+			"services_url":     "https://strategy.example/services",
+			"cache_ttl":        120,
+			"skin_domains":     []any{"strategy.example"},
+			"enable_profile":   true,
+			"enable_hasjoined": false,
+			"enable_whitelist": true,
+			"note":             "strategy",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	endpointsBefore, err := db.Fallbacks.ListEndpoints(ctx)
+	if err != nil || len(endpointsBefore) != 1 {
+		t.Fatalf("initial strategy endpoints=%#v err=%v", endpointsBefore, err)
+	}
+	endpointID := endpointsBefore[0]["id"].(int)
+	if err := db.Fallbacks.AddWhitelistUser(ctx, "StrategyPlayer", endpointID); err != nil {
+		t.Fatal(err)
+	}
+	whitelistBefore, err := db.Fallbacks.ListWhitelistUsers(ctx, endpointID)
+	if err != nil || len(whitelistBefore) != 1 {
+		t.Fatalf("initial strategy whitelist=%#v err=%v", whitelistBefore, err)
+	}
+
+	for _, change := range []struct {
+		strategy string
+		interval int
+	}{
+		{strategy: "parallel", interval: 1200},
+		{strategy: "serial", interval: 1800},
+	} {
+		if err := svc.UpdateGroup(ctx, actor, "fallback", map[string]any{
+			"fallback_strategy":       change.strategy,
+			"fallback_probe_interval": change.interval,
+		}); err != nil {
+			t.Fatal(err)
+		}
+		group, err := svc.GetGroup(ctx, "fallback")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if group["fallback_strategy"] != change.strategy || group["fallback_probe_interval"] != change.interval {
+			t.Fatalf("strategy group=%#v; want strategy=%q interval=%d", group, change.strategy, change.interval)
+		}
+		if !reflect.DeepEqual(group["fallbacks"], endpointsBefore) {
+			t.Fatalf("strategy-only save changed endpoints: got=%#v want=%#v", group["fallbacks"], endpointsBefore)
+		}
+		whitelistAfter, err := db.Fallbacks.ListWhitelistUsers(ctx, endpointID)
+		if err != nil || !reflect.DeepEqual(whitelistAfter, whitelistBefore) {
+			t.Fatalf("strategy-only save changed whitelist: got=%#v err=%v want=%#v", whitelistAfter, err, whitelistBefore)
+		}
+	}
+
+	err = svc.UpdateGroup(ctx, actor, "fallback", map[string]any{"fallback_strategy": "random"})
+	if !settingsHTTPError(err, http.StatusBadRequest, "fallback_strategy must be serial or parallel") {
+		t.Fatalf("invalid strategy error=%#v; want exact HTTP 400", err)
+	}
+	group, err := svc.GetGroup(ctx, "fallback")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if group["fallback_strategy"] != "serial" || group["fallback_probe_interval"] != 1800 || !reflect.DeepEqual(group["fallbacks"], endpointsBefore) {
+		t.Fatalf("invalid strategy changed persisted state: %#v", group)
+	}
+}
+
 func settingsActor(codes ...string) permission.Actor {
 	bits := permission.NewBitSet(len(permission.Definitions))
 	for _, code := range codes {

@@ -70,6 +70,19 @@ func TestValidateFallbackInputsRejectInvalidShapesExactly(t *testing.T) {
 			detail: "invalid fallback entry",
 		},
 		{
+			name: "endpoint id must be positive integer",
+			call: func() error {
+				_, err := ValidateFallbackEndpoints([]any{map[string]any{
+					"id":           float64(1.5),
+					"session_url":  "https://session.example",
+					"account_url":  "https://account.example",
+					"services_url": "https://services.example",
+				}})
+				return err
+			},
+			detail: "fallback[1] id must be a positive integer",
+		},
+		{
 			name: "negative cache TTL",
 			call: func() error {
 				_, err := ValidateFallbackEndpoints([]any{map[string]any{
@@ -121,6 +134,7 @@ func TestValidateFallbackInputsRejectInvalidShapesExactly(t *testing.T) {
 
 func TestValidateFallbackEndpointsNormalizesJSONCompatibleValuesExactly(t *testing.T) {
 	endpoints, err := ValidateFallbackEndpoints([]any{map[string]any{
+		"id":               float64(42),
 		"priority":         int64(4),
 		"session_url":      " https://session.example ",
 		"account_url":      " https://account.example ",
@@ -136,6 +150,7 @@ func TestValidateFallbackEndpointsNormalizesJSONCompatibleValuesExactly(t *testi
 		t.Fatal(err)
 	}
 	want := []any{
+		42,
 		4,
 		"https://session.example",
 		"https://account.example",
@@ -149,6 +164,7 @@ func TestValidateFallbackEndpointsNormalizesJSONCompatibleValuesExactly(t *testi
 	}
 	got := endpoints[0]
 	actual := []any{
+		got.ID,
 		got.Priority,
 		got.SessionURL,
 		got.AccountURL,
@@ -162,5 +178,21 @@ func TestValidateFallbackEndpointsNormalizesJSONCompatibleValuesExactly(t *testi
 	}
 	if len(endpoints) != 1 || !reflect.DeepEqual(actual, want) {
 		t.Fatalf("normalized endpoint=%#v; want exact values %#v", got, want)
+	}
+}
+
+func TestValidateFallbackEndpointsRejectsDuplicateIDsExactly(t *testing.T) {
+	entry := func() map[string]any {
+		return map[string]any{
+			"id":           float64(42),
+			"session_url":  "https://session.example",
+			"account_url":  "https://account.example",
+			"services_url": "https://services.example",
+		}
+	}
+	_, err := ValidateFallbackEndpoints([]any{entry(), entry()})
+	httpErr, ok := err.(util.HTTPError)
+	if !ok || httpErr.Status != 400 || httpErr.Detail != "fallback[2] id is duplicated" {
+		t.Fatalf("duplicate endpoint ID error=%#v; want exact HTTP 400", err)
 	}
 }
