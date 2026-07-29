@@ -3,6 +3,7 @@ package texture_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -44,6 +45,76 @@ func TestUpdateForUserPatchesExactFieldsAndAppliedProfile(t *testing.T) {
 	if err := store.UpdateForUser(ctx, owner.ID, "missing_hash", "skin", texture.Patch{Note: &note}); !errors.Is(err, texture.ErrNotFound) {
 		t.Fatalf("missing texture error = %v; want ErrNotFound", err)
 	}
+}
+
+func TestTextureStoreSingleFieldPatchesPreserveAllOtherFieldsAndRows(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	store := texture.Store{Pool: db.Pool}
+	owner := testutil.CreateUser(t, db, "texture-single-owner@test.com", "Password123", "TextureSingleOwner", false)
+	collector := testutil.CreateUser(t, db, "texture-single-collector@test.com", "Password123", "TextureSingleCollector", false)
+
+	for _, seed := range []struct {
+		hash  string
+		note  string
+		model string
+	}{
+		{hash: "texture_single_note", note: "Original Note", model: "slim"},
+		{hash: "texture_single_model", note: "Original Model", model: "default"},
+		{hash: "texture_single_public", note: "Original Public", model: "slim"},
+		{hash: "texture_single_untouched", note: "Untouched", model: "default"},
+		{hash: "texture_admin_single_note", note: "Admin Original Note", model: "slim"},
+		{hash: "texture_admin_single_model", note: "Admin Original Model", model: "default"},
+		{hash: "texture_admin_single_public", note: "Admin Original Public", model: "slim"},
+	} {
+		if err := store.AddToLibrary(ctx, owner.ID, seed.hash, "skin", seed.note, true, seed.model); err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasPrefix(seed.hash, "texture_admin_") {
+			if added, err := store.AddToWardrobe(ctx, collector.ID, seed.hash, "skin"); err != nil || !added {
+				t.Fatalf("seed collector wardrobe %s: added=%v err=%v", seed.hash, added, err)
+			}
+		}
+	}
+
+	updatedNote := "Updated Note Only"
+	if err := store.UpdateForUser(ctx, owner.ID, "texture_single_note", "skin", texture.Patch{Note: &updatedNote}); err != nil {
+		t.Fatal(err)
+	}
+	assertTextureState(t, store, owner.ID, "texture_single_note", "skin", updatedNote, "slim", 1)
+
+	updatedModel := "slim"
+	if err := store.UpdateForUser(ctx, owner.ID, "texture_single_model", "skin", texture.Patch{Model: &updatedModel}); err != nil {
+		t.Fatal(err)
+	}
+	assertTextureState(t, store, owner.ID, "texture_single_model", "skin", "Original Model", updatedModel, 1)
+
+	private := false
+	if err := store.UpdateForUser(ctx, owner.ID, "texture_single_public", "skin", texture.Patch{IsPublic: &private}); err != nil {
+		t.Fatal(err)
+	}
+	assertTextureState(t, store, owner.ID, "texture_single_public", "skin", "Original Public", "slim", 0)
+	assertTextureState(t, store, owner.ID, "texture_single_untouched", "skin", "Untouched", "default", 1)
+
+	adminNote := "Admin Updated Note Only"
+	if err := store.AdminPatch(ctx, "texture_admin_single_note", "skin", texture.Patch{Note: &adminNote}); err != nil {
+		t.Fatal(err)
+	}
+	assertTextureState(t, store, owner.ID, "texture_admin_single_note", "skin", adminNote, "slim", 1)
+	assertTextureState(t, store, collector.ID, "texture_admin_single_note", "skin", adminNote, "slim", 2)
+
+	adminModel := "slim"
+	if err := store.AdminPatch(ctx, "texture_admin_single_model", "skin", texture.Patch{Model: &adminModel}); err != nil {
+		t.Fatal(err)
+	}
+	assertTextureState(t, store, owner.ID, "texture_admin_single_model", "skin", "Admin Original Model", adminModel, 1)
+	assertTextureState(t, store, collector.ID, "texture_admin_single_model", "skin", "Admin Original Model", adminModel, 2)
+
+	if err := store.AdminPatch(ctx, "texture_admin_single_public", "skin", texture.Patch{IsPublic: &private}); err != nil {
+		t.Fatal(err)
+	}
+	assertTextureState(t, store, owner.ID, "texture_admin_single_public", "skin", "Admin Original Public", "slim", 0)
+	assertTextureState(t, store, collector.ID, "texture_admin_single_public", "skin", "Admin Original Public", "slim", 2)
 }
 
 func TestAdminPatchUpdatesOwnerAndWardrobeWithoutChangingWardrobeMarker(t *testing.T) {

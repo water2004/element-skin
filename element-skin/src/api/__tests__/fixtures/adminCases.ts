@@ -172,6 +172,12 @@ function adminNoticeCases(): ApiCase[] {
       args: ['/v1/admin/notifications/notice-1', { enabled: false, ends_at: null }],
     },
     {
+      name: 'patchAdminNotice sends only enabled for a list toggle',
+      method: 'patch',
+      call: () => patchAdminNotice('notice-toggle', { enabled: true }),
+      args: ['/v1/admin/notifications/notice-toggle', { enabled: true }],
+    },
+    {
       name: 'deleteAdminNotice deletes notice id',
       method: 'delete',
       call: () => deleteAdminNotice('notice-1'),
@@ -302,7 +308,7 @@ function adminTextureCases(): ApiCase[] {
       ],
     },
     {
-      name: 'patchAdminTexture patches admin texture',
+      name: 'patchAdminTexture patches every editable texture field',
       method: 'patch',
       call: () =>
         patchAdminTexture('hash-admin', { type: 'skin', model: 'slim', note: 'OK', is_public: 1 }),
@@ -310,6 +316,24 @@ function adminTextureCases(): ApiCase[] {
         '/v1/admin/textures/hash-admin',
         { type: 'skin', model: 'slim', note: 'OK', is_public: 1 },
       ],
+    },
+    {
+      name: 'patchAdminTexture sends only note for an independent note edit',
+      method: 'patch',
+      call: () => patchAdminTexture('hash-admin-note', { type: 'skin', note: 'Note only' }),
+      args: ['/v1/admin/textures/hash-admin-note', { type: 'skin', note: 'Note only' }],
+    },
+    {
+      name: 'patchAdminTexture sends only model for an independent model edit',
+      method: 'patch',
+      call: () => patchAdminTexture('hash-admin-model', { type: 'skin', model: 'slim' }),
+      args: ['/v1/admin/textures/hash-admin-model', { type: 'skin', model: 'slim' }],
+    },
+    {
+      name: 'patchAdminTexture sends only visibility for an independent visibility edit',
+      method: 'patch',
+      call: () => patchAdminTexture('hash-admin-public', { type: 'cape', is_public: false }),
+      args: ['/v1/admin/textures/hash-admin-public', { type: 'cape', is_public: false }],
     },
     {
       name: 'deleteAdminTexture deletes admin texture with params',
