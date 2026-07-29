@@ -184,26 +184,24 @@ import {
   Lock,
   Ticket as ShieldCheck,
 } from '@element-plus/icons-vue'
-import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
-import { getWhitelist, addWhitelistUser, removeWhitelistUser } from '@/api/admin/whitelist'
+import { getAdminSettingsGroup } from '@/api/admin/settings'
+import { getWhitelist } from '@/api/admin/whitelist'
 import PageHeader from '@/components/common/PageHeader.vue'
 import FallbackEndpointEditor from '@/components/admin/mojang/FallbackEndpointEditor.vue'
-import type { FallbackEndpoint, FallbackRow } from '@/components/admin/mojang/types'
+import type { FallbackRow } from '@/components/admin/mojang/types'
 import {
   createEmptyFallbackRow,
-  findSavedEndpoint,
   moveFallback,
   normalizeFallbackSettings,
   removeFallbackAt,
-  toFallbackSettingsPayload,
   type FallbackSettingsForm,
 } from '@/components/admin/mojang/fallbackSettings'
 import {
   createWhitelistEntryDraft,
-  getWhitelistChanges,
   hasWhitelistChanges,
   setLoadedWhitelist,
 } from '@/components/admin/mojang/whitelist'
+import { saveFallbackConfiguration } from '@/components/admin/mojang/fallbackSave'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import { getErrorMessage } from '@/utils/error'
@@ -233,37 +231,12 @@ async function saveSettings() {
   })
   saving.value = true
   try {
-    await saveAdminSettingsGroup(
-      'fallback',
-      toFallbackSettingsPayload(settings.value, fallbacks.value),
-    )
-
-    const res = await getAdminSettingsGroup('fallback')
-    const updatedFallbacksFromDB = Array.isArray(res.data.fallbacks)
-      ? (res.data.fallbacks as FallbackEndpoint[])
-      : []
-
-    for (const localRow of fallbacks.value) {
-      const dbEndpoint = findSavedEndpoint(localRow, updatedFallbacksFromDB)
-      if (!dbEndpoint || !dbEndpoint.id) continue
-
-      const endpointId = dbEndpoint.id
-      localRow.id = endpointId
-
-      if (localRow._loaded && hasWhitelistChanges(localRow)) {
-        const { toAdd, toRemove } = getWhitelistChanges(localRow)
-
-        const promises = [
-          ...toAdd.map((u) => addWhitelistUser({ username: u.username, endpoint_id: endpointId })),
-          ...toRemove.map((u) => removeWhitelistUser(u.username, endpointId)),
-        ]
-        await Promise.all(promises)
-        localRow._initialWhitelist = JSON.parse(JSON.stringify(localRow._whitelist))
-      }
-    }
+    const savedSettings = await saveFallbackConfiguration(settings.value, fallbacks.value)
+    const normalized = normalizeFallbackSettings(savedSettings, fallbacks.value)
+    settings.value = normalized.settings
+    fallbacks.value = normalized.rows.map((row) => reactive(row))
 
     ElMessage.success('所有配置及白名单已成功同步')
-    await fetchSettings()
   } catch (e: unknown) {
     console.error(e)
     ElMessage.error('保存失败: ' + getErrorMessage(e, '保存失败'))

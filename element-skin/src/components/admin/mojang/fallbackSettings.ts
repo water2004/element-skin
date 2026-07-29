@@ -149,6 +149,11 @@ export function findSavedEndpoint(
   savedEndpoints: FallbackEndpoint[],
 ): FallbackEndpoint | undefined {
   return savedEndpoints.find(
-    (endpoint) => endpoint.session_url === localRow.session_url && endpoint.note === localRow.note,
+    (endpoint) =>
+      (localRow.id !== null && endpoint.id === localRow.id) ||
+      (localRow.id === null &&
+        endpoint.priority === localRow.priority &&
+        endpoint.session_url === localRow.session_url &&
+        endpoint.note === localRow.note),
   )
 }

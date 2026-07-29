@@ -248,6 +248,25 @@ function adminProfileCases(): ApiCase[] {
 }
 
 function adminSettingsCases(): ApiCase[] {
+  const fallbackPayload = {
+    fallback_strategy: 'parallel',
+    fallback_probe_interval: 1200,
+    fallbacks: [
+      {
+        id: 7,
+        priority: 2,
+        session_url: 'https://fallback.example/session',
+        account_url: 'https://fallback.example/account',
+        services_url: 'https://fallback.example/services',
+        cache_ttl: 300,
+        enable_profile: true,
+        enable_hasjoined: false,
+        enable_whitelist: true,
+        note: 'secondary',
+        skin_domains: ['fallback.example', 'cdn.fallback.example'],
+      },
+    ],
+  }
   return [
     {
       name: 'getAdminSettingsGroup gets named settings group',
@@ -260,6 +279,12 @@ function adminSettingsCases(): ApiCase[] {
       method: 'post',
       call: () => saveAdminSettingsGroup('site', { site_name: 'Element Skin' }),
       args: ['/v1/admin/settings/site', { site_name: 'Element Skin' }],
+    },
+    {
+      name: 'saveAdminSettingsGroup posts exact fallback scheduling and endpoint payload',
+      method: 'post',
+      call: () => saveAdminSettingsGroup('fallback', fallbackPayload),
+      args: ['/v1/admin/settings/fallback', fallbackPayload],
     },
   ]
 }
