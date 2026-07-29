@@ -15,7 +15,10 @@ export function textureApiCases(context: ApiCaseContext): ApiCase[] {
       name: 'getTextures gets exact texture params',
       method: 'get',
       call: () => getTextures({ cursor: 'texture-cursor', limit: 24, texture_type: 'cape' }),
-      args: ['/v1/users/me/textures', { params: { cursor: 'texture-cursor', limit: 24, texture_type: 'cape' } }],
+      args: [
+        '/v1/users/me/textures',
+        { params: { cursor: 'texture-cursor', limit: 24, texture_type: 'cape' } },
+      ],
     },
     {
       name: 'uploadTexture posts FormData',
@@ -30,10 +33,32 @@ export function textureApiCases(context: ApiCaseContext): ApiCase[] {
       args: ['/v1/users/me/textures/hash-1/skin'],
     },
     {
-      name: 'patchTexture patches texture identity',
+      name: 'patchTexture patches every editable texture field',
       method: 'patch',
-      call: () => patchTexture('hash-1', 'skin', { note: 'Updated', model: 'slim', is_public: true }),
-      args: ['/v1/users/me/textures/hash-1/skin', { note: 'Updated', model: 'slim', is_public: true }],
+      call: () =>
+        patchTexture('hash-1', 'skin', { note: 'Updated', model: 'slim', is_public: true }),
+      args: [
+        '/v1/users/me/textures/hash-1/skin',
+        { note: 'Updated', model: 'slim', is_public: true },
+      ],
+    },
+    {
+      name: 'patchTexture sends only note for an independent note edit',
+      method: 'patch',
+      call: () => patchTexture('hash-note', 'skin', { note: 'Note only' }),
+      args: ['/v1/users/me/textures/hash-note/skin', { note: 'Note only' }],
+    },
+    {
+      name: 'patchTexture sends only model for an independent model edit',
+      method: 'patch',
+      call: () => patchTexture('hash-model', 'skin', { model: 'slim' }),
+      args: ['/v1/users/me/textures/hash-model/skin', { model: 'slim' }],
+    },
+    {
+      name: 'patchTexture sends only visibility for an independent visibility edit',
+      method: 'patch',
+      call: () => patchTexture('hash-public', 'cape', { is_public: false }),
+      args: ['/v1/users/me/textures/hash-public/cape', { is_public: false }],
     },
     {
       name: 'deleteTexture deletes texture identity',
@@ -51,7 +76,10 @@ export function textureApiCases(context: ApiCaseContext): ApiCase[] {
       name: 'applyTexture posts profile and type payload',
       method: 'post',
       call: () => applyTexture('hash-1', { profile_id: 'profile-1', texture_type: 'skin' }),
-      args: ['/v1/users/me/textures/hash-1/apply', { profile_id: 'profile-1', texture_type: 'skin' }],
+      args: [
+        '/v1/users/me/textures/hash-1/apply',
+        { profile_id: 'profile-1', texture_type: 'skin' },
+      ],
     },
   ]
 }

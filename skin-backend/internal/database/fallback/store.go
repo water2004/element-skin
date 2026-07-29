@@ -3,6 +3,7 @@ package fallback
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -28,7 +29,15 @@ type Store struct {
 	Pool *pgxpool.Pool
 }
 
+var (
+	ErrEndpointNotFound  = errors.New("fallback endpoint not found")
+	ErrDuplicateEndpoint = errors.New("duplicate fallback endpoint")
+)
+
 func IsEndpointNotFound(err error) bool {
+	if errors.Is(err, ErrEndpointNotFound) {
+		return true
+	}
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) &&
 		pgErr.Code == "23503" &&
@@ -80,20 +89,47 @@ func (s Store) SaveEndpoints(ctx context.Context, endpoints []Endpoint) error {
 }
 
 func ReplaceEndpoints(ctx context.Context, tx pgx.Tx, endpoints []Endpoint) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM fallback_endpoints`); err != nil {
+	if _, err := tx.Exec(ctx, `LOCK TABLE fallback_endpoints IN SHARE ROW EXCLUSIVE MODE`); err != nil {
 		return err
 	}
+	persistedIDs := make([]int, 0, len(endpoints))
+	seenIDs := make(map[int]struct{}, len(endpoints))
 	for _, endpoint := range endpoints {
-		var endpointID int
-		if err := tx.QueryRow(ctx, `
-			INSERT INTO fallback_endpoints (
-				priority,session_url,account_url,services_url,cache_ttl,
-				enable_profile,enable_hasjoined,enable_whitelist,note
-			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-			RETURNING id
-		`, endpoint.Priority, endpoint.SessionURL, endpoint.AccountURL, endpoint.ServicesURL,
-			endpoint.CacheTTL, endpoint.EnableProfile, endpoint.EnableHasJoined,
-			endpoint.EnableWhitelist, endpoint.Note).Scan(&endpointID); err != nil {
+		endpointID := endpoint.ID
+		if endpointID > 0 {
+			if _, exists := seenIDs[endpointID]; exists {
+				return fmt.Errorf("%w: %d", ErrDuplicateEndpoint, endpointID)
+			}
+			seenIDs[endpointID] = struct{}{}
+			command, err := tx.Exec(ctx, `
+				UPDATE fallback_endpoints
+				SET priority=$2,session_url=$3,account_url=$4,services_url=$5,cache_ttl=$6,
+				    enable_profile=$7,enable_hasjoined=$8,enable_whitelist=$9,note=$10
+				WHERE id=$1
+			`, endpointID, endpoint.Priority, endpoint.SessionURL, endpoint.AccountURL,
+				endpoint.ServicesURL, endpoint.CacheTTL, endpoint.EnableProfile,
+				endpoint.EnableHasJoined, endpoint.EnableWhitelist, endpoint.Note)
+			if err != nil {
+				return err
+			}
+			if command.RowsAffected() != 1 {
+				return fmt.Errorf("%w: %d", ErrEndpointNotFound, endpointID)
+			}
+		} else {
+			if err := tx.QueryRow(ctx, `
+				INSERT INTO fallback_endpoints (
+					priority,session_url,account_url,services_url,cache_ttl,
+					enable_profile,enable_hasjoined,enable_whitelist,note
+				) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+				RETURNING id
+			`, endpoint.Priority, endpoint.SessionURL, endpoint.AccountURL, endpoint.ServicesURL,
+				endpoint.CacheTTL, endpoint.EnableProfile, endpoint.EnableHasJoined,
+				endpoint.EnableWhitelist, endpoint.Note).Scan(&endpointID); err != nil {
+				return err
+			}
+		}
+		persistedIDs = append(persistedIDs, endpointID)
+		if _, err := tx.Exec(ctx, `DELETE FROM fallback_skin_domains WHERE endpoint_id=$1`, endpointID); err != nil {
 			return err
 		}
 		for index, domain := range endpoint.SkinDomains {
@@ -105,7 +141,8 @@ func ReplaceEndpoints(ctx context.Context, tx pgx.Tx, endpoints []Endpoint) erro
 			}
 		}
 	}
-	return nil
+	_, err := tx.Exec(ctx, `DELETE FROM fallback_endpoints WHERE NOT (id = ANY($1::INTEGER[]))`, persistedIDs)
+	return err
 }
 
 func (s Store) CollectSkinDomains(ctx context.Context) ([]string, error) {

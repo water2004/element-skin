@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -91,6 +92,12 @@ func (s Settings) SaveGroup(ctx context.Context, group string, body map[string]a
 				return util.HTTPError{Status: 400, Detail: "invalid profile_uuid_mode"}
 			}
 		}
+		if key == "fallback_strategy" {
+			strategy := fmt.Sprint(value)
+			if strategy != "serial" && strategy != "parallel" {
+				return util.HTTPError{Status: 400, Detail: "fallback_strategy must be serial or parallel"}
+			}
+		}
 		if key == "smtp_password" && fmt.Sprint(value) == "" {
 			continue
 		}
@@ -123,7 +130,14 @@ func (s Settings) SaveGroup(ctx context.Context, group string, body map[string]a
 		}
 		updates = append(updates, database.SettingUpdate{Key: key, Value: value})
 	}
-	return s.DB.SaveSettingsGroup(ctx, updates, pendingFallbacks, saveFallbacks)
+	err := s.DB.SaveSettingsGroup(ctx, updates, pendingFallbacks, saveFallbacks)
+	if errors.Is(err, fallback.ErrEndpointNotFound) {
+		return util.HTTPError{Status: 400, Detail: "fallback endpoint not found"}
+	}
+	if errors.Is(err, fallback.ErrDuplicateEndpoint) {
+		return util.HTTPError{Status: 400, Detail: "fallback endpoint id is duplicated"}
+	}
+	return err
 }
 
 func (s Settings) SaveGroupAndInvalidate(ctx context.Context, group string, body map[string]any) error {

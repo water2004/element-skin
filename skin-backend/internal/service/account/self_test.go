@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
+	"element-skin/backend/internal/database"
+	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/redisstore"
 	accountsvc "element-skin/backend/internal/service/account"
@@ -57,6 +60,60 @@ func TestAccountServiceMeReturnsCountsAndUpdateSelfPersistsExactFields(t *testin
 		me["texture_count"] != 1 {
 		t.Fatalf("Me response mismatch: %#v", me)
 	}
+}
+
+func TestAccountServiceIncrementalSelfUpdatesPreserveEveryUnsubmittedField(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	svc := accountsvc.AccountService{DB: db, Redis: redisstore.NewMemoryStore()}
+	user := testutil.CreateUser(t, db, "account-self-incremental@test.com", "Password123", "AccountIncremental", false)
+	actor := accountActor(t, db, user.ID)
+	if err := db.Textures.AddToLibrary(ctx, user.ID, "incremental_avatar", "skin", "avatar", false, "default"); err != nil {
+		t.Fatal(err)
+	}
+	baseline, err := db.Users.GetByID(ctx, user.ID)
+	if err != nil || baseline == nil {
+		t.Fatalf("load baseline user: user=%#v err=%v", baseline, err)
+	}
+
+	displayName := "Incremental Display"
+	if err := svc.UpdateSelf(ctx, actor, map[string]any{"display_name": displayName}); err != nil {
+		t.Fatal(err)
+	}
+	expected := *baseline
+	expected.DisplayName = displayName
+	assertExactUser(t, db, user.ID, expected)
+
+	language := "en_US"
+	if err := svc.UpdateSelf(ctx, actor, map[string]any{"preferred_language": language}); err != nil {
+		t.Fatal(err)
+	}
+	expected.PreferredLanguage = language
+	assertExactUser(t, db, user.ID, expected)
+
+	if err := svc.UpdateSelf(ctx, actor, map[string]any{"avatar_hash": "incremental_avatar"}); err != nil {
+		t.Fatal(err)
+	}
+	expected.AvatarHash = accountStringPtr("incremental_avatar")
+	assertExactUser(t, db, user.ID, expected)
+
+	if err := svc.UpdateSelf(ctx, actor, map[string]any{"avatar_hash": nil}); err != nil {
+		t.Fatal(err)
+	}
+	expected.AvatarHash = nil
+	assertExactUser(t, db, user.ID, expected)
+}
+
+func assertExactUser(t *testing.T, db *database.DB, userID string, expected model.User) {
+	t.Helper()
+	actual, err := db.Users.GetByID(context.Background(), userID)
+	if err != nil || actual == nil || !reflect.DeepEqual(*actual, expected) {
+		t.Fatalf("incremental account update mismatch: user=%#v err=%v want=%#v", actual, err, expected)
+	}
+}
+
+func accountStringPtr(value string) *string {
+	return &value
 }
 
 func TestAccountServiceMeReturnsDatabaseErrorsInsteadOfZeroCounts(t *testing.T) {

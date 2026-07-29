@@ -2,6 +2,7 @@ package settings
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -15,6 +16,7 @@ func ValidateFallbackEndpoints(value any) ([]fallback.Endpoint, error) {
 		return nil, util.HTTPError{Status: 400, Detail: "fallbacks must be a list"}
 	}
 	out := make([]fallback.Endpoint, 0, len(raw))
+	seenIDs := make(map[int]struct{}, len(raw))
 	for i, item := range raw {
 		m, ok := item.(map[string]any)
 		if !ok {
@@ -24,7 +26,18 @@ func ValidateFallbackEndpoints(value any) ([]fallback.Endpoint, error) {
 		if err != nil {
 			return nil, err
 		}
+		id, err := normalizeEndpointID(i+1, m["id"])
+		if err != nil {
+			return nil, err
+		}
+		if id > 0 {
+			if _, exists := seenIDs[id]; exists {
+				return nil, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] id is duplicated", i+1)}
+			}
+			seenIDs[id] = struct{}{}
+		}
 		out = append(out, fallback.Endpoint{
+			ID:              id,
 			Priority:        intValue(m["priority"], i+1),
 			SessionURL:      normalized["session_url"].(string),
 			AccountURL:      normalized["account_url"].(string),
@@ -38,6 +51,30 @@ func ValidateFallbackEndpoints(value any) ([]fallback.Endpoint, error) {
 		})
 	}
 	return out, nil
+}
+
+func normalizeEndpointID(idx int, value any) (int, error) {
+	if value == nil {
+		return 0, nil
+	}
+	var id int64
+	switch typed := value.(type) {
+	case int:
+		id = int64(typed)
+	case int64:
+		id = typed
+	case float64:
+		if typed != math.Trunc(typed) || typed > math.MaxInt32 {
+			return 0, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] id must be a positive integer", idx)}
+		}
+		id = int64(typed)
+	default:
+		return 0, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] id must be a positive integer", idx)}
+	}
+	if id <= 0 || id > math.MaxInt32 {
+		return 0, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] id must be a positive integer", idx)}
+	}
+	return int(id), nil
 }
 
 func normalizeFallbackMap(idx int, m map[string]any) (map[string]any, error) {

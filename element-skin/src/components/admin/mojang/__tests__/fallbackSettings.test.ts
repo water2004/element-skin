@@ -225,8 +225,16 @@ describe('fallback settings payload', () => {
     })
   })
 
-  it('finds saved endpoints by session URL and note', () => {
+  it('finds existing endpoints by stable ID and new endpoints by session URL and note', () => {
     expect(findSavedEndpoint(existingRow, [endpointB, endpointA])).toEqual(endpointA)
-    expect(findSavedEndpoint({ ...existingRow, note: 'missing' }, [endpointA])).toBeUndefined()
+    expect(findSavedEndpoint({ ...existingRow, session_url: 'changed', note: 'changed' }, [endpointA])).toEqual(
+      endpointA,
+    )
+    expect(
+      findSavedEndpoint({ ...existingRow, id: null, rowKey: 'new', note: 'missing' }, [endpointA]),
+    ).toBeUndefined()
+    expect(
+      findSavedEndpoint({ ...existingRow, id: null, rowKey: 'new' }, [endpointB, endpointA]),
+    ).toEqual(endpointA)
   })
 })

@@ -77,23 +77,19 @@ import type { HomepageMedia } from '@/api/types'
 import {
   deleteHomepageMedia,
   listHomepageMedia,
-  patchHomepageMedia,
-  reorderHomepageMedia,
   uploadHomepageImage,
   uploadHomepagePanorama,
 } from '@/api/admin/homepage-media'
 import HomepageMediaCard from '@/components/admin/homepage/HomepageMediaCard.vue'
 import HomepageMediaDialog from '@/components/admin/homepage/HomepageMediaDialog.vue'
 import {
-  buildHomepageMediaPatch,
-  changedHomepageMediaItems,
   cloneHomepageMediaItems,
-  homepageMediaOrderChanged,
   homepageMediaPreviewUrl,
   homepageMediaSnapshot,
   isHomepageMediaDirty,
   normalizeHomepageMedia,
 } from '@/components/admin/homepage/homepageMediaState'
+import { saveHomepageMediaChanges } from '@/components/admin/homepage/homepageMediaSave'
 import { useHomepageMediaDrag } from '@/components/admin/homepage/useHomepageMediaDrag'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getErrorMessage } from '@/utils/error'
@@ -192,18 +188,7 @@ async function saveChanges() {
   if (!hasChanges.value) return
   saving.value = true
   try {
-    const changedItems = changedHomepageMediaItems(items.value, savedItems.value)
-    const orderChanged = homepageMediaOrderChanged(items.value, savedItems.value)
-
-    for (const item of changedItems) {
-      const res = await patchHomepageMedia(item.id, buildHomepageMediaPatch(item))
-      Object.assign(item, normalizeHomepageMedia(res.data))
-    }
-    if (orderChanged) {
-      await reorderHomepageMedia(items.value.map((item) => item.id))
-    }
-
-    savedItems.value = cloneHomepageMediaItems(items.value.map(normalizeHomepageMedia))
+    savedItems.value = await saveHomepageMediaChanges(items.value, savedItems.value)
     ElMessage.success('配置已保存')
   } catch (e: unknown) {
     ElMessage.error(getErrorMessage(e, '保存失败'))

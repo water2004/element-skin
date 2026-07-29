@@ -12,10 +12,22 @@ export function meApiCases(): ApiCase[] {
   return [
     { name: 'getMe gets /me', method: 'get', call: getMe, args: ['/v1/users/me'] },
     {
-      name: 'patchMe patches profile fields',
+      name: 'patchMe patches display name and avatar fields',
       method: 'patch',
       call: () => patchMe({ display_name: 'Display', avatar_hash: null }),
       args: ['/v1/users/me', { display_name: 'Display', avatar_hash: null }],
+    },
+    {
+      name: 'patchMe sends only preferred language when it is the only changed field',
+      method: 'patch',
+      call: () => patchMe({ preferred_language: 'zh_CN' }),
+      args: ['/v1/users/me', { preferred_language: 'zh_CN' }],
+    },
+    {
+      name: 'patchMe sends only avatar hash when the avatar changes independently',
+      method: 'patch',
+      call: () => patchMe({ avatar_hash: 'avatar-hash' }),
+      args: ['/v1/users/me', { avatar_hash: 'avatar-hash' }],
     },
     { name: 'deleteMe deletes /me', method: 'delete', call: deleteMe, args: ['/v1/users/me'] },
     {

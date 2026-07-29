@@ -162,6 +162,84 @@ func TestHomepageStoreListGetPatchDefaultsAndReorderRollback(t *testing.T) {
 	}
 }
 
+func TestHomepageStoreIncrementalPatchAndReorderPreserveEveryUnsubmittedField(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	createdAt := int64(1000)
+	first := model.HomepageMedia{
+		ID: "first", Type: "image", Title: "First", StoragePath: "first.png",
+		OverlayOpacityLight: 0.11, OverlayOpacityDark: 0.21, StartYaw: 1, StartPitch: 2,
+		YawSpeedDPS: 3, PitchSpeedDPS: 4, SortOrder: 0, Enabled: true, DurationMS: 7000,
+		CreatedAt: createdAt, UpdatedAt: 1100,
+	}
+	second := model.HomepageMedia{
+		ID: "second", Type: "panorama", Title: "Second", StoragePath: "second/panorama",
+		OverlayOpacityLight: 0.12, OverlayOpacityDark: 0.22, StartYaw: 11, StartPitch: 12,
+		YawSpeedDPS: 13, PitchSpeedDPS: 14, SortOrder: 1, Enabled: false, DurationMS: 8000,
+		CreatedAt: createdAt + 1, UpdatedAt: 1200,
+	}
+	third := model.HomepageMedia{
+		ID: "third", Type: "image", Title: "Third", StoragePath: "third.webp",
+		OverlayOpacityLight: 0.13, OverlayOpacityDark: 0.23, StartYaw: 21, StartPitch: 22,
+		YawSpeedDPS: 23, PitchSpeedDPS: 24, SortOrder: 2, Enabled: true, DurationMS: 9000,
+		CreatedAt: createdAt + 2, UpdatedAt: 1300,
+	}
+	for _, item := range []model.HomepageMedia{first, second, third} {
+		if err := db.HomepageMedia.Create(ctx, item); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	updatedTitle := "Second updated"
+	patchedAt := int64(2000)
+	patched, err := db.HomepageMedia.Patch(ctx, second.ID, homepage.Patch{
+		Title:     &updatedTitle,
+		UpdatedAt: patchedAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedSecond := second
+	expectedSecond.Title = updatedTitle
+	expectedSecond.UpdatedAt = patchedAt
+	if patched != expectedSecond {
+		t.Fatalf("incremental patch changed unsubmitted fields: got=%#v want=%#v", patched, expectedSecond)
+	}
+	for _, want := range []model.HomepageMedia{first, third} {
+		got, err := db.HomepageMedia.Get(ctx, want.ID)
+		if err != nil || got != want {
+			t.Fatalf("patch changed unrelated media %s: got=%#v err=%v want=%#v", want.ID, got, err, want)
+		}
+	}
+
+	reorderedAt := int64(3000)
+	if err := db.HomepageMedia.Reorder(ctx, []string{third.ID, second.ID, first.ID}, reorderedAt); err != nil {
+		t.Fatal(err)
+	}
+	expectedThird := third
+	expectedThird.SortOrder = 0
+	expectedThird.UpdatedAt = reorderedAt
+	expectedSecond.SortOrder = 1
+	expectedSecond.UpdatedAt = reorderedAt
+	expectedFirst := first
+	expectedFirst.SortOrder = 2
+	expectedFirst.UpdatedAt = reorderedAt
+
+	items, err := db.HomepageMedia.List(ctx, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := []model.HomepageMedia{expectedThird, expectedSecond, expectedFirst}
+	if len(items) != len(expected) {
+		t.Fatalf("reorder media count=%d want=%d: %#v", len(items), len(expected), items)
+	}
+	for index := range expected {
+		if items[index] != expected[index] {
+			t.Fatalf("reorder item[%d] changed non-order fields: got=%#v want=%#v", index, items[index], expected[index])
+		}
+	}
+}
+
 func testMedia(id string, order int, now int64) model.HomepageMedia {
 	return model.HomepageMedia{
 		ID: id, Type: "image", Title: id, StoragePath: id + ".png",

@@ -2,6 +2,7 @@ package notice_test
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
 	"element-skin/backend/internal/database"
@@ -180,5 +181,52 @@ func TestNoticeServicePatchReplacesAllEditableFieldsExactly(t *testing.T) {
 		updated.EndsAt == nil || *updated.EndsAt != endsAt ||
 		updated.CreatedBy == nil || *updated.CreatedBy != admin.ID {
 		t.Fatalf("patched notice mismatch: %#v", updated)
+	}
+}
+
+func TestNoticeServiceSingleFieldPatchPreservesEveryUnsubmittedField(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	svc := noticesvc.Service{DB: db}
+	ctx := context.Background()
+	admin := testutil.CreateUser(t, db, "notice-service-patch-single@test.com", "Password123", "NoticePatchSingle", true)
+	actor := noticeManagerActor(admin.ID)
+	startsAt := int64(10_000)
+	endsAt := int64(20_000)
+	pinned := true
+	dismissible := false
+	notice, err := svc.Create(ctx, actor, noticesvc.CreateInput{
+		Type:            noticesvc.TypeAnnouncement,
+		Title:           "Preserved title",
+		Summary:         "Preserved summary",
+		ContentMarkdown: "Preserved body",
+		DisplayMode:     noticesvc.DisplayDetail,
+		Level:           noticesvc.LevelWarning,
+		LinkText:        "Open",
+		LinkURL:         "/notifications/preserved",
+		Audience:        noticesvc.AudienceAdmins,
+		Pinned:          &pinned,
+		Dismissible:     &dismissible,
+		StartsAt:        &startsAt,
+		EndsAt:          &endsAt,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	enabled := false
+	updated, err := svc.Patch(ctx, actor, notice.ID, noticesvc.PatchInput{Enabled: &enabled})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := *notice
+	expected.ID = updated.ID
+	expected.Enabled = false
+	expected.CreatedAt = updated.CreatedAt
+	expected.UpdatedAt = updated.UpdatedAt
+	if !reflect.DeepEqual(*updated, expected) {
+		t.Fatalf("single-field notice patch changed unsubmitted fields: got=%#v want=%#v", updated, expected)
+	}
+	if old, err := db.Notices.Get(ctx, notice.ID); err != nil || old != nil {
+		t.Fatalf("single-field patch should remove only the replaced notice: old=%#v err=%v", old, err)
 	}
 }
