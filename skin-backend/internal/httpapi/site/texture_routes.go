@@ -15,7 +15,7 @@ func (h Handler) ListMyTextures(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusOK, res)
 }
 
 func (h Handler) UploadMyTexture(w http.ResponseWriter, req *http.Request) {
@@ -36,7 +36,7 @@ func (h Handler) UploadMyTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusCreated, res)
 }
 
 func (h Handler) UploadAndApplyTexture(w http.ResponseWriter, req *http.Request) {
@@ -56,7 +56,7 @@ func (h Handler) UploadAndApplyTexture(w http.ResponseWriter, req *http.Request)
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusCreated, res)
 }
 
 func (h Handler) TextureDetail(w http.ResponseWriter, req *http.Request) {
@@ -87,7 +87,7 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) AddTexture(w http.ResponseWriter, req *http.Request) {
@@ -95,7 +95,7 @@ func (h Handler) AddTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) ApplyTexture(w http.ResponseWriter, req *http.Request) {
@@ -108,5 +108,5 @@ func (h Handler) ApplyTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }

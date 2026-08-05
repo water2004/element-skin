@@ -1,14 +1,14 @@
 # Element Skin Python SDK
 
 `element-skin-sdk` 是 Element Skin 的 Python SDK，用于接入 OAuth 2.1 流程和
-`/v1` 站点能力 API。
+`/v2` 站点能力 API。
 
 SDK 主要解决三件事：
 
 - 封装 Authorization Code + PKCE、Device Code Flow、Client Credentials、刷新、
   撤销和 introspection 等 OAuth 流程。
 - 提供权限常量和本地权限校验，避免第三方应用到处手写权限字符串。
-- 提供常用 `/v1` API 的同步 Python 调用入口。
+- 提供常用 `/v2` API 的同步 Python 调用入口。
 
 ## 安装
 

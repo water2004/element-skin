@@ -150,7 +150,7 @@
 - Client Credentials 使用应用权限主体，例如 `client:{client_id}`，不创建用户授权 grant。
 - 用户授权 grant 与 token 链路必须绑定，撤销 grant 后对应 refresh token 和 access token 应失效。
 - OAuth 标准端点应遵循 OAuth 错误响应格式；普通站点 API 继续使用 `{"detail":"..."}`。
-- OAuth、权限模型或 `/v1` API 行为变更必须同步更新开发者文档。
+- OAuth、权限模型或 `/v2` API 行为变更必须同步更新开发者文档。
 
 ### 3.7 配置与 CORS
 

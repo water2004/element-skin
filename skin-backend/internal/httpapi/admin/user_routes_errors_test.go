@@ -17,7 +17,7 @@ func TestAdminUserRoutesRejectExactMissingUserAndBadPayloadEdges(t *testing.T) {
 	h := admin.NewWithRedis(cfg, db, testutil.NewMemoryRedis(), nil)
 	adminUser := testutil.CreateUser(t, db, "admin-user-edge@test.com", "Password123", "AdminUserEdge", true)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/missing/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`,"reason":"missing user edge"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/missing/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`,"reason":"missing user edge"}`))
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", "missing-user")
 	rec := httptest.NewRecorder()
@@ -26,7 +26,7 @@ func TestAdminUserRoutesRejectExactMissingUserAndBadPayloadEdges(t *testing.T) {
 		t.Fatalf("ban missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"missing-user","new_password":"ChangedPassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"missing-user","new_password":"ChangedPassword123"}`))
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
@@ -34,7 +34,7 @@ func TestAdminUserRoutesRejectExactMissingUserAndBadPayloadEdges(t *testing.T) {
 		t.Fatalf("reset missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+adminUser.ID+"/permissions/account.read.self", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPut, "/v2/admin/users/"+adminUser.ID+"/permissions/account.read.self", strings.NewReader(`{`))
 	req = withAdminActor(req, adminUser.ID)
 	req.SetPathValue("user_id", adminUser.ID)
 	req.SetPathValue("permission_code", "account.read.self")

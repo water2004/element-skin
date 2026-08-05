@@ -125,7 +125,7 @@ func TestUploadServiceUploadAndApplyUpdatesProfileExactly(t *testing.T) {
 	}
 	hash, _ := res["hash"].(string)
 	updated, err := db.Profiles.GetByID(ctx, profile.ID)
-	if hash == "" || res["ok"] != true || res["type"] != "skin" ||
+	if hash == "" || len(res) != 2 || res["texture_type"] != "skin" ||
 		err != nil || updated == nil || updated.SkinHash == nil ||
 		*updated.SkinHash != hash || updated.TextureModel != "slim" {
 		t.Fatalf("upload apply mismatch: res=%#v profile=%#v err=%v", res, updated, err)
@@ -151,7 +151,7 @@ func TestUploadServiceUploadAndApplyCapeAndForeignProfileFailureExactState(t *te
 	}
 	capeHash, _ := capeResult["hash"].(string)
 	updated, err := db.Profiles.GetByID(ctx, ownProfile.ID)
-	if capeHash == "" || capeResult["ok"] != true || capeResult["type"] != "cape" ||
+	if capeHash == "" || len(capeResult) != 2 || capeResult["texture_type"] != "cape" ||
 		err != nil || updated == nil || updated.CapeHash == nil || *updated.CapeHash != capeHash ||
 		updated.SkinHash != nil {
 		t.Fatalf("cape upload apply mismatch: result=%#v profile=%#v err=%v", capeResult, updated, err)
@@ -194,7 +194,7 @@ func TestUploadServiceBoundProfileUploadDoesNotRequireCreatePermission(t *testin
 	}
 	hash, _ := res["hash"].(string)
 	updated, err := db.Profiles.GetByID(ctx, profile.ID)
-	if hash == "" || res["ok"] != true || res["type"] != "skin" ||
+	if hash == "" || len(res) != 2 || res["texture_type"] != "skin" ||
 		err != nil || updated == nil || updated.SkinHash == nil ||
 		*updated.SkinHash != hash || updated.TextureModel != "slim" {
 		t.Fatalf("bound upload apply mismatch: res=%#v profile=%#v err=%v", res, updated, err)

@@ -1,4 +1,4 @@
-# Element Skin v1 API 设计规范
+# Element Skin v2 API 设计规范
 
 > 状态：现行迁移规范
 >
@@ -19,30 +19,30 @@
 
 当前后端站点能力分布如下：
 
-| 当前分组 | 当前路径前缀 | 说明 | v1 处理 |
+| 当前分组 | 当前路径前缀 | 说明 | v2 处理 |
 | --- | --- | --- | --- |
-| 站点会话 | `/site-login`、`/site-logout`、`/register`、`/reset-password` | 登录、登出、注册、验证码、密码重置 | 迁移到 `/v1/auth/*` |
-| 当前用户账号 | `/me` | 当前登录用户资料、密码、自身账号删除 | 迁移到 `/v1/users/me/*` |
-| 当前用户角色 | `/me/profiles` | 用户自己的 Minecraft 角色 | 迁移到 `/v1/users/me/profiles/*` |
-| 当前用户材质 | `/me/textures`、`/textures/upload` | 用户自己的材质、衣柜、材质应用 | 迁移到 `/v1/users/me/textures/*` |
-| 公开站点能力 | `/public` | 公开设置、首页媒体、皮肤库、fallback 状态 | 迁移到 `/v1/public/*` |
-| 用户通知 | `/notices` | 用户通知和公告读取、已读、忽略 | 迁移到 `/v1/notifications/*` |
-| Microsoft 导入 | `/microsoft` | Microsoft 正版角色导入流程 | 迁移到 `/v1/imports/microsoft/*` |
-| 远程 Yggdrasil 导入 | `/remote-ygg` | 从远程 Yggdrasil 数据导入角色 | 迁移到 `/v1/imports/remote-ygg/*` |
-| 管理后台 | `/admin` | 用户、角色、材质、邀请码、白名单、首页媒体、公告、设置 | 迁移到 `/v1/admin/*` |
+| 站点会话 | `/site-login`、`/site-logout`、`/register`、`/reset-password` | 登录、登出、注册、验证码、密码重置 | 迁移到 `/v2/auth/*` |
+| 当前用户账号 | `/me` | 当前登录用户资料、密码、自身账号删除 | 迁移到 `/v2/users/me/*` |
+| 当前用户角色 | `/me/profiles` | 用户自己的 Minecraft 角色 | 迁移到 `/v2/users/me/profiles/*` |
+| 当前用户材质 | `/me/textures`、`/textures/upload` | 用户自己的材质、衣柜、材质应用 | 迁移到 `/v2/users/me/textures/*` |
+| 公开站点能力 | `/public` | 公开设置、首页媒体、皮肤库、fallback 状态 | 迁移到 `/v2/public/*` |
+| 用户通知 | `/notices` | 用户通知和公告读取、已读、忽略 | 迁移到 `/v2/notifications/*` |
+| Microsoft 导入 | `/microsoft` | Microsoft 正版角色导入流程 | 迁移到 `/v2/imports/microsoft/*` |
+| 远程 Yggdrasil 导入 | `/remote-ygg` | 从远程 Yggdrasil 数据导入角色 | 迁移到 `/v2/imports/remote-ygg/*` |
+| 管理后台 | `/admin` | 用户、角色、材质、邀请码、白名单、首页媒体、公告、设置 | 迁移到 `/v2/admin/*` |
 | Yggdrasil 协议 | `/authserver`、`/sessionserver`、部分 `/api` | 被启动器、游戏服务器、用户程序调用 | 保持原路径 |
 
 ## 3. 版本与兼容承诺
 
-v1 API 的 base path 是：
+v2 API 的 base path 是：
 
 ```text
-/v1
+/v2
 ```
 
-所有站点业务能力都应放在 `/v1` 下。OAuth 标准协议端点、Yggdrasil/Mojang 兼容端点不放入 `/v1`。
+所有站点业务能力都应放在 `/v2` 下。OAuth 标准协议端点、Yggdrasil/Mojang 兼容端点不放入 `/v2`。
 
-本次迁移是 breaking change。旧站点 API 不作为长期兼容接口保留：
+本次迁移是 breaking change。`/v1/*` 不再注册，也不通过重定向、别名或兼容 handler 保留；客户端必须整体迁移到 `/v2/*`。更早的未版本化站点 API 同样不保留：
 
 ```text
 /me
@@ -86,7 +86,7 @@ PUT    /api/user/profile/{uuid}/{texture_type}
 DELETE /api/user/profile/{uuid}/{texture_type}
 ```
 
-这些端点不参与 `/v1` 站点 API 命名迁移。会话和材质写入端点继续使用 Yggdrasil token、服务器 join 逻辑和对应细粒度权限；`GET /` 与 `GET /api/publickeys/` 通过公开 Actor 检查 `site_public.read.public`。
+这些端点不参与 `/v2` 站点 API 命名迁移。会话和材质写入端点继续使用 Yggdrasil token、服务器 join 逻辑和对应细粒度权限；`GET /` 与 `GET /api/publickeys/` 通过公开 Actor 检查 `site_public.read.public`。
 
 `GET /api/publickeys/` 返回本站签名公钥和当前 fallback 端点缓存的签名公钥。本站公钥固定排在首位，相同 DER 公钥只返回一次：
 
@@ -105,7 +105,7 @@ DELETE /api/user/profile/{uuid}/{texture_type}
 
 ## 5. 认证模型
 
-v1 站点 API 支持统一 Actor 模型。请求进入后端后，认证层将凭证解析为 Actor，业务服务只检查 Actor 的权限，不关心凭证来源。
+v2 站点 API 支持统一 Actor 模型。请求进入后端后，认证层将凭证解析为 Actor，业务服务只检查 Actor 的权限，不关心凭证来源。
 
 第一阶段凭证：
 
@@ -137,7 +137,7 @@ OAuth token 的最终权限必须是以下三者交集：
 ∩ 用户实际授权的权限
 ```
 
-因此，OAuth 应用调用 v1 API 时仍使用本文档列出的同一组权限 code。
+因此，OAuth 应用调用 v2 API 时仍使用本文档列出的同一组权限 code。
 
 ## 6. 通用协议约定
 
@@ -161,7 +161,19 @@ JSON 响应：
 Content-Type: application/json; charset=utf-8
 ```
 
-### 6.2 时间格式
+### 6.2 成功响应
+
+站点 API 不使用通用 envelope，也不返回仅表示 HTTP 已成功的 `ok`、`success` 或展示文案字段。成功语义由状态码和资源表示共同表达：
+
+- 查询成功返回 `200` 和资源对象；非分页集合返回 `{ "items": [] }`。
+- 创建资源返回 `201` 和新资源表示。
+- 更新后需要继续使用最新资源时返回 `200` 和更新后的表示。
+- 删除、幂等设置以及没有额外结果的动作返回 `204`，响应体必须为空。
+- Cursor 分页始终返回 `items`、`has_next`、`next_cursor`、`page_size`。
+
+OAuth/OIDC、Yggdrasil/Mojang 等标准协议端点使用各自协议定义的状态码与响应体，不套用站点 API 的约定。
+
+### 6.3 时间格式
 
 除非特别说明，时间字段均为 Unix 毫秒时间戳：
 
@@ -171,7 +183,7 @@ Content-Type: application/json; charset=utf-8
 }
 ```
 
-### 6.3 错误格式
+### 6.4 错误格式
 
 站点 API 的错误响应统一为：
 
@@ -195,9 +207,9 @@ Content-Type: application/json; charset=utf-8
 | `429` | 请求被限流 |
 | `500` | 服务端内部错误 |
 
-Yggdrasil 协议端点可返回 Yggdrasil 标准错误格式，不适用本节。
+OAuth/OIDC 标准端点返回 OAuth/OIDC 标准错误；Yggdrasil 协议端点返回 Yggdrasil 标准错误，均不适用本节。
 
-### 6.4 Cursor 分页
+### 6.5 Cursor 分页
 
 分页列表统一使用 cursor 分页：
 
@@ -227,11 +239,11 @@ cursor=<opaque_cursor>
 - `cursor` 是不透明字符串，客户端不得解析或构造。
 - `next_cursor` 为 `null` 或空值时表示没有下一页。
 
-### 6.5 Bool 输入
+### 6.6 Bool 输入
 
-JSON 中布尔字段应使用 true/false。部分历史字段可接受 `0`、`1`、`"true"`、`"false"`，但 v1 文档只承诺标准 JSON bool。
+JSON 中布尔字段应使用 true/false。部分历史字段可接受 `0`、`1`、`"true"`、`"false"`，但 v2 文档只承诺标准 JSON bool。
 
-### 6.6 材质类型与模型
+### 6.7 材质类型与模型
 
 材质类型：
 
@@ -364,7 +376,7 @@ slim
 
 ## 8. 权限命名说明
 
-v1 API 使用现有权限 catalog。权限 code 格式为：
+v2 API 使用现有权限 catalog。权限 code 格式为：
 
 ```text
 resource.action.scope
@@ -379,7 +391,7 @@ OAuth 应用申请 scope 时也使用这些权限 code。
 ### 9.1 登录
 
 ```http
-POST /v1/auth/login
+POST /v2/auth/login
 ```
 
 请求：
@@ -418,7 +430,7 @@ POST /site-login
 ### 9.2 登出
 
 ```http
-POST /v1/auth/logout
+POST /v2/auth/logout
 ```
 
 响应：
@@ -443,7 +455,7 @@ POST /site-logout
 ### 9.3 注册
 
 ```http
-POST /v1/auth/register
+POST /v2/auth/register
 ```
 
 请求：
@@ -487,7 +499,7 @@ POST /register
 ### 9.4 发送验证码
 
 ```http
-POST /v1/auth/verification-code
+POST /v2/auth/verification-code
 ```
 
 请求：
@@ -526,7 +538,7 @@ POST /send-verification-code
 ### 9.5 重置密码
 
 ```http
-POST /v1/auth/password/reset
+POST /v2/auth/password/reset
 ```
 
 请求：
@@ -558,7 +570,7 @@ POST /reset-password
 ### 9.6 刷新站点会话
 
 ```http
-POST /v1/auth/session/refresh
+POST /v2/auth/session/refresh
 ```
 
 请求凭证：
@@ -596,7 +608,7 @@ POST /me/refresh-token
 ### 10.1 获取当前用户
 
 ```http
-GET /v1/users/me
+GET /v2/users/me
 ```
 
 权限：
@@ -616,7 +628,7 @@ GET /me
 ### 10.2 修改当前用户
 
 ```http
-PATCH /v1/users/me
+PATCH /v2/users/me
 ```
 
 权限：
@@ -660,7 +672,7 @@ PATCH /me
 第一步向新邮箱发送验证码：
 
 ```http
-POST /v1/users/me/email/verification-code
+POST /v2/users/me/email/verification-code
 ```
 
 权限：
@@ -689,7 +701,7 @@ account.update.self
 第二步提交新邮箱和该邮箱收到的一次性验证码：
 
 ```http
-PUT /v1/users/me/email
+PUT /v2/users/me/email
 ```
 
 权限：
@@ -728,7 +740,7 @@ account.update.self
 ### 10.4 注销当前账号
 
 ```http
-DELETE /v1/users/me
+DELETE /v2/users/me
 ```
 
 权限：
@@ -758,7 +770,7 @@ DELETE /me
 ### 10.5 修改当前用户密码
 
 ```http
-POST /v1/users/me/password
+POST /v2/users/me/password
 ```
 
 权限：
@@ -800,7 +812,7 @@ POST /me/password
 ### 11.1 列出自己的角色
 
 ```http
-GET /v1/users/me/profiles
+GET /v2/users/me/profiles
 ```
 
 权限：
@@ -836,7 +848,7 @@ GET /me/profiles
 ### 11.2 创建自己的角色
 
 ```http
-POST /v1/users/me/profiles
+POST /v2/users/me/profiles
 ```
 
 权限：
@@ -873,7 +885,7 @@ POST /me/profiles
 ### 11.3 修改自己的角色
 
 ```http
-PATCH /v1/users/me/profiles/{profile_id}
+PATCH /v2/users/me/profiles/{profile_id}
 ```
 
 权限：
@@ -907,7 +919,7 @@ PATCH /me/profiles/{pid}
 ### 11.4 删除自己的角色
 
 ```http
-DELETE /v1/users/me/profiles/{profile_id}
+DELETE /v2/users/me/profiles/{profile_id}
 ```
 
 权限：
@@ -933,8 +945,8 @@ DELETE /me/profiles/{pid}
 ### 11.5 清除角色材质
 
 ```http
-DELETE /v1/users/me/profiles/{profile_id}/skin
-DELETE /v1/users/me/profiles/{profile_id}/cape
+DELETE /v2/users/me/profiles/{profile_id}/skin
+DELETE /v2/users/me/profiles/{profile_id}/cape
 ```
 
 权限：
@@ -963,7 +975,7 @@ DELETE /me/profiles/{pid}/cape
 ### 12.1 列出自己的材质
 
 ```http
-GET /v1/users/me/textures
+GET /v2/users/me/textures
 ```
 
 权限：
@@ -991,7 +1003,7 @@ GET /me/textures
 ### 12.2 上传自己的材质
 
 ```http
-POST /v1/users/me/textures
+POST /v2/users/me/textures
 ```
 
 权限：
@@ -1034,7 +1046,7 @@ POST /me/textures
 ### 12.3 获取自己的材质详情
 
 ```http
-GET /v1/users/me/textures/{hash}/{texture_type}
+GET /v2/users/me/textures/{hash}/{texture_type}
 ```
 
 权限：
@@ -1054,7 +1066,7 @@ GET /me/textures/{hash}/{texture_type}
 ### 12.4 修改自己的材质
 
 ```http
-PATCH /v1/users/me/textures/{hash}/{texture_type}
+PATCH /v2/users/me/textures/{hash}/{texture_type}
 ```
 
 请求：
@@ -1092,7 +1104,7 @@ PATCH /me/textures/{hash}/{texture_type}
 ### 12.5 删除自己的材质
 
 ```http
-DELETE /v1/users/me/textures/{hash}/{texture_type}
+DELETE /v2/users/me/textures/{hash}/{texture_type}
 ```
 
 权限：
@@ -1118,7 +1130,7 @@ DELETE /me/textures/{hash}/{texture_type}
 ### 12.6 加入自己的衣柜
 
 ```http
-POST /v1/users/me/textures/{hash}/wardrobe
+POST /v2/users/me/textures/{hash}/wardrobe
 ```
 
 权限：
@@ -1150,7 +1162,7 @@ POST /me/textures/{hash}/add
 ### 12.7 应用材质到自己的角色
 
 ```http
-POST /v1/users/me/textures/{hash}/apply
+POST /v2/users/me/textures/{hash}/apply
 ```
 
 权限：
@@ -1185,7 +1197,7 @@ POST /me/textures/{hash}/apply
 ### 12.8 上传并应用材质
 
 ```http
-POST /v1/users/me/textures/upload-and-apply
+POST /v2/users/me/textures/upload-and-apply
 ```
 
 权限：
@@ -1232,7 +1244,7 @@ POST /textures/upload
 ### 13.1 公开站点设置
 
 ```http
-GET /v1/public/settings
+GET /v2/public/settings
 ```
 
 认证：公开。
@@ -1296,7 +1308,7 @@ GET /public/settings
 ### 13.2 公开首页媒体
 
 ```http
-GET /v1/public/homepage-media
+GET /v2/public/homepage-media
 ```
 
 认证：公开。
@@ -1312,7 +1324,7 @@ GET /public/homepage-media
 ### 13.3 公开 fallback 状态
 
 ```http
-GET /v1/public/fallback-status
+GET /v2/public/fallback-status
 ```
 
 认证：公开。
@@ -1336,7 +1348,7 @@ GET /public/fallback-status
 ### 13.4 公开皮肤库
 
 ```http
-GET /v1/public/skin-library
+GET /v2/public/skin-library
 ```
 
 认证：公开。
@@ -1361,12 +1373,12 @@ GET /public/skin-library
 
 ## 14. 通知 API
 
-通知系统包含公告和系统消息。公告是通知的一种，不应单独设计 `/notices` 作为 v1 主路径。
+通知系统包含公告和系统消息。公告是通知的一种，不应单独设计 `/notices` 作为 v2 主路径。
 
 ### 14.1 列出当前用户通知
 
 ```http
-GET /v1/notifications
+GET /v2/notifications
 ```
 
 权限：
@@ -1396,7 +1408,7 @@ GET /notices
 ### 14.2 获取通知详情
 
 ```http
-GET /v1/notifications/{notification_id}
+GET /v2/notifications/{notification_id}
 ```
 
 权限：
@@ -1420,7 +1432,7 @@ GET /notices/{id}
 ### 14.3 标记通知已读
 
 ```http
-POST /v1/notifications/{notification_id}/read
+POST /v2/notifications/{notification_id}/read
 ```
 
 权限：
@@ -1440,7 +1452,7 @@ POST /notices/{id}/read
 ### 14.4 忽略通知
 
 ```http
-POST /v1/notifications/{notification_id}/dismiss
+POST /v2/notifications/{notification_id}/dismiss
 ```
 
 权限：
@@ -1463,12 +1475,12 @@ POST /notices/{id}/dismiss
 
 ## 15. Microsoft 正版角色导入 API
 
-Microsoft 是角色导入能力，不是账号绑定能力，因此归入 `/v1/imports/microsoft`。
+Microsoft 是角色导入能力，不是账号绑定能力，因此归入 `/v2/imports/microsoft`。
 
 ### 15.1 获取 Microsoft 授权 URL
 
 ```http
-GET /v1/imports/microsoft/auth-url
+GET /v2/imports/microsoft/auth-url
 ```
 
 权限：
@@ -1495,7 +1507,7 @@ GET /microsoft/auth-url
 ### 15.2 Microsoft 回调
 
 ```http
-GET /v1/imports/microsoft/callback
+GET /v2/imports/microsoft/callback
 ```
 
 Query：
@@ -1522,7 +1534,7 @@ Query：
 迁移为：
 
 ```text
-{api_url}/v1/imports/microsoft/callback
+{api_url}/v2/imports/microsoft/callback
 ```
 
 替代旧端点：
@@ -1534,7 +1546,7 @@ GET /microsoft/callback
 ### 15.3 读取 Microsoft 角色资料
 
 ```http
-POST /v1/imports/microsoft/profile
+POST /v2/imports/microsoft/profile
 ```
 
 权限：
@@ -1575,7 +1587,7 @@ POST /microsoft/get-profile
 ### 15.4 导入 Microsoft 角色
 
 ```http
-POST /v1/imports/microsoft/profile/import
+POST /v2/imports/microsoft/profile/import
 ```
 
 权限：
@@ -1611,12 +1623,12 @@ POST /microsoft/import-profile
 
 ## 16. 远程 Yggdrasil 导入 API
 
-这组 API 是站点导入工具，不是 Yggdrasil 协议端点，因此迁移到 `/v1`。
+这组 API 是站点导入工具，不是 Yggdrasil 协议端点，因此迁移到 `/v2`。
 
 ### 16.1 预览远程角色
 
 ```http
-POST /v1/imports/remote-ygg/profiles/preview
+POST /v2/imports/remote-ygg/profiles/preview
 ```
 
 权限：
@@ -1663,7 +1675,7 @@ POST /remote-ygg/get-profiles
 ### 16.2 导入单个远程角色
 
 ```http
-POST /v1/imports/remote-ygg/profiles/import
+POST /v2/imports/remote-ygg/profiles/import
 ```
 
 权限：
@@ -1703,7 +1715,7 @@ POST /remote-ygg/import-profile
 ### 16.3 批量导入远程角色
 
 ```http
-POST /v1/imports/remote-ygg/profiles/import-batch
+POST /v2/imports/remote-ygg/profiles/import-batch
 ```
 
 权限：
@@ -1751,7 +1763,7 @@ POST /remote-ygg/import-profiles
 ### 17.1 列出用户
 
 ```http
-GET /v1/admin/users
+GET /v2/admin/users
 ```
 
 权限：
@@ -1779,7 +1791,7 @@ GET /admin/users
 ### 17.2 获取用户详情
 
 ```http
-GET /v1/admin/users/{user_id}
+GET /v2/admin/users/{user_id}
 ```
 
 权限：
@@ -1793,7 +1805,7 @@ account.read.any
 ### 17.3 删除用户
 
 ```http
-DELETE /v1/admin/users/{user_id}
+DELETE /v2/admin/users/{user_id}
 ```
 
 权限：
@@ -1818,7 +1830,7 @@ account.delete.any
 ### 17.4 获取用户角色列表
 
 ```http
-GET /v1/admin/users/{user_id}/profiles
+GET /v2/admin/users/{user_id}/profiles
 ```
 
 权限：
@@ -1839,7 +1851,7 @@ Query：
 ### 17.5 获取用户权限状态
 
 ```http
-GET /v1/admin/users/{user_id}/permissions
+GET /v2/admin/users/{user_id}/permissions
 ```
 
 权限：由 permission service 内部按当前 Actor 校验。
@@ -1862,8 +1874,8 @@ GET /v1/admin/users/{user_id}/permissions
 ### 17.6 授予/撤销角色
 
 ```http
-PUT    /v1/admin/users/{user_id}/roles/{role_id}
-DELETE /v1/admin/users/{user_id}/roles/{role_id}
+PUT    /v2/admin/users/{user_id}/roles/{role_id}
+DELETE /v2/admin/users/{user_id}/roles/{role_id}
 ```
 
 权限：
@@ -1893,8 +1905,8 @@ permission_protected.manage.any
 ### 17.7 设置/清除用户单项权限覆盖
 
 ```http
-PUT    /v1/admin/users/{user_id}/permissions/{permission_code}
-DELETE /v1/admin/users/{user_id}/permissions/{permission_code}
+PUT    /v2/admin/users/{user_id}/permissions/{permission_code}
+DELETE /v2/admin/users/{user_id}/permissions/{permission_code}
 ```
 
 PUT 请求：
@@ -1932,7 +1944,7 @@ deny
 ### 17.8 转让受保护主体
 
 ```http
-POST /v1/admin/users/{user_id}/protected-subject/transfer
+POST /v2/admin/users/{user_id}/protected-subject/transfer
 ```
 
 权限：
@@ -1960,8 +1972,8 @@ permission_protected.manage.any
 ### 17.9 封禁/解封用户
 
 ```http
-POST /v1/admin/users/{user_id}/ban
-POST /v1/admin/users/{user_id}/unban
+POST /v2/admin/users/{user_id}/ban
+POST /v2/admin/users/{user_id}/unban
 ```
 
 权限：
@@ -2010,7 +2022,7 @@ account.unban.any
 ### 17.10 管理员重置用户密码
 
 ```http
-POST /v1/admin/users/password/reset
+POST /v2/admin/users/password/reset
 ```
 
 权限：
@@ -2047,7 +2059,7 @@ POST /admin/users/reset-password
 ### 18.1 列出全部角色
 
 ```http
-GET /v1/admin/profiles
+GET /v2/admin/profiles
 ```
 
 权限：
@@ -2069,7 +2081,7 @@ Query：
 ### 18.2 修改角色
 
 ```http
-PATCH /v1/admin/profiles/{profile_id}
+PATCH /v2/admin/profiles/{profile_id}
 ```
 
 权限：
@@ -2097,7 +2109,7 @@ profile.update.any
 ### 18.3 删除角色
 
 ```http
-DELETE /v1/admin/profiles/{profile_id}
+DELETE /v2/admin/profiles/{profile_id}
 ```
 
 权限：
@@ -2117,8 +2129,8 @@ profile.delete.any
 ### 18.4 设置/清除角色材质
 
 ```http
-PATCH /v1/admin/profiles/{profile_id}/skin
-PATCH /v1/admin/profiles/{profile_id}/cape
+PATCH /v2/admin/profiles/{profile_id}/skin
+PATCH /v2/admin/profiles/{profile_id}/cape
 ```
 
 权限：
@@ -2156,7 +2168,7 @@ profile.update.any
 ### 19.1 列出全部材质
 
 ```http
-GET /v1/admin/textures
+GET /v2/admin/textures
 ```
 
 权限：
@@ -2179,7 +2191,7 @@ Query：
 ### 19.2 修改材质
 
 ```http
-PATCH /v1/admin/textures/{hash}
+PATCH /v2/admin/textures/{hash}
 ```
 
 请求：
@@ -2218,7 +2230,7 @@ Query：
 ### 19.3 删除材质
 
 ```http
-DELETE /v1/admin/textures/{hash}
+DELETE /v2/admin/textures/{hash}
 ```
 
 权限：
@@ -2248,7 +2260,7 @@ Query：
 ### 20.1 列出邀请码
 
 ```http
-GET /v1/admin/invites
+GET /v2/admin/invites
 ```
 
 权限：
@@ -2269,7 +2281,7 @@ Query：
 ### 20.2 创建邀请码
 
 ```http
-POST /v1/admin/invites
+POST /v2/admin/invites
 ```
 
 权限：
@@ -2309,7 +2321,7 @@ invite.create.any
 ### 20.3 删除邀请码
 
 ```http
-DELETE /v1/admin/invites/{code}
+DELETE /v2/admin/invites/{code}
 ```
 
 权限：
@@ -2331,7 +2343,7 @@ invite.delete.any
 ### 21.1 列出官方白名单用户
 
 ```http
-GET /v1/admin/official-whitelist
+GET /v2/admin/official-whitelist
 ```
 
 权限：
@@ -2357,7 +2369,7 @@ Query：
 ### 21.2 添加官方白名单用户
 
 ```http
-POST /v1/admin/official-whitelist
+POST /v2/admin/official-whitelist
 ```
 
 权限：
@@ -2386,7 +2398,7 @@ official_whitelist.add.any
 ### 21.3 移除官方白名单用户
 
 ```http
-DELETE /v1/admin/official-whitelist/{username}
+DELETE /v2/admin/official-whitelist/{username}
 ```
 
 权限：
@@ -2414,7 +2426,7 @@ Query：
 ### 22.1 列出首页媒体
 
 ```http
-GET /v1/admin/homepage-media
+GET /v2/admin/homepage-media
 ```
 
 权限：
@@ -2428,7 +2440,7 @@ homepage_media.read.any
 ### 22.2 上传首页图片
 
 ```http
-POST /v1/admin/homepage-media/image
+POST /v2/admin/homepage-media/image
 ```
 
 权限：
@@ -2451,7 +2463,7 @@ homepage_media.create.any
 ### 22.3 上传首页全景图
 
 ```http
-POST /v1/admin/homepage-media/panorama
+POST /v2/admin/homepage-media/panorama
 ```
 
 权限：
@@ -2484,7 +2496,7 @@ ZIP 要求：
 ### 22.4 修改首页媒体
 
 ```http
-PATCH /v1/admin/homepage-media/{id}
+PATCH /v2/admin/homepage-media/{id}
 ```
 
 权限：
@@ -2514,7 +2526,7 @@ homepage_media.update.any
 ### 22.5 首页媒体排序
 
 ```http
-PATCH /v1/admin/homepage-media/reorder
+PATCH /v2/admin/homepage-media/reorder
 ```
 
 权限：
@@ -2542,7 +2554,7 @@ homepage_media.update.any
 ### 22.6 删除首页媒体
 
 ```http
-DELETE /v1/admin/homepage-media/{id}
+DELETE /v2/admin/homepage-media/{id}
 ```
 
 权限：
@@ -2566,7 +2578,7 @@ homepage_media.delete.any
 ### 23.1 列出通知
 
 ```http
-GET /v1/admin/notifications
+GET /v2/admin/notifications
 ```
 
 权限：
@@ -2595,7 +2607,7 @@ GET /admin/notices
 ### 23.2 创建通知
 
 ```http
-POST /v1/admin/notifications
+POST /v2/admin/notifications
 ```
 
 权限：
@@ -2654,7 +2666,7 @@ POST /admin/notices
 ### 23.3 删除通知
 
 ```http
-DELETE /v1/admin/notifications/{notification_id}
+DELETE /v2/admin/notifications/{notification_id}
 ```
 
 权限：
@@ -2674,7 +2686,7 @@ DELETE /admin/notices/{id}
 ### 23.4 替换通知
 
 ```http
-PATCH /v1/admin/notifications/{notification_id}
+PATCH /v2/admin/notifications/{notification_id}
 ```
 
 权限：
@@ -2690,8 +2702,8 @@ notice.update.any
 `PATCH` 不是原地修改通知，而是执行一次替换发布。服务端必须按以下流程处理：
 
 ```text
-DELETE /v1/admin/notifications/{old_id}
-POST   /v1/admin/notifications
+DELETE /v2/admin/notifications/{old_id}
+POST   /v2/admin/notifications
 ```
 
 原因：
@@ -2706,14 +2718,14 @@ POST   /v1/admin/notifications
 PATCH /admin/notices/{id}
 ```
 
-迁移为 `PATCH /v1/admin/notifications/{notification_id}`，但 v1 的语义必须是替换发布，不允许保留旧通知记录并直接覆盖内容字段。
+迁移为 `PATCH /v2/admin/notifications/{notification_id}`，但 v2 的语义必须是替换发布，不允许保留旧通知记录并直接覆盖内容字段。
 
 ## 24. 管理员设置 API
 
 ### 24.1 读取站点设置
 
 ```http
-GET /v1/admin/settings/site
+GET /v2/admin/settings/site
 ```
 
 权限：
@@ -2727,7 +2739,7 @@ site_settings.read.any
 ### 24.2 保存站点设置
 
 ```http
-POST /v1/admin/settings/site
+POST /v2/admin/settings/site
 ```
 
 权限：
@@ -2754,7 +2766,7 @@ site_settings.update.any
 ### 24.3 读取设置分组
 
 ```http
-GET /v1/admin/settings/{group}
+GET /v2/admin/settings/{group}
 ```
 
 权限：
@@ -2768,7 +2780,7 @@ site_settings.read.any
 ### 24.4 保存设置分组
 
 ```http
-POST /v1/admin/settings/{group}
+POST /v2/admin/settings/{group}
 ```
 
 权限：
@@ -2798,7 +2810,7 @@ easter_eggs
 
 ## 25. Minecraft 能力 API
 
-Minecraft 能力 API 是站点开放平台接口，不是 Yggdrasil 协议端点。它面向第三方启动器、外部工具、服务端插件和未来外置插件系统，统一放在 `/v1/minecraft/*` 下。
+Minecraft 能力 API 是站点开放平台接口，不是 Yggdrasil 协议端点。它面向第三方启动器、外部工具、服务端插件和未来外置插件系统，统一放在 `/v2/minecraft/*` 下。
 
 Yggdrasil 兼容端点必须继续保持原路径和协议响应格式：
 
@@ -2808,35 +2820,35 @@ Yggdrasil 兼容端点必须继续保持原路径和协议响应格式：
 /api/users/profiles/minecraft/*
 ```
 
-`/v1/minecraft/*` 不复刻 Yggdrasil 协议，不返回 Yggdrasil 错误格式，不接受 Yggdrasil access token。它只接受站点 API 的认证模型：公开接口、站点 Cookie、OAuth Bearer token 或未来 Client Credentials token。
+`/v2/minecraft/*` 不复刻 Yggdrasil 协议，不返回 Yggdrasil 错误格式，不接受 Yggdrasil access token。它只接受站点 API 的认证模型：公开接口、站点 Cookie、OAuth Bearer token 或未来 Client Credentials token。
 
 ### 25.1 不重复开放的能力
 
-以下能力已经由现有站点 API 覆盖，不在 `/v1/minecraft` 下重复提供：
+以下能力已经由现有站点 API 覆盖，不在 `/v2/minecraft` 下重复提供：
 
 ```http
-GET    /v1/users/me/profiles
-POST   /v1/users/me/profiles
-PATCH  /v1/users/me/profiles/{profile_id}
-DELETE /v1/users/me/profiles/{profile_id}
+GET    /v2/users/me/profiles
+POST   /v2/users/me/profiles
+PATCH  /v2/users/me/profiles/{profile_id}
+DELETE /v2/users/me/profiles/{profile_id}
 
-GET    /v1/users/me/textures
-POST   /v1/users/me/textures
-PATCH  /v1/users/me/textures/{hash}/{texture_type}
-DELETE /v1/users/me/textures/{hash}/{texture_type}
+GET    /v2/users/me/textures
+POST   /v2/users/me/textures
+PATCH  /v2/users/me/textures/{hash}/{texture_type}
+DELETE /v2/users/me/textures/{hash}/{texture_type}
 
-POST   /v1/users/me/textures/{hash}/apply
-POST   /v1/users/me/textures/upload-and-apply
-DELETE /v1/users/me/profiles/{profile_id}/skin
-DELETE /v1/users/me/profiles/{profile_id}/cape
+POST   /v2/users/me/textures/{hash}/apply
+POST   /v2/users/me/textures/upload-and-apply
+DELETE /v2/users/me/profiles/{profile_id}/skin
+DELETE /v2/users/me/profiles/{profile_id}/cape
 ```
 
-第三方应用代表用户管理自己的角色和材质时，必须走 OAuth Authorization Code + 上述现有 `/v1/users/me/*` API。
+第三方应用代表用户管理自己的角色和材质时，必须走 OAuth Authorization Code + 上述现有 `/v2/users/me/*` API。
 
 ### 25.2 按名称查询公开角色
 
 ```http
-GET /v1/minecraft/profiles/by-name/{name}
+GET /v2/minecraft/profiles/by-name/{name}
 ```
 
 认证：公开可读，或 OAuth Bearer。
@@ -2864,7 +2876,7 @@ minecraft_profile.read.public
 ### 25.3 批量按名称查询公开角色
 
 ```http
-POST /v1/minecraft/profiles/by-names
+POST /v2/minecraft/profiles/by-names
 ```
 
 认证：公开可读，或 OAuth Bearer。
@@ -2903,7 +2915,7 @@ minecraft_profile.read.public
 ### 25.4 按角色 ID 查询公开角色
 
 ```http
-GET /v1/minecraft/profiles/{profile_id}
+GET /v2/minecraft/profiles/{profile_id}
 ```
 
 认证：公开可读，或 OAuth Bearer。
@@ -2928,7 +2940,7 @@ minecraft_profile.read.public
 ### 25.5 获取 textures property
 
 ```http
-GET /v1/minecraft/profiles/{profile_id}/textures-property
+GET /v2/minecraft/profiles/{profile_id}/textures-property
 ```
 
 认证：公开可读，或 OAuth Bearer。
@@ -2958,7 +2970,7 @@ minecraft_texture_property.read.public
 ### 25.6 服务端加入结果校验
 
 ```http
-POST /v1/minecraft/session/has-joined
+POST /v2/minecraft/session/has-joined
 ```
 
 认证：OAuth Client Credentials Bearer token。
@@ -3015,7 +3027,7 @@ minecraft_session.hasjoined.server
 
 ## 26. OAuth 标准端点
 
-OAuth 协议端点不放入 `/v1`，以符合生态工具和标准发现习惯。
+OAuth 协议端点不放入 `/v2`，以符合生态工具和标准发现习惯。
 
 OAuth 协议端点：
 
@@ -3054,21 +3066,21 @@ Metadata 约束：
 
 - `/.well-known/oauth-authorization-server` 只声明当前实际支持的 endpoint、grant type、response type、PKCE method 和 client auth method。
 - 未实现的扩展，例如 PAR、JAR、JARM、DPoP、mTLS、CIBA、RAR，不在 metadata 中用 `null` 或空数组声明。
-- `/.well-known/oauth-protected-resource` 声明 `/v1` 作为受保护资源，并公开对应 authorization server。
+- `/.well-known/oauth-protected-resource` 声明 `/v2` 作为受保护资源，并公开对应 authorization server。
 
 ## 27. OAuth 应用与授权管理 API
 
-OAuth 应用和授权管理是站点业务能力，因此放入 `/v1`。
+OAuth 应用和授权管理是站点业务能力，因此放入 `/v2`。
 
 ### 27.1 开发者应用
 
 ```http
-GET    /v1/oauth/apps
-POST   /v1/oauth/apps
-GET    /v1/oauth/apps/{client_id}
-PATCH  /v1/oauth/apps/{client_id}
-DELETE /v1/oauth/apps/{client_id}
-POST   /v1/oauth/apps/{client_id}/secret
+GET    /v2/oauth/apps
+POST   /v2/oauth/apps
+GET    /v2/oauth/apps/{client_id}
+PATCH  /v2/oauth/apps/{client_id}
+DELETE /v2/oauth/apps/{client_id}
+POST   /v2/oauth/apps/{client_id}/secret
 ```
 
 权限：
@@ -3091,8 +3103,8 @@ oauth_app.delete.owned
 ### 27.2 当前用户授权
 
 ```http
-GET    /v1/oauth/grants
-DELETE /v1/oauth/grants/{grant_id}
+GET    /v2/oauth/grants
+DELETE /v2/oauth/grants/{grant_id}
 ```
 
 权限：
@@ -3443,7 +3455,7 @@ Content-Type: application/x-www-form-urlencoded
 列表接口必须保持轻量，不返回权限列表、回调地址、站点地址或密钥信息。管理后台需要展示详情时，必须在用户打开具体应用后再请求详情接口。
 
 ```http
-GET /v1/admin/oauth/apps
+GET /v2/admin/oauth/apps
 ```
 
 权限：
@@ -3487,7 +3499,7 @@ oauth_app.read.any
 - 后端不得为了列表展示预加载每个应用的权限明细。
 
 ```http
-GET /v1/admin/oauth/apps/{client_id}
+GET /v2/admin/oauth/apps/{client_id}
 ```
 
 权限：
@@ -3515,7 +3527,7 @@ oauth_app.read.any
 ```
 
 ```http
-PATCH /v1/admin/oauth/apps/{client_id}/review
+PATCH /v2/admin/oauth/apps/{client_id}/review
 ```
 
 权限：
@@ -3566,7 +3578,7 @@ oauth_app.update.any
 ### 28.1 站点能力
 
 ```http
-GET /v1/capabilities
+GET /v2/capabilities
 ```
 
 认证：公开。
@@ -3575,7 +3587,7 @@ GET /v1/capabilities
 
 ```json
 {
-  "api_version": "v1",
+  "api_version": "v2",
   "site_name": "Element Skin",
   "site_url": "https://skin.example.com",
   "api_url": "https://skin.example.com",
@@ -3601,7 +3613,7 @@ GET /v1/capabilities
 ### 28.2 权限目录
 
 ```http
-GET /v1/permissions/catalog
+GET /v2/permissions/catalog
 ```
 
 认证：公开可读。
@@ -3639,87 +3651,87 @@ GET /v1/permissions/catalog
 
 | 旧路径 | 新路径 |
 | --- | --- |
-| `POST /site-login` | `POST /v1/auth/login` |
-| `POST /site-logout` | `POST /v1/auth/logout` |
-| `POST /register` | `POST /v1/auth/register` |
-| `POST /send-verification-code` | `POST /v1/auth/verification-code` |
-| `POST /reset-password` | `POST /v1/auth/password/reset` |
-| `POST /me/refresh-token` | `POST /v1/auth/session/refresh` |
-| `GET /me` | `GET /v1/users/me` |
-| `PATCH /me` | `PATCH /v1/users/me` |
-| 无 | `POST /v1/users/me/email/verification-code` |
-| 无 | `PUT /v1/users/me/email` |
-| `DELETE /me` | `DELETE /v1/users/me` |
-| `POST /me/password` | `POST /v1/users/me/password` |
-| `GET /me/profiles` | `GET /v1/users/me/profiles` |
-| `POST /me/profiles` | `POST /v1/users/me/profiles` |
-| `PATCH /me/profiles/{pid}` | `PATCH /v1/users/me/profiles/{profile_id}` |
-| `DELETE /me/profiles/{pid}` | `DELETE /v1/users/me/profiles/{profile_id}` |
-| `DELETE /me/profiles/{pid}/skin` | `DELETE /v1/users/me/profiles/{profile_id}/skin` |
-| `DELETE /me/profiles/{pid}/cape` | `DELETE /v1/users/me/profiles/{profile_id}/cape` |
-| `GET /me/textures` | `GET /v1/users/me/textures` |
-| `POST /me/textures` | `POST /v1/users/me/textures` |
-| `GET /me/textures/{hash}/{texture_type}` | `GET /v1/users/me/textures/{hash}/{texture_type}` |
-| `PATCH /me/textures/{hash}/{texture_type}` | `PATCH /v1/users/me/textures/{hash}/{texture_type}` |
-| `DELETE /me/textures/{hash}/{texture_type}` | `DELETE /v1/users/me/textures/{hash}/{texture_type}` |
-| `POST /me/textures/{hash}/add` | `POST /v1/users/me/textures/{hash}/wardrobe` |
-| `POST /me/textures/{hash}/apply` | `POST /v1/users/me/textures/{hash}/apply` |
-| `POST /textures/upload` | `POST /v1/users/me/textures/upload-and-apply` |
-| `GET /public/settings` | `GET /v1/public/settings` |
-| `GET /public/homepage-media` | `GET /v1/public/homepage-media` |
-| `GET /public/fallback-status` | `GET /v1/public/fallback-status` |
-| `GET /public/skin-library` | `GET /v1/public/skin-library` |
-| `GET /notices` | `GET /v1/notifications` |
-| `GET /notices/{id}` | `GET /v1/notifications/{notification_id}` |
-| `POST /notices/{id}/read` | `POST /v1/notifications/{notification_id}/read` |
-| `POST /notices/{id}/dismiss` | `POST /v1/notifications/{notification_id}/dismiss` |
-| `GET /microsoft/auth-url` | `GET /v1/imports/microsoft/auth-url` |
-| `GET /microsoft/callback` | `GET /v1/imports/microsoft/callback` |
-| `POST /microsoft/get-profile` | `POST /v1/imports/microsoft/profile` |
-| `POST /microsoft/import-profile` | `POST /v1/imports/microsoft/profile/import` |
-| `POST /remote-ygg/get-profiles` | `POST /v1/imports/remote-ygg/profiles/preview` |
-| `POST /remote-ygg/import-profile` | `POST /v1/imports/remote-ygg/profiles/import` |
-| `POST /remote-ygg/import-profiles` | `POST /v1/imports/remote-ygg/profiles/import-batch` |
-| `GET /admin/users` | `GET /v1/admin/users` |
-| `GET /admin/users/{user_id}` | `GET /v1/admin/users/{user_id}` |
-| `GET /admin/users/{user_id}/profiles` | `GET /v1/admin/users/{user_id}/profiles` |
-| `GET /admin/users/{user_id}/permissions` | `GET /v1/admin/users/{user_id}/permissions` |
-| `PUT /admin/users/{user_id}/roles/{role_id}` | `PUT /v1/admin/users/{user_id}/roles/{role_id}` |
-| `DELETE /admin/users/{user_id}/roles/{role_id}` | `DELETE /v1/admin/users/{user_id}/roles/{role_id}` |
-| `PUT /admin/users/{user_id}/permissions/{permission_code}` | `PUT /v1/admin/users/{user_id}/permissions/{permission_code}` |
-| `DELETE /admin/users/{user_id}/permissions/{permission_code}` | `DELETE /v1/admin/users/{user_id}/permissions/{permission_code}` |
-| `DELETE /admin/users/{user_id}` | `DELETE /v1/admin/users/{user_id}` |
-| `POST /admin/users/{user_id}/ban` | `POST /v1/admin/users/{user_id}/ban` |
-| `POST /admin/users/{user_id}/unban` | `POST /v1/admin/users/{user_id}/unban` |
-| `POST /admin/users/reset-password` | `POST /v1/admin/users/password/reset` |
-| `GET /admin/profiles` | `GET /v1/admin/profiles` |
-| `PATCH /admin/profiles/{profile_id}` | `PATCH /v1/admin/profiles/{profile_id}` |
-| `DELETE /admin/profiles/{profile_id}` | `DELETE /v1/admin/profiles/{profile_id}` |
-| `PATCH /admin/profiles/{profile_id}/skin` | `PATCH /v1/admin/profiles/{profile_id}/skin` |
-| `PATCH /admin/profiles/{profile_id}/cape` | `PATCH /v1/admin/profiles/{profile_id}/cape` |
-| `GET /admin/textures` | `GET /v1/admin/textures` |
-| `PATCH /admin/textures/{hash}` | `PATCH /v1/admin/textures/{hash}` |
-| `DELETE /admin/textures/{hash}` | `DELETE /v1/admin/textures/{hash}` |
-| `GET /admin/invites` | `GET /v1/admin/invites` |
-| `POST /admin/invites` | `POST /v1/admin/invites` |
-| `DELETE /admin/invites/{code}` | `DELETE /v1/admin/invites/{code}` |
-| `GET /admin/official-whitelist` | `GET /v1/admin/official-whitelist` |
-| `POST /admin/official-whitelist` | `POST /v1/admin/official-whitelist` |
-| `DELETE /admin/official-whitelist/{username}` | `DELETE /v1/admin/official-whitelist/{username}` |
-| `GET /admin/homepage-media` | `GET /v1/admin/homepage-media` |
-| `POST /admin/homepage-media/image` | `POST /v1/admin/homepage-media/image` |
-| `POST /admin/homepage-media/panorama` | `POST /v1/admin/homepage-media/panorama` |
-| `PATCH /admin/homepage-media/reorder` | `PATCH /v1/admin/homepage-media/reorder` |
-| `PATCH /admin/homepage-media/{id}` | `PATCH /v1/admin/homepage-media/{id}` |
-| `DELETE /admin/homepage-media/{id}` | `DELETE /v1/admin/homepage-media/{id}` |
-| `GET /admin/notices` | `GET /v1/admin/notifications` |
-| `POST /admin/notices` | `POST /v1/admin/notifications` |
-| `PATCH /admin/notices/{id}` | `PATCH /v1/admin/notifications/{notification_id}`，语义为删除旧通知后创建替代通知 |
-| `DELETE /admin/notices/{id}` | `DELETE /v1/admin/notifications/{notification_id}` |
-| `GET /admin/settings/site` | `GET /v1/admin/settings/site` |
-| `POST /admin/settings/site` | `POST /v1/admin/settings/site` |
-| `GET /admin/settings/{group}` | `GET /v1/admin/settings/{group}` |
-| `POST /admin/settings/{group}` | `POST /v1/admin/settings/{group}` |
+| `POST /site-login` | `POST /v2/auth/login` |
+| `POST /site-logout` | `POST /v2/auth/logout` |
+| `POST /register` | `POST /v2/auth/register` |
+| `POST /send-verification-code` | `POST /v2/auth/verification-code` |
+| `POST /reset-password` | `POST /v2/auth/password/reset` |
+| `POST /me/refresh-token` | `POST /v2/auth/session/refresh` |
+| `GET /me` | `GET /v2/users/me` |
+| `PATCH /me` | `PATCH /v2/users/me` |
+| 无 | `POST /v2/users/me/email/verification-code` |
+| 无 | `PUT /v2/users/me/email` |
+| `DELETE /me` | `DELETE /v2/users/me` |
+| `POST /me/password` | `POST /v2/users/me/password` |
+| `GET /me/profiles` | `GET /v2/users/me/profiles` |
+| `POST /me/profiles` | `POST /v2/users/me/profiles` |
+| `PATCH /me/profiles/{pid}` | `PATCH /v2/users/me/profiles/{profile_id}` |
+| `DELETE /me/profiles/{pid}` | `DELETE /v2/users/me/profiles/{profile_id}` |
+| `DELETE /me/profiles/{pid}/skin` | `DELETE /v2/users/me/profiles/{profile_id}/skin` |
+| `DELETE /me/profiles/{pid}/cape` | `DELETE /v2/users/me/profiles/{profile_id}/cape` |
+| `GET /me/textures` | `GET /v2/users/me/textures` |
+| `POST /me/textures` | `POST /v2/users/me/textures` |
+| `GET /me/textures/{hash}/{texture_type}` | `GET /v2/users/me/textures/{hash}/{texture_type}` |
+| `PATCH /me/textures/{hash}/{texture_type}` | `PATCH /v2/users/me/textures/{hash}/{texture_type}` |
+| `DELETE /me/textures/{hash}/{texture_type}` | `DELETE /v2/users/me/textures/{hash}/{texture_type}` |
+| `POST /me/textures/{hash}/add` | `POST /v2/users/me/textures/{hash}/wardrobe` |
+| `POST /me/textures/{hash}/apply` | `POST /v2/users/me/textures/{hash}/apply` |
+| `POST /textures/upload` | `POST /v2/users/me/textures/upload-and-apply` |
+| `GET /public/settings` | `GET /v2/public/settings` |
+| `GET /public/homepage-media` | `GET /v2/public/homepage-media` |
+| `GET /public/fallback-status` | `GET /v2/public/fallback-status` |
+| `GET /public/skin-library` | `GET /v2/public/skin-library` |
+| `GET /notices` | `GET /v2/notifications` |
+| `GET /notices/{id}` | `GET /v2/notifications/{notification_id}` |
+| `POST /notices/{id}/read` | `POST /v2/notifications/{notification_id}/read` |
+| `POST /notices/{id}/dismiss` | `POST /v2/notifications/{notification_id}/dismiss` |
+| `GET /microsoft/auth-url` | `GET /v2/imports/microsoft/auth-url` |
+| `GET /microsoft/callback` | `GET /v2/imports/microsoft/callback` |
+| `POST /microsoft/get-profile` | `POST /v2/imports/microsoft/profile` |
+| `POST /microsoft/import-profile` | `POST /v2/imports/microsoft/profile/import` |
+| `POST /remote-ygg/get-profiles` | `POST /v2/imports/remote-ygg/profiles/preview` |
+| `POST /remote-ygg/import-profile` | `POST /v2/imports/remote-ygg/profiles/import` |
+| `POST /remote-ygg/import-profiles` | `POST /v2/imports/remote-ygg/profiles/import-batch` |
+| `GET /admin/users` | `GET /v2/admin/users` |
+| `GET /admin/users/{user_id}` | `GET /v2/admin/users/{user_id}` |
+| `GET /admin/users/{user_id}/profiles` | `GET /v2/admin/users/{user_id}/profiles` |
+| `GET /admin/users/{user_id}/permissions` | `GET /v2/admin/users/{user_id}/permissions` |
+| `PUT /admin/users/{user_id}/roles/{role_id}` | `PUT /v2/admin/users/{user_id}/roles/{role_id}` |
+| `DELETE /admin/users/{user_id}/roles/{role_id}` | `DELETE /v2/admin/users/{user_id}/roles/{role_id}` |
+| `PUT /admin/users/{user_id}/permissions/{permission_code}` | `PUT /v2/admin/users/{user_id}/permissions/{permission_code}` |
+| `DELETE /admin/users/{user_id}/permissions/{permission_code}` | `DELETE /v2/admin/users/{user_id}/permissions/{permission_code}` |
+| `DELETE /admin/users/{user_id}` | `DELETE /v2/admin/users/{user_id}` |
+| `POST /admin/users/{user_id}/ban` | `POST /v2/admin/users/{user_id}/ban` |
+| `POST /admin/users/{user_id}/unban` | `POST /v2/admin/users/{user_id}/unban` |
+| `POST /admin/users/reset-password` | `POST /v2/admin/users/password/reset` |
+| `GET /admin/profiles` | `GET /v2/admin/profiles` |
+| `PATCH /admin/profiles/{profile_id}` | `PATCH /v2/admin/profiles/{profile_id}` |
+| `DELETE /admin/profiles/{profile_id}` | `DELETE /v2/admin/profiles/{profile_id}` |
+| `PATCH /admin/profiles/{profile_id}/skin` | `PATCH /v2/admin/profiles/{profile_id}/skin` |
+| `PATCH /admin/profiles/{profile_id}/cape` | `PATCH /v2/admin/profiles/{profile_id}/cape` |
+| `GET /admin/textures` | `GET /v2/admin/textures` |
+| `PATCH /admin/textures/{hash}` | `PATCH /v2/admin/textures/{hash}` |
+| `DELETE /admin/textures/{hash}` | `DELETE /v2/admin/textures/{hash}` |
+| `GET /admin/invites` | `GET /v2/admin/invites` |
+| `POST /admin/invites` | `POST /v2/admin/invites` |
+| `DELETE /admin/invites/{code}` | `DELETE /v2/admin/invites/{code}` |
+| `GET /admin/official-whitelist` | `GET /v2/admin/official-whitelist` |
+| `POST /admin/official-whitelist` | `POST /v2/admin/official-whitelist` |
+| `DELETE /admin/official-whitelist/{username}` | `DELETE /v2/admin/official-whitelist/{username}` |
+| `GET /admin/homepage-media` | `GET /v2/admin/homepage-media` |
+| `POST /admin/homepage-media/image` | `POST /v2/admin/homepage-media/image` |
+| `POST /admin/homepage-media/panorama` | `POST /v2/admin/homepage-media/panorama` |
+| `PATCH /admin/homepage-media/reorder` | `PATCH /v2/admin/homepage-media/reorder` |
+| `PATCH /admin/homepage-media/{id}` | `PATCH /v2/admin/homepage-media/{id}` |
+| `DELETE /admin/homepage-media/{id}` | `DELETE /v2/admin/homepage-media/{id}` |
+| `GET /admin/notices` | `GET /v2/admin/notifications` |
+| `POST /admin/notices` | `POST /v2/admin/notifications` |
+| `PATCH /admin/notices/{id}` | `PATCH /v2/admin/notifications/{notification_id}`，语义为删除旧通知后创建替代通知 |
+| `DELETE /admin/notices/{id}` | `DELETE /v2/admin/notifications/{notification_id}` |
+| `GET /admin/settings/site` | `GET /v2/admin/settings/site` |
+| `POST /admin/settings/site` | `POST /v2/admin/settings/site` |
+| `GET /admin/settings/{group}` | `GET /v2/admin/settings/{group}` |
+| `POST /admin/settings/{group}` | `POST /v2/admin/settings/{group}` |
 
 ## 30. 实现注意事项
 
@@ -3727,13 +3739,13 @@ GET /v1/permissions/catalog
 
 当前后端公开设置中已经包含 `api_url`。迁移后：
 
-- `api_url` 仍表示站点 API 根地址，不自动包含 `/v1`。
-- 前端 API client 应统一拼接 `/v1/...`。
-- Microsoft redirect URI 默认值必须同步迁移到 `/v1/imports/microsoft/callback`。
+- `api_url` 仍表示站点 API 根地址，不自动包含 `/v2`。
+- 前端 API client 应统一拼接 `/v2/...`。
+- Microsoft redirect URI 默认值必须同步迁移到 `/v2/imports/microsoft/callback`。
 
 ### 30.2 前端迁移
 
-前端所有 API client 应迁移到 v1 路径。
+前端所有 API client 应迁移到 v2 路径。
 
 页面路由不受本规范影响，页面路径如下：
 
@@ -3758,26 +3770,26 @@ Yggdrasil 相关测试不应迁移路径。
 
 ### 30.4 Loadtest
 
-loadtest 应覆盖 v1 路径：
+loadtest 应覆盖 v2 路径：
 
 ```text
-/v1/public/settings
-/v1/auth/login
-/v1/users/me
-/v1/users/me/profiles
-/v1/users/me/textures
-/v1/admin/users
-/v1/admin/profiles
-/v1/admin/textures
-/v1/admin/invites
-/v1/admin/settings/site
+/v2/public/settings
+/v2/auth/login
+/v2/users/me
+/v2/users/me/profiles
+/v2/users/me/textures
+/v2/admin/users
+/v2/admin/profiles
+/v2/admin/textures
+/v2/admin/invites
+/v2/admin/settings/site
 ```
 
 Yggdrasil loadtest 路径保持原样。
 
 ## 31. Minecraft 资源权限
 
-`/v1/minecraft/*` 是站点能力 API，不使用 `yggdrasil_*` 权限资源。实现该组接口时必须新增以下资源：
+`/v2/minecraft/*` 是站点能力 API，不使用 `yggdrasil_*` 权限资源。实现该组接口时必须新增以下资源：
 
 ```text
 minecraft_profile
@@ -3806,7 +3818,7 @@ Client Credentials access token 使用应用自身权限主体 `client:{client_i
 
 ## 32. OAuth 资源权限
 
-OAuth 应用和授权是站点能力资源。v1 实现 OAuth 时必须新增以下资源：
+OAuth 应用和授权是站点能力资源。v2 实现 OAuth 时必须新增以下资源：
 
 ```text
 oauth_app
@@ -3839,12 +3851,12 @@ oauth_token.introspect.any
 
 本规范确认以下 breaking change：
 
-1. 当前用户资源统一迁移到 `/v1/users/me/*`。
-2. 用户通知统一迁移到 `/v1/notifications/*`。
-3. Microsoft 导入统一迁移到 `/v1/imports/microsoft/*`。
-4. 远端 Yggdrasil 导入统一迁移到 `/v1/imports/remote-ygg/*`。
-5. 管理员通知的 `PATCH` 保留为 v1 端点，但语义固定为替换发布。
-6. OAuth 标准端点不放入 `/v1`。
-7. `/v1/permissions/catalog` 作为未来 OAuth scope 发现基础。
-8. `/v1/minecraft/*` 是新增站点能力 API，不是 Yggdrasil 协议迁移路径。
+1. 当前用户资源统一迁移到 `/v2/users/me/*`。
+2. 用户通知统一迁移到 `/v2/notifications/*`。
+3. Microsoft 导入统一迁移到 `/v2/imports/microsoft/*`。
+4. 远端 Yggdrasil 导入统一迁移到 `/v2/imports/remote-ygg/*`。
+5. 管理员通知的 `PATCH` 保留为 v2 端点，但语义固定为替换发布。
+6. OAuth 标准端点不放入 `/v2`。
+7. `/v2/permissions/catalog` 作为未来 OAuth scope 发现基础。
+8. `/v2/minecraft/*` 是新增站点能力 API，不是 Yggdrasil 协议迁移路径。
 9. 旧站点 API 不长期保留；Yggdrasil 与 Mojang 兼容端点不在本次迁移范围内。

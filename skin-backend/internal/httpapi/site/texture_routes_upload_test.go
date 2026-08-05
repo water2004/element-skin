@@ -23,7 +23,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 	user := testutil.CreateUser(t, db, "site-texture-upload@test.com", "Password123", "SiteTextureUpload", false)
 	profile := testutil.CreateProfile(t, db, user.ID, "site_texture_upload_apply", "SiteTextureUploadApply")
 
-	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v2/users/me/textures", map[string]string{
 		"texture_type": "skin",
 		"note":         "Uploaded Route Texture",
 		"is_public":    "true",
@@ -32,7 +32,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
 		t.Fatalf("upload texture response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	uploadedHash := jsonStringField(t, rec.Body.String(), "hash")
@@ -41,13 +41,13 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 		t.Fatalf("upload texture should persist library row: info=%#v err=%v", info, err)
 	}
 
-	req = textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
+	req = textureMultipartRequest(t, "/v2/users/me/textures", map[string]string{
 		"note": "Default Skin Type",
 	}, "file", "default-skin.png", routePNGWithColor(t, 64, 64, color.RGBA{R: 90, G: 180, B: 40, A: 255}))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
 		t.Fatalf("upload default texture_type response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	defaultHash := jsonStringField(t, rec.Body.String(), "hash")
@@ -69,7 +69,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req = textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{
+	req = textureMultipartRequest(t, "/v2/users/me/textures/upload-and-apply", map[string]string{
 		"uuid":         profile.ID,
 		"texture_type": "skin",
 		"model":        "slim",
@@ -77,7 +77,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":true`) {
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
 		t.Fatalf("upload and apply response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	appliedHash := jsonStringField(t, rec.Body.String(), "hash")
@@ -96,7 +96,7 @@ func TestTextureRoutesUploadApplyFailureKeepsUploadedLibraryRow(t *testing.T) {
 	other := testutil.CreateUser(t, db, "site-texture-apply-foreign@test.com", "Password123", "SiteTextureApplyForeign", false)
 	foreignProfile := testutil.CreateProfile(t, db, other.ID, "site_texture_foreign_apply", "SiteTextureForeignApply")
 
-	req := textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{
+	req := textureMultipartRequest(t, "/v2/users/me/textures/upload-and-apply", map[string]string{
 		"uuid":         foreignProfile.ID,
 		"texture_type": "skin",
 		"model":        "slim",
@@ -132,7 +132,7 @@ func TestTextureUploadRemovesNewFileWhenDatabaseInsertFails(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v2/users/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "skin.png", routePNG(t, 64, 64))
 	req = withUserActor(req, user.ID)
@@ -170,7 +170,7 @@ func TestTextureUploadKeepsNewFileWhenAnotherTextureTypeReferencesHash(t *testin
 		t.Fatal(err)
 	}
 
-	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v2/users/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "skin.png", data)
 	req = withUserActor(req, uploader.ID)

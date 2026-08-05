@@ -35,7 +35,7 @@ func (h Handler) CreateNotice(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, http.StatusOK, res)
+	util.JSON(w, http.StatusCreated, res)
 }
 
 func (h Handler) PatchNotice(w http.ResponseWriter, req *http.Request) {
@@ -62,7 +62,7 @@ func (h Handler) DeleteNotice(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	util.NoContent(w)
 }
 
 func noticePatchInput(raw map[string]json.RawMessage) (noticesvc.PatchInput, error) {

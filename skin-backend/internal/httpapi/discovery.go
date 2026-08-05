@@ -14,7 +14,7 @@ func (r *Router) Capabilities(w http.ResponseWriter, req *http.Request) {
 		apiURL = strings.TrimRight(r.cfg.SiteURL, "/")
 	}
 	util.JSON(w, http.StatusOK, map[string]any{
-		"api_version": "v1",
+		"api_version": "v2",
 		"site_name":   "Element Skin",
 		"site_url":    strings.TrimRight(r.cfg.SiteURL, "/"),
 		"api_url":     apiURL,

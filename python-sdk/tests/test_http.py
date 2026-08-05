@@ -13,10 +13,10 @@ def test_http_context_manager_returns_self_and_gets_json(response_json) -> None:
     recorder = RequestRecorder(lambda request: response_json({"ok": True}))
 
     with HTTPClient("https://skin.example.test", transport=recorder.transport()) as client:
-        assert client.get("/v1/ping") == {"ok": True}
+        assert client.get("/v2/ping") == {"ok": True}
 
     assert recorder.requests[0].method == "GET"
-    assert recorder.requests[0].path == "/v1/ping"
+    assert recorder.requests[0].path == "/v2/ping"
 
 
 def test_http_close_does_not_close_external_client(response_json) -> None:
@@ -25,11 +25,11 @@ def test_http_close_does_not_close_external_client(response_json) -> None:
     client = HTTPClient("https://skin.example.test", client=external)
 
     client.close()
-    body = external.get("/v1/ping").json()
+    body = external.get("/v2/ping").json()
     external.close()
 
     assert body == {"ok": True}
-    assert recorder.requests[0].path == "/v1/ping"
+    assert recorder.requests[0].path == "/v2/ping"
 
 
 def test_http_put_and_delete_helpers_use_exact_methods(response_json) -> None:
@@ -37,12 +37,12 @@ def test_http_put_and_delete_helpers_use_exact_methods(response_json) -> None:
     recorder = RequestRecorder(lambda request: responses.pop(0))
     client = HTTPClient("https://skin.example.test", transport=recorder.transport())
 
-    assert client.put("/v1/resource", json={"value": "new"}) == {"ok": True}
-    assert client.delete("/v1/resource") is None
+    assert client.put("/v2/resource", json={"value": "new"}) == {"ok": True}
+    assert client.delete("/v2/resource") is None
 
     assert [(request.method, request.path, request.json_body) for request in recorder.requests] == [
-        ("PUT", "/v1/resource", {"value": "new"}),
-        ("DELETE", "/v1/resource", None),
+        ("PUT", "/v2/resource", {"value": "new"}),
+        ("DELETE", "/v2/resource", None),
     ]
 
 
@@ -67,7 +67,7 @@ def test_http_error_mapping_for_site_api(
     client = HTTPClient("https://skin.example.test", transport=recorder.transport())
 
     with pytest.raises(expected_cls) as exc:
-        client.get("/v1/failure")
+        client.get("/v2/failure")
 
     assert exc.value.status_code == status_code
     assert exc.value.detail == expected_detail
@@ -79,7 +79,7 @@ def test_http_error_mapping_for_plain_text_response() -> None:
     client = HTTPClient("https://skin.example.test", transport=recorder.transport())
 
     with pytest.raises(APIError) as exc:
-        client.get("/v1/plain")
+        client.get("/v2/plain")
 
     assert exc.value.status_code == 418
     assert exc.value.detail == "I'm a teapot"

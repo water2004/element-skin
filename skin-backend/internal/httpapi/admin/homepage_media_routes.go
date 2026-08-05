@@ -14,7 +14,7 @@ func (h Handler) ListHomepageMedia(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, items)
+	util.JSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h Handler) UploadHomepageImage(w http.ResponseWriter, req *http.Request) {
@@ -32,7 +32,7 @@ func (h Handler) UploadHomepageImage(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, item)
+	util.JSON(w, http.StatusCreated, item)
 }
 
 func (h Handler) UploadHomepagePanorama(w http.ResponseWriter, req *http.Request) {
@@ -50,7 +50,7 @@ func (h Handler) UploadHomepagePanorama(w http.ResponseWriter, req *http.Request
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, item)
+	util.JSON(w, http.StatusCreated, item)
 }
 
 func (h Handler) PatchHomepageMedia(w http.ResponseWriter, req *http.Request) {
@@ -99,7 +99,7 @@ func (h Handler) ReorderHomepageMedia(w http.ResponseWriter, req *http.Request) 
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) DeleteHomepageMedia(w http.ResponseWriter, req *http.Request) {
@@ -107,5 +107,5 @@ func (h Handler) DeleteHomepageMedia(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }

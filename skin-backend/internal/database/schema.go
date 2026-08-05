@@ -469,7 +469,7 @@ CREATE INDEX IF NOT EXISTS idx_oauth_device_codes_client_status ON oauth_device_
 INSERT INTO settings (key, value) VALUES
 ('microsoft_client_id', ''),
 ('microsoft_client_secret', ''),
-('microsoft_redirect_uri', 'http://localhost:8000/v1/imports/microsoft/callback'),
+('microsoft_redirect_uri', 'http://localhost:8000/v2/imports/microsoft/callback'),
 ('fallback_strategy', 'serial'),
 ('profile_uuid_mode', 'random'),
 ('enable_skin_library', 'true'),

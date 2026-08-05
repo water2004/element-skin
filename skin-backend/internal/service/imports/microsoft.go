@@ -178,7 +178,7 @@ func (s MicrosoftImportWorkflow) Import(ctx context.Context, actor permission.Ac
 }
 
 func (s MicrosoftImportWorkflow) redirectURI(ctx context.Context) (string, error) {
-	fallback := strings.TrimRight(s.APIURL, "/") + "/v1/imports/microsoft/callback"
+	fallback := strings.TrimRight(s.APIURL, "/") + "/v2/imports/microsoft/callback"
 	return s.Settings.Get(ctx, "microsoft_redirect_uri", fallback)
 }
 

@@ -61,7 +61,7 @@ func TestEmailChangeSendsToNewAddressAndConsumesCodeExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result["ok"] != true || result["ttl"] != 180 {
+	if len(result) != 1 || result["ttl"] != 180 {
 		t.Fatalf("email verification response mismatch: %#v", result)
 	}
 	if len(sender.messages) != 1 {

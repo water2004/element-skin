@@ -30,7 +30,7 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 		return next
 	}, states)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/auth-url", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/auth-url", nil)
 	req = withUserActor(req, "microsoft-auth-user")
 	rec := httptest.NewRecorder()
 	h.AuthURL(rec, req)
@@ -39,7 +39,7 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 		t.Fatalf("auth url response mismatch: status=%d body=%q stateLen=%d", rec.Code, rec.Body.String(), states.Len())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/auth-url", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/auth-url", nil)
 	req = withUserActorWithoutPermission(req, "microsoft-auth-user", "microsoft_import.start.owned")
 	rec = httptest.NewRecorder()
 	h.AuthURL(rec, req)
@@ -47,21 +47,21 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 		t.Fatalf("auth URL permission denial mismatch: status=%d body=%q stateLen=%d", rec.Code, rec.Body.String(), states.Len())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?error="+url.QueryEscape("access_denied"), nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?error="+url.QueryEscape("access_denied"), nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Authorization failed: access_denied") {
 		t.Fatalf("callback error response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?code=only-code", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?code=only-code", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"Missing code or state parameter"`) {
 		t.Fatalf("callback missing state response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?code=code&state=missing", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?code=code&state=missing", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
 	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"Invalid or expired state parameter"`) {
@@ -71,7 +71,7 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 	if err := microsoft.SeedStateForTest(states, "wrong-kind-state", map[string]any{"kind": microsoft.TestStateKindProfile, "user_id": "user-id"}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?code=code&state=wrong-kind-state", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?code=code&state=wrong-kind-state", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid or expired state parameter\"}\n" || states.Len() != 1 {
@@ -81,14 +81,14 @@ func TestMicrosoftRoutesAuthURLAndCallbackValidationExactResponses(t *testing.T)
 	if err := microsoft.SeedStateForTest(states, "oauth-state", map[string]any{"kind": microsoft.TestStateKindOAuth, "user_id": "user-id"}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?code=code&state=oauth-state", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?code=code&state=oauth-state", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
 	if rec.Code != http.StatusFound || rec.Header().Get("Location") != "https://skin.example/root/dashboard/roles?error=auth_failed" {
 		t.Fatalf("callback without complete microsoft config should redirect to auth failure: status=%d location=%q body=%q", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/microsoft/profile", strings.NewReader(`{"ms_token":"missing"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/microsoft/profile", strings.NewReader(`{"ms_token":"missing"}`))
 	req = withUserActor(req, "microsoft-profile-user")
 	rec = httptest.NewRecorder()
 	h.GetProfile(rec, req)
@@ -108,7 +108,7 @@ func TestMicrosoftRoutesSettingsFailuresAndMissingSiteURLConsumeStateExactly(t *
 		return next
 	}, states)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/auth-url", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/auth-url", nil)
 	req = withUserActor(req, "microsoft-auth-settings-user")
 	rec := httptest.NewRecorder()
 	h.AuthURL(rec, req)
@@ -121,7 +121,7 @@ func TestMicrosoftRoutesSettingsFailuresAndMissingSiteURLConsumeStateExactly(t *
 	}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?code=code&state=settings-failure-state", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?code=code&state=settings-failure-state", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" || states.Len() != 0 {
@@ -137,7 +137,7 @@ func TestMicrosoftRoutesSettingsFailuresAndMissingSiteURLConsumeStateExactly(t *
 	}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?code=code&state=default-site-state", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?code=code&state=default-site-state", nil)
 	rec = httptest.NewRecorder()
 	h.Callback(rec, req)
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"site URL is not configured\"}\n" || rec.Header().Get("Location") != "" {
@@ -162,7 +162,7 @@ func TestMicrosoftRoutesReturnExactErrorsForLaterDependencyFailures(t *testing.T
 		h := microsoft.New(cfg, db, settings.Settings{DB: db, Redis: cache}, func(next http.HandlerFunc, _ ...permission.Definition) http.HandlerFunc {
 			return next
 		}, states)
-		req := httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/auth-url", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/auth-url", nil)
 		req = withUserActor(req, "microsoft-auth-redirect-failure-user")
 		rec := httptest.NewRecorder()
 		h.AuthURL(rec, req)
@@ -183,7 +183,7 @@ func TestMicrosoftRoutesReturnExactErrorsForLaterDependencyFailures(t *testing.T
 		h := microsoft.New(cfg, db, settings.Settings{DB: db, Redis: cache}, func(next http.HandlerFunc, _ ...permission.Definition) http.HandlerFunc {
 			return next
 		}, states)
-		req := httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/auth-url", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/auth-url", nil)
 		req = withUserActor(req, "microsoft-auth-state-failure-user")
 		rec := httptest.NewRecorder()
 		h.AuthURL(rec, req)
@@ -210,7 +210,7 @@ func TestMicrosoftRoutesReturnExactErrorsForLaterDependencyFailures(t *testing.T
 		h := microsoft.New(cfg, db, settings.Settings{DB: db, Redis: cache}, func(next http.HandlerFunc, _ ...permission.Definition) http.HandlerFunc {
 			return next
 		}, states)
-		req := httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?code=code&state=client-secret-failure-state", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?code=code&state=client-secret-failure-state", nil)
 		rec := httptest.NewRecorder()
 		h.Callback(rec, req)
 
@@ -239,7 +239,7 @@ func TestMicrosoftRoutesReturnExactErrorsForLaterDependencyFailures(t *testing.T
 		h := microsoft.New(cfg, db, settings.Settings{DB: db, Redis: cache}, func(next http.HandlerFunc, _ ...permission.Definition) http.HandlerFunc {
 			return next
 		}, states)
-		req := httptest.NewRequest(http.MethodGet, "/v1/imports/microsoft/callback?code=code&state=redirect-failure-state", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/imports/microsoft/callback?code=code&state=redirect-failure-state", nil)
 		rec := httptest.NewRecorder()
 		h.Callback(rec, req)
 

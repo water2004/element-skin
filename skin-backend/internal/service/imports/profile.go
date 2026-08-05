@@ -46,7 +46,7 @@ func (s ImportService) ImportProfile(ctx context.Context, actor permission.Actor
 		err = s.DB.Profiles.Create(ctx, p)
 		switch {
 		case err == nil:
-			return map[string]any{"ok": true, "profile": profile.Summary(p)}, nil
+			return map[string]any{"profile": profile.Summary(p)}, nil
 		case profile.IsNameConflict(err):
 			continue
 		case profile.IsIDConflict(err):

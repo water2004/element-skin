@@ -48,7 +48,7 @@ func TestOAuthClientCredentialsTokenWorksForMinecraftOnly(t *testing.T) {
 		t.Fatalf("protected resource metadata status=%d body=%s", protectedRes.Code, protectedRes.Body.String())
 	}
 	protected := decodeMap(t, protectedRes.Body.Bytes())
-	if protected["resource"] != "http://localhost:8000/v1" ||
+	if protected["resource"] != "http://localhost:8000/v2" ||
 		len(protected["authorization_servers"].([]any)) != 1 ||
 		protected["authorization_servers"].([]any)[0] != "http://localhost:8000" {
 		t.Fatalf("protected resource metadata mismatch: %#v", protected)
@@ -57,7 +57,7 @@ func TestOAuthClientCredentialsTokenWorksForMinecraftOnly(t *testing.T) {
 		t.Fatalf("protected resource metadata should omit unsupported signing algorithms: %#v", protected)
 	}
 
-	createRes := doJSON(t, router, http.MethodPost, "/v1/oauth/apps", map[string]any{
+	createRes := doJSON(t, router, http.MethodPost, "/v2/oauth/apps", map[string]any{
 		"name":         "Minecraft server plugin",
 		"redirect_uri": "https://server.example/callback",
 		"client_type":  "confidential",
@@ -107,11 +107,11 @@ func TestOAuthClientCredentialsTokenWorksForMinecraftOnly(t *testing.T) {
 		t.Fatalf("basic client credentials token mismatch: %#v", basicToken)
 	}
 
-	meRes := doJSON(t, router, http.MethodGet, "/v1/users/me", nil, nil, access)
+	meRes := doJSON(t, router, http.MethodGet, "/v2/users/me", nil, nil, access)
 	if meRes.Code != http.StatusForbidden || !strings.Contains(meRes.Body.String(), "permission denied") {
 		t.Fatalf("app-only token should not read user me: status=%d body=%s", meRes.Code, meRes.Body.String())
 	}
-	hasJoinedRes := doJSON(t, router, http.MethodPost, "/v1/minecraft/session/has-joined", map[string]any{
+	hasJoinedRes := doJSON(t, router, http.MethodPost, "/v2/minecraft/session/has-joined", map[string]any{
 		"username":  "NoJoinedUser",
 		"server_id": "missing-server",
 	}, nil, access)

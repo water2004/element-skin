@@ -74,7 +74,7 @@ describe('useRemoteYggProfileImport', () => {
   it('loads profiles and selects every returned profile exactly', async () => {
     const getProfiles = vi.fn().mockResolvedValue({
       data: {
-        profiles: [
+        items: [
           { id: 'p1', name: 'Steve' },
           { id: 'p2', name: 'Alex' },
         ],
@@ -106,7 +106,7 @@ describe('useRemoteYggProfileImport', () => {
     const warning = vi.fn()
     const state = useRemoteYggProfileImport({
       warning,
-      getProfiles: vi.fn().mockResolvedValue({ data: { profiles: [] } }),
+      getProfiles: vi.fn().mockResolvedValue({ data: { items: [] } }),
     })
     state.yggApiUrl.value = 'https://remote.example/api'
     state.yggUsername.value = 'empty@example.com'

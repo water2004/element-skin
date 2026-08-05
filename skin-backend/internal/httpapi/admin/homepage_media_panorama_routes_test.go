@@ -41,12 +41,12 @@ func TestHomepageMediaPanoramaUploadUsesGeneratedStandardZipAndYawPitchFields(t 
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec := httptest.NewRecorder()
 	h.UploadHomepagePanorama(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("panorama upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	item := decodeMedia(t, rec.Body.Bytes())
@@ -69,7 +69,7 @@ func TestHomepageMediaPanoramaUploadUsesGeneratedStandardZipAndYawPitchFields(t 
 		}
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/"+item.ID, strings.NewReader(`{"start_yaw":30,"start_pitch":-10,"yaw_speed_dps":-3.5,"pitch_speed_dps":2.25}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/"+item.ID, strings.NewReader(`{"start_yaw":30,"start_pitch":-10,"yaw_speed_dps":-3.5,"pitch_speed_dps":2.25}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
@@ -82,12 +82,12 @@ func TestHomepageMediaPanoramaUploadUsesGeneratedStandardZipAndYawPitchFields(t 
 		t.Fatalf("patched panorama fields mismatch: %#v", patched)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/homepage-media/"+item.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v2/admin/homepage-media/"+item.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteHomepageMedia(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("delete panorama status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if _, err := os.Stat(filepath.Join(cfg.CarouselDir, item.ID)); !os.IsNotExist(err) {
@@ -100,13 +100,13 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	h := admin.NewWithRedis(testutil.TestConfig(), db, testutil.NewMemoryRedis(), nil)
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "bad.txt", []byte("x")))
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "bad.txt", []byte("x")))
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Unsupported file format\"}\n" {
 		t.Fatalf("bad extension mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "bad.zip", invalidPanoramaZip(t)))
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "bad.zip", invalidPanoramaZip(t)))
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"missing panorama_5.png\"}\n" {
 		t.Fatalf("missing face mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -126,7 +126,7 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
@@ -150,7 +150,7 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
@@ -174,7 +174,7 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
@@ -196,7 +196,7 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			req := multipartUploadRequestWithFields(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t), tc.fields)
+			req := multipartUploadRequestWithFields(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t), tc.fields)
 			h.UploadHomepagePanorama(rec, req)
 			if rec.Code != http.StatusBadRequest || rec.Body.String() != tc.body {
 				t.Fatalf("%s mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
@@ -217,7 +217,7 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", tc.data))
+			h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", tc.data))
 			if rec.Code != http.StatusBadRequest || rec.Body.String() != tc.body {
 				t.Fatalf("%s mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
@@ -228,12 +228,12 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	cfg.CarouselDir = t.TempDir()
 	h = admin.NewWithRedis(cfg, db, testutil.NewMemoryRedis(), nil)
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
-	if rec.Code != http.StatusOK {
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("panorama setup status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	item := decodeMedia(t, rec.Body.Bytes())
-	req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/"+item.ID, strings.NewReader(`{"start_yaw":361}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/"+item.ID, strings.NewReader(`{"start_yaw":361}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()

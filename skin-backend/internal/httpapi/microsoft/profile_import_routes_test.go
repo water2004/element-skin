@@ -40,7 +40,7 @@ func TestGetProfileConsumesStateAndIssuesImportTokenExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/imports/microsoft/profile", strings.NewReader(`{"ms_token":"profile-token"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/imports/microsoft/profile", strings.NewReader(`{"ms_token":"profile-token"}`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.GetProfile(rec, req)
@@ -59,7 +59,7 @@ func TestGetProfileConsumesStateAndIssuesImportTokenExactly(t *testing.T) {
 		t.Fatalf("import state profile mismatch: %#v", importState)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/microsoft/profile", strings.NewReader(`{"ms_token":"profile-token"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/microsoft/profile", strings.NewReader(`{"ms_token":"profile-token"}`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.GetProfile(rec, req)
@@ -82,7 +82,7 @@ func TestMicrosoftProfileRoutesRejectWrongOwnerExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/imports/microsoft/profile", strings.NewReader(`{"ms_token":"owned-token"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/imports/microsoft/profile", strings.NewReader(`{"ms_token":"owned-token"}`))
 	req = withUserActor(req, other.ID)
 	rec := httptest.NewRecorder()
 	h.GetProfile(rec, req)
@@ -98,7 +98,7 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 	owner := testutil.CreateUser(t, db, "ms-import-owner@test.com", "Password123", "MSImportOwner", false)
 	other := testutil.CreateUser(t, db, "ms-import-other@test.com", "Password123", "MSImportOther", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/imports/microsoft/profile/import", strings.NewReader(`{"ms_token":"missing"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/imports/microsoft/profile/import", strings.NewReader(`{"ms_token":"missing"}`))
 	req = withUserActor(req, owner.ID)
 	rec := httptest.NewRecorder()
 	h.ImportProfile(rec, req)
@@ -113,7 +113,7 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 	}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/microsoft/profile/import", strings.NewReader(`{"ms_token":"wrong-owner"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/microsoft/profile/import", strings.NewReader(`{"ms_token":"wrong-owner"}`))
 	req = withUserActor(req, owner.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfile(rec, req)
@@ -124,7 +124,7 @@ func TestImportProfileRejectsInvalidTokenOwnerAndPayloadExactly(t *testing.T) {
 	if err := microsoft.SeedStateForTest(states, "bad-payload", map[string]any{"user_id": owner.ID, "kind": microsoft.TestStateKindImport, "profile": "bad"}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/microsoft/profile/import", strings.NewReader(`{"ms_token":"bad-payload"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/microsoft/profile/import", strings.NewReader(`{"ms_token":"bad-payload"}`))
 	req = withUserActor(req, owner.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfile(rec, req)
@@ -153,11 +153,11 @@ func TestImportProfileCreatesProfileFromStateExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/imports/microsoft/profile/import", strings.NewReader(`{"ms_token":"import-ok"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/imports/microsoft/profile/import", strings.NewReader(`{"ms_token":"import-ok"}`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.ImportProfile(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":true`) ||
+	if rec.Code != http.StatusOK ||
 		!strings.Contains(rec.Body.String(), `"id":"ms_import_ok_profile"`) ||
 		!strings.Contains(rec.Body.String(), `"name":"MSImportOK"`) {
 		t.Fatalf("import profile response mismatch: status=%d body=%q", rec.Code, rec.Body.String())

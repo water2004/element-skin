@@ -32,7 +32,7 @@ func TestTextureLibraryWardrobeAndPatchParsingExactState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated["ok"] != true || updated["model"] != "slim" || updated["is_public"] != 2 {
+	if updated["model"] != "slim" || updated["is_public"] != 2 {
 		t.Fatalf("wardrobe model patch mismatch: %#v", updated)
 	}
 	updated, err = svc.UpdateTexture(ctx, textureUserActor(owner.ID), "texture_service_wardrobe_skin", "skin", map[string]any{
@@ -41,7 +41,7 @@ func TestTextureLibraryWardrobeAndPatchParsingExactState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated["ok"] != true || updated["model"] != "default" || updated["is_public"] != 1 {
+	if updated["model"] != "default" || updated["is_public"] != 1 {
 		t.Fatalf("integer public patch mismatch: %#v", updated)
 	}
 	updated, err = svc.UpdateTexture(ctx, textureUserActor(owner.ID), "texture_service_wardrobe_skin", "skin", map[string]any{
@@ -50,7 +50,7 @@ func TestTextureLibraryWardrobeAndPatchParsingExactState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated["ok"] != true || updated["model"] != "default" || updated["is_public"] != 0 {
+	if updated["model"] != "default" || updated["is_public"] != 0 {
 		t.Fatalf("float public patch mismatch: %#v", updated)
 	}
 	ownerInfo, err := db.Textures.GetInfo(ctx, owner.ID, "texture_service_wardrobe_skin", "skin")

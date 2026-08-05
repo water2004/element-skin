@@ -73,11 +73,11 @@ func TestRealBackendLoad(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	loginClient := newHTTPClient(1, 5*time.Second, false)
-	userCookie, err := login(loginClient, server.URL, "/v1/auth/login", seed.User.Email, "Password123")
+	userCookie, err := login(loginClient, server.URL, "/v2/auth/login", seed.User.Email, "Password123")
 	if err != nil {
 		t.Fatalf("login seed user: %v", err)
 	}
-	adminCookie, err := login(loginClient, server.URL, "/v1/auth/login", seed.Admin.Email, "Password123")
+	adminCookie, err := login(loginClient, server.URL, "/v2/auth/login", seed.Admin.Email, "Password123")
 	if err != nil {
 		t.Fatalf("login seed admin: %v", err)
 	}
@@ -136,36 +136,36 @@ func TestRealBackendLoad(t *testing.T) {
 
 func defaultLoadScenarios(seed loadSeed, userCookie, adminCookie string, prepareYggHasJoined func(testing.TB)) []loadScenario {
 	return []loadScenario{
-		{Area: "Public home", Name: "public-settings", Method: http.MethodGet, Path: "/v1/public/settings"},
-		{Area: "Public home", Name: "public-homepage-media", Method: http.MethodGet, Path: "/v1/public/homepage-media"},
-		{Area: "Public library", Name: "public-library-search", Method: http.MethodGet, Path: "/v1/public/skin-library?limit=20&q=Load"},
-		{Area: "Authentication", Name: "site-login", Method: http.MethodPost, Path: "/v1/auth/login", Body: fmt.Sprintf(`{"email":%q,"password":"Password123"}`, seed.User.Email)},
+		{Area: "Public home", Name: "public-settings", Method: http.MethodGet, Path: "/v2/public/settings"},
+		{Area: "Public home", Name: "public-homepage-media", Method: http.MethodGet, Path: "/v2/public/homepage-media"},
+		{Area: "Public library", Name: "public-library-search", Method: http.MethodGet, Path: "/v2/public/skin-library?limit=20&q=Load"},
+		{Area: "Authentication", Name: "site-login", Method: http.MethodPost, Path: "/v2/auth/login", Body: fmt.Sprintf(`{"email":%q,"password":"Password123"}`, seed.User.Email)},
 		{Area: "Yggdrasil", Name: "ygg-metadata", Method: http.MethodGet, Path: "/"},
 		{Area: "Yggdrasil", Name: "ygg-authenticate", Method: http.MethodPost, Path: "/authserver/authenticate", Body: fmt.Sprintf(`{"username":%q,"password":"Password123","requestUser":true}`, seed.User.Email)},
 		{Area: "Yggdrasil", Name: "ygg-validate", Method: http.MethodPost, Path: "/authserver/validate", Body: fmt.Sprintf(`{"accessToken":%q,"clientToken":%q}`, seed.YggAccessToken, seed.YggClientToken)},
 		{Area: "Yggdrasil", Name: "ygg-profile", Method: http.MethodGet, Path: "/sessionserver/session/minecraft/profile/" + seed.ProfileID},
 		{Area: "Yggdrasil", Name: "ygg-lookup-name", Method: http.MethodGet, Path: "/api/users/profiles/minecraft/" + seed.ProfileName},
 		{Area: "Yggdrasil", Name: "ygg-has-joined", Method: http.MethodGet, Path: "/sessionserver/session/minecraft/hasJoined?username=" + seed.ProfileName + "&serverId=" + seed.YggServerID, Prepare: prepareYggHasJoined},
-		{Area: "User center", Name: "me", Method: http.MethodGet, Path: "/v1/users/me", Cookie: userCookie},
-		{Area: "OAuth delegated", Name: "oauth-me", Method: http.MethodGet, Path: "/v1/users/me", Bearer: seed.OAuthUserToken},
-		{Area: "User center", Name: "my-profiles", Method: http.MethodGet, Path: "/v1/users/me/profiles?limit=20", Cookie: userCookie},
-		{Area: "OAuth delegated", Name: "oauth-my-profiles", Method: http.MethodGet, Path: "/v1/users/me/profiles?limit=20", Bearer: seed.OAuthUserToken},
-		{Area: "User center", Name: "my-textures", Method: http.MethodGet, Path: "/v1/users/me/textures?limit=20", Cookie: userCookie},
-		{Area: "OAuth delegated", Name: "oauth-my-textures", Method: http.MethodGet, Path: "/v1/users/me/textures?limit=20", Bearer: seed.OAuthUserToken},
-		{Area: "User center", Name: "texture-detail", Method: http.MethodGet, Path: "/v1/users/me/textures/" + seed.TextureHash + "/skin", Cookie: userCookie},
-		{Area: "OAuth delegated", Name: "oauth-texture-detail", Method: http.MethodGet, Path: "/v1/users/me/textures/" + seed.TextureHash + "/skin", Bearer: seed.OAuthUserToken},
-		{Area: "Admin console", Name: "admin-users", Method: http.MethodGet, Path: "/v1/admin/users?limit=20&q=Load", Cookie: adminCookie},
-		{Area: "OAuth delegated admin", Name: "oauth-admin-users", Method: http.MethodGet, Path: "/v1/admin/users?limit=20&q=Load", Bearer: seed.OAuthAdminToken},
-		{Area: "Admin console", Name: "admin-user-detail", Method: http.MethodGet, Path: "/v1/admin/users/" + seed.User.ID, Cookie: adminCookie},
-		{Area: "OAuth delegated admin", Name: "oauth-admin-user-detail", Method: http.MethodGet, Path: "/v1/admin/users/" + seed.User.ID, Bearer: seed.OAuthAdminToken},
-		{Area: "Admin console", Name: "admin-user-profiles", Method: http.MethodGet, Path: "/v1/admin/users/" + seed.User.ID + "/profiles?limit=20", Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-profiles", Method: http.MethodGet, Path: "/v1/admin/profiles?limit=20", Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-textures", Method: http.MethodGet, Path: "/v1/admin/textures?limit=20", Cookie: adminCookie},
-		{Area: "Admin console", Name: "admin-invites", Method: http.MethodGet, Path: "/v1/admin/invites?limit=20", Cookie: adminCookie},
-		{Area: "OAuth delegated admin", Name: "oauth-admin-invites", Method: http.MethodGet, Path: "/v1/admin/invites?limit=20", Bearer: seed.OAuthAdminToken},
-		{Area: "OAuth client credentials", Name: "oauth-client-invites", Method: http.MethodGet, Path: "/v1/admin/invites?limit=20", Bearer: seed.OAuthClientToken},
-		{Area: "Admin console", Name: "admin-settings-site", Method: http.MethodGet, Path: "/v1/admin/settings/site", Cookie: adminCookie},
-		{Area: "OAuth delegated admin", Name: "oauth-admin-settings-site", Method: http.MethodGet, Path: "/v1/admin/settings/site", Bearer: seed.OAuthAdminToken},
+		{Area: "User center", Name: "me", Method: http.MethodGet, Path: "/v2/users/me", Cookie: userCookie},
+		{Area: "OAuth delegated", Name: "oauth-me", Method: http.MethodGet, Path: "/v2/users/me", Bearer: seed.OAuthUserToken},
+		{Area: "User center", Name: "my-profiles", Method: http.MethodGet, Path: "/v2/users/me/profiles?limit=20", Cookie: userCookie},
+		{Area: "OAuth delegated", Name: "oauth-my-profiles", Method: http.MethodGet, Path: "/v2/users/me/profiles?limit=20", Bearer: seed.OAuthUserToken},
+		{Area: "User center", Name: "my-textures", Method: http.MethodGet, Path: "/v2/users/me/textures?limit=20", Cookie: userCookie},
+		{Area: "OAuth delegated", Name: "oauth-my-textures", Method: http.MethodGet, Path: "/v2/users/me/textures?limit=20", Bearer: seed.OAuthUserToken},
+		{Area: "User center", Name: "texture-detail", Method: http.MethodGet, Path: "/v2/users/me/textures/" + seed.TextureHash + "/skin", Cookie: userCookie},
+		{Area: "OAuth delegated", Name: "oauth-texture-detail", Method: http.MethodGet, Path: "/v2/users/me/textures/" + seed.TextureHash + "/skin", Bearer: seed.OAuthUserToken},
+		{Area: "Admin console", Name: "admin-users", Method: http.MethodGet, Path: "/v2/admin/users?limit=20&q=Load", Cookie: adminCookie},
+		{Area: "OAuth delegated admin", Name: "oauth-admin-users", Method: http.MethodGet, Path: "/v2/admin/users?limit=20&q=Load", Bearer: seed.OAuthAdminToken},
+		{Area: "Admin console", Name: "admin-user-detail", Method: http.MethodGet, Path: "/v2/admin/users/" + seed.User.ID, Cookie: adminCookie},
+		{Area: "OAuth delegated admin", Name: "oauth-admin-user-detail", Method: http.MethodGet, Path: "/v2/admin/users/" + seed.User.ID, Bearer: seed.OAuthAdminToken},
+		{Area: "Admin console", Name: "admin-user-profiles", Method: http.MethodGet, Path: "/v2/admin/users/" + seed.User.ID + "/profiles?limit=20", Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-profiles", Method: http.MethodGet, Path: "/v2/admin/profiles?limit=20", Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-textures", Method: http.MethodGet, Path: "/v2/admin/textures?limit=20", Cookie: adminCookie},
+		{Area: "Admin console", Name: "admin-invites", Method: http.MethodGet, Path: "/v2/admin/invites?limit=20", Cookie: adminCookie},
+		{Area: "OAuth delegated admin", Name: "oauth-admin-invites", Method: http.MethodGet, Path: "/v2/admin/invites?limit=20", Bearer: seed.OAuthAdminToken},
+		{Area: "OAuth client credentials", Name: "oauth-client-invites", Method: http.MethodGet, Path: "/v2/admin/invites?limit=20", Bearer: seed.OAuthClientToken},
+		{Area: "Admin console", Name: "admin-settings-site", Method: http.MethodGet, Path: "/v2/admin/settings/site", Cookie: adminCookie},
+		{Area: "OAuth delegated admin", Name: "oauth-admin-settings-site", Method: http.MethodGet, Path: "/v2/admin/settings/site", Bearer: seed.OAuthAdminToken},
 	}
 }
 

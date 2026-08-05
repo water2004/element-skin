@@ -37,15 +37,15 @@ func TestRouterServeHTTPAddsAuthlibHeaderAndAuthRoutes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: userToken})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !bytes.Contains(rec.Body.Bytes(), []byte(`"id":"`+user.ID+`"`)) || !bytes.Contains(rec.Body.Bytes(), []byte(`"permissions":[`)) {
-		t.Fatalf("/v1/users/me auth response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+		t.Fatalf("/v2/users/me auth response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/users", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: userToken})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -53,7 +53,7 @@ func TestRouterServeHTTPAddsAuthlibHeaderAndAuthRoutes(t *testing.T) {
 		t.Fatalf("non-admin should be forbidden: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users?limit=1", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/users?limit=1", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: adminToken})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -62,7 +62,7 @@ func TestRouterServeHTTPAddsAuthlibHeaderAndAuthRoutes(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/users/me", nil))
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v2/users/me", nil))
 	if rec.Code != http.StatusUnauthorized || !bytes.Contains(rec.Body.Bytes(), []byte("not authenticated")) {
 		t.Fatalf("missing cookie should be unauthorized: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -93,11 +93,11 @@ func TestRouterRegistersRepresentativeRouteGroups(t *testing.T) {
 		wantBody   string
 	}{
 		{name: "metadata", method: http.MethodGet, path: "/", wantStatus: http.StatusOK, wantBody: "implementationName"},
-		{name: "public settings", method: http.MethodGet, path: "/v1/public/settings", wantStatus: http.StatusOK, wantBody: "site_name"},
-		{name: "me route", method: http.MethodGet, path: "/v1/users/me", token: userToken, wantStatus: http.StatusOK, wantBody: user.ID},
-		{name: "admin settings", method: http.MethodGet, path: "/v1/admin/settings/site", token: adminToken, wantStatus: http.StatusOK, wantBody: "site_name"},
+		{name: "public settings", method: http.MethodGet, path: "/v2/public/settings", wantStatus: http.StatusOK, wantBody: "site_name"},
+		{name: "me route", method: http.MethodGet, path: "/v2/users/me", token: userToken, wantStatus: http.StatusOK, wantBody: user.ID},
+		{name: "admin settings", method: http.MethodGet, path: "/v2/admin/settings/site", token: adminToken, wantStatus: http.StatusOK, wantBody: "site_name"},
 		{name: "ygg validate invalid", method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, wantStatus: http.StatusForbidden, wantBody: "Invalid token"},
-		{name: "remote ygg", method: http.MethodPost, path: "/v1/imports/remote-ygg/profiles/preview", token: userToken, body: `{}`, wantStatus: http.StatusBadRequest, wantBody: "api_url, username and password are required"},
+		{name: "remote ygg", method: http.MethodPost, path: "/v2/imports/remote-ygg/profiles/preview", token: userToken, body: `{}`, wantStatus: http.StatusBadRequest, wantBody: "api_url, username and password are required"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -125,7 +125,7 @@ func TestRouterAppliesConfiguredCORSExactly(t *testing.T) {
 	cfg.CORSCredentials = true
 	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/public/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/public/settings", nil)
 	req.Header.Set("Origin", "https://app.example")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -137,7 +137,7 @@ func TestRouterAppliesConfiguredCORSExactly(t *testing.T) {
 		t.Fatalf("cors simple response mismatch: status=%d headers=%#v body=%q", rec.Code, rec.Header(), rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodOptions, "/v1/users/me", nil)
+	req = httptest.NewRequest(http.MethodOptions, "/v2/users/me", nil)
 	req.Header.Set("Origin", "http://localhost:5173")
 	req.Header.Set("Access-Control-Request-Method", "PATCH")
 	req.Header.Set("Access-Control-Request-Headers", "content-type, authorization")
@@ -152,7 +152,7 @@ func TestRouterAppliesConfiguredCORSExactly(t *testing.T) {
 		t.Fatalf("cors preflight response mismatch: status=%d headers=%#v body=%q", rec.Code, rec.Header(), rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodOptions, "/v1/users/me", nil)
+	req = httptest.NewRequest(http.MethodOptions, "/v2/users/me", nil)
 	req.Header.Set("Origin", "https://blocked.example")
 	req.Header.Set("Access-Control-Request-Method", "GET")
 	rec = httptest.NewRecorder()
@@ -169,7 +169,7 @@ func TestRouterRejectsCredentialedWildcardCORSExactly(t *testing.T) {
 	cfg.CORSCredentials = true
 	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/public/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/public/settings", nil)
 	req.Header.Set("Origin", "https://any.example")
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -179,7 +179,7 @@ func TestRouterRejectsCredentialedWildcardCORSExactly(t *testing.T) {
 		t.Fatalf("credentialed wildcard cors mismatch: status=%d headers=%#v body=%q", rec.Code, rec.Header(), rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodOptions, "/v1/users/me", nil)
+	req = httptest.NewRequest(http.MethodOptions, "/v2/users/me", nil)
 	req.Header.Set("Origin", "https://any.example")
 	req.Header.Set("Access-Control-Request-Method", "GET")
 	rec = httptest.NewRecorder()
@@ -190,7 +190,7 @@ func TestRouterRejectsCredentialedWildcardCORSExactly(t *testing.T) {
 
 	cfg.CORSCredentials = false
 	router = httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
-	req = httptest.NewRequest(http.MethodGet, "/v1/public/settings", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/public/settings", nil)
 	req.Header.Set("Origin", "https://any.example")
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)

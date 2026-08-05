@@ -41,7 +41,7 @@ func TestNewOpensDependenciesBuildsRouterAndClosesExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/public/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/public/settings", nil)
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"site_name"`) {
@@ -76,7 +76,7 @@ func TestNewWithDBBuildsWorkingRouterAndCloseReleasesRedis(t *testing.T) {
 	}
 	defer application.Close()
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/public/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/public/settings", nil)
 	rec := httptest.NewRecorder()
 	application.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"site_name"`) {

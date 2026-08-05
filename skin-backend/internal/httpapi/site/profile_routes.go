@@ -18,7 +18,7 @@ func (h Handler) CreateProfile(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusCreated, res)
 }
 
 func (h Handler) UpdateProfile(w http.ResponseWriter, req *http.Request) {
@@ -31,7 +31,7 @@ func (h Handler) UpdateProfile(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) DeleteProfile(w http.ResponseWriter, req *http.Request) {
@@ -39,7 +39,7 @@ func (h Handler) DeleteProfile(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) ClearProfileSkin(w http.ResponseWriter, req *http.Request) {
@@ -47,7 +47,7 @@ func (h Handler) ClearProfileSkin(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) ClearProfileCape(w http.ResponseWriter, req *http.Request) {
@@ -55,7 +55,7 @@ func (h Handler) ClearProfileCape(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func profilePathID(req *http.Request) string {

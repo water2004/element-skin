@@ -353,7 +353,7 @@ POST /oauth/par
 | --- | --- | --- |
 | `authorization_code` | 必须 | 必须配合 PKCE |
 | `refresh_token` | 必须 | 必须轮换 |
-| `client_credentials` | 已落地 | 管理员审核后的应用主体能力；首个目标场景是 `/v1/minecraft/session/has-joined` |
+| `client_credentials` | 已落地 | 管理员审核后的应用主体能力；首个目标场景是 `/v2/minecraft/session/has-joined` |
 | `urn:ietf:params:oauth:grant-type:device_code` | 建议 | 启动器、CLI、插件体验好 |
 | `password` | 禁止 | OAuth 2.1 不保留 |
 | `implicit` | 禁止 | OAuth 2.1 不保留 |
@@ -466,10 +466,10 @@ client subject effective permissions
 Client Credentials 首批站点能力包括 Minecraft 服务端查询和经管理员审核下放的站点管理能力：
 
 ```http
-POST /v1/minecraft/session/has-joined
-GET  /v1/admin/invites
-POST /v1/admin/invites
-DELETE /v1/admin/invites/{id}
+POST /v2/minecraft/session/has-joined
+GET  /v2/admin/invites
+POST /v2/admin/invites
+DELETE /v2/admin/invites/{id}
 ```
 
 对应权限示例：

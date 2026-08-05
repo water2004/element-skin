@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import httpx
 import pytest
 
 from element_skin_sdk import ElementSkinAPI
@@ -34,7 +35,7 @@ def test_me_sends_bearer_token_and_returns_exact_body(response_json) -> None:
 
     assert body == ME_RESPONSE
     assert recorder.requests[0].method == "GET"
-    assert recorder.requests[0].path == "/v1/users/me"
+    assert recorder.requests[0].path == "/v2/users/me"
     assert recorder.requests[0].headers["authorization"] == "Bearer access-token-1"
 
 
@@ -61,10 +62,10 @@ def test_local_permission_check_blocks_request_before_transport(response_json) -
 
 def test_email_change_uses_exact_permission_paths_and_bodies(response_json) -> None:
     responses = [
-        {"ok": True, "ttl": 300},
-        {"ok": True},
+        response_json({"ttl": 300}),
+        httpx.Response(204),
     ]
-    recorder = RequestRecorder(lambda request: response_json(responses.pop(0)))
+    recorder = RequestRecorder(lambda request: responses.pop(0))
     api = ElementSkinAPI(
         "https://skin.example.test",
         access_token="access-token-1",
@@ -75,11 +76,11 @@ def test_email_change_uses_exact_permission_paths_and_bodies(response_json) -> N
     sent = api.request_email_change_code("new@example.com")
     changed = api.change_email("new@example.com", "EMAIL123")
 
-    assert sent == {"ok": True, "ttl": 300}
-    assert changed == {"ok": True}
+    assert sent == {"ttl": 300}
+    assert changed is None
     assert [(request.method, request.path, request.json_body) for request in recorder.requests] == [
-        ("POST", "/v1/users/me/email/verification-code", {"email": "new@example.com"}),
-        ("PUT", "/v1/users/me/email", {"email": "new@example.com", "code": "EMAIL123"}),
+        ("POST", "/v2/users/me/email/verification-code", {"email": "new@example.com"}),
+        ("PUT", "/v2/users/me/email", {"email": "new@example.com", "code": "EMAIL123"}),
     ]
 
 
@@ -115,14 +116,14 @@ def test_list_profiles_uses_exact_cursor_params(response_json) -> None:
     body = api.list_profiles(cursor="cursor-1", page_size=20)
 
     assert body == PROFILE_PAGE_RESPONSE
-    assert recorder.requests[0].path == "/v1/users/me/profiles"
+    assert recorder.requests[0].path == "/v2/users/me/profiles"
     assert recorder.requests[0].query == {"cursor": ["cursor-1"], "limit": ["20"]}
 
 
 def test_profile_mutations_use_exact_methods_paths_and_bodies(response_json) -> None:
     responses = [
         {"id": "profile-1", "name": "Created", "model": "default"},
-        {"id": "profile-1", "name": "Renamed", "model": "slim"},
+        None,
         None,
     ]
 
@@ -149,12 +150,12 @@ def test_profile_mutations_use_exact_methods_paths_and_bodies(response_json) -> 
     deleted = api.delete_profile("profile-1")
 
     assert created == {"id": "profile-1", "name": "Created", "model": "default"}
-    assert updated == {"id": "profile-1", "name": "Renamed", "model": "slim"}
+    assert updated is None
     assert deleted is None
     assert [(request.method, request.path, request.json_body) for request in recorder.requests] == [
-        ("POST", "/v1/users/me/profiles", {"name": "Created", "model": "default"}),
-        ("PATCH", "/v1/users/me/profiles/profile-1", {"name": "Renamed", "model": "slim"}),
-        ("DELETE", "/v1/users/me/profiles/profile-1", None),
+        ("POST", "/v2/users/me/profiles", {"name": "Created", "model": "default"}),
+        ("PATCH", "/v2/users/me/profiles/profile-1", {"name": "Renamed", "model": "slim"}),
+        ("DELETE", "/v2/users/me/profiles/profile-1", None),
     ]
 
 
@@ -170,7 +171,7 @@ def test_list_textures_uses_backend_texture_type_param(response_json) -> None:
     body = api.list_textures(texture_type="skin", cursor="texture-cursor", page_size=10)
 
     assert body == {"items": [], "has_next": False}
-    assert recorder.requests[0].path == "/v1/users/me/textures"
+    assert recorder.requests[0].path == "/v2/users/me/textures"
     assert recorder.requests[0].query == {
         "texture_type": ["skin"],
         "cursor": ["texture-cursor"],
@@ -191,15 +192,15 @@ def test_update_texture_uses_hash_and_type_path_with_exact_body(response_json) -
 
     assert body == {"hash": "hash-1", "type": "skin"}
     assert recorder.requests[0].method == "PATCH"
-    assert recorder.requests[0].path == "/v1/users/me/textures/hash-1/skin"
+    assert recorder.requests[0].path == "/v2/users/me/textures/hash-1/skin"
     assert recorder.requests[0].json_body == {"note": "A note", "model": "slim"}
 
 
 def test_texture_delete_wardrobe_and_minecraft_wrappers_use_exact_shapes(response_json) -> None:
     responses = [
         None,
-        {"hash": "hash-1", "type": "skin", "added": True},
-        {"profile_id": "profile-1", "texture_type": "skin"},
+        None,
+        None,
         {"id": "profile-1", "name": "Alice"},
         {"profiles": [{"id": "profile-1", "name": "Alice"}]},
     ]
@@ -224,31 +225,24 @@ def test_texture_delete_wardrobe_and_minecraft_wrappers_use_exact_shapes(respons
     )
 
     assert api.delete_texture("hash-1", "skin") is None
-    assert api.add_texture_to_wardrobe("hash-1", texture_type="skin") == {
-        "hash": "hash-1",
-        "type": "skin",
-        "added": True,
-    }
-    assert api.apply_texture("hash-1", profile_id="profile-1", texture_type="skin") == {
-        "profile_id": "profile-1",
-        "texture_type": "skin",
-    }
+    assert api.add_texture_to_wardrobe("hash-1", texture_type="skin") is None
+    assert api.apply_texture("hash-1", profile_id="profile-1", texture_type="skin") is None
     assert api.minecraft_profile("Alice") == {"id": "profile-1", "name": "Alice"}
     assert api.minecraft_profiles(["Alice"]) == {"profiles": [{"id": "profile-1", "name": "Alice"}]}
     assert [
         (request.method, request.path, request.query, request.json_body)
         for request in recorder.requests
     ] == [
-        ("DELETE", "/v1/users/me/textures/hash-1/skin", {}, None),
-        ("POST", "/v1/users/me/textures/hash-1/wardrobe", {"texture_type": ["skin"]}, None),
+        ("DELETE", "/v2/users/me/textures/hash-1/skin", {}, None),
+        ("POST", "/v2/users/me/textures/hash-1/wardrobe", {"texture_type": ["skin"]}, None),
         (
             "POST",
-            "/v1/users/me/textures/hash-1/apply",
+            "/v2/users/me/textures/hash-1/apply",
             {},
             {"profile_id": "profile-1", "texture_type": "skin"},
         ),
-        ("GET", "/v1/minecraft/profiles/by-name/Alice", {}, None),
-        ("POST", "/v1/minecraft/profiles/by-names", {}, {"names": ["Alice"]}),
+        ("GET", "/v2/minecraft/profiles/by-name/Alice", {}, None),
+        ("POST", "/v2/minecraft/profiles/by-names", {}, {"names": ["Alice"]}),
     ]
 
 
@@ -269,7 +263,7 @@ def test_minecraft_has_joined_posts_exact_json(response_json) -> None:
 
     assert body == MINECRAFT_HAS_JOINED_RESPONSE
     assert recorder.requests[0].method == "POST"
-    assert recorder.requests[0].path == "/v1/minecraft/session/has-joined"
+    assert recorder.requests[0].path == "/v2/minecraft/session/has-joined"
     assert recorder.requests[0].json_body == {
         "username": "Alice",
         "server_id": "server-hash",
@@ -317,4 +311,4 @@ def test_missing_permission_metadata_allows_request_when_token_permissions_unkno
     )
 
     assert api.me() == ME_RESPONSE
-    assert recorder.requests[0].path == "/v1/users/me"
+    assert recorder.requests[0].path == "/v2/users/me"

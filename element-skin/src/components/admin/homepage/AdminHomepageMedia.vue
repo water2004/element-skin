@@ -125,7 +125,7 @@ async function fetchItems() {
   loading.value = true
   try {
     const res = await listHomepageMedia()
-    const normalized = res.data.map(normalizeHomepageMedia)
+    const normalized = res.data.items.map(normalizeHomepageMedia)
     items.value = cloneHomepageMediaItems(normalized)
     savedItems.value = cloneHomepageMediaItems(normalized)
   } catch {

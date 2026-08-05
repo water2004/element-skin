@@ -22,7 +22,7 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 	adminSession := webCookie(t, cfg.JWTSecret, adminUser.ID)
 	userSession := webCookie(t, cfg.JWTSecret, user.ID)
 
-	createRes := doJSON(t, router, http.MethodPost, "/v1/oauth/apps", map[string]any{
+	createRes := doJSON(t, router, http.MethodPost, "/v2/oauth/apps", map[string]any{
 		"name":         "Malformed route app",
 		"redirect_uri": "https://malformed.example/callback",
 		"client_type":  "confidential",
@@ -39,10 +39,10 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 		path   string
 		cookie *http.Cookie
 	}{
-		{name: "create app", method: http.MethodPost, path: "/v1/oauth/apps", cookie: userSession},
-		{name: "update app", method: http.MethodPatch, path: "/v1/oauth/apps/" + clientID, cookie: userSession},
-		{name: "review app", method: http.MethodPatch, path: "/v1/admin/oauth/apps/" + clientID + "/review", cookie: adminSession},
-		{name: "permission override", method: http.MethodPut, path: "/v1/oauth/apps/" + clientID + "/permissions/account.read.self", cookie: adminSession},
+		{name: "create app", method: http.MethodPost, path: "/v2/oauth/apps", cookie: userSession},
+		{name: "update app", method: http.MethodPatch, path: "/v2/oauth/apps/" + clientID, cookie: userSession},
+		{name: "review app", method: http.MethodPatch, path: "/v2/admin/oauth/apps/" + clientID + "/review", cookie: adminSession},
+		{name: "permission override", method: http.MethodPut, path: "/v2/oauth/apps/" + clientID + "/permissions/account.read.self", cookie: adminSession},
 		{name: "authorize", method: http.MethodPost, path: "/oauth/authorize", cookie: userSession},
 		{name: "device decision", method: http.MethodPost, path: "/oauth/device", cookie: userSession},
 	} {
@@ -54,19 +54,19 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 		})
 	}
 
-	reviewRes := doJSON(t, router, http.MethodPatch, "/v1/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "pending"}, adminSession, "")
+	reviewRes := doJSON(t, router, http.MethodPatch, "/v2/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "pending"}, adminSession, "")
 	if reviewRes.Code != http.StatusBadRequest || reviewRes.Body.String() != "{\"detail\":\"invalid status\"}\n" {
 		t.Fatalf("invalid review status mismatch: status=%d body=%s", reviewRes.Code, reviewRes.Body.String())
 	}
-	rejectWithoutReason := doJSON(t, router, http.MethodPatch, "/v1/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "rejected"}, adminSession, "")
+	rejectWithoutReason := doJSON(t, router, http.MethodPatch, "/v2/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "rejected"}, adminSession, "")
 	if rejectWithoutReason.Code != http.StatusBadRequest || rejectWithoutReason.Body.String() != "{\"detail\":\"reason is required\"}\n" {
 		t.Fatalf("reject without reason mismatch: status=%d body=%s", rejectWithoutReason.Code, rejectWithoutReason.Body.String())
 	}
-	grantRes := doJSON(t, router, http.MethodPut, "/v1/oauth/apps/"+clientID+"/permissions/nope.nope.nope", map[string]any{"effect": "allow"}, adminSession, "")
+	grantRes := doJSON(t, router, http.MethodPut, "/v2/oauth/apps/"+clientID+"/permissions/nope.nope.nope", map[string]any{"effect": "allow"}, adminSession, "")
 	if grantRes.Code != http.StatusBadRequest || grantRes.Body.String() != "{\"detail\":\"invalid permission\"}\n" {
 		t.Fatalf("invalid client permission mismatch: status=%d body=%s", grantRes.Code, grantRes.Body.String())
 	}
-	clearRes := doJSON(t, router, http.MethodDelete, "/v1/oauth/apps/"+clientID+"/permissions/nope.nope.nope", nil, adminSession, "")
+	clearRes := doJSON(t, router, http.MethodDelete, "/v2/oauth/apps/"+clientID+"/permissions/nope.nope.nope", nil, adminSession, "")
 	if clearRes.Code != http.StatusBadRequest || clearRes.Body.String() != "{\"detail\":\"invalid permission\"}\n" {
 		t.Fatalf("clear invalid client permission mismatch: status=%d body=%s", clearRes.Code, clearRes.Body.String())
 	}
@@ -122,25 +122,25 @@ func TestOAuthHandlerForwardsServiceErrorsExactly(t *testing.T) {
 		body   string
 		call   func(http.ResponseWriter, *http.Request)
 	}{
-		{name: "list apps", method: http.MethodGet, path: "/v1/oauth/apps", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListApps},
-		{name: "admin list apps", method: http.MethodGet, path: "/v1/admin/oauth/apps", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListAdminApps},
-		{name: "submit review", method: http.MethodPost, path: "/v1/oauth/apps/missing/review-submission", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+		{name: "list apps", method: http.MethodGet, path: "/v2/oauth/apps", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListApps},
+		{name: "admin list apps", method: http.MethodGet, path: "/v2/admin/oauth/apps", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListAdminApps},
+		{name: "submit review", method: http.MethodPost, path: "/v2/oauth/apps/missing/review-submission", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
 			req.SetPathValue("client_id", "missing")
 			handler.SubmitAppReview(rec, req)
 		}},
-		{name: "rotate secret", method: http.MethodPost, path: "/v1/oauth/apps/missing/secret", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+		{name: "rotate secret", method: http.MethodPost, path: "/v2/oauth/apps/missing/secret", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
 			req.SetPathValue("client_id", "missing")
 			handler.RotateSecret(rec, req)
 		}},
-		{name: "delete app", method: http.MethodDelete, path: "/v1/oauth/apps/missing", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+		{name: "delete app", method: http.MethodDelete, path: "/v2/oauth/apps/missing", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
 			req.SetPathValue("client_id", "missing")
 			handler.DeleteApp(rec, req)
 		}},
-		{name: "client permissions", method: http.MethodGet, path: "/v1/oauth/apps/missing/permissions", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+		{name: "client permissions", method: http.MethodGet, path: "/v2/oauth/apps/missing/permissions", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
 			req.SetPathValue("client_id", "missing")
 			handler.ClientPermissions(rec, req)
 		}},
-		{name: "list grants", method: http.MethodGet, path: "/v1/oauth/grants", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListGrants},
+		{name: "list grants", method: http.MethodGet, path: "/v2/oauth/grants", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListGrants},
 		{name: "authorize info", method: http.MethodGet, path: "/oauth/authorize", status: http.StatusBadRequest, body: "{\"detail\":\"response_type must be code\"}\n", call: handler.AuthorizeInfo},
 		{name: "device info", method: http.MethodGet, path: "/oauth/device?user_code=missing", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.DeviceInfo},
 	} {
@@ -160,7 +160,7 @@ func TestOAuthHandlerForwardsServiceErrorsExactly(t *testing.T) {
 		t.Fatalf("site-url protected metadata status=%d body=%s", rec.Code, rec.Body.String())
 	}
 	protected := decodeMap(t, rec.Body.Bytes())
-	if protected["resource"] != "https://skin.example/v1" ||
+	if protected["resource"] != "https://skin.example/v2" ||
 		protected["authorization_servers"].([]any)[0] != "https://skin.example" {
 		t.Fatalf("site-url protected metadata mismatch: %#v", protected)
 	}

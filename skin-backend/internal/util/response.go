@@ -21,6 +21,10 @@ func JSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+func NoContent(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func Error(w http.ResponseWriter, err error) {
 	if he, ok := err.(HTTPError); ok {
 		if he.YggError != "" {

@@ -30,7 +30,7 @@ func TestVerificationSendAndVerifyExactStoredCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res["ok"] != true || res["ttl"] != 180 {
+	if len(res) != 1 || res["ttl"] != 180 {
 		t.Fatalf("verification response mismatch: %#v", res)
 	}
 	code, err := svc.Redis.GetVerificationCode(ctx, "verify-service@test.com", "register")
@@ -60,7 +60,7 @@ func TestVerificationRejectsInvalidRequestsAndHidesMissingResetAccount(t *testin
 	}
 
 	res, err := svc.SendVerificationCode(ctx, "missing-reset@test.com", "reset")
-	if err != nil || res["ok"] != true || res["ttl"] != 0 {
+	if err != nil || len(res) != 1 || res["ttl"] != 0 {
 		t.Fatalf("missing reset account should return generic ok without code: res=%#v err=%v", res, err)
 	}
 	if _, err := svc.Redis.GetVerificationCode(ctx, "missing-reset@test.com", "reset"); !errors.Is(err, redisstore.ErrCacheMiss) {

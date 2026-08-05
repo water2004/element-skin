@@ -12,17 +12,17 @@ export interface NoticeListParams {
 export function getNotices(
   params: NoticeListParams = {},
 ): Promise<{ data: CursorPageResponse<NoticeView> }> {
-  return client.get('/v1/notifications', { params })
+  return client.get('/v2/notifications', { params })
 }
 
 export function getNotice(id: string): Promise<{ data: NoticeView }> {
-  return client.get(`/v1/notifications/${id}`)
+  return client.get(`/v2/notifications/${id}`)
 }
 
-export function markNoticeRead(id: string): Promise<{ data: NoticeView }> {
-  return client.post(`/v1/notifications/${id}/read`)
+export function markNoticeRead(id: string): Promise<{ data: void }> {
+  return client.post(`/v2/notifications/${id}/read`)
 }
 
-export function dismissNotice(id: string): Promise<{ data: { ok: boolean } }> {
-  return client.post(`/v1/notifications/${id}/dismiss`)
+export function dismissNotice(id: string): Promise<{ data: void }> {
+  return client.post(`/v2/notifications/${id}/dismiss`)
 }

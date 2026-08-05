@@ -24,7 +24,7 @@ func TestRoutesRegistersPublicAndYggdrasilEntrypointsExactly(t *testing.T) {
 		want   string
 	}{
 		{method: http.MethodGet, path: "/", status: http.StatusOK, want: "implementationName"},
-		{method: http.MethodGet, path: "/v1/public/settings", status: http.StatusOK, want: "site_name"},
+		{method: http.MethodGet, path: "/v2/public/settings", status: http.StatusOK, want: "site_name"},
 		{method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, status: http.StatusForbidden, want: "Invalid token"},
 	}
 	for _, tc := range cases {
@@ -33,6 +33,25 @@ func TestRoutesRegistersPublicAndYggdrasilEntrypointsExactly(t *testing.T) {
 		router.ServeHTTP(rec, req)
 		if rec.Code != tc.status || !strings.Contains(rec.Body.String(), tc.want) {
 			t.Fatalf("%s %s mismatch: status=%d body=%q", tc.method, tc.path, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestRoutesDoNotRetainV1CompatibilityPaths(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cfg := testutil.TestConfig()
+	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
+
+	for _, path := range []string{
+		"/v1/public/settings",
+		"/v1/auth/login",
+		"/v1/users/me",
+		"/v1/admin/users",
+	} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+		if rec.Code != http.StatusNotFound || rec.Body.String() != "404 page not found\n" {
+			t.Fatalf("legacy path %s mismatch: status=%d body=%q", path, rec.Code, rec.Body.String())
 		}
 	}
 }

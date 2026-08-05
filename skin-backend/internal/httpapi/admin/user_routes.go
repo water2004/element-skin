@@ -33,7 +33,7 @@ func (h Handler) GrantUserRole(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true, "role_id": roleID})
+	util.NoContent(w)
 }
 
 func (h Handler) RevokeUserRole(w http.ResponseWriter, req *http.Request) {
@@ -43,7 +43,7 @@ func (h Handler) RevokeUserRole(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true, "role_id": roleID})
+	util.NoContent(w)
 }
 
 func (h Handler) TransferProtectedSubject(w http.ResponseWriter, req *http.Request) {
@@ -52,7 +52,7 @@ func (h Handler) TransferProtectedSubject(w http.ResponseWriter, req *http.Reque
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true, "user_id": targetID})
+	util.NoContent(w)
 }
 
 func (h Handler) UserPermissions(w http.ResponseWriter, req *http.Request) {
@@ -77,7 +77,7 @@ func (h Handler) SetUserPermissionOverride(w http.ResponseWriter, req *http.Requ
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true, "permission_code": code, "effect": body.Effect})
+	util.NoContent(w)
 }
 
 func (h Handler) ClearUserPermissionOverride(w http.ResponseWriter, req *http.Request) {
@@ -86,7 +86,7 @@ func (h Handler) ClearUserPermissionOverride(w http.ResponseWriter, req *http.Re
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true, "permission_code": code})
+	util.NoContent(w)
 }
 
 func (h Handler) DeleteUser(w http.ResponseWriter, req *http.Request) {
@@ -95,7 +95,7 @@ func (h Handler) DeleteUser(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) UserProfiles(w http.ResponseWriter, req *http.Request) {
@@ -124,7 +124,7 @@ func (h Handler) BanUser(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true, "banned_until": until})
+	util.JSON(w, http.StatusOK, map[string]any{"banned_until": until})
 }
 
 func (h Handler) UnbanUser(w http.ResponseWriter, req *http.Request) {
@@ -132,7 +132,7 @@ func (h Handler) UnbanUser(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) ResetUserPassword(w http.ResponseWriter, req *http.Request) {
@@ -148,5 +148,5 @@ func (h Handler) ResetUserPassword(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }

@@ -16,20 +16,20 @@ func TestListHomepageMedia(t *testing.T) {
 	h := admin.NewWithRedis(cfg, db, cache, nil)
 
 	t.Run("empty list", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/admin/homepage-media", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/admin/homepage-media", nil)
 		req = withAdminActor(req, "admin-test-user")
 		rec := httptest.NewRecorder()
 		h.ListHomepageMedia(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("empty list status=%d body=%q", rec.Code, rec.Body.String())
 		}
-		if rec.Body.String() != "[]\n" {
-			t.Fatalf("empty list must be [], got %q", rec.Body.String())
+		if rec.Body.String() != "{\"items\":[]}\n" {
+			t.Fatalf("empty list response mismatch: %q", rec.Body.String())
 		}
 	})
 
 	t.Run("permission denied", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/v1/admin/homepage-media", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/admin/homepage-media", nil)
 		rec := httptest.NewRecorder()
 		h.ListHomepageMedia(rec, req)
 		if rec.Code != http.StatusForbidden {

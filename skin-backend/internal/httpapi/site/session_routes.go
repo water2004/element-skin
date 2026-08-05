@@ -52,7 +52,7 @@ func (h Handler) Logout(w http.ResponseWriter, req *http.Request) {
 	}
 	http.SetCookie(w, h.sessionCookie("access_token", "", -1))
 	http.SetCookie(w, h.sessionCookie("refresh_token", "", -1))
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) Register(w http.ResponseWriter, req *http.Request) {
@@ -69,7 +69,7 @@ func (h Handler) Register(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"id": id})
+	util.JSON(w, http.StatusCreated, map[string]any{"id": id})
 }
 
 func (h Handler) SendVerificationCode(w http.ResponseWriter, req *http.Request) {
@@ -111,7 +111,7 @@ func (h Handler) ResetPassword(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) RefreshToken(w http.ResponseWriter, req *http.Request) {

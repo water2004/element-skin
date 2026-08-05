@@ -49,7 +49,7 @@ func TestSendEmailChangeStoresExactPurposeAfterDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result["ok"] != true || result["ttl"] != 90 {
+	if len(result) != 1 || result["ttl"] != 90 {
 		t.Fatalf("result=%#v; want ok=true ttl=90", result)
 	}
 	if sender.calls != 1 || sender.to != "new-email@test.com" || sender.purpose != verificationsvc.PurposeEmailChange || len(sender.code) != 8 {

@@ -164,7 +164,7 @@ func TestImportProfileRequiresTexturePermissionOnlyWhenAssetsExist(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profileOnly["ok"] != true || profileOnly["profile"].(map[string]any)["id"] != "profile_only_import" {
+	if len(profileOnly) != 1 || profileOnly["profile"].(map[string]any)["id"] != "profile_only_import" {
 		t.Fatalf("profile-only import should succeed with profile permission: %#v", profileOnly)
 	}
 

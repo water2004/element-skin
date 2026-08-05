@@ -29,7 +29,7 @@ func (h Handler) UpdateTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
@@ -39,7 +39,7 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"success": true})
+	util.NoContent(w)
 }
 
 func textureTypeFromRequest(req *http.Request, body map[string]any) string {

@@ -40,7 +40,7 @@ onMounted(async () => {
   // 加载首页媒体
   try {
     const res = await getPublicHomepageMedia()
-    scene.setMedia(res.data)
+    scene.setMedia(res.data.items)
   } catch (e) {
     console.warn('Failed to load homepage media:', e)
   }

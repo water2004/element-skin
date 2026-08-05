@@ -1,7 +1,7 @@
 # Element Skin Python SDK 文档
 
 本目录面向第三方 Python 应用开发者，说明如何使用 `element-skin-sdk` 接入
-Element Skin 的 OAuth 和 `/v1` API。
+Element Skin 的 OAuth 和 `/v2` API。
 
 ## 阅读顺序
 
@@ -17,7 +17,7 @@ Element Skin 的 OAuth 和 `/v1` API。
 ```text
 element_skin_sdk
 ├── OAuthClient             OAuth 2.1 流程封装
-├── ElementSkinAPI          `/v1` API 客户端
+├── ElementSkinAPI          `/v2` API 客户端
 ├── permissions             权限常量和校验器
 ├── oauth                   PKCE 与 token 存储
 ├── models                  token、权限等数据模型
@@ -39,15 +39,15 @@ element_skin_sdk
 
 当前同步客户端覆盖常用用户 API 和 Minecraft 能力 API：
 
-- `GET /v1/users/me`
-- `POST /v1/users/me/email/verification-code`
-- `PUT /v1/users/me/email`
-- `GET/POST/PATCH/DELETE /v1/users/me/profiles`
-- `GET/PATCH/DELETE /v1/users/me/textures/{hash}/{texture_type}`
-- `POST /v1/users/me/textures/{hash}/wardrobe`
-- `POST /v1/users/me/textures/{hash}/apply`
-- `GET /v1/minecraft/profiles/by-name/{name}`
-- `POST /v1/minecraft/profiles/by-names`
-- `POST /v1/minecraft/session/has-joined`
+- `GET /v2/users/me`
+- `POST /v2/users/me/email/verification-code`
+- `PUT /v2/users/me/email`
+- `GET/POST/PATCH/DELETE /v2/users/me/profiles`
+- `GET/PATCH/DELETE /v2/users/me/textures/{hash}/{texture_type}`
+- `POST /v2/users/me/textures/{hash}/wardrobe`
+- `POST /v2/users/me/textures/{hash}/apply`
+- `GET /v2/minecraft/profiles/by-name/{name}`
+- `POST /v2/minecraft/profiles/by-names`
+- `POST /v2/minecraft/session/has-joined`
 
-后续增加更多 `/v1` wrapper 不需要改变 OAuth 行为。
+后续增加更多 `/v2` wrapper 不需要改变 OAuth 行为。

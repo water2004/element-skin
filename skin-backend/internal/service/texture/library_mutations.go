@@ -51,7 +51,6 @@ func (s LibraryService) UpdateTexture(ctx context.Context, actor permission.Acto
 	if err != nil {
 		return nil, err
 	}
-	info["ok"] = true
 	return info, nil
 }
 

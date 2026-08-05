@@ -184,7 +184,7 @@ func TestRemoteYggImportProfileFetchesTexturesAndPersistsExactly(t *testing.T) {
 		t.Fatalf("ImportProfile returned error: %v", err)
 	}
 	profile := result["profile"].(map[string]any)
-	if result["ok"] != true ||
+	if len(result) != 1 ||
 		profile["id"] != "0123456789abcdef0123456789abcdef" ||
 		profile["name"] != "RemoteImport" ||
 		profile["model"] != "slim" ||

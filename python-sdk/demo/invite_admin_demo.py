@@ -277,12 +277,12 @@ def list_invites(api: HTTPClient, *, limit: int, cursor: str | None = None) -> d
     params: dict[str, Any] = {"limit": limit}
     if cursor:
         params["cursor"] = cursor
-    return api.get("/v1/admin/invites", params=params)
+    return api.get("/v2/admin/invites", params=params)
 
 
 def create_invite(api: HTTPClient, code: str, total_uses: int | None, note: str) -> dict[str, Any]:
     return api.post(
-        "/v1/admin/invites",
+        "/v2/admin/invites",
         json={
             "code": code,
             "total_uses": total_uses,
@@ -292,7 +292,7 @@ def create_invite(api: HTTPClient, code: str, total_uses: int | None, note: str)
 
 
 def delete_invite(api: HTTPClient, code: str) -> None:
-    api.delete(f"/v1/admin/invites/{code}")
+    api.delete(f"/v2/admin/invites/{code}")
 
 
 def contains_invite(page: dict[str, Any], code: str) -> bool:

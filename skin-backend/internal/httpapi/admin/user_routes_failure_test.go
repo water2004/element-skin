@@ -27,63 +27,63 @@ func TestUserRoutesReturnInternalServerErrorWhenDatabaseIsClosedExactly(t *testi
 		req  *http.Request
 		call func(http.ResponseWriter, *http.Request)
 	}{
-		{"users", withProtectedActor(httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil), "admin-closed-db"), h.Users},
+		{"users", withProtectedActor(httptest.NewRequest(http.MethodGet, "/v2/admin/users", nil), "admin-closed-db"), h.Users},
 		{"user detail", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodGet, "/v1/admin/users/user-closed-db", nil)
+			req := httptest.NewRequest(http.MethodGet, "/v2/admin/users/user-closed-db", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			return req
 		}(), "admin-closed-db"), h.User},
 		{"grant role", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/user-closed-db/roles/admin", nil)
+			req := httptest.NewRequest(http.MethodPut, "/v2/admin/users/user-closed-db/roles/admin", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			req.SetPathValue("role_id", permission.RoleAdmin)
 			return req
 		}(), "admin-closed-db"), h.GrantUserRole},
 		{"revoke role", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/user-closed-db/roles/admin", nil)
+			req := httptest.NewRequest(http.MethodDelete, "/v2/admin/users/user-closed-db/roles/admin", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			req.SetPathValue("role_id", permission.RoleAdmin)
 			return req
 		}(), "admin-closed-db"), h.RevokeUserRole},
 		{"transfer protected subject", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/user-closed-db/protected-subject/transfer", nil)
+			req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/user-closed-db/protected-subject/transfer", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			return req
 		}(), "admin-closed-db"), h.TransferProtectedSubject},
 		{"delete user", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/user-closed-db", nil)
+			req := httptest.NewRequest(http.MethodDelete, "/v2/admin/users/user-closed-db", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			return req
 		}(), "admin-closed-db"), h.DeleteUser},
 		{"user profiles", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodGet, "/v1/admin/users/user-closed-db/profiles", nil)
+			req := httptest.NewRequest(http.MethodGet, "/v2/admin/users/user-closed-db/profiles", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			return req
 		}(), "admin-closed-db"), h.UserProfiles},
 		{"ban user", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/user-closed-db/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`,"reason":"closed database"}`))
+			req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/user-closed-db/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`,"reason":"closed database"}`))
 			req.SetPathValue("user_id", "user-closed-db")
 			return req
 		}(), "admin-closed-db"), h.BanUser},
 		{"unban user", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/user-closed-db/unban", nil)
+			req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/user-closed-db/unban", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			return req
 		}(), "admin-closed-db"), h.UnbanUser},
-		{"reset password", withProtectedActor(httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"user-closed-db","new_password":"ChangedPassword123"}`)), "admin-closed-db"), h.ResetUserPassword},
+		{"reset password", withProtectedActor(httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"user-closed-db","new_password":"ChangedPassword123"}`)), "admin-closed-db"), h.ResetUserPassword},
 		{"user permissions", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodGet, "/v1/admin/users/user-closed-db/permissions", nil)
+			req := httptest.NewRequest(http.MethodGet, "/v2/admin/users/user-closed-db/permissions", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			return req
 		}(), "admin-closed-db"), h.UserPermissions},
 		{"set permission override", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/user-closed-db/permissions/notice.create.any", strings.NewReader(`{"effect":"allow"}`))
+			req := httptest.NewRequest(http.MethodPut, "/v2/admin/users/user-closed-db/permissions/notice.create.any", strings.NewReader(`{"effect":"allow"}`))
 			req.SetPathValue("user_id", "user-closed-db")
 			req.SetPathValue("permission_code", "notice.create.any")
 			return req
 		}(), "admin-closed-db"), h.SetUserPermissionOverride},
 		{"clear permission override", withProtectedActor(func() *http.Request {
-			req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/user-closed-db/permissions/notice.create.any", nil)
+			req := httptest.NewRequest(http.MethodDelete, "/v2/admin/users/user-closed-db/permissions/notice.create.any", nil)
 			req.SetPathValue("user_id", "user-closed-db")
 			req.SetPathValue("permission_code", "notice.create.any")
 			return req
@@ -108,7 +108,7 @@ func TestUserRoutesProtectProtectedSubjectFromPlainAdminExactly(t *testing.T) {
 	plainAdmin := testutil.CreateUser(t, db, "plain-protect@test.com", "Password123", "PlainProtect", true)
 	protectedAdmin := testutil.CreateUser(t, db, "protected-subject-protect@test.com", "Password123", "ProtectedSubjectProtect", true, true)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+protectedAdmin.ID, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+protectedAdmin.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", protectedAdmin.ID)
 	req = withAdminActor(req, plainAdmin.ID)
@@ -118,7 +118,7 @@ func TestUserRoutesProtectProtectedSubjectFromPlainAdminExactly(t *testing.T) {
 		t.Fatalf("plain admin deleting protected subject mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+protectedAdmin.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`,"reason":"protected target"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+protectedAdmin.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`,"reason":"protected target"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", protectedAdmin.ID)
 	req = withAdminActor(req, plainAdmin.ID)
@@ -128,7 +128,7 @@ func TestUserRoutesProtectProtectedSubjectFromPlainAdminExactly(t *testing.T) {
 		t.Fatalf("plain admin banning protected subject mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+protectedAdmin.ID+"/unban", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+protectedAdmin.ID+"/unban", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", protectedAdmin.ID)
 	req = withAdminActor(req, plainAdmin.ID)
@@ -146,7 +146,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	protectedAdmin := testutil.CreateUser(t, db, "admin-missing-protected@test.com", "Password123", "AdminMissingProtected", true, true)
 	target := testutil.CreateUser(t, db, "admin-reset-unchanged@test.com", "Password123", "AdminResetUnchanged", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users?cursor=not-base64", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/admin/users?cursor=not-base64", nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.Users(rec, req)
@@ -155,7 +155,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	}
 
 	incompleteCursor := util.EncodeCursor(map[string]any{"unexpected": "value"})
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users?cursor="+incompleteCursor, nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/users?cursor="+incompleteCursor, nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.Users(rec, req)
@@ -163,7 +163,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("user list incomplete cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users/missing-user", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/users/missing-user", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", "missing-user")
 	rec = httptest.NewRecorder()
@@ -172,7 +172,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("missing user detail mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/missing-user/roles/admin", nil)
+	req = httptest.NewRequest(http.MethodPut, "/v2/admin/users/missing-user/roles/admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", "missing-user")
 	req.SetPathValue("role_id", permission.RoleAdmin)
@@ -183,7 +183,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("missing role grant target mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/missing-user/protected-subject/transfer", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/missing-user/protected-subject/transfer", nil)
 	req = withProtectedActor(req, protectedAdmin.ID)
 	req.SetPathValue("user_id", "missing-user")
 	rec = httptest.NewRecorder()
@@ -192,7 +192,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("missing transfer target mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/roles/", nil)
+	req = httptest.NewRequest(http.MethodPut, "/v2/admin/users/"+target.ID+"/roles/", nil)
 	req = withProtectedActor(req, protectedAdmin.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("role_id", "")
@@ -202,7 +202,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("blank role grant mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID+"/roles/", nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+target.ID+"/roles/", nil)
 	req = withProtectedActor(req, protectedAdmin.ID)
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("role_id", "")
@@ -212,7 +212,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 		t.Fatalf("blank role revoke mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withProtectedActor(req, protectedAdmin.ID)
 	rec = httptest.NewRecorder()
@@ -240,7 +240,7 @@ func TestAdminResetPasswordPreservesCredentialsAndRefreshWhenYggRevocationFails(
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec := httptest.NewRecorder()
@@ -270,7 +270,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		req := httptest.NewRequest(http.MethodGet, "/v1/admin/users?q=TargetRoleAttachFail", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/admin/users?q=TargetRoleAttachFail", nil)
 		req = withAdminActor(req, adminUser.ID)
 		rec := httptest.NewRecorder()
 		h.Users(rec, req)
@@ -278,7 +278,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 			t.Fatalf("list role attachment failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
-		req = httptest.NewRequest(http.MethodGet, "/v1/admin/users/"+target.ID, nil)
+		req = httptest.NewRequest(http.MethodGet, "/v2/admin/users/"+target.ID, nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		rec = httptest.NewRecorder()
@@ -297,7 +297,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/roles/admin", nil)
+		req := httptest.NewRequest(http.MethodPut, "/v2/admin/users/"+target.ID+"/roles/admin", nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		req.SetPathValue("role_id", permission.RoleAdmin)
@@ -307,7 +307,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 			t.Fatalf("grant role persistence failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
-		req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID+"/roles/admin", nil)
+		req = httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+target.ID+"/roles/admin", nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		req.SetPathValue("role_id", permission.RoleAdmin)
@@ -323,7 +323,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		h := admin.New(testutil.TestConfig(), db, nil)
 		adminUser := testutil.CreateUser(t, db, "admin-revoke-missing@test.com", "Password123", "AdminRevokeMissing", true)
 
-		req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/missing-role-target/roles/admin", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/v2/admin/users/missing-role-target/roles/admin", nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", "missing-role-target")
 		req.SetPathValue("role_id", permission.RoleAdmin)
@@ -343,7 +343,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/unban", nil)
+		req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/unban", nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		rec := httptest.NewRecorder()
@@ -352,7 +352,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 			t.Fatalf("unban protected-subject check failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
-		req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID, nil)
+		req = httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+target.ID, nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		rec = httptest.NewRecorder()
@@ -361,7 +361,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 			t.Fatalf("delete protected-subject check failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
-		req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"ChangedPassword123"}`))
+		req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"ChangedPassword123"}`))
 		req = withAdminActor(req, adminUser.ID)
 		rec = httptest.NewRecorder()
 		h.ResetUserPassword(rec, req)

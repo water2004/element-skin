@@ -23,7 +23,7 @@ func (h Handler) GetProfiles(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"profiles": profiles})
+	util.JSON(w, http.StatusOK, map[string]any{"items": profiles})
 }
 
 func (h Handler) ImportProfiles(w http.ResponseWriter, req *http.Request) {
@@ -63,5 +63,5 @@ func (h Handler) ImportProfile(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	profile := res["profile"].(map[string]any)
-	util.JSON(w, 200, map[string]any{"id": profile["id"], "name": profile["name"]})
+	util.JSON(w, http.StatusCreated, map[string]any{"id": profile["id"], "name": profile["name"]})
 }

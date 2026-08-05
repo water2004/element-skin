@@ -28,8 +28,8 @@ func TestHomepageMediaImageUploadPatchReorderDeleteExactState(t *testing.T) {
 	h := admin.NewWithRedis(cfg, db, cache, nil)
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64)))
-	if rec.Code != http.StatusOK {
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64)))
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("image upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	item := decodeMedia(t, rec.Body.Bytes())
@@ -47,7 +47,7 @@ func TestHomepageMediaImageUploadPatchReorderDeleteExactState(t *testing.T) {
 	}
 
 	body := strings.NewReader(`{"title":"Hero","enabled":false,"duration_ms":7000,"overlay_opacity_light":0.38,"overlay_opacity_dark":0.62}`)
-	req := httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/"+item.ID, body)
+	req := httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/"+item.ID, body)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
@@ -64,17 +64,17 @@ func TestHomepageMediaImageUploadPatchReorderDeleteExactState(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "second.png", pngBytes(t, 32, 32)))
-	if rec.Code != http.StatusOK {
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "second.png", pngBytes(t, 32, 32)))
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("second upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	second := decodeMedia(t, rec.Body.Bytes())
 	reorderBody := strings.NewReader(`{"ids":["` + second.ID + `","` + item.ID + `"]}`)
-	req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/reorder", reorderBody)
+	req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/reorder", reorderBody)
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.ReorderHomepageMedia(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("reorder status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	items, err := db.HomepageMedia.List(context.Background(), false)
@@ -85,12 +85,12 @@ func TestHomepageMediaImageUploadPatchReorderDeleteExactState(t *testing.T) {
 		t.Fatalf("reorder did not persist exact order: %#v", items)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/homepage-media/"+item.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v2/admin/homepage-media/"+item.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteHomepageMedia(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("delete status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if _, err := os.Stat(filepath.Join(cfg.CarouselDir, item.StoragePath)); !os.IsNotExist(err) {
@@ -104,7 +104,7 @@ func TestHomepageMediaUploadValidatesWebPAndRejectsMalformedMultipartExactly(t *
 	cfg.CarouselDir = t.TempDir()
 	h := admin.NewWithRedis(cfg, db, testutil.NewMemoryRedis(), nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/image", strings.NewReader("not multipart"))
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/image", strings.NewReader("not multipart"))
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing")
 	rec := httptest.NewRecorder()
@@ -113,7 +113,7 @@ func TestHomepageMediaUploadValidatesWebPAndRejectsMalformedMultipartExactly(t *
 		t.Fatalf("image malformed multipart mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", strings.NewReader("not multipart"))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", strings.NewReader("not multipart"))
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing")
 	rec = httptest.NewRecorder()
@@ -122,14 +122,14 @@ func TestHomepageMediaUploadValidatesWebPAndRejectsMalformedMultipartExactly(t *
 		t.Fatalf("panorama malformed multipart mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = multipartUploadRequest(t, "/v1/admin/homepage-media/image", "not_file", "slide.png", pngBytes(t, 8, 8))
+	req = multipartUploadRequest(t, "/v2/admin/homepage-media/image", "not_file", "slide.png", pngBytes(t, 8, 8))
 	rec = httptest.NewRecorder()
 	h.UploadHomepageImage(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"file is required\"}\n" {
 		t.Fatalf("image missing file mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "not_file", "panorama.zip", standardPanoramaZip(t))
+	req = multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "not_file", "panorama.zip", standardPanoramaZip(t))
 	rec = httptest.NewRecorder()
 	h.UploadHomepagePanorama(rec, req)
 	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"file is required\"}\n" {
@@ -137,10 +137,10 @@ func TestHomepageMediaUploadValidatesWebPAndRejectsMalformedMultipartExactly(t *
 	}
 
 	webp := webpBytes(t)
-	req = multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.webp", webp)
+	req = multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.webp", webp)
 	rec = httptest.NewRecorder()
 	h.UploadHomepageImage(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("webp upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	item := decodeMedia(t, rec.Body.Bytes())

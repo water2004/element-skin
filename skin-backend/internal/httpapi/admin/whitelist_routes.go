@@ -33,7 +33,10 @@ func (h Handler) AddOfficialWhitelist(w http.ResponseWriter, req *http.Request) 
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.JSON(w, http.StatusCreated, map[string]any{
+		"username":    shared.AsString(body["username"]),
+		"endpoint_id": endpointID,
+	})
 }
 
 func (h Handler) RemoveOfficialWhitelist(w http.ResponseWriter, req *http.Request) {
@@ -42,5 +45,5 @@ func (h Handler) RemoveOfficialWhitelist(w http.ResponseWriter, req *http.Reques
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }

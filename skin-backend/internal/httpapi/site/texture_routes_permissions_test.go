@@ -27,7 +27,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "list requires read",
 			permission: "texture.read.owned",
 			makeRequest: func() *http.Request {
-				return httptest.NewRequest(http.MethodGet, "/v1/users/me/textures", nil)
+				return httptest.NewRequest(http.MethodGet, "/v2/users/me/textures", nil)
 			},
 			call: h.ListMyTextures,
 		},
@@ -35,7 +35,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "upload requires create",
 			permission: "texture.create.owned",
 			makeRequest: func() *http.Request {
-				return textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{"texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
+				return textureMultipartRequest(t, "/v2/users/me/textures", map[string]string{"texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
 			},
 			call: h.UploadMyTexture,
 		},
@@ -43,7 +43,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "upload apply requires create",
 			permission: "texture.create.owned",
 			makeRequest: func() *http.Request {
-				return textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{"uuid": "profile-id", "texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
+				return textureMultipartRequest(t, "/v2/users/me/textures/upload-and-apply", map[string]string{"uuid": "profile-id", "texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
 			},
 			call: h.UploadAndApplyTexture,
 		},
@@ -51,7 +51,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "upload apply requires apply",
 			permission: "texture.apply.owned",
 			makeRequest: func() *http.Request {
-				return textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{"uuid": "profile-id", "texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
+				return textureMultipartRequest(t, "/v2/users/me/textures/upload-and-apply", map[string]string{"uuid": "profile-id", "texture_type": "skin"}, "file", "skin.png", routePNG(t, 64, 64))
 			},
 			call: h.UploadAndApplyTexture,
 		},
@@ -59,7 +59,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "detail requires read",
 			permission: "texture.read.owned",
 			makeRequest: func() *http.Request {
-				req := httptest.NewRequest(http.MethodGet, "/v1/users/me/textures/hash/skin", nil)
+				req := httptest.NewRequest(http.MethodGet, "/v2/users/me/textures/hash/skin", nil)
 				req.SetPathValue("hash", "hash")
 				req.SetPathValue("texture_type", "skin")
 				return req
@@ -70,7 +70,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "update note requires metadata",
 			permission: "texture.update_metadata.owned",
 			makeRequest: func() *http.Request {
-				req := httptest.NewRequest(http.MethodPatch, "/v1/users/me/textures/hash/skin", strings.NewReader(`{"note":"blocked"}`))
+				req := httptest.NewRequest(http.MethodPatch, "/v2/users/me/textures/hash/skin", strings.NewReader(`{"note":"blocked"}`))
 				req.SetPathValue("hash", "hash")
 				req.SetPathValue("texture_type", "skin")
 				return req
@@ -81,7 +81,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "update model requires metadata",
 			permission: "texture.update_metadata.owned",
 			makeRequest: func() *http.Request {
-				req := httptest.NewRequest(http.MethodPatch, "/v1/users/me/textures/hash/skin", strings.NewReader(`{"model":"slim"}`))
+				req := httptest.NewRequest(http.MethodPatch, "/v2/users/me/textures/hash/skin", strings.NewReader(`{"model":"slim"}`))
 				req.SetPathValue("hash", "hash")
 				req.SetPathValue("texture_type", "skin")
 				return req
@@ -92,7 +92,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "update visibility requires visibility",
 			permission: "texture.update_visibility.owned",
 			makeRequest: func() *http.Request {
-				req := httptest.NewRequest(http.MethodPatch, "/v1/users/me/textures/hash/skin", strings.NewReader(`{"is_public":true}`))
+				req := httptest.NewRequest(http.MethodPatch, "/v2/users/me/textures/hash/skin", strings.NewReader(`{"is_public":true}`))
 				req.SetPathValue("hash", "hash")
 				req.SetPathValue("texture_type", "skin")
 				return req
@@ -103,7 +103,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "delete requires delete",
 			permission: "texture.delete.owned",
 			makeRequest: func() *http.Request {
-				req := httptest.NewRequest(http.MethodDelete, "/v1/users/me/textures/hash/skin", nil)
+				req := httptest.NewRequest(http.MethodDelete, "/v2/users/me/textures/hash/skin", nil)
 				req.SetPathValue("hash", "hash")
 				req.SetPathValue("texture_type", "skin")
 				return req
@@ -114,7 +114,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "wardrobe add requires wardrobe entry add",
 			permission: "wardrobe_entry.add.owned",
 			makeRequest: func() *http.Request {
-				req := httptest.NewRequest(http.MethodPost, "/v1/users/me/textures/hash/wardrobe?texture_type=skin", nil)
+				req := httptest.NewRequest(http.MethodPost, "/v2/users/me/textures/hash/wardrobe?texture_type=skin", nil)
 				req.SetPathValue("hash", "hash")
 				return req
 			},
@@ -124,7 +124,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			name:       "apply requires apply",
 			permission: "texture.apply.owned",
 			makeRequest: func() *http.Request {
-				req := httptest.NewRequest(http.MethodPost, "/v1/users/me/textures/hash/apply", strings.NewReader(`{"profile_id":"profile","texture_type":"skin"}`))
+				req := httptest.NewRequest(http.MethodPost, "/v2/users/me/textures/hash/apply", strings.NewReader(`{"profile_id":"profile","texture_type":"skin"}`))
 				req.SetPathValue("hash", "hash")
 				return req
 			},
@@ -152,7 +152,7 @@ func TestTextureRoutesIsPublicWithoutPermissionReturns403(t *testing.T) {
 	profile := testutil.CreateProfile(t, db, user.ID, "site_texture_no_vis", "SiteTextureNoVis")
 
 	// UploadMyTexture with is_public=true but without texture.update_visibility.owned
-	req := textureMultipartRequest(t, "/v1/users/me/textures", map[string]string{
+	req := textureMultipartRequest(t, "/v2/users/me/textures", map[string]string{
 		"texture_type": "skin",
 		"is_public":    "true",
 	}, "file", "skin.png", routePNG(t, 64, 64))
@@ -164,7 +164,7 @@ func TestTextureRoutesIsPublicWithoutPermissionReturns403(t *testing.T) {
 	}
 
 	// UploadAndApplyTexture with is_public=true but without texture.update_visibility.owned
-	req = textureMultipartRequest(t, "/v1/users/me/textures/upload-and-apply", map[string]string{
+	req = textureMultipartRequest(t, "/v2/users/me/textures/upload-and-apply", map[string]string{
 		"uuid":         profile.ID,
 		"texture_type": "skin",
 		"is_public":    "true",

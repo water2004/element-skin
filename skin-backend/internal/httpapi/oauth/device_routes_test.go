@@ -19,7 +19,7 @@ func TestOAuthDeviceCodeFlowRoutesIssueDelegatedBearer(t *testing.T) {
 	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 	session := webCookie(t, cfg.JWTSecret, user.ID)
 
-	createRes := doJSON(t, router, http.MethodPost, "/v1/oauth/apps", map[string]any{
+	createRes := doJSON(t, router, http.MethodPost, "/v2/oauth/apps", map[string]any{
 		"name":         "Device route app",
 		"redirect_uri": "https://device.example/callback",
 		"client_type":  "public",
@@ -73,7 +73,7 @@ func TestOAuthDeviceCodeFlowRoutesIssueDelegatedBearer(t *testing.T) {
 		"user_code": userCode,
 		"approve":   true,
 	}, session, "")
-	if decisionRes.Code != http.StatusOK || decisionRes.Body.String() != "{\"ok\":true}\n" {
+	if decisionRes.Code != http.StatusNoContent || decisionRes.Body.Len() != 0 {
 		t.Fatalf("device decision mismatch: status=%d body=%s", decisionRes.Code, decisionRes.Body.String())
 	}
 	tokenForm := url.Values{}
@@ -89,7 +89,7 @@ func TestOAuthDeviceCodeFlowRoutesIssueDelegatedBearer(t *testing.T) {
 	if access == "" || token["refresh_token"].(string) == "" || token["scope"] != "account.read.self" {
 		t.Fatalf("device token mismatch: %#v", token)
 	}
-	meRes := doJSON(t, router, http.MethodGet, "/v1/users/me", nil, nil, access)
+	meRes := doJSON(t, router, http.MethodGet, "/v2/users/me", nil, nil, access)
 	if meRes.Code != http.StatusOK {
 		t.Fatalf("device bearer me status=%d body=%s", meRes.Code, meRes.Body.String())
 	}

@@ -49,7 +49,7 @@ func (s Service) SendPublic(ctx context.Context, email, purpose string) (map[str
 		}
 	case PurposeReset:
 		if existing == nil {
-			return map[string]any{"ok": true, "ttl": 0}, nil
+			return map[string]any{"ttl": 0}, nil
 		}
 	default:
 		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid verification type"}
@@ -111,7 +111,7 @@ func (s Service) issue(ctx context.Context, email, purpose string) (map[string]a
 		_ = s.Redis.DeleteVerificationCode(ctx, email, purpose)
 		return nil, err
 	}
-	return map[string]any{"ok": true, "ttl": ttl}, nil
+	return map[string]any{"ttl": ttl}, nil
 }
 
 func (s Service) ensureEnabled(ctx context.Context) error {

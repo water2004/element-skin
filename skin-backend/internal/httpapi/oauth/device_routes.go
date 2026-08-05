@@ -63,7 +63,7 @@ func (h Handler) DeviceDecision(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, http.StatusOK, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 type deviceDecisionBody struct {

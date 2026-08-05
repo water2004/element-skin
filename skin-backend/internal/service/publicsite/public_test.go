@@ -42,7 +42,7 @@ func TestPublicSettingsUsesCacheAndFallbackPrimaryEndpointExactly(t *testing.T) 
 		Redis:    redis,
 		Settings: settingssvc.Settings{DB: db, Redis: redis},
 		SiteURL:  "https://config.example/root/",
-		APIURL:   "https://api.example/v1/",
+		APIURL:   "https://api.example/v2/",
 		CacheTTL: time.Minute,
 	}
 
@@ -53,7 +53,7 @@ func TestPublicSettingsUsesCacheAndFallbackPrimaryEndpointExactly(t *testing.T) 
 	status := first["mojang_status_urls"].(map[string]any)
 	if first["site_name"] != "Cached Site" || first["allow_register"] != false ||
 		first["require_invite"] != true ||
-		first["site_url"] != "https://config.example/root" || first["api_url"] != "https://api.example/v1" ||
+		first["site_url"] != "https://config.example/root" || first["api_url"] != "https://api.example/v2" ||
 		status["session"] != "https://session.example" || status["account"] != "https://account.example" || status["services"] != "https://services.example" {
 		t.Fatalf("public settings mismatch: %#v", first)
 	}
@@ -175,7 +175,7 @@ func TestFallbackStatusBuildsEndpointHistoryAndLatestExactly(t *testing.T) {
 	db, _, redis := testutil.NewTestAppWithRedisTB(t)
 	ctx := context.Background()
 	if err := db.Fallbacks.SaveEndpoints(ctx, []dbfallback.Endpoint{
-		{Priority: 1, SessionURL: "https://s1.example", AccountURL: "https://a1.example", ServicesURL: "https://v1.example", CacheTTL: 60, Note: "one"},
+		{Priority: 1, SessionURL: "https://s1.example", AccountURL: "https://a1.example", ServicesURL: "https://v2.example", CacheTTL: 60, Note: "one"},
 		{Priority: 2, SessionURL: "https://s2.example", AccountURL: "https://a2.example", ServicesURL: "https://v2.example", CacheTTL: 60, Note: "two"},
 	}); err != nil {
 		t.Fatal(err)
@@ -204,7 +204,7 @@ func TestFallbackStatusBuildsEndpointHistoryAndLatestExactly(t *testing.T) {
 		t.Fatalf("fallback status envelope mismatch: %#v", status)
 	}
 	if decoded.Endpoints[0].ID != firstID || decoded.Endpoints[0].Priority != 1 || decoded.Endpoints[0].Note != "one" ||
-		decoded.Endpoints[0].SessionURL != "https://s1.example" || decoded.Endpoints[0].AccountURL != "https://a1.example" || decoded.Endpoints[0].ServicesURL != "https://v1.example" {
+		decoded.Endpoints[0].SessionURL != "https://s1.example" || decoded.Endpoints[0].AccountURL != "https://a1.example" || decoded.Endpoints[0].ServicesURL != "https://v2.example" {
 		t.Fatalf("first endpoint metadata mismatch: %#v", decoded.Endpoints[0])
 	}
 	if len(decoded.Endpoints[0].History) != 2 || decoded.Endpoints[0].History[0].CheckedAt != now.Add(-2*time.Minute).UnixMilli() ||

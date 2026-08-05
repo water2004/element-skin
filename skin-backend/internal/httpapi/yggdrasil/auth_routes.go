@@ -8,6 +8,10 @@ import (
 )
 
 func (h Handler) Metadata(w http.ResponseWriter, req *http.Request) {
+	if req.URL.Path != "/" {
+		http.NotFound(w, req)
+		return
+	}
 	res, err := h.ygg.Metadata(req.Context(), shared.CurrentActor(req))
 	if err != nil {
 		util.Error(w, err)

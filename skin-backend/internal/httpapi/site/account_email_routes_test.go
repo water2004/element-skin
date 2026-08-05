@@ -24,11 +24,11 @@ func TestAccountEmailRoutesSendAndChangeExactResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/users/me/email/verification-code", strings.NewReader(`{"email":"route-email-new@test.com"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/users/me/email/verification-code", strings.NewReader(`{"email":"route-email-new@test.com"}`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.SendEmailChangeCode(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true,\"ttl\":150}\n" {
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ttl\":150}\n" {
 		t.Fatalf("send email code response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	code, err := cache.GetVerificationCode(t.Context(), "route-email-new@test.com", "email_change")
@@ -36,11 +36,11 @@ func TestAccountEmailRoutesSendAndChangeExactResponses(t *testing.T) {
 		t.Fatalf("stored email code=%q err=%v", code, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPut, "/v1/users/me/email", strings.NewReader(`{"email":"route-email-new@test.com","code":"`+strings.ToLower(code)+`"}`))
+	req = httptest.NewRequest(http.MethodPut, "/v2/users/me/email", strings.NewReader(`{"email":"route-email-new@test.com","code":"`+strings.ToLower(code)+`"}`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ChangeEmail(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("change email response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	updated, err := db.Users.GetByID(t.Context(), user.ID)
@@ -65,7 +65,7 @@ func TestAccountEmailRoutesRejectMalformedBodiesExactly(t *testing.T) {
 		{name: "change email", call: h.ChangeEmail},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			req := withUserActor(httptest.NewRequest(http.MethodPost, "/v1/users/me/email", strings.NewReader(`{`)), user.ID)
+			req := withUserActor(httptest.NewRequest(http.MethodPost, "/v2/users/me/email", strings.NewReader(`{`)), user.ID)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
 			if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {

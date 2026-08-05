@@ -15,36 +15,36 @@
 
 | Area | Scenario | Method | Path |
 | --- | --- | --- | --- |
-| Public home | `public-settings` | `GET` | `/v1/public/settings` |
-| Public home | `public-homepage-media` | `GET` | `/v1/public/homepage-media` |
-| Public library | `public-library-search` | `GET` | `/v1/public/skin-library?limit=20&q=Load` |
-| Authentication | `site-login` | `POST` | `/v1/auth/login` |
+| Public home | `public-settings` | `GET` | `/v2/public/settings` |
+| Public home | `public-homepage-media` | `GET` | `/v2/public/homepage-media` |
+| Public library | `public-library-search` | `GET` | `/v2/public/skin-library?limit=20&q=Load` |
+| Authentication | `site-login` | `POST` | `/v2/auth/login` |
 | Yggdrasil | `ygg-metadata` | `GET` | `/` |
 | Yggdrasil | `ygg-authenticate` | `POST` | `/authserver/authenticate` |
 | Yggdrasil | `ygg-validate` | `POST` | `/authserver/validate` |
 | Yggdrasil | `ygg-profile` | `GET` | `/sessionserver/session/minecraft/profile/c140127903fb4c06a9ae3e8ad8801fec` |
 | Yggdrasil | `ygg-lookup-name` | `GET` | `/api/users/profiles/minecraft/LoadProfile002_0` |
 | Yggdrasil | `ygg-has-joined` | `GET` | `/sessionserver/session/minecraft/hasJoined?username=LoadProfile002_0&serverId=load_ygg_server` |
-| User center | `me` | `GET` | `/v1/users/me` |
-| OAuth delegated | `oauth-me` | `GET` | `/v1/users/me` |
-| User center | `my-profiles` | `GET` | `/v1/users/me/profiles?limit=20` |
-| OAuth delegated | `oauth-my-profiles` | `GET` | `/v1/users/me/profiles?limit=20` |
-| User center | `my-textures` | `GET` | `/v1/users/me/textures?limit=20` |
-| OAuth delegated | `oauth-my-textures` | `GET` | `/v1/users/me/textures?limit=20` |
-| User center | `texture-detail` | `GET` | `/v1/users/me/textures/load_texture_001_000/skin` |
-| OAuth delegated | `oauth-texture-detail` | `GET` | `/v1/users/me/textures/load_texture_001_000/skin` |
-| Admin console | `admin-users` | `GET` | `/v1/admin/users?limit=20&q=Load` |
-| OAuth delegated admin | `oauth-admin-users` | `GET` | `/v1/admin/users?limit=20&q=Load` |
-| Admin console | `admin-user-detail` | `GET` | `/v1/admin/users/0a8e0f3544794d4a8c6982fbaa1c6f38` |
-| OAuth delegated admin | `oauth-admin-user-detail` | `GET` | `/v1/admin/users/0a8e0f3544794d4a8c6982fbaa1c6f38` |
-| Admin console | `admin-user-profiles` | `GET` | `/v1/admin/users/0a8e0f3544794d4a8c6982fbaa1c6f38/profiles?limit=20` |
-| Admin console | `admin-profiles` | `GET` | `/v1/admin/profiles?limit=20` |
-| Admin console | `admin-textures` | `GET` | `/v1/admin/textures?limit=20` |
-| Admin console | `admin-invites` | `GET` | `/v1/admin/invites?limit=20` |
-| OAuth delegated admin | `oauth-admin-invites` | `GET` | `/v1/admin/invites?limit=20` |
-| OAuth client credentials | `oauth-client-invites` | `GET` | `/v1/admin/invites?limit=20` |
-| Admin console | `admin-settings-site` | `GET` | `/v1/admin/settings/site` |
-| OAuth delegated admin | `oauth-admin-settings-site` | `GET` | `/v1/admin/settings/site` |
+| User center | `me` | `GET` | `/v2/users/me` |
+| OAuth delegated | `oauth-me` | `GET` | `/v2/users/me` |
+| User center | `my-profiles` | `GET` | `/v2/users/me/profiles?limit=20` |
+| OAuth delegated | `oauth-my-profiles` | `GET` | `/v2/users/me/profiles?limit=20` |
+| User center | `my-textures` | `GET` | `/v2/users/me/textures?limit=20` |
+| OAuth delegated | `oauth-my-textures` | `GET` | `/v2/users/me/textures?limit=20` |
+| User center | `texture-detail` | `GET` | `/v2/users/me/textures/load_texture_001_000/skin` |
+| OAuth delegated | `oauth-texture-detail` | `GET` | `/v2/users/me/textures/load_texture_001_000/skin` |
+| Admin console | `admin-users` | `GET` | `/v2/admin/users?limit=20&q=Load` |
+| OAuth delegated admin | `oauth-admin-users` | `GET` | `/v2/admin/users?limit=20&q=Load` |
+| Admin console | `admin-user-detail` | `GET` | `/v2/admin/users/0a8e0f3544794d4a8c6982fbaa1c6f38` |
+| OAuth delegated admin | `oauth-admin-user-detail` | `GET` | `/v2/admin/users/0a8e0f3544794d4a8c6982fbaa1c6f38` |
+| Admin console | `admin-user-profiles` | `GET` | `/v2/admin/users/0a8e0f3544794d4a8c6982fbaa1c6f38/profiles?limit=20` |
+| Admin console | `admin-profiles` | `GET` | `/v2/admin/profiles?limit=20` |
+| Admin console | `admin-textures` | `GET` | `/v2/admin/textures?limit=20` |
+| Admin console | `admin-invites` | `GET` | `/v2/admin/invites?limit=20` |
+| OAuth delegated admin | `oauth-admin-invites` | `GET` | `/v2/admin/invites?limit=20` |
+| OAuth client credentials | `oauth-client-invites` | `GET` | `/v2/admin/invites?limit=20` |
+| Admin console | `admin-settings-site` | `GET` | `/v2/admin/settings/site` |
+| OAuth delegated admin | `oauth-admin-settings-site` | `GET` | `/v2/admin/settings/site` |
 
 ## Fixed-200 One-Second Results
 

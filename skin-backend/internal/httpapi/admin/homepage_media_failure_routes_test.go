@@ -19,7 +19,7 @@ func TestHomepageMediaUploadFailsWhenRedisInvalidateFails(t *testing.T) {
 	cfg.CarouselDir = t.TempDir()
 	h := admin.NewWithRedis(cfg, db, &homepageInvalidateFailRedis{Store: testutil.NewMemoryRedis()}, nil)
 
-	req := multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64))
+	req := multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64))
 	rec := httptest.NewRecorder()
 	h.UploadHomepageImage(rec, req)
 	if rec.Code != http.StatusInternalServerError {
@@ -46,7 +46,7 @@ func TestHomepageMediaUploadFailsWhenRedisInvalidateFails(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 		t.Fatalf("redis fail panorama upload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -76,7 +76,7 @@ func TestHomepageMediaUploadDatabaseFailureCleansFilesExactly(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64)))
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64)))
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 		t.Fatalf("image database failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -90,7 +90,7 @@ func TestHomepageMediaUploadDatabaseFailureCleansFilesExactly(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 		t.Fatalf("panorama database failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -112,7 +112,7 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		h := admin.NewWithRedis(cfg, db, testutil.NewMemoryRedis(), nil)
 		db.Close()
 
-		req := httptest.NewRequest(http.MethodGet, "/v1/admin/homepage-media", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/admin/homepage-media", nil)
 		req = withAdminActor(req, "admin-test-user")
 		rec := httptest.NewRecorder()
 		h.ListHomepageMedia(rec, req)
@@ -121,7 +121,7 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		}
 
 		rec = httptest.NewRecorder()
-		h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 8, 8)))
+		h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 8, 8)))
 		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 			t.Fatalf("image upload closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
@@ -130,7 +130,7 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		}
 
 		rec = httptest.NewRecorder()
-		h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+		h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
 		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 			t.Fatalf("panorama upload closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
@@ -138,7 +138,7 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 			t.Fatalf("panorama upload closed database should leave no files: entries=%d err=%v", len(entries), err)
 		}
 
-		req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/missing", strings.NewReader(`{"title":"x"}`))
+		req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/missing", strings.NewReader(`{"title":"x"}`))
 		req = withAdminActor(req, "admin-test-user")
 		req.SetPathValue("id", "missing")
 		rec = httptest.NewRecorder()
@@ -147,7 +147,7 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 			t.Fatalf("patch closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
-		req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/reorder", strings.NewReader(`{"ids":["missing"]}`))
+		req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/reorder", strings.NewReader(`{"ids":["missing"]}`))
 		req = withAdminActor(req, "admin-test-user")
 		rec = httptest.NewRecorder()
 		h.ReorderHomepageMedia(rec, req)
@@ -155,7 +155,7 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 			t.Fatalf("reorder closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
-		req = httptest.NewRequest(http.MethodDelete, "/v1/admin/homepage-media/missing", nil)
+		req = httptest.NewRequest(http.MethodDelete, "/v2/admin/homepage-media/missing", nil)
 		req = withAdminActor(req, "admin-test-user")
 		req.SetPathValue("id", "missing")
 		rec = httptest.NewRecorder()
@@ -175,7 +175,7 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		h := admin.NewWithRedis(cfg, db, testutil.NewMemoryRedis(), nil)
 
 		rec := httptest.NewRecorder()
-		h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 8, 8)))
+		h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 8, 8)))
 		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 			t.Fatalf("image mkdir failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
@@ -185,7 +185,7 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		}
 
 		rec = httptest.NewRecorder()
-		h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+		h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
 		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 			t.Fatalf("panorama mkdir failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
@@ -204,20 +204,20 @@ func TestHomepageMediaMutationRedisFailuresKeepExactPersistedSideEffects(t *test
 	h := admin.NewWithRedis(cfg, db, healthy, nil)
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "first.png", pngBytes(t, 8, 8)))
-	if rec.Code != http.StatusOK {
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "first.png", pngBytes(t, 8, 8)))
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("first upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	first := decodeMedia(t, rec.Body.Bytes())
 	rec = httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "second.png", pngBytes(t, 8, 8)))
-	if rec.Code != http.StatusOK {
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "second.png", pngBytes(t, 8, 8)))
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("second upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	second := decodeMedia(t, rec.Body.Bytes())
 
 	failing := admin.NewWithRedis(cfg, db, &homepageInvalidateFailRedis{Store: testutil.NewMemoryRedis()}, nil)
-	req := httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/"+first.ID, strings.NewReader(`{"title":"Patched before cache failure"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/"+first.ID, strings.NewReader(`{"title":"Patched before cache failure"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", first.ID)
 	rec = httptest.NewRecorder()
@@ -230,7 +230,7 @@ func TestHomepageMediaMutationRedisFailuresKeepExactPersistedSideEffects(t *test
 		t.Fatalf("patch should persist before invalidate failure: row=%#v err=%v", row, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/reorder", strings.NewReader(`{"ids":["`+second.ID+`","`+first.ID+`"]}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/reorder", strings.NewReader(`{"ids":["`+second.ID+`","`+first.ID+`"]}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	failing.ReorderHomepageMedia(rec, req)
@@ -245,7 +245,7 @@ func TestHomepageMediaMutationRedisFailuresKeepExactPersistedSideEffects(t *test
 		t.Fatalf("reorder should persist before invalidate failure: %#v", items)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/homepage-media/"+first.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v2/admin/homepage-media/"+first.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", first.ID)
 	rec = httptest.NewRecorder()

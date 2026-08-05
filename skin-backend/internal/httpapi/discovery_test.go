@@ -20,7 +20,7 @@ func TestDiscoveryCapabilitiesAndPermissionCatalogExactPayloads(t *testing.T) {
 	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/capabilities", nil))
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v2/capabilities", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("capabilities status mismatch: got=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -36,7 +36,7 @@ func TestDiscoveryCapabilitiesAndPermissionCatalogExactPayloads(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &capabilities); err != nil {
 		t.Fatalf("decode capabilities %q: %v", rec.Body.String(), err)
 	}
-	if capabilities.APIVersion != "v1" ||
+	if capabilities.APIVersion != "v2" ||
 		capabilities.SiteName != "Element Skin" ||
 		capabilities.SiteURL != "https://skin.example/root" ||
 		capabilities.APIURL != "https://skin.example/root" ||
@@ -57,7 +57,7 @@ func TestDiscoveryCapabilitiesAndPermissionCatalogExactPayloads(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/permissions/catalog", nil))
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v2/permissions/catalog", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("permission catalog status mismatch: got=%d body=%q", rec.Code, rec.Body.String())
 	}

@@ -26,7 +26,7 @@ func (h Handler) UpdateMe(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) DeleteMe(w http.ResponseWriter, req *http.Request) {
@@ -34,7 +34,7 @@ func (h Handler) DeleteMe(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) ChangePassword(w http.ResponseWriter, req *http.Request) {
@@ -47,7 +47,7 @@ func (h Handler) ChangePassword(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true, "message": "密码修改成功"})
+	util.NoContent(w)
 }
 
 func (h Handler) SendEmailChangeCode(w http.ResponseWriter, req *http.Request) {
@@ -82,5 +82,5 @@ func (h Handler) ChangeEmail(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, http.StatusOK, map[string]any{"ok": true})
+	util.NoContent(w)
 }

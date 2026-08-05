@@ -14,7 +14,7 @@ func (h Handler) Invites(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusOK, res)
 }
 
 func (h Handler) CreateInvite(w http.ResponseWriter, req *http.Request) {
@@ -36,7 +36,7 @@ func (h Handler) CreateInvite(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusCreated, res)
 }
 
 func (h Handler) DeleteInvite(w http.ResponseWriter, req *http.Request) {
@@ -44,5 +44,5 @@ func (h Handler) DeleteInvite(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }

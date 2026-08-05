@@ -1,6 +1,6 @@
 # API 客户端
 
-`ElementSkinAPI` 是常用 Element Skin `/v1` 接口的同步封装。
+`ElementSkinAPI` 是常用 Element Skin `/v2` 接口的同步封装。
 
 ## 构造客户端
 
@@ -49,7 +49,7 @@ print(info.protected)
 接口：
 
 ```text
-GET /v1/users/me
+GET /v2/users/me
 ```
 
 所需权限：
@@ -72,8 +72,8 @@ api.change_email("new@example.com", "EMAIL123")
 接口：
 
 ```text
-POST /v1/users/me/email/verification-code
-PUT  /v1/users/me/email
+POST /v2/users/me/email/verification-code
+PUT  /v2/users/me/email
 ```
 
 两个接口都需要：
@@ -96,10 +96,10 @@ api.delete_profile("profile-id")
 接口：
 
 ```text
-GET    /v1/users/me/profiles
-POST   /v1/users/me/profiles
-PATCH  /v1/users/me/profiles/{profile_id}
-DELETE /v1/users/me/profiles/{profile_id}
+GET    /v2/users/me/profiles
+POST   /v2/users/me/profiles
+PATCH  /v2/users/me/profiles/{profile_id}
+DELETE /v2/users/me/profiles/{profile_id}
 ```
 
 ## 材质
@@ -114,10 +114,10 @@ api.delete_texture("texture-hash", "skin")
 接口：
 
 ```text
-GET    /v1/users/me/textures
-GET    /v1/users/me/textures/{hash}/{texture_type}
-PATCH  /v1/users/me/textures/{hash}/{texture_type}
-DELETE /v1/users/me/textures/{hash}/{texture_type}
+GET    /v2/users/me/textures
+GET    /v2/users/me/textures/{hash}/{texture_type}
+PATCH  /v2/users/me/textures/{hash}/{texture_type}
+DELETE /v2/users/me/textures/{hash}/{texture_type}
 ```
 
 ## 衣柜操作
@@ -130,13 +130,13 @@ api.apply_texture("texture-hash", profile_id="profile-id", texture_type="skin")
 接口：
 
 ```text
-POST /v1/users/me/textures/{hash}/wardrobe
-POST /v1/users/me/textures/{hash}/apply
+POST /v2/users/me/textures/{hash}/wardrobe
+POST /v2/users/me/textures/{hash}/apply
 ```
 
 ## Minecraft 能力 API
 
-这些接口是 `/v1/minecraft` 下的站点能力 API，不是 Yggdrasil 协议端点。
+这些接口是 `/v2/minecraft` 下的站点能力 API，不是 Yggdrasil 协议端点。
 
 ```python
 profile = api.minecraft_profile("Steve")
@@ -151,9 +151,9 @@ joined = api.minecraft_has_joined(
 接口：
 
 ```text
-GET  /v1/minecraft/profiles/by-name/{name}
-POST /v1/minecraft/profiles/by-names
-POST /v1/minecraft/session/has-joined
+GET  /v2/minecraft/profiles/by-name/{name}
+POST /v2/minecraft/profiles/by-names
+POST /v2/minecraft/session/has-joined
 ```
 
 `minecraft_has_joined` 需要应用自身 token 具备：

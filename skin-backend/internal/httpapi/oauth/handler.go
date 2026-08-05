@@ -42,7 +42,7 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 		"token_endpoint_auth_methods_supported":      []string{"client_secret_basic", "client_secret_post", "none"},
 		"revocation_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
 		"scopes_supported":                           h.scopeCodes(),
-		"protected_resources":                        []string{base + "/v1"},
+		"protected_resources":                        []string{base + "/v2"},
 	}
 	if docs := strings.TrimRight(h.cfg.SiteURL, "/"); docs != "" {
 		metadata["service_documentation"] = docs
@@ -53,7 +53,7 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 func (h Handler) ProtectedResourceMetadata(w http.ResponseWriter, req *http.Request) {
 	base := h.baseURL()
 	util.JSON(w, http.StatusOK, map[string]any{
-		"resource":                 base + "/v1",
+		"resource":                 base + "/v2",
 		"authorization_servers":    []string{base},
 		"bearer_methods_supported": []string{"header"},
 		"scopes_supported":         h.scopeCodes(),
