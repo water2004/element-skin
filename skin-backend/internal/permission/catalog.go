@@ -46,7 +46,7 @@ const (
 	ResourcePermissionProtected
 	ResourceYggdrasilSession
 	ResourceYggdrasilServer
-	ResourceMicrosoftImport
+	ResourceOfficialProfile
 	ResourceAudit
 	ResourceCache
 	ResourceInvite
@@ -58,6 +58,8 @@ const (
 	ResourceMinecraftProfile
 	ResourceMinecraftTextureProperty
 	ResourceMinecraftSession
+	ResourceExternalIdentity
+	ResourceIdentityProvider
 )
 
 const (
@@ -119,7 +121,7 @@ var Resources = []Resource{
 	{ResourcePermissionProtected, "permission_protected", "受保护权限主体"},
 	{ResourceYggdrasilSession, "yggdrasil_session", "Yggdrasil 会话"},
 	{ResourceYggdrasilServer, "yggdrasil_server", "Yggdrasil 服务器登录"},
-	{ResourceMicrosoftImport, "microsoft_import", "Microsoft 正版角色导入"},
+	{ResourceOfficialProfile, "official_profile", "正版角色绑定"},
 	{ResourceAudit, "audit", "审计"},
 	{ResourceCache, "cache", "缓存"},
 	{ResourceInvite, "invite", "邀请码"},
@@ -131,6 +133,8 @@ var Resources = []Resource{
 	{ResourceMinecraftProfile, "minecraft_profile", "Minecraft 角色资料"},
 	{ResourceMinecraftTextureProperty, "minecraft_texture_property", "Minecraft 材质属性"},
 	{ResourceMinecraftSession, "minecraft_session", "Minecraft 会话能力"},
+	{ResourceExternalIdentity, "external_identity", "外部登录身份"},
+	{ResourceIdentityProvider, "identity_provider", "OIDC 身份提供方"},
 }
 
 var Actions = []Action{
@@ -260,9 +264,19 @@ var Definitions = definitions(
 	def(ResourceYggdrasilSession, ActionDelete, ScopeSystem, "系统删除过期 Yggdrasil 会话"),
 	def(ResourceYggdrasilServer, ActionJoin, ScopeBoundProfile, "加入 Minecraft 服务器"),
 	def(ResourceYggdrasilServer, ActionHasJoined, ScopeBoundProfile, "查询服务器加入结果"),
-	def(ResourceMicrosoftImport, ActionStart, ScopeOwned, "启动 Microsoft 正版角色导入"),
-	def(ResourceMicrosoftImport, ActionReadProfile, ScopeOwned, "读取 Microsoft 角色资料"),
-	def(ResourceMicrosoftImport, ActionCreateProfile, ScopeOwned, "导入 Microsoft 角色"),
+	def(ResourceOfficialProfile, ActionRead, ScopeOwned, "读取自己的正版角色绑定"),
+	def(ResourceOfficialProfile, ActionCreate, ScopeOwned, "创建自己的正版角色绑定"),
+	def(ResourceOfficialProfile, ActionRefresh, ScopeOwned, "同步自己的正版角色绑定"),
+	def(ResourceOfficialProfile, ActionDelete, ScopeOwned, "删除自己的正版角色绑定"),
+	def(ResourceExternalIdentity, ActionRead, ScopeOwned, "读取自己的外部身份"),
+	def(ResourceExternalIdentity, ActionCreate, ScopeOwned, "绑定自己的外部身份"),
+	def(ResourceExternalIdentity, ActionUpdate, ScopeOwned, "修改自己的外部身份"),
+	def(ResourceExternalIdentity, ActionDelete, ScopeOwned, "解绑自己的外部身份"),
+	def(ResourceIdentityProvider, ActionRead, ScopePublic, "读取公开的 OIDC 身份提供方"),
+	def(ResourceIdentityProvider, ActionRead, ScopeAny, "读取 OIDC 身份提供方配置"),
+	def(ResourceIdentityProvider, ActionCreate, ScopeAny, "创建 OIDC 身份提供方"),
+	def(ResourceIdentityProvider, ActionUpdate, ScopeAny, "修改 OIDC 身份提供方"),
+	def(ResourceIdentityProvider, ActionDelete, ScopeAny, "删除 OIDC 身份提供方"),
 	def(ResourceAudit, ActionRead, ScopeAny, "读取审计日志"),
 	def(ResourceAudit, ActionArchive, ScopeSystem, "系统归档审计日志"),
 	def(ResourceCache, ActionInvalidate, ScopeSystem, "系统失效缓存"),

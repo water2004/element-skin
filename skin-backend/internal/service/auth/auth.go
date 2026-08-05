@@ -13,9 +13,12 @@ import (
 	userstore "element-skin/backend/internal/database/user"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/redisstore"
+	identitysvc "element-skin/backend/internal/service/identity"
 	settingssvc "element-skin/backend/internal/service/settings"
 	verificationsvc "element-skin/backend/internal/service/verification"
 	"element-skin/backend/internal/util"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Service struct {
@@ -24,6 +27,7 @@ type Service struct {
 	Redis        redisstore.Store
 	Settings     settingssvc.Settings
 	Verification verificationsvc.Service
+	Identity     identitysvc.Service
 }
 
 func (s Service) settings() settingssvc.Settings {
@@ -41,7 +45,22 @@ func (s Service) Login(ctx context.Context, email, password string) (map[string]
 	return s.issueSession(ctx, user.ID, map[string]any{"user_id": user.ID})
 }
 
+func (s Service) IssueSessionForUser(ctx context.Context, userID string) (map[string]any, error) {
+	user, err := s.DB.Users.GetByID(ctx, strings.TrimSpace(userID))
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, util.HTTPError{Status: 404, Detail: "user not found"}
+	}
+	return s.issueSession(ctx, user.ID, map[string]any{"user_id": user.ID})
+}
+
 func (s Service) Register(ctx context.Context, email, password, username, invite, code string) (string, error) {
+	return s.RegisterWithIdentity(ctx, email, password, username, invite, code, "")
+}
+
+func (s Service) RegisterWithIdentity(ctx context.Context, email, password, username, invite, code, identityTicket string) (string, error) {
 	email = strings.TrimSpace(email)
 	username = strings.TrimSpace(username)
 	if username == "" {
@@ -49,6 +68,9 @@ func (s Service) Register(ctx context.Context, email, password, username, invite
 	}
 	if !validEmail(email) {
 		return "", util.HTTPError{Status: 400, Detail: "Invalid email format"}
+	}
+	if password == "" {
+		return "", util.HTTPError{Status: 400, Detail: "Password is required"}
 	}
 	if taken, err := s.DB.Users.IsDisplayNameTaken(ctx, username, ""); err != nil {
 		return "", err
@@ -136,6 +158,10 @@ func (s Service) Register(ctx context.Context, email, password, username, invite
 		return "", err
 	}
 	u := model.User{ID: userID, Email: email, Password: hash, DisplayName: username}
+	var pending identitysvc.PendingRegistration
+	var externalIdentity *model.ExternalIdentity
+	var externalCredential *model.ExternalIdentityCredential
+	registrationConsumed := false
 	for attempt := 0; attempt < 100; attempt++ {
 		profileName := util.ProfileNameCandidate(base, attempt)
 		if existing, err := s.DB.Profiles.GetByName(ctx, profileName); err != nil {
@@ -156,7 +182,25 @@ func (s Service) Register(ctx context.Context, email, password, username, invite
 			return "", util.HTTPError{Status: 400, Detail: "角色 UUID 冲突，无法新建角色"}
 		}
 		p := model.Profile{ID: profileID, UserID: userID, Name: profileName, TextureModel: "default"}
-		err = s.DB.Users.CreateWithProfile(ctx, u, p, inviteCode, email)
+		if identityTicket != "" && !registrationConsumed {
+			pending, err = s.Identity.ConsumeRegistration(ctx, identityTicket)
+			if err != nil {
+				return "", err
+			}
+			identityRecord, credentialRecord, err := s.Identity.RegistrationRecords(userID, pending)
+			if err != nil {
+				_ = s.Identity.RestoreRegistration(ctx, pending)
+				return "", err
+			}
+			externalIdentity = &identityRecord
+			externalCredential = &credentialRecord
+			registrationConsumed = true
+		}
+		if externalIdentity == nil {
+			err = s.DB.Users.CreateWithProfile(ctx, u, p, inviteCode, email)
+		} else {
+			err = s.DB.Users.CreateWithProfileAndIdentity(ctx, u, p, inviteCode, email, externalIdentity, externalCredential)
+		}
 		if profilestore.IsNameConflict(err) || (mode == "offline" && profilestore.IsIDConflict(err)) {
 			continue
 		}
@@ -170,7 +214,13 @@ func (s Service) Register(ctx context.Context, email, password, username, invite
 			if verifiedEmail {
 				_ = s.Redis.DeleteVerificationCode(ctx, email, "register")
 			}
+			if externalIdentity != nil {
+				_ = s.Identity.CacheRegistrationAccess(ctx, externalIdentity.ID, pending.Tokens)
+			}
 			return userID, nil
+		}
+		if registrationConsumed {
+			_ = s.Identity.RestoreRegistration(ctx, pending)
 		}
 		if err == invitestore.ErrExhausted {
 			return "", util.HTTPError{Status: 400, Detail: "invite code has no remaining uses"}
@@ -184,7 +234,14 @@ func (s Service) Register(ctx context.Context, email, password, username, invite
 		if profilestore.IsIDConflict(err) {
 			return "", util.HTTPError{Status: 400, Detail: "角色 UUID 冲突，无法新建角色"}
 		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "external_identities_provider_id_subject_key" {
+			return "", util.HTTPError{Status: 409, Detail: "this external identity is already linked"}
+		}
 		return "", err
+	}
+	if registrationConsumed {
+		_ = s.Identity.RestoreRegistration(ctx, pending)
 	}
 	return "", util.HTTPError{Status: 500, Detail: "无法生成唯一角色名"}
 }

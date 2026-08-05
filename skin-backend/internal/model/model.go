@@ -151,3 +151,61 @@ type OAuthDeviceCode struct {
 	ConsumedAt     *int64
 	LastPolledAt   *int64
 }
+
+type IdentityProvider struct {
+	ID                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	IssuerURL              string   `json:"issuer_url"`
+	AuthorizationEndpoint  string   `json:"authorization_endpoint"`
+	TokenEndpoint          string   `json:"token_endpoint"`
+	UserInfoEndpoint       string   `json:"userinfo_endpoint"`
+	JWKSURI                string   `json:"jwks_uri"`
+	ClientID               string   `json:"client_id"`
+	ClientSecretCiphertext string   `json:"-"`
+	Scopes                 []string `json:"scopes"`
+	Adapter                string   `json:"adapter"`
+	IconURL                string   `json:"icon_url"`
+	Enabled                bool     `json:"enabled"`
+	LoginEnabled           bool     `json:"login_enabled"`
+	LinkEnabled            bool     `json:"link_enabled"`
+	RegistrationEnabled    bool     `json:"registration_enabled"`
+	DisplayOrder           int      `json:"display_order"`
+	CreatedAt              int64    `json:"created_at"`
+	UpdatedAt              int64    `json:"updated_at"`
+}
+
+type ExternalIdentity struct {
+	ID            string `json:"id"`
+	UserID        string `json:"user_id"`
+	ProviderID    string `json:"provider_id"`
+	Subject       string `json:"subject"`
+	Label         string `json:"label"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	DisplayName   string `json:"display_name"`
+	AvatarURL     string `json:"avatar_url"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+	LastLoginAt   *int64 `json:"last_login_at"`
+}
+
+type ExternalIdentityCredential struct {
+	IdentityID             string
+	RefreshTokenCiphertext string
+	GrantedScopes          []string
+	UpdatedAt              int64
+}
+
+type OfficialProfileBinding struct {
+	ID              string `json:"id"`
+	IdentityID      string `json:"identity_id"`
+	ProfileID       string `json:"profile_id"`
+	RemoteUUID      string `json:"remote_uuid"`
+	RemoteName      string `json:"remote_name"`
+	RemoteSkinURL   string `json:"remote_skin_url"`
+	RemoteCapeURL   string `json:"remote_cape_url"`
+	RemoteSkinModel string `json:"remote_skin_model"`
+	CreatedAt       int64  `json:"created_at"`
+	UpdatedAt       int64  `json:"updated_at"`
+	LastSyncedAt    *int64 `json:"last_synced_at"`
+}

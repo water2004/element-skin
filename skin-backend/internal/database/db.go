@@ -13,6 +13,7 @@ import (
 	"element-skin/backend/internal/database/easteregg"
 	"element-skin/backend/internal/database/fallback"
 	"element-skin/backend/internal/database/homepage"
+	"element-skin/backend/internal/database/identity"
 	"element-skin/backend/internal/database/invite"
 	"element-skin/backend/internal/database/notice"
 	"element-skin/backend/internal/database/oauth"
@@ -40,6 +41,7 @@ type DB struct {
 	Invites       invite.Store
 	Fallbacks     fallback.Store
 	HomepageMedia homepage.Store
+	Identities    identity.Store
 	Verifications verification.Store
 	Notices       notice.Store
 	OAuth         oauth.Store
@@ -80,6 +82,7 @@ func New(pool *pgxpool.Pool) *DB {
 		Invites:       invite.Store{Pool: pool},
 		Fallbacks:     fallback.Store{Pool: pool},
 		HomepageMedia: homepage.Store{Pool: pool},
+		Identities:    identity.Store{Pool: pool},
 		Verifications: verification.Store{Pool: pool},
 		Notices:       notice.Store{Pool: pool},
 		OAuth:         oauth.Store{Pool: pool},

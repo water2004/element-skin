@@ -95,7 +95,8 @@ func (s *MemoryStore) GetPermissionCache(_ context.Context, subjectID string) (s
 		return "", false, s.Err
 	}
 	v, ok := s.items[permCacheKey(subjectID)]
-		str, _ := v.value.(string); return str, ok, nil
+	str, _ := v.value.(string)
+	return str, ok, nil
 }
 
 func (s *MemoryStore) SetPermissionCache(_ context.Context, subjectID, encoded string, _ time.Duration) error {

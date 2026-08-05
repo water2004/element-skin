@@ -2,6 +2,7 @@ package user
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"element-skin/backend/internal/database/invite"
@@ -18,6 +19,30 @@ func (s Store) Create(ctx context.Context, u model.User) error {
 }
 
 func (s Store) CreateWithProfile(ctx context.Context, u model.User, p model.Profile, inviteCode, usedBy string) error {
+	return s.createRegistration(ctx, u, p, inviteCode, usedBy, nil, nil)
+}
+
+func (s Store) CreateWithProfileAndIdentity(
+	ctx context.Context,
+	u model.User,
+	p model.Profile,
+	inviteCode string,
+	usedBy string,
+	identity *model.ExternalIdentity,
+	credential *model.ExternalIdentityCredential,
+) error {
+	return s.createRegistration(ctx, u, p, inviteCode, usedBy, identity, credential)
+}
+
+func (s Store) createRegistration(
+	ctx context.Context,
+	u model.User,
+	p model.Profile,
+	inviteCode string,
+	usedBy string,
+	identity *model.ExternalIdentity,
+	credential *model.ExternalIdentityCredential,
+) error {
 	if u.CreatedAt == 0 {
 		u.CreatedAt = time.Now().UnixMilli()
 	}
@@ -36,6 +61,32 @@ func (s Store) CreateWithProfile(ctx context.Context, u model.User, p model.Prof
 	if _, err := tx.Exec(ctx, `INSERT INTO profiles (id,user_id,name,texture_model,skin_hash,cape_hash) VALUES ($1,$2,$3,$4,$5,$6)`,
 		p.ID, p.UserID, p.Name, p.TextureModel, p.SkinHash, p.CapeHash); err != nil {
 		return err
+	}
+	if identity != nil {
+		if credential == nil || identity.ID == "" || credential.IdentityID != identity.ID || identity.UserID != u.ID {
+			return errors.New("invalid external identity registration records")
+		}
+		if credential.GrantedScopes == nil {
+			credential.GrantedScopes = []string{}
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO external_identities (
+				id,user_id,provider_id,subject,label,email,email_verified,display_name,
+				avatar_url,created_at,updated_at,last_login_at
+			) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+		`, identity.ID, identity.UserID, identity.ProviderID, identity.Subject, identity.Label,
+			identity.Email, identity.EmailVerified, identity.DisplayName, identity.AvatarURL,
+			identity.CreatedAt, identity.UpdatedAt, identity.LastLoginAt); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO external_identity_credentials
+				(identity_id,refresh_token_ciphertext,granted_scopes,updated_at)
+			VALUES ($1,$2,$3,$4)
+		`, credential.IdentityID, credential.RefreshTokenCiphertext, credential.GrantedScopes,
+			credential.UpdatedAt); err != nil {
+			return err
+		}
 	}
 	if inviteCode != "" {
 		tag, err := tx.Exec(ctx, `UPDATE invites SET used_count=used_count+1 WHERE code=$1 AND (total_uses IS NULL OR used_count < total_uses)`, inviteCode)

@@ -34,6 +34,9 @@ func validateRequiredConfig(cfg Config, raw rawConfig) error {
 		"redis.auth_cache_ttl_seconds",
 		"keys.private_key",
 		"keys.public_key",
+		"oidc.private_key",
+		"oidc.public_key",
+		"identity.encryption_key",
 		"cors.allow_origins",
 		"cors.allow_credentials",
 	}
@@ -87,6 +90,9 @@ func validateRequiredConfig(cfg Config, raw rawConfig) error {
 		{field: "redis.auth_cache_ttl_seconds", ok: cfg.AuthCacheTTL > 0},
 		{field: "keys.private_key", ok: cfg.PrivateKeyPath != ""},
 		{field: "keys.public_key", ok: cfg.PublicKeyPath != ""},
+		{field: "oidc.private_key", ok: cfg.OIDCPrivateKeyPath != ""},
+		{field: "oidc.public_key", ok: cfg.OIDCPublicKeyPath != ""},
+		{field: "identity.encryption_key", ok: cfg.IdentityEncryptionKey != ""},
 		{field: "cors.allow_origins", ok: len(cfg.CORSOrigins) > 0},
 	} {
 		if !check.ok {

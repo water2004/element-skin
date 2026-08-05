@@ -63,6 +63,9 @@ func TestConfig() config.Config {
 	}
 	cfg.PrivateKeyPath = filepath.Join(repoRoot(), "private.pem")
 	cfg.PublicKeyPath = filepath.Join(repoRoot(), "public.pem")
+	cfg.OIDCPrivateKeyPath = filepath.Join(repoRoot(), "oidc-private.pem")
+	cfg.OIDCPublicKeyPath = filepath.Join(repoRoot(), "oidc-public.pem")
+	cfg.IdentityEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 	cfg.RedisAddr = os.Getenv("REDIS_TEST_ADDR")
 	if cfg.RedisAddr == "" {
 		cfg.RedisAddr = "127.0.0.1:6379"

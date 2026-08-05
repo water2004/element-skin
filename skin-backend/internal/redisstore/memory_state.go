@@ -16,6 +16,16 @@ func (s *MemoryStore) SetState(_ context.Context, token string, value map[string
 	return s.set(s.stateKey(token), value, ttl)
 }
 
+func (s *MemoryStore) GetState(_ context.Context, token string) (map[string]any, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	value, err := s.get(s.stateKey(token))
+	if err != nil {
+		return nil, err
+	}
+	return memoryStateMap(value), nil
+}
+
 func (s *MemoryStore) PopState(_ context.Context, token string) (map[string]any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -25,14 +35,28 @@ func (s *MemoryStore) PopState(_ context.Context, token string) (map[string]any,
 		return nil, err
 	}
 	delete(s.items, key)
+	return memoryStateMap(value), nil
+}
+
+func (s *MemoryStore) DeleteState(_ context.Context, token string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.Err != nil {
+		return s.Err
+	}
+	delete(s.items, s.stateKey(token))
+	return nil
+}
+
+func memoryStateMap(value any) map[string]any {
 	out, ok := value.(map[string]any)
 	if ok {
-		return out, nil
+		return out
 	}
 	b, _ := json.Marshal(value)
 	_ = json.Unmarshal(b, &out)
 	if out == nil {
 		out = map[string]any{}
 	}
-	return out, nil
+	return out
 }

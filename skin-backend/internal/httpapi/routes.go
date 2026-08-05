@@ -2,7 +2,7 @@ package httpapi
 
 import (
 	"element-skin/backend/internal/httpapi/admin"
-	"element-skin/backend/internal/httpapi/microsoft"
+	identityapi "element-skin/backend/internal/httpapi/identity"
 	"element-skin/backend/internal/httpapi/minecraft"
 	"element-skin/backend/internal/httpapi/notice"
 	"element-skin/backend/internal/httpapi/oauth"
@@ -15,12 +15,12 @@ import (
 func (r *Router) routes() {
 	siteRoutes := site.NewWithRedis(r.cfg, r.db, r.redis, r.auth, r.mail)
 	yggRoutes := yggdrasil.New(r.cfg, r.db, r.redis, r.settings, r.ygg)
-	microsoftRoutes := microsoft.New(r.cfg, r.db, r.settings, r.auth, r.redis)
 	noticeRoutes := notice.New(r.db, r.auth)
 	oauthRoutes := oauth.New(r.cfg, r.db, r.redis, r.auth)
 	minecraftRoutes := minecraft.New(r.db, r.auth, r.ygg)
 	remoteRoutes := remote.New(r.cfg, r.db, r.auth)
 	adminRoutes := admin.NewWithRedis(r.cfg, r.db, r.redis, r.auth)
+	identityRoutes := identityapi.New(r.cfg, r.db, r.redis, r.auth)
 	sitePublicRead := permission.MustDefinitionByCode("site_public.read.public")
 	texturePublicRead := permission.MustDefinitionByCode("texture.read.public")
 
@@ -36,6 +36,9 @@ func (r *Router) routes() {
 	r.handle("POST /v2/auth/register", siteRoutes.Register)
 	r.handle("POST /v2/auth/verification-code", siteRoutes.SendVerificationCode)
 	r.handle("POST /v2/auth/password/reset", siteRoutes.ResetPassword)
+	r.handle("GET /v2/auth/identity-providers", r.publicAuth(identityRoutes.PublicProviders, permission.MustDefinitionByCode("identity_provider.read.public")))
+	r.handle("POST /v2/identity-authorizations", r.publicAuth(identityRoutes.StartAuthorization, permission.MustDefinitionByCode("identity_provider.read.public")))
+	r.handle("GET /v2/auth/oidc/callback", identityRoutes.AuthorizationCallback)
 	r.handle("POST /v2/auth/session/refresh", siteRoutes.RefreshToken)
 	r.handle("GET /v2/users/me", siteRoutes.Auth(siteRoutes.Me))
 	r.handle("PATCH /v2/users/me", siteRoutes.Auth(siteRoutes.UpdateMe))
@@ -43,6 +46,9 @@ func (r *Router) routes() {
 	r.handle("POST /v2/users/me/password", siteRoutes.Auth(siteRoutes.ChangePassword))
 	r.handle("POST /v2/users/me/email/verification-code", siteRoutes.Auth(siteRoutes.SendEmailChangeCode))
 	r.handle("PUT /v2/users/me/email", siteRoutes.Auth(siteRoutes.ChangeEmail))
+	r.handle("GET /v2/users/me/identities", identityRoutes.Auth(identityRoutes.ListIdentities))
+	r.handle("PATCH /v2/users/me/identities/{identity_id}", identityRoutes.Auth(identityRoutes.UpdateIdentity))
+	r.handle("DELETE /v2/users/me/identities/{identity_id}", identityRoutes.Auth(identityRoutes.DeleteIdentity))
 	r.handle("GET /v2/users/me/profiles", siteRoutes.Auth(siteRoutes.ListMyProfiles))
 	r.handle("POST /v2/users/me/profiles", siteRoutes.Auth(siteRoutes.CreateProfile))
 	r.handle("PATCH /v2/users/me/profiles/{profile_id}", siteRoutes.Auth(siteRoutes.UpdateProfile))
@@ -108,10 +114,6 @@ func (r *Router) routes() {
 	r.handle("GET /minecraft/profile/lookup/name/{playerName}", yggRoutes.LookupName)
 	r.handle("PUT /api/user/profile/{uuid}/{texture_type}", yggRoutes.UploadTexture)
 	r.handle("DELETE /api/user/profile/{uuid}/{texture_type}", yggRoutes.DeleteTexture)
-	r.handle("GET /v2/imports/microsoft/auth-url", microsoftRoutes.Auth(microsoftRoutes.AuthURL))
-	r.handle("GET /v2/imports/microsoft/callback", microsoftRoutes.Callback)
-	r.handle("POST /v2/imports/microsoft/profile", microsoftRoutes.Auth(microsoftRoutes.GetProfile))
-	r.handle("POST /v2/imports/microsoft/profile/import", microsoftRoutes.Auth(microsoftRoutes.ImportProfile))
 	r.handle("POST /v2/imports/remote-ygg/profiles/preview", remoteRoutes.Auth(remoteRoutes.GetProfiles))
 	r.handle("POST /v2/imports/remote-ygg/profiles/import", remoteRoutes.Auth(remoteRoutes.ImportProfile))
 	r.handle("POST /v2/imports/remote-ygg/profiles/import-batch", remoteRoutes.Auth(remoteRoutes.ImportProfiles))
@@ -160,4 +162,9 @@ func (r *Router) routes() {
 	r.handle("POST /v2/admin/settings/site", adminRoutes.Auth(adminRoutes.SaveSiteSettings))
 	r.handle("GET /v2/admin/settings/{group}", adminRoutes.Auth(adminRoutes.GetSettingsGroup))
 	r.handle("POST /v2/admin/settings/{group}", adminRoutes.Auth(adminRoutes.SaveSettingsGroup))
+	r.handle("GET /v2/admin/identity-providers", identityRoutes.Auth(identityRoutes.ListProviders))
+	r.handle("POST /v2/admin/identity-providers", identityRoutes.Auth(identityRoutes.CreateProvider))
+	r.handle("GET /v2/admin/identity-providers/{provider_id}", identityRoutes.Auth(identityRoutes.GetProvider))
+	r.handle("PUT /v2/admin/identity-providers/{provider_id}", identityRoutes.Auth(identityRoutes.UpdateProvider))
+	r.handle("DELETE /v2/admin/identity-providers/{provider_id}", identityRoutes.Auth(identityRoutes.DeleteProvider))
 }

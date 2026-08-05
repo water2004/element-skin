@@ -51,6 +51,11 @@ jwt:
 keys:
   private_key: "private.pem"
   public_key: "public.pem"
+oidc:
+  private_key: "oidc-private.pem"
+  public_key: "oidc-public.pem"
+identity:
+  encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 database:
   host: "localhost"
   port: "5432"

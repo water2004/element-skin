@@ -2,28 +2,10 @@ package site
 
 import (
 	"net/http"
-	"strings"
 
 	"element-skin/backend/internal/httpapi/shared"
 	"element-skin/backend/internal/util"
 )
-
-func (h Handler) setSessionCookies(w http.ResponseWriter, access, refresh string, refreshMaxAgeSeconds int) {
-	http.SetCookie(w, h.sessionCookie("access_token", access, h.cfg.AccessMinutes*60))
-	http.SetCookie(w, h.sessionCookie("refresh_token", refresh, refreshMaxAgeSeconds))
-}
-
-func (h Handler) sessionCookie(name, value string, maxAge int) *http.Cookie {
-	return &http.Cookie{
-		Name:     name,
-		Value:    value,
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   strings.HasPrefix(strings.ToLower(h.cfg.SiteURL), "https://"),
-		SameSite: http.SameSiteLaxMode,
-		MaxAge:   maxAge,
-	}
-}
 
 func (h Handler) Login(w http.ResponseWriter, req *http.Request) {
 	if !h.checkAuthRateLimit(w, req, "login") {
@@ -39,7 +21,7 @@ func (h Handler) Login(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	h.setSessionCookies(w, res["access_token"].(string), res["refresh_token"].(string), res["refresh_max_age_seconds"].(int))
+	shared.SetWebSessionCookies(w, h.cfg, res["access_token"].(string), res["refresh_token"].(string), res["refresh_max_age_seconds"].(int))
 	util.JSON(w, 200, map[string]any{"user_id": res["user_id"], "permissions": res["permissions"]})
 }
 
@@ -50,8 +32,7 @@ func (h Handler) Logout(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 	}
-	http.SetCookie(w, h.sessionCookie("access_token", "", -1))
-	http.SetCookie(w, h.sessionCookie("refresh_token", "", -1))
+	shared.ClearWebSessionCookies(w, h.cfg)
 	util.NoContent(w)
 }
 
@@ -64,7 +45,15 @@ func (h Handler) Register(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
 		return
 	}
-	id, err := h.authSvc.Register(req.Context(), body["email"], body["password"], body["username"], body["invite"], body["code"])
+	id, err := h.authSvc.RegisterWithIdentity(
+		req.Context(),
+		body["email"],
+		body["password"],
+		body["username"],
+		body["invite"],
+		body["code"],
+		body["identity_ticket"],
+	)
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -125,6 +114,6 @@ func (h Handler) RefreshToken(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	h.setSessionCookies(w, res["access_token"].(string), res["refresh_token"].(string), res["refresh_max_age_seconds"].(int))
+	shared.SetWebSessionCookies(w, h.cfg, res["access_token"].(string), res["refresh_token"].(string), res["refresh_max_age_seconds"].(int))
 	util.JSON(w, 200, map[string]any{"permissions": res["permissions"]})
 }

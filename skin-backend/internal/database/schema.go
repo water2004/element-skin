@@ -174,6 +174,72 @@ CREATE TABLE IF NOT EXISTS notice_targets (
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS identity_providers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    issuer_url TEXT NOT NULL,
+    authorization_endpoint TEXT NOT NULL,
+    token_endpoint TEXT NOT NULL,
+    userinfo_endpoint TEXT NOT NULL DEFAULT '',
+    jwks_uri TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    client_secret_ciphertext TEXT NOT NULL DEFAULT '',
+    scopes TEXT[] NOT NULL DEFAULT ARRAY['openid', 'profile', 'email']::TEXT[],
+    adapter TEXT NOT NULL DEFAULT 'generic_oidc' CHECK(adapter IN ('generic_oidc', 'microsoft')),
+    icon_url TEXT NOT NULL DEFAULT '',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    login_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    link_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    registration_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE(issuer_url, client_id)
+);
+
+CREATE TABLE IF NOT EXISTS external_identities (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    subject TEXT NOT NULL CHECK(subject <> ''),
+    label TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '',
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    display_name TEXT NOT NULL DEFAULT '',
+    avatar_url TEXT NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    last_login_at BIGINT,
+    UNIQUE(provider_id, subject),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(provider_id) REFERENCES identity_providers(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS external_identity_credentials (
+    identity_id TEXT PRIMARY KEY,
+    refresh_token_ciphertext TEXT NOT NULL DEFAULT '',
+    granted_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    updated_at BIGINT NOT NULL,
+    FOREIGN KEY(identity_id) REFERENCES external_identities(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS official_profile_bindings (
+    id TEXT PRIMARY KEY,
+    identity_id TEXT NOT NULL,
+    profile_id TEXT NOT NULL UNIQUE,
+    remote_uuid TEXT NOT NULL,
+    remote_name TEXT NOT NULL,
+    remote_skin_url TEXT NOT NULL DEFAULT '',
+    remote_cape_url TEXT NOT NULL DEFAULT '',
+    remote_skin_model TEXT NOT NULL DEFAULT 'default',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    last_synced_at BIGINT,
+    UNIQUE(identity_id, remote_uuid),
+    FOREIGN KEY(identity_id) REFERENCES external_identities(id) ON DELETE RESTRICT,
+    FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS permission_subjects (
     id TEXT PRIMARY KEY,
     user_id TEXT UNIQUE,
@@ -465,11 +531,15 @@ CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_grant_expiry ON oauth_a
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user_client ON oauth_refresh_tokens (user_id, client_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_grant_active_expiry ON oauth_refresh_tokens (grant_id, expires_at) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_oauth_device_codes_client_status ON oauth_device_codes (client_id, status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_identity_providers_public ON identity_providers (display_order, created_at, id) WHERE enabled=TRUE;
+CREATE INDEX IF NOT EXISTS idx_external_identities_user ON external_identities (user_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_official_profile_bindings_identity ON official_profile_bindings (identity_id, created_at, id);
+
+-- Breaking migration: the v2 identity model replaces the one-shot Microsoft import contract.
+DELETE FROM permissions WHERE code LIKE 'microsoft_import.%';
+DELETE FROM settings WHERE key IN ('microsoft_client_id', 'microsoft_client_secret', 'microsoft_redirect_uri');
 
 INSERT INTO settings (key, value) VALUES
-('microsoft_client_id', ''),
-('microsoft_client_secret', ''),
-('microsoft_redirect_uri', 'http://localhost:8000/v2/imports/microsoft/callback'),
 ('fallback_strategy', 'serial'),
 ('profile_uuid_mode', 'random'),
 ('enable_skin_library', 'true'),

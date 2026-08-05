@@ -40,12 +40,15 @@ func TestDiscoveryCapabilitiesAndPermissionCatalogExactPayloads(t *testing.T) {
 		capabilities.SiteName != "Element Skin" ||
 		capabilities.SiteURL != "https://skin.example/root" ||
 		capabilities.APIURL != "https://skin.example/root" ||
-		len(capabilities.Features) != 6 ||
+		len(capabilities.Features) != 9 ||
 		!capabilities.Features["skin_library"] ||
 		!capabilities.Features["oauth"] ||
 		!capabilities.Features["device_code"] ||
 		!capabilities.Features["minecraft_api"] ||
-		!capabilities.Features["microsoft_import"] ||
+		!capabilities.Features["external_identities"] ||
+		!capabilities.Features["oidc_client"] ||
+		!capabilities.Features["oidc_server"] ||
+		!capabilities.Features["official_profiles"] ||
 		!capabilities.Features["remote_ygg_import"] ||
 		len(capabilities.TextureTypes) != 2 ||
 		capabilities.TextureTypes[0] != "skin" ||
