@@ -105,13 +105,14 @@ type OAuthClient struct {
 }
 
 type OAuthGrant struct {
-	ID        string `json:"id"`
-	UserID    string `json:"user_id"`
-	SubjectID string `json:"subject_id"`
-	ClientID  string `json:"client_id"`
-	Status    string `json:"status"`
-	CreatedAt int64  `json:"created_at"`
-	RevokedAt *int64 `json:"revoked_at"`
+	ID         string   `json:"id"`
+	UserID     string   `json:"user_id"`
+	SubjectID  string   `json:"subject_id"`
+	ClientID   string   `json:"client_id"`
+	OIDCScopes []string `json:"oidc_scopes"`
+	Status     string   `json:"status"`
+	CreatedAt  int64    `json:"created_at"`
+	RevokedAt  *int64   `json:"revoked_at"`
 }
 
 type OAuthAuthorizationCode struct {
@@ -122,19 +123,22 @@ type OAuthAuthorizationCode struct {
 	RedirectURI         string
 	CodeChallenge       string
 	CodeChallengeMethod string
+	OIDCScopes          []string
+	Nonce               string
 	ExpiresAt           int64
 	CreatedAt           int64
 	ConsumedAt          *int64
 }
 
 type OAuthToken struct {
-	TokenHash string
-	ClientID  string
-	UserID    string
-	GrantID   string
-	ExpiresAt int64
-	CreatedAt int64
-	RevokedAt *int64
+	TokenHash  string
+	ClientID   string
+	UserID     string
+	GrantID    string
+	OIDCScopes []string
+	ExpiresAt  int64
+	CreatedAt  int64
+	RevokedAt  *int64
 }
 
 type OAuthDeviceCode struct {

@@ -33,10 +33,14 @@ func (s Service) exchangeAuthorizationCode(ctx context.Context, req TokenRequest
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	if len(codes) == 0 {
+	oidcScopes, active, err := s.DB.OAuth.ActiveGrantOIDCScopes(ctx, code.GrantID, code.UserID, client.ID)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+	if !active || (len(codes) == 0 && len(oidcScopes) == 0) {
 		return TokenResponse{}, badRequest("invalid authorization code")
 	}
-	return s.issueTokens(ctx, client.ID, code.UserID, code.GrantID, codes)
+	return s.issueTokens(ctx, client.ID, code.UserID, code.GrantID, codes, oidcScopes, code.Nonce)
 }
 
 func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenResponse, error) {
@@ -56,7 +60,12 @@ func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenRespo
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	if len(codes) == 0 {
+	grantOIDCScopes, active, err := s.DB.OAuth.ActiveGrantOIDCScopes(ctx, old.GrantID, old.UserID, client.ID)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+	oidcScopes := intersectOIDCScopes(old.OIDCScopes, grantOIDCScopes)
+	if !active || (len(codes) == 0 && len(oidcScopes) == 0) {
 		return TokenResponse{}, badRequest("invalid refresh_token")
 	}
 	accessRaw, accessHash, refreshRaw, refreshHash, err := tokenPair()
@@ -64,7 +73,11 @@ func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenRespo
 		return TokenResponse{}, err
 	}
 	now := database.NowMS()
-	refresh := model.OAuthToken{TokenHash: refreshHash, ClientID: client.ID, UserID: old.UserID, GrantID: old.GrantID, ExpiresAt: now + int64(refreshTokenTTL/time.Millisecond), CreatedAt: now}
+	idToken, err := s.issueIDToken(ctx, client.ID, old.UserID, "", oidcScopes, now)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+	refresh := model.OAuthToken{TokenHash: refreshHash, ClientID: client.ID, UserID: old.UserID, GrantID: old.GrantID, OIDCScopes: oidcScopes, ExpiresAt: now + int64(refreshTokenTTL/time.Millisecond), CreatedAt: now}
 	ok, err := s.DB.OAuth.RotateRefreshToken(ctx, oldHash, refresh, now)
 	if err != nil {
 		return TokenResponse{}, err
@@ -78,12 +91,13 @@ func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenRespo
 		UserID:        old.UserID,
 		GrantID:       old.GrantID,
 		PermissionIDs: permissionIDsFromCodes(codes),
+		OIDCScopes:    oidcScopes,
 		ExpiresAt:     now + int64(accessTokenTTL/time.Millisecond),
 		CreatedAt:     now,
 	}); err != nil {
 		return TokenResponse{}, err
 	}
-	return tokenResponse(accessRaw, refreshRaw, codes), nil
+	return tokenResponse(accessRaw, refreshRaw, codes, oidcScopes, idToken), nil
 }
 
 func (s Service) clientCredentialsToken(ctx context.Context, req TokenRequest) (TokenResponse, error) {
@@ -136,13 +150,17 @@ func (s Service) clientCredentialsToken(ctx context.Context, req TokenRequest) (
 	}, nil
 }
 
-func (s Service) issueTokens(ctx context.Context, clientID, userID, grantID string, codes []string) (TokenResponse, error) {
+func (s Service) issueTokens(ctx context.Context, clientID, userID, grantID string, codes, oidcScopes []string, nonce string) (TokenResponse, error) {
 	accessRaw, accessHash, refreshRaw, refreshHash, err := tokenPair()
 	if err != nil {
 		return TokenResponse{}, err
 	}
 	now := database.NowMS()
-	refresh := model.OAuthToken{TokenHash: refreshHash, ClientID: clientID, UserID: userID, GrantID: grantID, ExpiresAt: now + int64(refreshTokenTTL/time.Millisecond), CreatedAt: now}
+	idToken, err := s.issueIDToken(ctx, clientID, userID, nonce, oidcScopes, now)
+	if err != nil {
+		return TokenResponse{}, err
+	}
+	refresh := model.OAuthToken{TokenHash: refreshHash, ClientID: clientID, UserID: userID, GrantID: grantID, OIDCScopes: oidcScopes, ExpiresAt: now + int64(refreshTokenTTL/time.Millisecond), CreatedAt: now}
 	if err := s.DB.OAuth.CreateRefreshToken(ctx, refresh); err != nil {
 		return TokenResponse{}, err
 	}
@@ -152,12 +170,13 @@ func (s Service) issueTokens(ctx context.Context, clientID, userID, grantID stri
 		UserID:        userID,
 		GrantID:       grantID,
 		PermissionIDs: permissionIDsFromCodes(codes),
+		OIDCScopes:    oidcScopes,
 		ExpiresAt:     now + int64(accessTokenTTL/time.Millisecond),
 		CreatedAt:     now,
 	}); err != nil {
 		return TokenResponse{}, err
 	}
-	return tokenResponse(accessRaw, refreshRaw, codes), nil
+	return tokenResponse(accessRaw, refreshRaw, codes, oidcScopes, idToken), nil
 }
 
 func (s Service) storeAccessToken(ctx context.Context, token redisstore.OAuthAccessToken) error {

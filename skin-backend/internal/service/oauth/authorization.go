@@ -83,36 +83,38 @@ func (s Service) CleanupGrants(ctx context.Context, actor permission.Actor, now 
 }
 
 func (s Service) AuthorizationDetails(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (AuthorizationDetails, error) {
-	client, codes, err := s.validAuthorizationRequest(ctx, actor, req)
+	client, scopes, err := s.validAuthorizationRequest(ctx, actor, req)
 	if err != nil {
 		return AuthorizationDetails{}, err
 	}
 	return AuthorizationDetails{
 		Client:      publicClient(client),
-		Scopes:      permissionDetails(codes),
+		Scopes:      permissionDetails(scopes.Permissions),
+		OIDCScopes:  scopes.OIDC,
 		RedirectURI: req.RedirectURI,
 		State:       req.State,
 	}, nil
 }
 
 func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (map[string]any, error) {
-	client, codes, err := s.validAuthorizationRequest(ctx, actor, req)
+	client, scopes, err := s.validAuthorizationRequest(ctx, actor, req)
 	if err != nil {
 		return nil, err
 	}
-	permissionIDs := permissionIDsFromCodes(codes)
+	permissionIDs := permissionIDsFromCodes(scopes.Permissions)
 	now := database.NowMS()
 	grantID, err := util.GenerateUUIDNoDash()
 	if err != nil {
 		return nil, err
 	}
 	grant := model.OAuthGrant{
-		ID:        grantID,
-		UserID:    actor.UserID,
-		SubjectID: permissiondb.SubjectIDForUser(actor.UserID),
-		ClientID:  client.ID,
-		Status:    StatusActive,
-		CreatedAt: now,
+		ID:         grantID,
+		UserID:     actor.UserID,
+		SubjectID:  permissiondb.SubjectIDForUser(actor.UserID),
+		ClientID:   client.ID,
+		OIDCScopes: scopes.OIDC,
+		Status:     StatusActive,
+		CreatedAt:  now,
 	}
 	if err := s.DB.OAuth.CreateGrant(ctx, grant, permissionIDs); err != nil {
 		return nil, err
@@ -129,6 +131,8 @@ func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Acto
 		RedirectURI:         req.RedirectURI,
 		CodeChallenge:       req.CodeChallenge,
 		CodeChallengeMethod: "S256",
+		OIDCScopes:          scopes.OIDC,
+		Nonce:               strings.TrimSpace(req.Nonce),
 		ExpiresAt:           now + int64(authorizationCodeTTL/time.Millisecond),
 		CreatedAt:           now,
 	}
@@ -146,45 +150,48 @@ func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Acto
 	}, nil
 }
 
-func (s Service) validAuthorizationRequest(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (model.OAuthClient, []string, error) {
+func (s Service) validAuthorizationRequest(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (model.OAuthClient, authorizationScopes, error) {
 	if req.ResponseType != "code" {
-		return model.OAuthClient{}, nil, badRequest("response_type must be code")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("response_type must be code")
 	}
 	client, err := s.DB.OAuth.GetClient(ctx, strings.TrimSpace(req.ClientID))
 	if err != nil {
-		return model.OAuthClient{}, nil, err
+		return model.OAuthClient{}, authorizationScopes{}, err
 	}
 	if client == nil || client.Status != StatusActive {
-		return model.OAuthClient{}, nil, badRequest("invalid client_id")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("invalid client_id")
 	}
 	if req.RedirectURI != client.RedirectURI {
-		return model.OAuthClient{}, nil, badRequest("invalid redirect_uri")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("invalid redirect_uri")
 	}
 	if req.CodeChallengeMethod != "S256" || strings.TrimSpace(req.CodeChallenge) == "" {
-		return model.OAuthClient{}, nil, badRequest("PKCE S256 is required")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("PKCE S256 is required")
 	}
-	codes, err := parseScope(req.Scope)
+	if len(req.Nonce) > 512 {
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("nonce is too long")
+	}
+	scopes, err := parseAuthorizationScopes(req.Scope)
 	if err != nil {
-		return model.OAuthClient{}, nil, err
+		return model.OAuthClient{}, authorizationScopes{}, err
 	}
 	clientIDs, err := s.DB.OAuth.ClientPermissionIDs(ctx, client.ID)
 	if err != nil {
-		return model.OAuthClient{}, nil, err
+		return model.OAuthClient{}, authorizationScopes{}, err
 	}
 	clientAllowed := idSet(clientIDs)
-	for _, code := range codes {
+	for _, code := range scopes.Permissions {
 		def := permission.MustDefinitionByCode(code)
 		if def.Scope.ID == permission.ScopeServer {
-			return model.OAuthClient{}, nil, badRequest("invalid scope")
+			return model.OAuthClient{}, authorizationScopes{}, badRequest("invalid scope")
 		}
 		if !actor.Has(def) {
-			return model.OAuthClient{}, nil, forbidden()
+			return model.OAuthClient{}, authorizationScopes{}, forbidden()
 		}
 		if !clientAllowed[int64(def.ID)] {
-			return model.OAuthClient{}, nil, badRequest("scope exceeds client permission limit")
+			return model.OAuthClient{}, authorizationScopes{}, badRequest("scope exceeds client permission limit")
 		}
 	}
-	return *client, codes, nil
+	return *client, scopes, nil
 }
 
 func (s Service) grantPermissionCodes(ctx context.Context, grantID string) ([]string, error) {

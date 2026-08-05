@@ -19,8 +19,12 @@ type Handler struct {
 	oauth oauthsvc.Service
 }
 
-func New(cfg config.Config, db *database.DB, redis redisstore.Store, auth shared.AuthFunc) Handler {
-	return Handler{cfg: cfg, auth: auth, oauth: oauthsvc.Service{DB: db, Redis: redis}}
+func New(cfg config.Config, db *database.DB, redis redisstore.Store, auth shared.AuthFunc, signers ...*oauthsvc.OIDCSigner) Handler {
+	var signer *oauthsvc.OIDCSigner
+	if len(signers) > 0 {
+		signer = signers[0]
+	}
+	return Handler{cfg: cfg, auth: auth, oauth: oauthsvc.Service{DB: db, Redis: redis, Config: cfg, OIDCSigner: signer}}
 }
 
 func (h Handler) Auth(next http.HandlerFunc) http.HandlerFunc {
@@ -41,7 +45,7 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 		"code_challenge_methods_supported":           []string{"S256"},
 		"token_endpoint_auth_methods_supported":      []string{"client_secret_basic", "client_secret_post", "none"},
 		"revocation_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-		"scopes_supported":                           h.scopeCodes(),
+		"scopes_supported":                           h.authorizationScopeCodes(),
 		"protected_resources":                        []string{base + "/v2"},
 	}
 	if docs := strings.TrimRight(h.cfg.SiteURL, "/"); docs != "" {
@@ -75,4 +79,8 @@ func (h Handler) scopeCodes() []string {
 		}
 	}
 	return codes
+}
+
+func (h Handler) authorizationScopeCodes() []string {
+	return append([]string{"openid", "profile", "email", "offline_access"}, h.scopeCodes()...)
 }

@@ -18,6 +18,10 @@ func forbidden() error {
 	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
 }
 
+func unauthorized(detail string) error {
+	return util.HTTPError{Status: http.StatusUnauthorized, Detail: detail}
+}
+
 func notFound(detail string) error {
 	return util.HTTPError{Status: http.StatusNotFound, Detail: detail}
 }

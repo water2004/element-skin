@@ -76,6 +76,12 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		db.Close()
 		return nil, err
 	}
+	oidcSigner, err := oauthsvc.NewOIDCSigner(cfg)
+	if err != nil {
+		_ = redis.Close()
+		db.Close()
+		return nil, err
+	}
 	cleanupCtx, cancel := context.WithCancel(context.Background())
 	probeService := probesvc.New(db, redis)
 	StartScheduler(cleanupCtx,
@@ -87,7 +93,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	return &App{
 		db:       db,
 		redis:    redis,
-		handler:  httpapi.NewRouterWithRedis(cfg, db, redis, ygg),
+		handler:  httpapi.NewRouterWithOIDCSigner(cfg, db, redis, ygg, oidcSigner),
 		cancelFn: cancel,
 	}, nil
 }
@@ -110,7 +116,12 @@ func NewWithDBAndRedis(cfg config.Config, db *database.DB, redis redisstore.Stor
 		_ = redis.Close()
 		return nil, err
 	}
-	return &App{db: db, redis: redis, handler: httpapi.NewRouterWithRedis(cfg, db, redis, ygg, senders...)}, nil
+	oidcSigner, err := oauthsvc.NewOIDCSigner(cfg)
+	if err != nil {
+		_ = redis.Close()
+		return nil, err
+	}
+	return &App{db: db, redis: redis, handler: httpapi.NewRouterWithOIDCSigner(cfg, db, redis, ygg, oidcSigner, senders...)}, nil
 }
 
 func (a *App) Handler() http.Handler {

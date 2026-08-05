@@ -36,13 +36,14 @@ type RateLimitResult struct {
 }
 
 type OAuthAccessToken struct {
-	TokenHash     string  `json:"token_hash"`
-	ClientID      string  `json:"client_id"`
-	UserID        string  `json:"user_id,omitempty"`
-	GrantID       string  `json:"grant_id,omitempty"`
-	PermissionIDs []int64 `json:"permission_ids"`
-	ExpiresAt     int64   `json:"expires_at"`
-	CreatedAt     int64   `json:"created_at"`
+	TokenHash     string   `json:"token_hash"`
+	ClientID      string   `json:"client_id"`
+	UserID        string   `json:"user_id,omitempty"`
+	GrantID       string   `json:"grant_id,omitempty"`
+	PermissionIDs []int64  `json:"permission_ids"`
+	OIDCScopes    []string `json:"oidc_scopes"`
+	ExpiresAt     int64    `json:"expires_at"`
+	CreatedAt     int64    `json:"created_at"`
 }
 
 type ExternalAccessToken struct {

@@ -368,6 +368,7 @@ CREATE TABLE IF NOT EXISTS delegated_permission_grants (
     user_id TEXT NOT NULL,
     subject_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
+	 oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     status TEXT NOT NULL CHECK(status IN ('active', 'revoked')),
     created_at BIGINT NOT NULL,
     revoked_at BIGINT,
@@ -393,6 +394,8 @@ CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
     redirect_uri TEXT NOT NULL,
     code_challenge TEXT NOT NULL,
     code_challenge_method TEXT NOT NULL CHECK(code_challenge_method IN ('S256')),
+	 oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+	 nonce TEXT NOT NULL DEFAULT '',
     expires_at BIGINT NOT NULL,
     created_at BIGINT NOT NULL,
     consumed_at BIGINT,
@@ -415,12 +418,23 @@ CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
     client_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
     grant_id TEXT NOT NULL,
+	 oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     expires_at BIGINT NOT NULL,
     created_at BIGINT NOT NULL,
     revoked_at BIGINT,
     FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY(grant_id) REFERENCES delegated_permission_grants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS oidc_pairwise_subjects (
+	client_id TEXT NOT NULL,
+	user_id TEXT NOT NULL,
+	subject TEXT NOT NULL UNIQUE,
+	created_at BIGINT NOT NULL,
+	PRIMARY KEY(client_id, user_id),
+	FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE,
+	FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS oauth_device_codes (
@@ -530,12 +544,17 @@ CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_client_user ON oauth_au
 CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_grant_expiry ON oauth_authorization_codes (grant_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user_client ON oauth_refresh_tokens (user_id, client_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_grant_active_expiry ON oauth_refresh_tokens (grant_id, expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_oidc_pairwise_subjects_user ON oidc_pairwise_subjects (user_id, client_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_device_codes_client_status ON oauth_device_codes (client_id, status, expires_at);
 CREATE INDEX IF NOT EXISTS idx_identity_providers_public ON identity_providers (display_order, created_at, id) WHERE enabled=TRUE;
 CREATE INDEX IF NOT EXISTS idx_external_identities_user ON external_identities (user_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_official_profile_bindings_identity ON official_profile_bindings (identity_id, created_at, id);
 
 -- Breaking migration: the v2 identity model replaces the one-shot Microsoft import contract.
+ALTER TABLE delegated_permission_grants ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
+ALTER TABLE oauth_refresh_tokens ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 DELETE FROM permissions WHERE code LIKE 'microsoft_import.%';
 DELETE FROM settings WHERE key IN ('microsoft_client_id', 'microsoft_client_secret', 'microsoft_redirect_uri');
 

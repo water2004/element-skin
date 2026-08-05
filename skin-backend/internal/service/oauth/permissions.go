@@ -7,12 +7,69 @@ import (
 	"element-skin/backend/internal/permission"
 )
 
+var supportedOIDCScopes = map[string]bool{
+	"openid":         true,
+	"profile":        true,
+	"email":          true,
+	"offline_access": true,
+}
+
+type authorizationScopes struct {
+	Permissions []string
+	OIDC        []string
+}
+
 func parseScope(raw string) ([]string, error) {
 	parts := strings.Fields(raw)
 	if len(parts) == 0 {
 		return nil, badRequest("scope is required")
 	}
 	return validateCodes(parts)
+}
+
+func parseAuthorizationScopes(raw string) (authorizationScopes, error) {
+	parts := strings.Fields(raw)
+	if len(parts) == 0 {
+		return authorizationScopes{}, badRequest("scope is required")
+	}
+	permissionCodes := make([]string, 0, len(parts))
+	oidcScopes := make([]string, 0, 4)
+	seenOIDC := map[string]bool{}
+	for _, scope := range parts {
+		if supportedOIDCScopes[scope] {
+			if !seenOIDC[scope] {
+				seenOIDC[scope] = true
+				oidcScopes = append(oidcScopes, scope)
+			}
+			continue
+		}
+		permissionCodes = append(permissionCodes, scope)
+	}
+	if len(oidcScopes) > 0 && !seenOIDC["openid"] {
+		return authorizationScopes{}, badRequest("OIDC scopes require openid")
+	}
+	codes, err := validateCodes(permissionCodes)
+	if err != nil {
+		return authorizationScopes{}, err
+	}
+	sort.Strings(oidcScopes)
+	return authorizationScopes{Permissions: codes, OIDC: oidcScopes}, nil
+}
+
+func combinedScopes(permissionCodes, oidcScopes []string) []string {
+	out := append([]string(nil), permissionCodes...)
+	out = append(out, oidcScopes...)
+	sort.Strings(out)
+	return out
+}
+
+func hasOIDCScope(scopes []string, want string) bool {
+	for _, scope := range scopes {
+		if scope == want {
+			return true
+		}
+	}
+	return false
 }
 
 func validateCodes(codes []string) ([]string, error) {

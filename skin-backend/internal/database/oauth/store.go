@@ -69,18 +69,24 @@ func scanClients(rows pgx.Rows) ([]model.OAuthClient, error) {
 
 func scanAuthorizationCode(row rowScanner) (*model.OAuthAuthorizationCode, error) {
 	var code model.OAuthAuthorizationCode
-	err := row.Scan(&code.CodeHash, &code.ClientID, &code.UserID, &code.GrantID, &code.RedirectURI, &code.CodeChallenge, &code.CodeChallengeMethod, &code.ExpiresAt, &code.CreatedAt, &code.ConsumedAt)
+	err := row.Scan(&code.CodeHash, &code.ClientID, &code.UserID, &code.GrantID, &code.RedirectURI, &code.CodeChallenge, &code.CodeChallengeMethod, &code.OIDCScopes, &code.Nonce, &code.ExpiresAt, &code.CreatedAt, &code.ConsumedAt)
 	if err != nil {
 		return nil, err
+	}
+	if len(code.OIDCScopes) == 0 {
+		code.OIDCScopes = nil
 	}
 	return &code, nil
 }
 
 func scanOAuthToken(row rowScanner) (*model.OAuthToken, error) {
 	var token model.OAuthToken
-	err := row.Scan(&token.TokenHash, &token.ClientID, &token.UserID, &token.GrantID, &token.ExpiresAt, &token.CreatedAt, &token.RevokedAt)
+	err := row.Scan(&token.TokenHash, &token.ClientID, &token.UserID, &token.GrantID, &token.OIDCScopes, &token.ExpiresAt, &token.CreatedAt, &token.RevokedAt)
 	if err != nil {
 		return nil, err
+	}
+	if len(token.OIDCScopes) == 0 {
+		token.OIDCScopes = nil
 	}
 	return &token, nil
 }

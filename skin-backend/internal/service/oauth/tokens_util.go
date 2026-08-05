@@ -50,13 +50,14 @@ func tokenPair() (string, string, string, string, error) {
 	return accessRaw, accessHash, refreshRaw, refreshHash, nil
 }
 
-func tokenResponse(access, refresh string, codes []string) TokenResponse {
+func tokenResponse(access, refresh string, codes, oidcScopes []string, idToken string) TokenResponse {
 	return TokenResponse{
 		AccessToken:  access,
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(accessTokenTTL / time.Second),
 		RefreshToken: refresh,
-		Scope:        strings.Join(codes, " "),
+		Scope:        strings.Join(combinedScopes(codes, oidcScopes), " "),
 		Permissions:  codes,
+		IDToken:      idToken,
 	}
 }

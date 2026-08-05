@@ -188,7 +188,7 @@ func (s Service) deviceCodeToken(ctx context.Context, req TokenRequest) (TokenRe
 	if err := s.DB.OAuth.CreateGrant(ctx, grant, permissionIDsFromCodes(codes)); err != nil {
 		return TokenResponse{}, err
 	}
-	return s.issueTokens(ctx, client.ID, *consumed.UserID, grantID, codes)
+	return s.issueTokens(ctx, client.ID, *consumed.UserID, grantID, codes, nil, "")
 }
 
 func normalizeUserCode(raw string) string {

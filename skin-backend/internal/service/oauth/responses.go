@@ -49,5 +49,6 @@ func grantResponse(grant model.OAuthGrant, permissions []string) map[string]any 
 		"created_at":  grant.CreatedAt,
 		"revoked_at":  grant.RevokedAt,
 		"permissions": permissions,
+		"oidc_scopes": append([]string{}, grant.OIDCScopes...),
 	}
 }

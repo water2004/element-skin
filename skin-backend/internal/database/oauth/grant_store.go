@@ -2,8 +2,11 @@ package oauth
 
 import (
 	"context"
+	"errors"
 
 	"element-skin/backend/internal/model"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func (s Store) CreateGrant(ctx context.Context, grant model.OAuthGrant, permissionIDs []int64) error {
@@ -13,9 +16,9 @@ func (s Store) CreateGrant(ctx context.Context, grant model.OAuthGrant, permissi
 	}
 	defer tx.Rollback(ctx)
 	if _, err := tx.Exec(ctx, `
-		INSERT INTO delegated_permission_grants (id, user_id, subject_id, client_id, status, created_at, revoked_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7)
-	`, grant.ID, grant.UserID, grant.SubjectID, grant.ClientID, grant.Status, grant.CreatedAt, grant.RevokedAt); err != nil {
+		INSERT INTO delegated_permission_grants (id, user_id, subject_id, client_id, oidc_scopes, status, created_at, revoked_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+	`, grant.ID, grant.UserID, grant.SubjectID, grant.ClientID, nonNilStrings(grant.OIDCScopes), grant.Status, grant.CreatedAt, grant.RevokedAt); err != nil {
 		return err
 	}
 	if err := insertGrantPermissions(ctx, tx, grant.ID, permissionIDs, grant.CreatedAt); err != nil {
@@ -152,7 +155,7 @@ func (s Store) DeleteRevokedGrants(ctx context.Context, cutoff int64) (int64, er
 
 func (s Store) ListGrantsByUser(ctx context.Context, userID string, limit int) ([]model.OAuthGrant, error) {
 	rows, err := s.Pool.Query(ctx, `
-		SELECT id, user_id, subject_id, client_id, status, created_at, revoked_at
+		SELECT id, user_id, subject_id, client_id, oidc_scopes, status, created_at, revoked_at
 		FROM delegated_permission_grants
 		WHERE user_id=$1
 		ORDER BY created_at DESC, id DESC
@@ -165,12 +168,36 @@ func (s Store) ListGrantsByUser(ctx context.Context, userID string, limit int) (
 	var grants []model.OAuthGrant
 	for rows.Next() {
 		var grant model.OAuthGrant
-		if err := rows.Scan(&grant.ID, &grant.UserID, &grant.SubjectID, &grant.ClientID, &grant.Status, &grant.CreatedAt, &grant.RevokedAt); err != nil {
+		if err := rows.Scan(&grant.ID, &grant.UserID, &grant.SubjectID, &grant.ClientID, &grant.OIDCScopes, &grant.Status, &grant.CreatedAt, &grant.RevokedAt); err != nil {
 			return nil, err
+		}
+		if len(grant.OIDCScopes) == 0 {
+			grant.OIDCScopes = nil
 		}
 		grants = append(grants, grant)
 	}
 	return grants, rows.Err()
+}
+
+func (s Store) ActiveGrantOIDCScopes(ctx context.Context, grantID, userID, clientID string) ([]string, bool, error) {
+	var scopes []string
+	err := s.Pool.QueryRow(ctx, `
+		SELECT g.oidc_scopes
+		FROM delegated_permission_grants g
+		JOIN delegated_clients c ON c.id=g.client_id
+		WHERE g.id=$1 AND g.user_id=$2 AND g.client_id=$3
+		  AND g.status='active' AND c.status='active'
+	`, grantID, userID, clientID).Scan(&scopes)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if scopes == nil {
+		scopes = []string{}
+	}
+	return scopes, true, nil
 }
 
 func (s Store) GrantPermissionIDs(ctx context.Context, grantID string) ([]int64, error) {

@@ -88,6 +88,16 @@ func oauthAccessTokenFromMap(raw map[string]any) OAuthAccessToken {
 			token.PermissionIDs = append(token.PermissionIDs, int64Value(value))
 		}
 	}
+	if values, ok := raw["oidc_scopes"].([]any); ok {
+		token.OIDCScopes = make([]string, 0, len(values))
+		for _, value := range values {
+			if scope, ok := value.(string); ok {
+				token.OIDCScopes = append(token.OIDCScopes, scope)
+			}
+		}
+	} else if values, ok := raw["oidc_scopes"].([]string); ok {
+		token.OIDCScopes = append([]string(nil), values...)
+	}
 	return token
 }
 

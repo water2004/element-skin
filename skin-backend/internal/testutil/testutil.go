@@ -63,8 +63,8 @@ func TestConfig() config.Config {
 	}
 	cfg.PrivateKeyPath = filepath.Join(repoRoot(), "private.pem")
 	cfg.PublicKeyPath = filepath.Join(repoRoot(), "public.pem")
-	cfg.OIDCPrivateKeyPath = filepath.Join(repoRoot(), "oidc-private.pem")
-	cfg.OIDCPublicKeyPath = filepath.Join(repoRoot(), "oidc-public.pem")
+	cfg.OIDCPrivateKeyPath = cfg.PrivateKeyPath
+	cfg.OIDCPublicKeyPath = cfg.PublicKeyPath
 	cfg.IdentityEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 	cfg.RedisAddr = os.Getenv("REDIS_TEST_ADDR")
 	if cfg.RedisAddr == "" {
@@ -123,6 +123,9 @@ func newTestAppTB(t testing.TB, configure func(*config.Config)) (*database.DB, h
 	cfg := TestConfig()
 	cfg.TexturesDir = t.TempDir()
 	cfg.CarouselDir = t.TempDir()
+	oidcKeyDir := t.TempDir()
+	cfg.OIDCPrivateKeyPath = filepath.Join(oidcKeyDir, "private.pem")
+	cfg.OIDCPublicKeyPath = filepath.Join(oidcKeyDir, "public.pem")
 	dbName := fmt.Sprintf("%s_%d_%d", testDBName, os.Getpid(), atomic.AddUint64(&dbCounter, 1))
 	cfg.DatabaseDSN = "postgresql://postgres:12345678@localhost:5432/" + dbName + "?sslmode=disable"
 	if configure != nil {
