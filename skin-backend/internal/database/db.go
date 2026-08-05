@@ -17,6 +17,7 @@ import (
 	"element-skin/backend/internal/database/invite"
 	"element-skin/backend/internal/database/notice"
 	"element-skin/backend/internal/database/oauth"
+	"element-skin/backend/internal/database/officialprofile"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/database/setting"
@@ -31,21 +32,22 @@ import (
 )
 
 type DB struct {
-	Pool          *pgxpool.Pool
-	Users         user.Store
-	Profiles      profile.Store
-	Textures      texture.Store
-	Tokens        token.Store
-	Settings      setting.Store
-	EasterEggs    easteregg.Store
-	Invites       invite.Store
-	Fallbacks     fallback.Store
-	HomepageMedia homepage.Store
-	Identities    identity.Store
-	Verifications verification.Store
-	Notices       notice.Store
-	OAuth         oauth.Store
-	Permissions   permissiondb.Store
+	Pool             *pgxpool.Pool
+	Users            user.Store
+	Profiles         profile.Store
+	Textures         texture.Store
+	Tokens           token.Store
+	Settings         setting.Store
+	EasterEggs       easteregg.Store
+	Invites          invite.Store
+	Fallbacks        fallback.Store
+	HomepageMedia    homepage.Store
+	Identities       identity.Store
+	Verifications    verification.Store
+	Notices          notice.Store
+	OAuth            oauth.Store
+	OfficialProfiles officialprofile.Store
+	Permissions      permissiondb.Store
 }
 
 func Open(ctx context.Context, cfg config.Config) (*DB, error) {
@@ -72,21 +74,22 @@ func Open(ctx context.Context, cfg config.Config) (*DB, error) {
 
 func New(pool *pgxpool.Pool) *DB {
 	return &DB{
-		Pool:          pool,
-		Users:         user.Store{Pool: pool},
-		Profiles:      profile.Store{Pool: pool},
-		Textures:      texture.Store{Pool: pool},
-		Tokens:        token.Store{Pool: pool},
-		Settings:      setting.Store{Pool: pool},
-		EasterEggs:    easteregg.Store{Pool: pool},
-		Invites:       invite.Store{Pool: pool},
-		Fallbacks:     fallback.Store{Pool: pool},
-		HomepageMedia: homepage.Store{Pool: pool},
-		Identities:    identity.Store{Pool: pool},
-		Verifications: verification.Store{Pool: pool},
-		Notices:       notice.Store{Pool: pool},
-		OAuth:         oauth.Store{Pool: pool},
-		Permissions:   permissiondb.Store{Pool: pool},
+		Pool:             pool,
+		Users:            user.Store{Pool: pool},
+		Profiles:         profile.Store{Pool: pool},
+		Textures:         texture.Store{Pool: pool},
+		Tokens:           token.Store{Pool: pool},
+		Settings:         setting.Store{Pool: pool},
+		EasterEggs:       easteregg.Store{Pool: pool},
+		Invites:          invite.Store{Pool: pool},
+		Fallbacks:        fallback.Store{Pool: pool},
+		HomepageMedia:    homepage.Store{Pool: pool},
+		Identities:       identity.Store{Pool: pool},
+		Verifications:    verification.Store{Pool: pool},
+		Notices:          notice.Store{Pool: pool},
+		OAuth:            oauth.Store{Pool: pool},
+		OfficialProfiles: officialprofile.Store{Pool: pool},
+		Permissions:      permissiondb.Store{Pool: pool},
 	}
 }
 

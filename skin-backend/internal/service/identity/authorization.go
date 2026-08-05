@@ -166,7 +166,10 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		}
 		if existing != nil {
 			if existing.UserID == userID {
-				return AuthorizationResult{}, conflict("this external identity is already linked to your account")
+				if err := s.updateIdentityAuthorization(ctx, *existing, claims, tokens); err != nil {
+					return AuthorizationResult{}, err
+				}
+				return AuthorizationResult{Intent: intent, UserID: userID, IdentityID: existing.ID, ProviderID: provider.ID}, nil
 			}
 			return AuthorizationResult{}, conflict("this external identity is already linked to another account")
 		}

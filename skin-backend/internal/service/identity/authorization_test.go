@@ -211,6 +211,51 @@ func TestOIDCLoginReturnsExistingUserOrRegistrationTicketWithoutCreatingAccount(
 	}
 }
 
+func TestOIDCLinkReauthorizesAnExistingOwnedIdentityThroughTheSamePath(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oidc-reauthorize@test.com", "pw", "OIDCReauthorize", false)
+	provider := oidcTestProvider(t, db, "oidc-reauthorize-provider")
+	existing := model.ExternalIdentity{
+		ID: "reauthorize-identity", UserID: user.ID, ProviderID: provider.ID,
+		Subject: "reauthorize-subject", Email: "old@example.com", CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := db.Identities.CreateIdentity(ctx, existing, model.ExternalIdentityCredential{IdentityID: existing.ID, UpdatedAt: 1}); err != nil {
+		t.Fatal(err)
+	}
+	cache := redisstore.NewMemoryStore()
+	client := &fakeOIDCClient{
+		claims: identity.OIDCClaims{Subject: existing.Subject, Email: "new@example.com", EmailVerified: true, DisplayName: "Reauthorized"},
+		tokens: identity.OIDCTokens{AccessToken: "new-access", RefreshToken: "new-refresh", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour), Scopes: []string{"openid", "profile"}},
+	}
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: cache, OIDCClient: client}
+	actor := actorWithPermissions(user.ID, "external_identity.create.owned")
+	started, err := service.StartAuthorization(ctx, actor, provider.ID, "link")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.CompleteAuthorization(ctx, "reauthorize-code", mustAuthorizationState(t, started.AuthorizationURL), "")
+	if err != nil || result.Intent != "link" || result.UserID != user.ID || result.IdentityID != existing.ID || result.ProviderID != provider.ID {
+		t.Fatalf("reauthorization result=%#v err=%v", result, err)
+	}
+	stored, err := db.Identities.GetIdentity(ctx, existing.ID)
+	if err != nil || stored == nil || stored.Email != "new@example.com" || !stored.EmailVerified || stored.DisplayName != "Reauthorized" || stored.LastLoginAt == nil {
+		t.Fatalf("reauthorized identity=%#v err=%v", stored, err)
+	}
+	credential, err := db.Identities.GetCredential(ctx, existing.ID)
+	if err != nil || credential == nil {
+		t.Fatalf("reauthorized credential=%#v err=%v", credential, err)
+	}
+	box, _ := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
+	refreshToken, err := box.Decrypt(credential.RefreshTokenCiphertext)
+	if err != nil || refreshToken != "new-refresh" {
+		t.Fatalf("reauthorized refresh token=%q err=%v", refreshToken, err)
+	}
+	if access, err := cache.GetExternalAccessToken(ctx, existing.ID); err != nil || access.AccessToken != "new-access" {
+		t.Fatalf("reauthorized access token=%#v err=%v", access, err)
+	}
+}
+
 func TestOIDCAuthorizationRejectsUnauthorizedLinkAndConsumesDeniedStateExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()

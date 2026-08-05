@@ -33,6 +33,12 @@ type OIDCClient interface {
 	ExchangeAndVerify(context.Context, model.IdentityProvider, string, string, string, string, string) (OIDCClaims, OIDCTokens, error)
 }
 
+type TokenRefresher interface {
+	Refresh(context.Context, model.IdentityProvider, string, string, []string) (OIDCTokens, error)
+}
+
+var ErrRefreshRejected = errors.New("external identity refresh token was rejected")
+
 type StandardOIDCClient struct {
 	HTTPClient *http.Client
 }
@@ -99,6 +105,51 @@ func (c StandardOIDCClient) ExchangeAndVerify(
 		TokenType:    token.TokenType,
 		Expiry:       token.Expiry,
 		Scopes:       scopes,
+	}, nil
+}
+
+func (c StandardOIDCClient) Refresh(
+	ctx context.Context,
+	provider model.IdentityProvider,
+	clientSecret string,
+	refreshToken string,
+	scopes []string,
+) (OIDCTokens, error) {
+	if c.HTTPClient != nil {
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, c.HTTPClient)
+	}
+	config := oauth2.Config{
+		ClientID:     provider.ClientID,
+		ClientSecret: clientSecret,
+		Endpoint: oauth2.Endpoint{
+			TokenURL: provider.TokenEndpoint,
+		},
+		Scopes: scopes,
+	}
+	token, err := config.TokenSource(ctx, &oauth2.Token{
+		RefreshToken: refreshToken,
+		Expiry:       time.Now().Add(-time.Minute),
+	}).Token()
+	if err != nil {
+		var retrieveErr *oauth2.RetrieveError
+		if errors.As(err, &retrieveErr) && (retrieveErr.ErrorCode == "invalid_grant" || retrieveErr.ErrorCode == "invalid_request") {
+			return OIDCTokens{}, ErrRefreshRejected
+		}
+		return OIDCTokens{}, errors.New("OIDC token refresh failed")
+	}
+	if strings.TrimSpace(token.AccessToken) == "" {
+		return OIDCTokens{}, errors.New("OIDC token refresh response did not include an access token")
+	}
+	grantedScopes := append([]string(nil), scopes...)
+	if granted, ok := token.Extra("scope").(string); ok && strings.TrimSpace(granted) != "" {
+		grantedScopes = strings.Fields(granted)
+	}
+	return OIDCTokens{
+		AccessToken:  token.AccessToken,
+		RefreshToken: token.RefreshToken,
+		TokenType:    token.TokenType,
+		Expiry:       token.Expiry,
+		Scopes:       grantedScopes,
 	}, nil
 }
 

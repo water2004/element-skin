@@ -24,11 +24,12 @@ const (
 )
 
 type Service struct {
-	DB         *database.DB
-	Config     config.Config
-	Discovery  Discovery
-	Redis      redisstore.Store
-	OIDCClient OIDCClient
+	DB             *database.DB
+	Config         config.Config
+	Discovery      Discovery
+	Redis          redisstore.Store
+	OIDCClient     OIDCClient
+	TokenRefresher TokenRefresher
 }
 
 type ProviderInput struct {
@@ -248,6 +249,9 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 	if err != nil {
 		return model.IdentityProvider{}, err
 	}
+	if input.Adapter == AdapterMicrosoft && (!hasScope(scopes, "XboxLive.signin") || !hasScope(scopes, "offline_access")) {
+		return model.IdentityProvider{}, badRequest("Microsoft providers must request XboxLive.signin and offline_access scopes")
+	}
 	discovery := s.Discovery
 	if discovery == nil {
 		discovery = HTTPDiscovery{}
@@ -301,6 +305,15 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 		RegistrationEnabled:    input.RegistrationEnabled,
 		DisplayOrder:           input.DisplayOrder,
 	}, nil
+}
+
+func hasScope(scopes []string, expected string) bool {
+	for _, scope := range scopes {
+		if scope == expected {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeScopes(scopes []string) ([]string, error) {

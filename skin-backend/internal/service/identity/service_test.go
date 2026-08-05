@@ -113,6 +113,23 @@ func TestProviderAndMultipleIdentityLifecycleUsesOneModelExactly(t *testing.T) {
 	}
 }
 
+func TestMicrosoftProviderRequiresMinecraftAndRefreshScopesExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	admin := testutil.CreateUser(t, db, "microsoft-scope-admin@test.com", "pw", "MicrosoftScopeAdmin", true)
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Discovery: &fixedDiscovery{}}
+	secret := "secret"
+	_, err := service.CreateProvider(ctx, actorForUser(t, db, admin.ID), identity.ProviderInput{
+		Name: "Microsoft", IssuerURL: "https://login.example", ClientID: "client", ClientSecret: &secret,
+		Scopes: []string{"openid", "profile"}, Adapter: identity.AdapterMicrosoft, Enabled: true,
+	})
+	assertHTTPError(t, err, 400, "Microsoft providers must request XboxLive.signin and offline_access scopes")
+	var count int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM identity_providers`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("invalid Microsoft provider persisted count=%d err=%v", count, err)
+	}
+}
+
 func TestIdentityAndProviderDeletionRejectDependenciesWithExactConflicts(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()

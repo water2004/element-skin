@@ -50,9 +50,6 @@ func (c MicrosoftHTTPClient) do(ctx context.Context, method, endpoint string, bo
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode == 404 && method == "GET" && strings.Contains(endpoint, "/minecraft/profile") {
-		if ptr, ok := out.(*map[string]any); ok {
-			*ptr = nil
-		}
 		return nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {

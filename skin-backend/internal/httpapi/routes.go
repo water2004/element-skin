@@ -6,6 +6,7 @@ import (
 	"element-skin/backend/internal/httpapi/minecraft"
 	"element-skin/backend/internal/httpapi/notice"
 	"element-skin/backend/internal/httpapi/oauth"
+	officialprofileapi "element-skin/backend/internal/httpapi/officialprofile"
 	"element-skin/backend/internal/httpapi/remote"
 	"element-skin/backend/internal/httpapi/site"
 	"element-skin/backend/internal/httpapi/yggdrasil"
@@ -21,6 +22,7 @@ func (r *Router) routes() {
 	remoteRoutes := remote.New(r.cfg, r.db, r.auth)
 	adminRoutes := admin.NewWithRedis(r.cfg, r.db, r.redis, r.auth)
 	identityRoutes := identityapi.New(r.cfg, r.db, r.redis, r.auth)
+	officialProfileRoutes := officialprofileapi.New(r.cfg, r.db, r.redis, r.auth)
 	sitePublicRead := permission.MustDefinitionByCode("site_public.read.public")
 	texturePublicRead := permission.MustDefinitionByCode("texture.read.public")
 
@@ -50,6 +52,10 @@ func (r *Router) routes() {
 	r.handle("GET /v2/users/me/identities", identityRoutes.Auth(identityRoutes.ListIdentities))
 	r.handle("PATCH /v2/users/me/identities/{identity_id}", identityRoutes.Auth(identityRoutes.UpdateIdentity))
 	r.handle("DELETE /v2/users/me/identities/{identity_id}", identityRoutes.Auth(identityRoutes.DeleteIdentity))
+	r.handle("GET /v2/users/me/official-profile-bindings", officialProfileRoutes.Auth(officialProfileRoutes.List))
+	r.handle("POST /v2/users/me/official-profile-bindings", officialProfileRoutes.Auth(officialProfileRoutes.Create))
+	r.handle("POST /v2/users/me/official-profile-bindings/{binding_id}/sync", officialProfileRoutes.Auth(officialProfileRoutes.Sync))
+	r.handle("DELETE /v2/users/me/official-profile-bindings/{binding_id}", officialProfileRoutes.Auth(officialProfileRoutes.Delete))
 	r.handle("GET /v2/users/me/profiles", siteRoutes.Auth(siteRoutes.ListMyProfiles))
 	r.handle("POST /v2/users/me/profiles", siteRoutes.Auth(siteRoutes.CreateProfile))
 	r.handle("PATCH /v2/users/me/profiles/{profile_id}", siteRoutes.Auth(siteRoutes.UpdateProfile))

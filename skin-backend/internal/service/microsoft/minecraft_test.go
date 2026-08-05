@@ -72,8 +72,27 @@ func TestMicrosoftHTTPClientOwnershipAndProfileContracts(t *testing.T) {
 		t.Fatalf("ownership result=%v err=%v, want true nil", owned, err)
 	}
 	profile, err := client.GetMinecraftProfile(context.Background(), "mc_access")
-	if err != nil || profile["id"] != "profile-id" || profile["name"] != "Steve" {
+	if err != nil || profile == nil || profile.ID != "profile-id" || profile.Name != "Steve" || len(profile.Skins) != 0 || len(profile.Capes) != 0 {
 		t.Fatalf("profile=%#v err=%v", profile, err)
+	}
+}
+
+func TestMinecraftProfileSelectsActiveTexturesExactly(t *testing.T) {
+	profile := microsoft.MinecraftProfile{
+		Skins: []microsoft.MinecraftTexture{
+			{ID: "inactive", State: "INACTIVE", URL: "https://textures.example/inactive.png", Variant: "CLASSIC"},
+			{ID: "active", State: "ACTIVE", URL: "https://textures.example/active.png", Variant: "SLIM"},
+		},
+		Capes: []microsoft.MinecraftTexture{{ID: "cape", URL: "https://textures.example/cape.png"}},
+	}
+	if skin := profile.ActiveSkin(); skin == nil || skin.ID != "active" || skin.Variant != "SLIM" {
+		t.Fatalf("active skin mismatch: %#v", skin)
+	}
+	if cape := profile.ActiveCape(); cape == nil || cape.ID != "cape" {
+		t.Fatalf("fallback cape mismatch: %#v", cape)
+	}
+	if texture := (microsoft.MinecraftProfile{}).ActiveSkin(); texture != nil {
+		t.Fatalf("empty profile active skin=%#v; want nil", texture)
 	}
 }
 
