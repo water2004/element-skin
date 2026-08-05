@@ -38,6 +38,7 @@ const dashboardLinks: NavLink[] = [
   { path: '/dashboard/wardrobe', title: '我的衣柜', icon: Box },
   { path: '/dashboard/roles', title: '角色管理', icon: User },
   { path: '/dashboard/profile', title: '个人资料', icon: Setting },
+  { path: '/dashboard/identities', title: '身份管理', icon: Link },
   { path: '/dashboard/oauth', title: '第三方应用', icon: Link },
 ]
 
@@ -51,6 +52,7 @@ const adminNavLinks: NavLink[] = [
   { path: '/admin/email', title: '邮件服务', icon: Message },
   { path: '/admin/notices', title: '通知公告', icon: Bell },
   { path: '/admin/oauth-apps', title: '第三方应用', icon: Link },
+  { path: '/admin/identity-providers', title: 'OIDC 身份提供方', icon: Link },
   { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
   { path: '/admin/homepage-media', title: '首页图片', icon: Picture },
   { path: '/admin/easter-eggs', title: '彩蛋列表', icon: MagicStick },
@@ -70,6 +72,7 @@ export function buildDefaultOpeneds(path: string) {
       '/admin/email',
       '/admin/notices',
       '/admin/oauth-apps',
+      '/admin/identity-providers',
       '/admin/mojang',
       '/admin/homepage-media',
       '/admin/easter-eggs',
@@ -140,6 +143,7 @@ function buildAdminNavItems(userPermissions: string[]): NavLink[] {
       { path: '/admin/email', title: '邮件服务', icon: Message },
       { path: '/admin/notices', title: '通知公告', icon: Bell },
       { path: '/admin/oauth-apps', title: '第三方应用', icon: Link },
+      { path: '/admin/identity-providers', title: 'OIDC 身份提供方', icon: Link },
       { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
       { path: '/admin/homepage-media', title: '首页图片', icon: Picture },
       { path: '/admin/easter-eggs', title: '彩蛋列表', icon: MagicStick },

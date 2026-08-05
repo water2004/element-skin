@@ -16,6 +16,7 @@ import DashboardRoles from '@/components/dashboard/roles/DashboardRoles.vue'
 import DashboardProfile from '@/components/dashboard/profile/DashboardProfile.vue'
 import DashboardHome from '@/components/dashboard/home/DashboardHome.vue'
 import DashboardOAuthApps from '@/components/dashboard/oauth/DashboardOAuthApps.vue'
+import DashboardIdentities from '@/components/dashboard/identities/DashboardIdentities.vue'
 
 // Admin Components
 import AdminSettings from '@/components/admin/settings/AdminSettings.vue'
@@ -29,6 +30,7 @@ import AdminTexturesList from '@/components/admin/textures/AdminTexturesList.vue
 import AdminRolesList from '@/components/admin/roles/AdminRolesList.vue'
 import AdminNotices from '@/components/admin/notices/AdminNotices.vue'
 import AdminOAuthApps from '@/components/admin/oauth/AdminOAuthApps.vue'
+import AdminIdentityProviders from '@/components/admin/identity/AdminIdentityProviders.vue'
 import { getMe } from '@/api/me'
 import { installEasterEggRouterHooks } from '@/easter-eggs'
 import { canAccessAdminPath, firstAccessibleAdminPath } from '@/permissions/adminPages'
@@ -120,6 +122,11 @@ const router = createRouter({
           name: 'admin-oauth-apps',
           component: AdminOAuthApps,
         },
+        {
+          path: 'identity-providers',
+          name: 'admin-identity-providers',
+          component: AdminIdentityProviders,
+        },
       ],
     },
     {
@@ -151,6 +158,11 @@ const router = createRouter({
           path: 'oauth',
           name: 'dashboard-oauth',
           component: DashboardOAuthApps,
+        },
+        {
+          path: 'identities',
+          name: 'dashboard-identities',
+          component: DashboardIdentities,
         },
       ],
     },

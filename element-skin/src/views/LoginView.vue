@@ -45,6 +45,29 @@
         </el-button>
       </div>
 
+      <template v-if="loginProviders.length">
+        <el-divider>或使用外部身份登录</el-divider>
+        <div class="grid gap-3">
+          <el-button
+            v-for="provider in loginProviders"
+            :key="provider.id"
+            size="large"
+            :loading="authorizingProviderId === provider.id"
+            :disabled="!!authorizingProviderId"
+            @click="loginWithProvider(provider.id)"
+          >
+            <img
+              v-if="provider.icon_url"
+              :src="provider.icon_url"
+              alt=""
+              class="w-5 h-5 rounded-sm object-contain"
+            />
+            <el-icon v-else><Connection /></el-icon>
+            使用 {{ provider.name }} 登录
+          </el-button>
+        </div>
+      </template>
+
       <div class="text-center mt-6 text-[var(--color-text)] text-sm transition-colors">
         <span>还没有账号？</span>
         <el-button link type="primary" @click="$router.push('/register')"> 立即注册 </el-button>
@@ -57,9 +80,11 @@
 import { reactive, ref, inject, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Message, Lock, Right } from '@element-plus/icons-vue'
+import { Message, Lock, Right, Connection } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import { siteLogin } from '@/api/auth'
+import { getIdentityProviders, startIdentityAuthorization } from '@/api/identity'
+import type { IdentityProvider } from '@/api/types'
 import { getErrorMessage, isValidationError } from '@/utils/error'
 
 const router = useRouter()
@@ -73,6 +98,8 @@ const form = reactive({
 })
 
 const emailVerifyEnabled = ref(false)
+const loginProviders = ref<IdentityProvider[]>([])
+const authorizingProviderId = ref('')
 
 onMounted(async () => {
   try {
@@ -80,6 +107,12 @@ onMounted(async () => {
     emailVerifyEnabled.value = res.data.email_verify_enabled ?? false
   } catch (e) {
     console.error('Failed to fetch settings', e)
+  }
+  try {
+    const res = await getIdentityProviders()
+    loginProviders.value = res.data.items.filter((provider) => provider.login_enabled)
+  } catch (e) {
+    console.error('Failed to fetch identity providers', e)
   }
 })
 
@@ -114,6 +147,17 @@ async function login() {
     }
   } finally {
     loading.value = false
+  }
+}
+
+async function loginWithProvider(providerId: string) {
+  try {
+    authorizingProviderId.value = providerId
+    const res = await startIdentityAuthorization({ provider_id: providerId, intent: 'login' })
+    window.location.assign(res.data.authorization_url)
+  } catch (e: unknown) {
+    authorizingProviderId.value = ''
+    ElMessage.error('外部登录失败: ' + getErrorMessage(e, '无法开始登录'))
   }
 }
 </script>

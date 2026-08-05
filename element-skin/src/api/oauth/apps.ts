@@ -17,7 +17,7 @@ export function listOAuthGrants(limit = 50) {
 }
 
 export function revokeOAuthGrant(grantId: string) {
-  return apiClient.delete<{ ok: true }>(`/v2/oauth/grants/${grantId}`)
+  return apiClient.delete<void>(`/v2/oauth/grants/${grantId}`)
 }
 
 export function getPermissionCatalog() {
@@ -37,7 +37,7 @@ export function submitOAuthAppReview(clientId: string) {
 }
 
 export function deleteOAuthApp(clientId: string) {
-  return apiClient.delete<{ ok: true }>(`/v2/oauth/apps/${clientId}`)
+  return apiClient.delete<void>(`/v2/oauth/apps/${clientId}`)
 }
 
 export function rotateOAuthSecret(clientId: string) {
@@ -53,11 +53,11 @@ export function setOAuthClientPermission(
   permissionCode: string,
   effect: PermissionOverrideEffect,
 ) {
-  return apiClient.put<{ ok: true }>(`/v2/oauth/apps/${clientId}/permissions/${permissionCode}`, {
+  return apiClient.put<void>(`/v2/oauth/apps/${clientId}/permissions/${permissionCode}`, {
     effect,
   })
 }
 
 export function clearOAuthClientPermission(clientId: string, permissionCode: string) {
-  return apiClient.delete<{ ok: true }>(`/v2/oauth/apps/${clientId}/permissions/${permissionCode}`)
+  return apiClient.delete<void>(`/v2/oauth/apps/${clientId}/permissions/${permissionCode}`)
 }

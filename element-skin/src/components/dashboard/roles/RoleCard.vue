@@ -7,7 +7,11 @@
     <div class="card-clip">
       <div
         class="role-preview"
-        :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
+        :style="{
+          background: isDark
+            ? 'var(--color-background-hero-dark)'
+            : 'var(--color-background-hero-light)',
+        }"
       >
         <SkinViewer
           v-if="profile.skin_hash"
@@ -24,6 +28,9 @@
       <div class="role-info">
         <div class="role-name">{{ profile.name }}</div>
         <div class="role-model">模型: {{ profile.model || 'default' }}</div>
+        <el-tag v-if="officialBinding" class="mt-2" size="small" type="success">
+          正版：{{ officialBinding.remote_name }}
+        </el-tag>
       </div>
 
       <CardActions>
@@ -31,7 +38,7 @@
           variant="gradient-danger"
           icon-swap
           size="default"
-          @click="$emit('delete', profile.id)"
+          @click.stop="$emit('delete', profile.id)"
         >
           删除
           <template #icon>
@@ -44,7 +51,7 @@
           variant="soft-warning"
           icon-swap
           size="default"
-          @click="$emit('clear-skin', profile.id)"
+          @click.stop="$emit('clear-skin', profile.id)"
         >
           皮肤
           <template #icon>
@@ -57,12 +64,39 @@
           variant="soft-warning"
           icon-swap
           size="default"
-          @click="$emit('clear-cape', profile.id)"
+          @click.stop="$emit('clear-cape', profile.id)"
         >
           披风
           <template #icon>
             <el-icon><Close /></el-icon>
           </template>
+        </UiButton>
+
+        <UiButton
+          v-if="!officialBinding && canCreateOfficialBinding"
+          variant="outline"
+          size="default"
+          @click.stop="$emit('bind-official', profile)"
+        >
+          绑定正版
+        </UiButton>
+
+        <UiButton
+          v-if="officialBinding && canSyncOfficialBinding"
+          variant="outline"
+          size="default"
+          @click.stop="$emit('sync-official', officialBinding)"
+        >
+          同步
+        </UiButton>
+
+        <UiButton
+          v-if="officialBinding && canDeleteOfficialBinding"
+          variant="soft-warning"
+          size="default"
+          @click.stop="$emit('unbind-official', officialBinding)"
+        >
+          解绑
         </UiButton>
       </CardActions>
     </div>
@@ -71,7 +105,7 @@
 
 <script setup lang="ts">
 import { Close, Delete } from '@element-plus/icons-vue'
-import type { Profile } from '@/api/types'
+import type { OfficialProfileBinding, Profile } from '@/api/types'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CardActions from '@/components/common/CardActions.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -81,6 +115,10 @@ defineProps<{
   delayIndex: number
   isDark: boolean
   texturesUrl: (hash: string | null | undefined) => string
+  officialBinding?: OfficialProfileBinding | null
+  canCreateOfficialBinding: boolean
+  canSyncOfficialBinding: boolean
+  canDeleteOfficialBinding: boolean
 }>()
 
 defineEmits<{
@@ -88,6 +126,9 @@ defineEmits<{
   delete: [profileId: string]
   'clear-skin': [profileId: string]
   'clear-cape': [profileId: string]
+  'bind-official': [profile: Profile]
+  'sync-official': [binding: OfficialProfileBinding]
+  'unbind-official': [binding: OfficialProfileBinding]
 }>()
 </script>
 

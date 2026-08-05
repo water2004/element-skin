@@ -38,4 +38,14 @@ describe('admin page permission access', () => {
     )
     expect(firstAccessibleAdminPath(['site_settings.read.any'])).toBe('/admin/settings')
   })
+
+  it('gates OIDC provider administration with provider permissions only', () => {
+    expect(canAccessAdminPath('/admin/identity-providers', ['identity_provider.read.any'])).toBe(
+      true,
+    )
+    expect(
+      canAccessAdminPath('/admin/identity-providers/new', ['identity_provider.create.any']),
+    ).toBe(true)
+    expect(canAccessAdminPath('/admin/identity-providers', ['oauth_app.read.any'])).toBe(false)
+  })
 })

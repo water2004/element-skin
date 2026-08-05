@@ -144,22 +144,69 @@ export interface WhitelistResponse {
   items: WhitelistEntry[]
 }
 
-// Microsoft auth
-export interface MicrosoftAuthUrlResponse {
-  auth_url: string
-  state: string
-}
+export type IdentityProviderAdapter = 'generic_oidc' | 'microsoft'
 
-export interface MicrosoftGameProfile {
+export interface IdentityProvider {
   id: string
   name: string
-  has_game?: boolean
+  adapter: IdentityProviderAdapter
+  icon_url: string
+  login_enabled: boolean
+  link_enabled: boolean
+  registration_enabled: boolean
 }
 
-export interface MicrosoftProfileResponse {
-  profile: MicrosoftGameProfile
-  has_game: boolean
-  import_token: string
+export interface AdminIdentityProvider extends IdentityProvider {
+  issuer_url: string
+  authorization_endpoint: string
+  token_endpoint: string
+  userinfo_endpoint: string
+  jwks_uri: string
+  client_id: string
+  has_client_secret: boolean
+  scopes: string[]
+  enabled: boolean
+  display_order: number
+  created_at: number
+  updated_at: number
+}
+
+export interface ExternalIdentity {
+  id: string
+  provider_id: string
+  provider_name: string
+  provider_adapter: IdentityProviderAdapter
+  subject: string
+  label: string
+  email: string
+  email_verified: boolean
+  display_name: string
+  avatar_url: string
+  created_at: number
+  updated_at: number
+  last_login_at: number | null
+}
+
+export interface OfficialProfileBinding {
+  id: string
+  identity_id: string
+  profile_id: string
+  remote_uuid: string
+  remote_name: string
+  remote_skin_url: string
+  remote_cape_url: string
+  remote_skin_model: 'default' | 'slim'
+  created_at: number
+  updated_at: number
+  last_synced_at: number | null
+  profile: Profile
+  identity: {
+    id: string
+    label: string
+    provider_id: string
+    provider_name: string
+    provider_adapter: IdentityProviderAdapter
+  }
 }
 
 export interface YggdrasilImportResult {

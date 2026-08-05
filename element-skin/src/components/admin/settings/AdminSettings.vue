@@ -203,55 +203,13 @@
         </el-form-item>
       </el-form>
     </UiCard>
-
-    <!-- Microsoft Config -->
-    <UiCard class="mb-6" shadow="never">
-      <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
-            <el-icon><Link /></el-icon>
-            <span>微软正版登录集成</span>
-          </div>
-          <el-button
-            type="primary"
-            size="small"
-            @click="saveGroup('microsoft')"
-            :loading="saving.microsoft"
-            class="hover-lift"
-            >保存</el-button
-          >
-        </div>
-      </template>
-      <el-form label-position="top" :model="settings.microsoft">
-        <el-form-item label="Azure Client ID">
-          <el-input
-            v-model="settings.microsoft.microsoft_client_id"
-            placeholder="Azure AD 应用 ID"
-          />
-        </el-form-item>
-        <el-form-item label="Azure Client Secret">
-          <el-input
-            v-model="settings.microsoft.microsoft_client_secret"
-            type="password"
-            show-password
-            placeholder="保持空白以不修改"
-          />
-        </el-form-item>
-        <el-form-item label="Redirect URI">
-          <el-input
-            v-model="settings.microsoft.microsoft_redirect_uri"
-            placeholder="https://your-skin-site.com/v2/imports/microsoft/callback"
-          />
-        </el-form-item>
-      </el-form>
-    </UiCard>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Setting, Monitor, Lock, Key, Link } from '@element-plus/icons-vue'
+import { Refresh, Setting, Monitor, Lock, Key } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
@@ -280,23 +238,17 @@ const settings = reactive({
   auth: {
     jwt_expire_days: 7,
   },
-  microsoft: {
-    microsoft_client_id: '',
-    microsoft_client_secret: '',
-    microsoft_redirect_uri: '',
-  },
 })
 
 const saving = reactive({
   site: false,
   security: false,
   auth: false,
-  microsoft: false,
 })
 
 const regulatoryCollapse = ref<string[]>([])
 
-type SettingsGroup = 'site' | 'security' | 'auth' | 'microsoft'
+type SettingsGroup = 'site' | 'security' | 'auth'
 
 async function loadGroup(group: SettingsGroup) {
   try {
@@ -308,12 +260,7 @@ async function loadGroup(group: SettingsGroup) {
 }
 
 async function loadAllSettings() {
-  await Promise.all([
-    loadGroup('site'),
-    loadGroup('security'),
-    loadGroup('auth'),
-    loadGroup('microsoft'),
-  ])
+  await Promise.all([loadGroup('site'), loadGroup('security'), loadGroup('auth')])
 }
 
 async function saveGroup(group: SettingsGroup) {
@@ -321,9 +268,6 @@ async function saveGroup(group: SettingsGroup) {
   try {
     await saveAdminSettingsGroup(group, settings[group])
     ElMessage.success('设置已更新')
-    if (group === 'microsoft') {
-      settings.microsoft.microsoft_client_secret = '' // Clear local secret field
-    }
   } catch {
     ElMessage.error('保存失败')
   } finally {

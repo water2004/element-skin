@@ -61,6 +61,15 @@ export const adminPageAccess: AdminPageAccess[] = [
     ],
   },
   {
+    path: '/admin/identity-providers',
+    permissions: [
+      'identity_provider.read.any',
+      'identity_provider.create.any',
+      'identity_provider.update.any',
+      'identity_provider.delete.any',
+    ],
+  },
+  {
     path: '/admin/mojang',
     permissions: [
       'site_settings.read.any',

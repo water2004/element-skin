@@ -41,4 +41,11 @@ describe('site page permission access', () => {
     expect(isProtectedSitePath('/')).toBe(false)
     expect(isProtectedSitePath('/admin/users')).toBe(false)
   })
+
+  it('exposes identity and official binding pages through fine-grained permissions', () => {
+    expect(canAccessSitePath('/dashboard/identities', ['external_identity.read.owned'])).toBe(true)
+    expect(canAccessSitePath('/dashboard/identities', ['official_profile.read.owned'])).toBe(true)
+    expect(canAccessSitePath('/dashboard/roles', ['official_profile.refresh.owned'])).toBe(true)
+    expect(canAccessSitePath('/dashboard/identities', ['profile.read.owned'])).toBe(false)
+  })
 })

@@ -76,6 +76,11 @@
 
         <el-form-item label="申请权限">
           <PermissionTagPicker v-model="form.permissions" :permissions="delegablePermissions" />
+          <div class="form-tip">
+            这里仅配置访问本站 /v2 API 的权限。只使用 OIDC
+            登录的应用可以不选择；openid、profile、email 和 offline_access 由授权请求的 scope
+            参数声明。
+          </div>
         </el-form-item>
       </el-form>
     </div>

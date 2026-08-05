@@ -21,7 +21,7 @@ export function getDeviceAuthorization(userCode: string) {
 }
 
 export function decideDeviceAuthorization(userCode: string, approve: boolean) {
-  return apiClient.post<{ ok: true }>('/oauth/device', {
+  return apiClient.post<void>('/oauth/device', {
     user_code: userCode,
     approve,
   })

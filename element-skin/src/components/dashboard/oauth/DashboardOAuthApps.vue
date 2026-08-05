@@ -253,8 +253,8 @@ function openEditDialog(app: OAuthClient) {
 }
 
 async function saveApp(payload: OAuthClientInput, options: { resubmit: boolean }) {
-  if (!payload.name || !payload.redirect_uri || payload.permissions.length === 0) {
-    ElMessage.warning('请填写名称、回调地址并选择至少一个权限')
+  if (!payload.name || !payload.redirect_uri) {
+    ElMessage.warning('请填写名称和回调地址')
     return
   }
 

@@ -1,7 +1,10 @@
 import client from './client'
 import type { LoginResponse } from './types'
 
-export function siteLogin(data: { email: string; password: string }): Promise<{ data: LoginResponse }> {
+export function siteLogin(data: {
+  email: string
+  password: string
+}): Promise<{ data: LoginResponse }> {
   return client.post('/v2/auth/login', data)
 }
 
@@ -11,6 +14,7 @@ export function register(data: {
   username: string
   invite?: string
   code?: string
+  identity_ticket?: string
 }): Promise<{ data: { id: string } }> {
   return client.post('/v2/auth/register', data)
 }
