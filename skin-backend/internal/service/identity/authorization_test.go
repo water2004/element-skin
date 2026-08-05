@@ -90,7 +90,8 @@ func TestOIDCAuthorizationLinkUsesStateNoncePKCEAndStoresCredentialsExactly(t *t
 		query.Get("response_type") != "code" || query.Get("client_id") != "client-id" ||
 		query.Get("redirect_uri") != "http://localhost:8000/v2/auth/oidc/callback" ||
 		query.Get("scope") != "openid profile" || state == "" || query.Get("nonce") == "" ||
-		query.Get("code_challenge") == "" || query.Get("code_challenge_method") != "S256" {
+		query.Get("code_challenge") == "" || query.Get("code_challenge_method") != "S256" ||
+		query.Get("prompt") != "select_account" {
 		t.Fatalf("authorization URL mismatch: %s", started.AuthorizationURL)
 	}
 	storedState, err := redis.GetState(ctx, state)

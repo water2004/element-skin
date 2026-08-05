@@ -90,7 +90,7 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 	}, authorizationStateTTL); err != nil {
 		return AuthorizationStart{}, err
 	}
-	authorizationURL, err := buildAuthorizationURL(*provider, s.redirectURI(), state, nonce, pkceVerifier)
+	authorizationURL, err := buildAuthorizationURL(*provider, s.redirectURI(), state, nonce, pkceVerifier, intent)
 	if err != nil {
 		_ = s.Redis.DeleteState(ctx, state)
 		return AuthorizationStart{}, err
@@ -311,7 +311,7 @@ func (s Service) createRegistrationTicket(ctx context.Context, provider model.Id
 	return ticket, nil
 }
 
-func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, nonce, pkceVerifier string) (string, error) {
+func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, nonce, pkceVerifier, intent string) (string, error) {
 	u, err := url.Parse(provider.AuthorizationEndpoint)
 	if err != nil {
 		return "", err
@@ -326,6 +326,9 @@ func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, 
 	query.Set("nonce", nonce)
 	query.Set("code_challenge", base64.RawURLEncoding.EncodeToString(challengeSum[:]))
 	query.Set("code_challenge_method", "S256")
+	if intent == AuthorizationIntentLink {
+		query.Set("prompt", "select_account")
+	}
 	u.RawQuery = query.Encode()
 	return u.String(), nil
 }
