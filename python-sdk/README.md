@@ -5,8 +5,8 @@
 
 SDK 主要解决三件事：
 
-- 封装 Authorization Code + PKCE、Device Code Flow、Client Credentials、刷新、
-  撤销和 introspection 等 OAuth 流程。
+- 封装 Authorization Code + PKCE、OpenID Connect、Device Code Flow、Client Credentials、
+  刷新、撤销和 introspection 等流程。
 - 提供权限常量和本地权限校验，避免第三方应用到处手写权限字符串。
 - 提供常用 `/v2` API 的同步 Python 调用入口。
 

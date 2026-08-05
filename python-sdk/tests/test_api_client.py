@@ -85,7 +85,7 @@ def test_email_change_uses_exact_permission_paths_and_bodies(response_json) -> N
 
 
 def test_email_change_permission_check_blocks_both_requests(response_json) -> None:
-    recorder = RequestRecorder(lambda request: response_json({"ok": True}))
+    recorder = RequestRecorder(lambda request: response_json({}, 204))
     api = ElementSkinAPI(
         "https://skin.example.test",
         access_token="access-token-1",
@@ -160,7 +160,8 @@ def test_profile_mutations_use_exact_methods_paths_and_bodies(response_json) -> 
 
 
 def test_list_textures_uses_backend_texture_type_param(response_json) -> None:
-    recorder = RequestRecorder(lambda request: response_json({"items": [], "has_next": False}))
+    page = {"items": [], "has_next": False, "next_cursor": "", "page_size": 0}
+    recorder = RequestRecorder(lambda request: response_json(page))
     api = ElementSkinAPI(
         "https://skin.example.test",
         access_token="access-token-1",
@@ -170,7 +171,7 @@ def test_list_textures_uses_backend_texture_type_param(response_json) -> None:
 
     body = api.list_textures(texture_type="skin", cursor="texture-cursor", page_size=10)
 
-    assert body == {"items": [], "has_next": False}
+    assert body == page
     assert recorder.requests[0].path == "/v2/users/me/textures"
     assert recorder.requests[0].query == {
         "texture_type": ["skin"],
@@ -184,7 +185,7 @@ def test_update_texture_uses_hash_and_type_path_with_exact_body(response_json) -
     api = ElementSkinAPI(
         "https://skin.example.test",
         access_token="access-token-1",
-        permissions=(TextureScopes.UPDATE_OWNED,),
+        permissions=(TextureScopes.UPDATE_METADATA_OWNED,),
         transport=recorder.transport(),
     )
 
@@ -196,13 +197,38 @@ def test_update_texture_uses_hash_and_type_path_with_exact_body(response_json) -
     assert recorder.requests[0].json_body == {"note": "A note", "model": "slim"}
 
 
+def test_update_texture_checks_visibility_and_empty_patch_permissions_exactly(response_json) -> None:
+    recorder = RequestRecorder(
+        lambda request: response_json({"hash": "hash-1", "type": "skin"})
+    )
+    api = ElementSkinAPI(
+        "https://skin.example.test",
+        access_token="access-token-1",
+        permissions=(
+            TextureScopes.UPDATE_METADATA_OWNED,
+            TextureScopes.UPDATE_VISIBILITY_OWNED,
+        ),
+        transport=recorder.transport(),
+    )
+
+    assert api.update_texture("hash-1", "skin", model="default", is_public=True) == {
+        "hash": "hash-1",
+        "type": "skin",
+    }
+    assert api.update_texture("hash-1", "skin") == {"hash": "hash-1", "type": "skin"}
+    assert [request.json_body for request in recorder.requests] == [
+        {"model": "default", "is_public": True},
+        {},
+    ]
+
+
 def test_texture_delete_wardrobe_and_minecraft_wrappers_use_exact_shapes(response_json) -> None:
     responses = [
         None,
         None,
         None,
         {"id": "profile-1", "name": "Alice"},
-        {"profiles": [{"id": "profile-1", "name": "Alice"}]},
+        {"items": [{"id": "profile-1", "name": "Alice"}]},
     ]
 
     def handler(request):
@@ -228,7 +254,7 @@ def test_texture_delete_wardrobe_and_minecraft_wrappers_use_exact_shapes(respons
     assert api.add_texture_to_wardrobe("hash-1", texture_type="skin") is None
     assert api.apply_texture("hash-1", profile_id="profile-1", texture_type="skin") is None
     assert api.minecraft_profile("Alice") == {"id": "profile-1", "name": "Alice"}
-    assert api.minecraft_profiles(["Alice"]) == {"profiles": [{"id": "profile-1", "name": "Alice"}]}
+    assert api.minecraft_profiles(["Alice"]) == {"items": [{"id": "profile-1", "name": "Alice"}]}
     assert [
         (request.method, request.path, request.query, request.json_body)
         for request in recorder.requests

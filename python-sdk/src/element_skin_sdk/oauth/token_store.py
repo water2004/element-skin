@@ -58,6 +58,7 @@ class FileTokenStore(TokenStore):
             "scope": tokens.scope,
             "refresh_token": tokens.refresh_token,
             "permissions": list(tokens.permissions),
+            "id_token": tokens.id_token,
         }
         self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         try:

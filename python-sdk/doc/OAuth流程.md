@@ -46,6 +46,28 @@ SDK 会把构造 `OAuthClient` 时配置的 `redirect_uri` 一并发送到 token
 生成授权请求时的回调地址完全一致。若一次流程临时使用了其他回调地址，也应在
 `exchange_code(..., redirect_uri="...")` 中传入同一个地址。
 
+## OpenID Connect
+
+第三方应用只需要“使用皮肤站登录”时，可以申请 OIDC scope 而不申请任何 `/v2` 权限：
+
+```python
+from element_skin_sdk.permissions import OIDCScopes
+
+session = oauth.authorization_url(
+    [OIDCScopes.OPENID, OIDCScopes.PROFILE, OIDCScopes.EMAIL]
+)
+```
+
+SDK 会为包含 `openid` 的授权请求生成并保存 `session.nonce`；调用方必须保存整个 session，
+并在验证 ID Token claim 时核对 nonce。token 响应中的 ID Token 位于：
+
+```python
+tokens.id_token
+```
+
+`profile`、`email`、`offline_access` 不能脱离 `openid` 单独请求。OIDC scope 与站点 permission
+code 可以组合，但语义独立；纯 OIDC token 不因此获得受保护 `/v2` API 权限。
+
 机密客户端可以在构造函数或单次请求中传入 `client_secret`：
 
 ```python

@@ -68,6 +68,7 @@ tokens.expires_in
 tokens.scope
 tokens.refresh_token
 tokens.permissions
+tokens.id_token
 ```
 
 refresh token 有效期为服务端配置的授权生命周期，当前站点实现为 30 天并在每次刷新时轮换。应用必须持久化每次响应返回的新 `refresh_token`。如果 refresh token 已过期或被撤销，`OAuthClient.refresh()` 会收到 `OAuthError`；服务端随后会自动撤销失去有效凭证的 grant，应用必须重新执行 Authorization Code 或 Device Code 授权流程。

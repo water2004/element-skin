@@ -3,7 +3,18 @@ from __future__ import annotations
 import pytest
 
 from element_skin_sdk.exceptions import InvalidScope
-from element_skin_sdk.permissions import AccountScopes, InviteScopes, MinecraftScopes, PermissionCatalog, PermissionValidator
+from element_skin_sdk.permissions import (
+    AccountScopes,
+    ExternalIdentityScopes,
+    IdentityProviderScopes,
+    InviteScopes,
+    MinecraftScopes,
+    OIDCScopes,
+    OfficialProfileScopes,
+    PermissionCatalog,
+    PermissionValidator,
+    TextureScopes,
+)
 
 from .fixtures import PERMISSION_CATALOG_RESPONSE
 
@@ -81,3 +92,31 @@ def test_validator_normalize_handles_none_blank_values_and_catalog() -> None:
         validator.normalize(["missing.scope.self"])
 
     assert exc.value.invalid_scopes == ["missing.scope.self"]
+
+
+def test_validator_accepts_oidc_scopes_with_catalog_and_rejects_invalid_combinations() -> None:
+    catalog = PermissionCatalog.from_api_payload(PERMISSION_CATALOG_RESPONSE)
+    validator = PermissionValidator(catalog)
+
+    assert validator.validate_delegated(
+        [OIDCScopes.OPENID, OIDCScopes.PROFILE, AccountScopes.READ_SELF]
+    ) == ("openid", "profile", "account.read.self")
+
+    with pytest.raises(InvalidScope) as exc:
+        validator.validate_delegated([OIDCScopes.EMAIL])
+    assert exc.value.invalid_scopes == ["email"]
+    assert str(exc.value) == "OIDC scopes require openid"
+
+    with pytest.raises(InvalidScope) as exc:
+        validator.validate_delegated(["unknown_protocol_scope"])
+    assert exc.value.invalid_scopes == ["unknown_protocol_scope"]
+    assert str(exc.value) == "unknown OIDC scope"
+
+
+def test_v2_permission_constants_match_current_protocol_codes() -> None:
+    assert TextureScopes.CREATE_OWNED == "texture.create.owned"
+    assert TextureScopes.UPDATE_METADATA_OWNED == "texture.update_metadata.owned"
+    assert TextureScopes.UPDATE_VISIBILITY_OWNED == "texture.update_visibility.owned"
+    assert ExternalIdentityScopes.CREATE_OWNED == "external_identity.create.owned"
+    assert IdentityProviderScopes.UPDATE_ANY == "identity_provider.update.any"
+    assert OfficialProfileScopes.REFRESH_OWNED == "official_profile.refresh.owned"

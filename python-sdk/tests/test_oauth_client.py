@@ -7,7 +7,13 @@ import pytest
 
 from element_skin_sdk import MemoryTokenStore, OAuthClient
 from element_skin_sdk.exceptions import InvalidScope, OAuthError
-from element_skin_sdk.permissions import AccountScopes, InviteScopes, MinecraftScopes, ProfileScopes
+from element_skin_sdk.permissions import (
+    AccountScopes,
+    InviteScopes,
+    MinecraftScopes,
+    OIDCScopes,
+    ProfileScopes,
+)
 
 from .conftest import RequestRecorder
 from .fixtures import CLIENT_CREDENTIALS_TOKEN_RESPONSE, DEVICE_CODE_RESPONSE, TOKEN_RESPONSE
@@ -52,6 +58,26 @@ def test_authorization_url_rejects_server_scope_for_delegated_flow() -> None:
 
     assert exc.value.invalid_scopes == ["minecraft_session.hasjoined.server"]
     assert str(exc.value) == "authorization code and device flows cannot request server or system scopes"
+
+
+def test_authorization_url_adds_exact_oidc_nonce_and_scopes() -> None:
+    oauth = OAuthClient(
+        "https://skin.example.test",
+        "client-1",
+        redirect_uri="https://app.example.test/callback",
+    )
+
+    session = oauth.authorization_url(
+        [OIDCScopes.OPENID, OIDCScopes.PROFILE, OIDCScopes.EMAIL],
+        state="state-1",
+        code_verifier="a" * 64,
+        nonce="nonce-1",
+    )
+
+    query = parse_qs(urlparse(session.authorization_url).query)
+    assert query["scope"] == ["openid profile email"]
+    assert query["nonce"] == ["nonce-1"]
+    assert session.nonce == "nonce-1"
 
 
 def test_authorization_url_requires_redirect_uri() -> None:
@@ -146,6 +172,7 @@ def test_exchange_code_posts_exact_form_and_saves_tokens(response_json) -> None:
     assert tokens.access_token == "access-token-1"
     assert tokens.refresh_token == "refresh-token-1"
     assert tokens.permissions == ("account.read.self", "profile.read.owned")
+    assert tokens.id_token == "id-token-1"
     assert store.load() == tokens
     assert len(recorder.requests) == 1
     request = recorder.requests[0]

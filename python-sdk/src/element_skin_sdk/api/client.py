@@ -100,7 +100,12 @@ class ElementSkinAPI:
         return self._http.get(f"/v2/users/me/textures/{texture_hash}/{texture_type}")
 
     def update_texture(self, texture_hash: str, texture_type: str, **fields: Any) -> dict[str, Any]:
-        self._require(TextureScopes.UPDATE_OWNED)
+        required: list[str] = []
+        if any(field in fields for field in ("note", "model")):
+            required.append(TextureScopes.UPDATE_METADATA_OWNED)
+        if "is_public" in fields:
+            required.append(TextureScopes.UPDATE_VISIBILITY_OWNED)
+        self._require(*(required or [TextureScopes.UPDATE_METADATA_OWNED]))
         return self._http.patch(f"/v2/users/me/textures/{texture_hash}/{texture_type}", json=fields)
 
     def delete_texture(self, texture_hash: str, texture_type: str) -> None:

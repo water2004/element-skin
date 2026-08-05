@@ -18,6 +18,7 @@ def test_token_set_accepts_space_separated_permissions_and_defaults() -> None:
     assert tokens.scope == ""
     assert tokens.refresh_token is None
     assert tokens.permissions == ("account.read.self", "profile.read.owned")
+    assert tokens.id_token is None
 
 
 def test_user_info_parses_protected_flag_and_permissions_exactly() -> None:

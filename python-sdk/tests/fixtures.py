@@ -7,6 +7,7 @@ TOKEN_RESPONSE = {
     "scope": "account.read.self profile.read.owned",
     "refresh_token": "refresh-token-1",
     "permissions": ["account.read.self", "profile.read.owned"],
+    "id_token": "id-token-1",
 }
 
 CLIENT_CREDENTIALS_TOKEN_RESPONSE = {

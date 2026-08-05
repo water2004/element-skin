@@ -37,6 +37,7 @@ class TokenSet:
     scope: str = ""
     refresh_token: str | None = None
     permissions: tuple[str, ...] = ()
+    id_token: str | None = None
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> "TokenSet":
@@ -51,6 +52,7 @@ class TokenSet:
             scope=str(data.get("scope", "")),
             refresh_token=data.get("refresh_token"),
             permissions=tuple(str(permission) for permission in permissions),
+            id_token=data.get("id_token"),
         )
 
 
@@ -61,6 +63,7 @@ class AuthorizationSession:
     code_challenge: str
     state: str
     scopes: tuple[str, ...]
+    nonce: str | None = None
 
 
 @dataclass(frozen=True)

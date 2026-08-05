@@ -32,7 +32,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"type":"skin"`) || strings.Contains(rec.Body.String(), `"texture_type"`) {
 		t.Fatalf("upload texture response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	uploadedHash := jsonStringField(t, rec.Body.String(), "hash")
@@ -47,7 +47,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"type":"skin"`) || strings.Contains(rec.Body.String(), `"texture_type"`) {
 		t.Fatalf("upload default texture_type response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	defaultHash := jsonStringField(t, rec.Body.String(), "hash")
@@ -77,7 +77,7 @@ func TestTextureRoutesUploadAndUploadApplyExactResponses(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"texture_type":"skin"`) {
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"type":"skin"`) || strings.Contains(rec.Body.String(), `"texture_type"`) {
 		t.Fatalf("upload and apply response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	appliedHash := jsonStringField(t, rec.Body.String(), "hash")

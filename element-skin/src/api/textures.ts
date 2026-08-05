@@ -12,7 +12,7 @@ export function getTextures(params: {
 }
 
 export function uploadTexture(formData: FormData): Promise<{
-  data: { hash: string; texture_type: string }
+  data: { hash: string; type: string }
 }> {
   return client.post('/v2/users/me/textures', formData)
 }

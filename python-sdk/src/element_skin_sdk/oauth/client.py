@@ -60,6 +60,7 @@ class OAuthClient:
         *,
         state: str | None = None,
         code_verifier: str | None = None,
+        nonce: str | None = None,
         redirect_uri: str | None = None,
     ) -> AuthorizationSession:
         requested_scopes = self.validator.validate_delegated(scopes)
@@ -70,17 +71,19 @@ class OAuthClient:
         verifier = code_verifier or generate_code_verifier()
         challenge = create_code_challenge(verifier)
         final_state = state or secrets.token_urlsafe(24)
-        query = urlencode(
-            {
-                "response_type": "code",
-                "client_id": self.client_id,
-                "redirect_uri": final_redirect_uri,
-                "scope": " ".join(requested_scopes),
-                "state": final_state,
-                "code_challenge": challenge,
-                "code_challenge_method": "S256",
-            }
-        )
+        final_nonce = nonce or (secrets.token_urlsafe(24) if "openid" in requested_scopes else None)
+        query_values = {
+            "response_type": "code",
+            "client_id": self.client_id,
+            "redirect_uri": final_redirect_uri,
+            "scope": " ".join(requested_scopes),
+            "state": final_state,
+            "code_challenge": challenge,
+            "code_challenge_method": "S256",
+        }
+        if final_nonce is not None:
+            query_values["nonce"] = final_nonce
+        query = urlencode(query_values)
 
         return AuthorizationSession(
             authorization_url=f"{self.base_url}/oauth/authorize?{query}",
@@ -88,6 +91,7 @@ class OAuthClient:
             code_challenge=challenge,
             state=final_state,
             scopes=requested_scopes,
+            nonce=final_nonce,
         )
 
     def authorization_info(self, params: dict[str, Any]) -> dict[str, Any]:

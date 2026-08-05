@@ -46,7 +46,7 @@ func (s UploadService) UploadToLibrary(ctx context.Context, input UploadInput) (
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"hash": hash, "texture_type": textureType}, nil
+	return map[string]any{"hash": hash, "type": textureType}, nil
 }
 
 func (s UploadService) UploadAndApply(ctx context.Context, input UploadInput, profileID string) (map[string]any, error) {
@@ -77,7 +77,7 @@ func (s UploadService) UploadAndApply(ctx context.Context, input UploadInput, pr
 	if err := s.applyUploadedTexture(ctx, input.Actor.UserID, profileID, hash, textureType, model); err != nil {
 		return nil, err
 	}
-	return map[string]any{"hash": hash, "texture_type": textureType}, nil
+	return map[string]any{"hash": hash, "type": textureType}, nil
 }
 
 func (s UploadService) UploadAndApplyBoundProfile(ctx context.Context, input UploadInput, profileID string) (map[string]any, error) {
@@ -100,7 +100,7 @@ func (s UploadService) UploadAndApplyBoundProfile(ctx context.Context, input Upl
 	if err := s.applyUploadedTexture(ctx, input.Actor.UserID, profileID, hash, textureType, model); err != nil {
 		return nil, err
 	}
-	return map[string]any{"hash": hash, "texture_type": textureType}, nil
+	return map[string]any{"hash": hash, "type": textureType}, nil
 }
 
 func (s UploadService) saveLibraryTexture(ctx context.Context, userID string, data []byte, textureType, note string, isPublic bool, model string) (string, error) {
