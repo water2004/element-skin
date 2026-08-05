@@ -1,6 +1,6 @@
 # OAuth 2.1 标准与扩展参考
 
-> 参考快照日期：2026-06-29
+> 参考快照日期：2026-08-06
 >
 > 本文档用于 Element Skin 的 OAuth 能力设计与实现参考。它不复制 RFC/Internet-Draft 全文，而是收录官方规范入口、规范定位、实现要点、安全要求和本项目取舍。实现时以官方 IETF/RFC 文档为最终依据。
 
@@ -44,33 +44,16 @@ OAuth 2.1 强化的要求：
 - 浏览器、移动端、桌面端、CLI 等客户端都应避免直接接触用户密码。
 - 客户端类型、公私客户端能力、回调地址和 token 生命周期必须被明确建模。
 
-## 3. 本项目目标基线
+## 3. 本项目当前基线
 
-Element Skin 的 OAuth 实现应以 OAuth 2.1 风格为目标，而不是复刻 OAuth 2.0 的所有历史模式。
+Element Skin 已按 OAuth 2.1 风格实现 Authorization Code + PKCE、Device Authorization、
+Refresh Token Rotation、Token Revocation、Token Introspection、Client Credentials、服务发现、
+用户授权管理、应用权限上限，以及 access token 到细粒度权限 Actor 的转换。本站同时在同一套
+client、grant 和 token 链路上提供 OpenID Connect。
 
-第一阶段应实现：
-
-- Authorization Code + PKCE
-- Refresh Token Rotation
-- Token Revocation
-- OAuth Authorization Server Metadata
-- 用户授权管理
-- 应用权限上限控制
-- Access Token 到现有细粒度权限 Actor 的转换
-
-第一阶段可同时设计、视工作量实现：
-
-- Device Authorization Grant
-- Token Introspection
-
-第二阶段再考虑：
-
-- Client Credentials
-- Dynamic Client Registration
-- JWT Access Token Profile
-- DPoP
-- PAR
-- RAR
+当前 access token 使用 opaque token 和 Redis 短期存储；refresh token、grant 和 client 等长期
+授权状态进入 PostgreSQL。尚未承诺的扩展包括 Dynamic Client Registration、JWT Access Token
+Profile、DPoP、PAR 和 RAR，新增前必须独立设计和评审。
 
 明确不实现：
 
@@ -94,14 +77,14 @@ Element Skin 的 OAuth 实现应以 OAuth 2.1 风格为目标，而不是复刻 
 
 | 规范 | 状态 | 官方地址 | 本项目取舍 |
 | --- | --- | --- | --- |
-| Token Revocation, RFC 7009 | RFC | https://www.rfc-editor.org/rfc/rfc7009 | 第一阶段实现 |
-| Token Introspection, RFC 7662 | RFC | https://www.rfc-editor.org/rfc/rfc7662 | 第一阶段可实现；若 access token 采用 opaque token，则强烈建议实现 |
-| JWT Profile for OAuth 2.0 Access Tokens, RFC 9068 | RFC | https://www.rfc-editor.org/rfc/rfc9068 | 第二阶段评估；初期可优先 opaque token + 服务端缓存 |
+| Token Revocation, RFC 7009 | RFC | https://www.rfc-editor.org/rfc/rfc7009 | 已实现 |
+| Token Introspection, RFC 7662 | RFC | https://www.rfc-editor.org/rfc/rfc7662 | 已实现 |
+| JWT Profile for OAuth 2.0 Access Tokens, RFC 9068 | RFC | https://www.rfc-editor.org/rfc/rfc9068 | 未实现；当前使用 opaque token + Redis |
 | Token Exchange, RFC 8693 | RFC | https://www.rfc-editor.org/rfc/rfc8693 | 暂不实现；未来服务间委托可评估 |
 
 实现建议：
 
-- Access Token 初期建议采用 opaque token。
+- Access Token 当前采用 opaque token。
 - 服务端保存 token hash，不保存明文 token。
 - Token 解析后生成现有权限 Actor。
 - Access Token 生命周期应短。
@@ -112,14 +95,14 @@ Element Skin 的 OAuth 实现应以 OAuth 2.1 风格为目标，而不是复刻 
 
 | 规范 | 状态 | 官方地址 | 本项目取舍 |
 | --- | --- | --- | --- |
-| Authorization Server Metadata, RFC 8414 | RFC | https://www.rfc-editor.org/rfc/rfc8414 | 第一阶段实现 |
-| Dynamic Client Registration, RFC 7591 | RFC | https://www.rfc-editor.org/rfc/rfc7591 | 第二阶段评估 |
-| Dynamic Client Registration Management, RFC 7592 | RFC | https://www.rfc-editor.org/rfc/rfc7592 | 第二阶段评估 |
-| Protected Resource Metadata, RFC 9728 | RFC | https://www.rfc-editor.org/rfc/rfc9728 | 第二阶段评估 |
+| Authorization Server Metadata, RFC 8414 | RFC | https://www.rfc-editor.org/rfc/rfc8414 | 已实现 |
+| Dynamic Client Registration, RFC 7591 | RFC | https://www.rfc-editor.org/rfc/rfc7591 | 未实现 |
+| Dynamic Client Registration Management, RFC 7592 | RFC | https://www.rfc-editor.org/rfc/rfc7592 | 未实现 |
+| Protected Resource Metadata, RFC 9728 | RFC | https://www.rfc-editor.org/rfc/rfc9728 | 已实现 |
 
 实现建议：
 
-- 第一阶段由站内开发者控制台注册应用，不开放完全动态注册。
+- 当前由站内开发者控制台注册应用，不开放动态注册。
 - 元数据端点应公开授权端点、token 端点、revocation 端点、支持的 grant type、支持的 code challenge method。
 - 客户端应区分 confidential client 与 public client。
 
@@ -127,9 +110,9 @@ Element Skin 的 OAuth 实现应以 OAuth 2.1 风格为目标，而不是复刻 
 
 | 规范 | 状态 | 官方地址 | 本项目取舍 |
 | --- | --- | --- | --- |
-| Device Authorization Grant, RFC 8628 | RFC | https://www.rfc-editor.org/rfc/rfc8628 | 适合启动器、CLI、服务器插件；建议第一阶段或紧随其后实现 |
-| Resource Indicators, RFC 8707 | RFC | https://www.rfc-editor.org/rfc/rfc8707 | 第二阶段评估；当前站点资源服务器单一，可暂缓 |
-| Rich Authorization Requests, RFC 9396 | RFC | https://www.rfc-editor.org/rfc/rfc9396 | 第二阶段评估；适合复杂授权对象 |
+| Device Authorization Grant, RFC 8628 | RFC | https://www.rfc-editor.org/rfc/rfc8628 | 已实现，供启动器、CLI 和服务器插件使用 |
+| Resource Indicators, RFC 8707 | RFC | https://www.rfc-editor.org/rfc/rfc8707 | 未实现；当前站点资源服务器单一 |
+| Rich Authorization Requests, RFC 9396 | RFC | https://www.rfc-editor.org/rfc/rfc9396 | 未实现；适合复杂授权对象 |
 
 Device Authorization Grant 实现要点：
 
@@ -143,13 +126,13 @@ Device Authorization Grant 实现要点：
 
 | 规范 | 状态 | 官方地址 | 本项目取舍 |
 | --- | --- | --- | --- |
-| JWT-Secured Authorization Request, RFC 9101 | RFC | https://www.rfc-editor.org/rfc/rfc9101 | 第二阶段评估 |
-| Pushed Authorization Requests, RFC 9126 | RFC | https://www.rfc-editor.org/rfc/rfc9126 | 第二阶段评估，优先级高于 JAR |
+| JWT-Secured Authorization Request, RFC 9101 | RFC | https://www.rfc-editor.org/rfc/rfc9101 | 未实现 |
+| Pushed Authorization Requests, RFC 9126 | RFC | https://www.rfc-editor.org/rfc/rfc9126 | 未实现，后续优先级高于 JAR |
 | Authorization Server Issuer Identification, RFC 9207 | RFC | https://www.rfc-editor.org/rfc/rfc9207 | 若未来多 issuer 或联合登录复杂化，则采用 |
 
 实现建议：
 
-- 第一阶段可使用普通 authorization request，但必须严格校验 `client_id`、`redirect_uri`、`response_type`、`scope`、`state`、`code_challenge`、`code_challenge_method`。
+- 当前使用普通 authorization request，并严格校验 `client_id`、`redirect_uri`、`response_type`、`scope`、`state`、`code_challenge`、`code_challenge_method`。
 - 未来如果授权参数变复杂，先实现 PAR，再考虑 JAR。
 
 ### 5.5 发送方约束与高安全场景
@@ -157,11 +140,11 @@ Device Authorization Grant 实现要点：
 | 规范 | 状态 | 官方地址 | 本项目取舍 |
 | --- | --- | --- | --- |
 | Mutual-TLS Client Authentication and Certificate-Bound Access Tokens, RFC 8705 | RFC | https://www.rfc-editor.org/rfc/rfc8705 | 暂不实现；运维成本较高 |
-| DPoP, RFC 9449 | RFC | https://www.rfc-editor.org/rfc/rfc9449 | 第二阶段评估；适合 public client 的 token replay 防护 |
+| DPoP, RFC 9449 | RFC | https://www.rfc-editor.org/rfc/rfc9449 | 未实现；适合 public client 的 token replay 防护 |
 
 实现建议：
 
-- 第一阶段优先使用短生命周期 access token、refresh token rotation、token hash 存储和权限版本缓存。
+- 当前使用短生命周期 access token、refresh token rotation、token hash 存储和权限版本缓存。
 - 如果开放高权限管理员 OAuth 授权，应优先评估 DPoP 或其他 sender-constrained token 方案。
 
 ### 5.6 客户端类型最佳实践
@@ -179,7 +162,9 @@ Device Authorization Grant 实现要点：
 
 ## 6. Element Skin OAuth 权限模型映射
 
-OAuth scope 不应另起一套字符串体系。Element Skin 应直接使用现有权限 catalog 中的 permission code 作为 OAuth scope。
+访问 `/v2` 业务资源的 OAuth scope 直接使用权限 catalog 中的 permission code。OIDC 协议 scope
+`openid`、`profile`、`email`、`offline_access` 与站点 permission code 分开解析和保存；它们控制
+ID Token、UserInfo 和 refresh token 等协议行为，本身不授予任何 `/v2` 业务权限。
 
 令牌最终权限必须按以下规则裁剪：
 
@@ -316,45 +301,41 @@ Device Code 需要：
 
 ## 10. Endpoint 参考
 
-第一阶段建议端点：
+当前协议端点：
 
 ```text
-GET  /.well-known/oauth-authorization-server
-GET  /oauth/authorize
-POST /oauth/token
-POST /oauth/revoke
-GET  /oauth/consents
-DELETE /oauth/consents/{grant_id}
-GET  /developer/oauth/apps
-POST /developer/oauth/apps
-GET  /developer/oauth/apps/{client_id}
-PATCH /developer/oauth/apps/{client_id}
-DELETE /developer/oauth/apps/{client_id}
+GET      /.well-known/oauth-authorization-server
+GET      /.well-known/openid-configuration
+GET      /.well-known/oauth-protected-resource
+GET|POST /oauth/authorize
+POST     /oauth/device/code
+GET|POST /oauth/device
+POST     /oauth/token
+POST     /oauth/revoke
+POST     /oauth/introspect
+GET      /oauth/jwks
+GET      /oauth/userinfo
 ```
 
-Device Flow 端点：
+应用和授权记录复用站点 `/v2` API 管理：
 
 ```text
-POST /oauth/device/code
-GET  /oauth/device
-POST /oauth/device/confirm
+GET|POST          /v2/oauth/apps
+GET|PATCH|DELETE  /v2/oauth/apps/{client_id}
+GET               /v2/oauth/grants
+DELETE            /v2/oauth/grants/{grant_id}
 ```
 
-可选端点：
-
-```text
-POST /oauth/introspect
-POST /oauth/par
-```
+`/oauth/par` 不在当前协议中。
 
 ## 11. Grant Type 支持矩阵
 
-| Grant Type | 第一阶段 | 说明 |
+| Grant Type | 当前状态 | 说明 |
 | --- | --- | --- |
-| `authorization_code` | 必须 | 必须配合 PKCE |
-| `refresh_token` | 必须 | 必须轮换 |
-| `client_credentials` | 已落地 | 管理员审核后的应用主体能力；首个目标场景是 `/v2/minecraft/session/has-joined` |
-| `urn:ietf:params:oauth:grant-type:device_code` | 建议 | 启动器、CLI、插件体验好 |
+| `authorization_code` | 已实现 | 必须配合 PKCE S256 |
+| `refresh_token` | 已实现 | 每次使用均轮换 |
+| `client_credentials` | 已实现 | 使用管理员审核后的 `client:{client_id}` 应用主体 |
+| `urn:ietf:params:oauth:grant-type:device_code` | 已实现 | 面向启动器、CLI 和插件 |
 | `password` | 禁止 | OAuth 2.1 不保留 |
 | `implicit` | 禁止 | OAuth 2.1 不保留 |
 
@@ -501,59 +482,32 @@ invite.delete.any
 
 受保护权限申请、授权、使用都应写入审计日志。
 
-## 15. 与 OpenID Connect 的边界
+## 15. OpenID Connect 实现边界
 
-OAuth 负责授权，不负责身份登录语义。若第三方应用需要“用皮肤站登录”，应另行设计 OpenID Connect。
+本站已在同一 OAuth client、grant 和 token 链路上实现 OpenID Connect，不建立第二套客户端或授权记录。
 
-OAuth-only 第一阶段可以提供：
+当前实现包括：
 
-- `/me` 或 `/oauth/userinfo` 风格的资源接口
-- 使用 `profile.read.self` 权限读取用户资料
+- `openid`、`profile`、`email`、`offline_access` scope；
+- RS256 ID Token 与独立 OIDC 签名密钥；
+- pairwise `sub`；
+- UserInfo、JWKS 与 OIDC Discovery；
+- Authorization Code 请求中的 nonce 会绑定到授权码并写入 ID Token；
+- grant 撤销后 refresh token、access token 和 UserInfo 立即失效。已签发的自包含 ID Token 不做
+  在线撤销，依靠短有效期自然过期。
 
-但不要把 OAuth access token 当作 ID token 使用。
+OIDC scope 与 Element Skin `/v2` permission code 必须分开。纯 OIDC client 可以拥有零项站点权限；它可以取得 ID Token/UserInfo，但 access token 不能调用受保护站点 API。OAuth access token 也不得当作 ID Token 使用。
 
-如果以后支持 OpenID Connect，需要补充：
+## 16. 当前实现与后续扩展
 
-- `openid` scope
-- ID Token
-- UserInfo endpoint
-- JWKS endpoint
-- OIDC Discovery
-- nonce 校验
+当前已实现 Authorization Code + PKCE S256、Device Code、Refresh Token Rotation、Revocation、Introspection、Client Credentials、OIDC、OAuth Actor 权限裁剪、应用/授权管理页和短期 access token 存储。
 
-## 16. 本项目推荐实现顺序
+以下能力不在当前协议承诺内，新增前必须独立设计和评审：
 
-第一批：
-
-1. OAuth 数据模型与迁移。
-2. 开发者应用管理页。
-3. Authorization Code + PKCE。
-4. 授权确认页。
-5. Token endpoint。
-6. Refresh Token Rotation。
-7. Revocation endpoint。
-8. OAuth token middleware。
-9. OAuth Actor 与权限 bitset 裁剪。
-10. 用户授权管理页。
-11. 审计日志。
-12. 测试与 loadtest。
-
-第二批：
-
-1. Device Authorization Grant。
-2. Token Introspection。
-3. 管理员撤销任意应用授权。
-4. OAuth 应用风险提示。
-5. 权限缓存优化。
-
-第三批：
-
-1. Client Credentials。
-2. Dynamic Client Registration。
-3. PAR。
-4. DPoP。
-5. JWT Access Token Profile。
-6. OpenID Connect。
+1. Dynamic Client Registration。
+2. Pushed Authorization Requests（PAR）。
+3. DPoP 或 mTLS sender-constrained token。
+4. JWT Access Token Profile。
 
 ## 17. 实现验收标准
 
