@@ -23,6 +23,8 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		"site_refresh_tokens",
 		"invites",
 		"settings",
+		"email_suffix_policy",
+		"email_suffix_rules",
 		"user_textures",
 		"skin_library",
 		"fallback_endpoints",

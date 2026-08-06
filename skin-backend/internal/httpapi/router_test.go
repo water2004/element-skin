@@ -96,6 +96,7 @@ func TestRouterRegistersRepresentativeRouteGroups(t *testing.T) {
 		{name: "public settings", method: http.MethodGet, path: "/v2/public/settings", wantStatus: http.StatusOK, wantBody: "site_name"},
 		{name: "me route", method: http.MethodGet, path: "/v2/users/me", token: userToken, wantStatus: http.StatusOK, wantBody: user.ID},
 		{name: "admin settings", method: http.MethodGet, path: "/v2/admin/settings/site", token: adminToken, wantStatus: http.StatusOK, wantBody: "site_name"},
+		{name: "admin email suffix policy", method: http.MethodGet, path: "/v2/admin/settings/email-suffix-policy", token: adminToken, wantStatus: http.StatusOK, wantBody: `"mode":"disabled"`},
 		{name: "ygg validate invalid", method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, wantStatus: http.StatusForbidden, wantBody: "Invalid token"},
 		{name: "remote ygg", method: http.MethodPost, path: "/v2/imports/remote-ygg/profiles/preview", token: userToken, body: `{}`, wantStatus: http.StatusBadRequest, wantBody: "api_url, username and password are required"},
 	}

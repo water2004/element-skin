@@ -2,12 +2,83 @@ package integration_test
 
 import (
 	"context"
+	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
 	"net/http"
 	"strings"
 	"testing"
 )
+
+func TestEmailSuffixPolicyBlocksRegistrationRequestsButNeverPasswordReset(t *testing.T) {
+	db, h, redis := testutil.NewTestAppWithRedisTB(t)
+	ctx := context.Background()
+	if err := db.EmailPolicies.Replace(ctx, model.EmailSuffixPolicy{
+		Mode:      model.EmailSuffixModeAllowlist,
+		Allowlist: []string{"@allowed.test"},
+		Denylist:  []string{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	directBlocked := doJSON(t, h, "POST", "/v2/auth/register", map[string]any{
+		"email": "direct@blocked.test", "password": "Password123!", "username": "DirectPolicyUser",
+	})
+	if directBlocked.Code != http.StatusBadRequest || directBlocked.Body.String() != "{\"detail\":\"Email suffix is not allowed\"}\n" {
+		t.Fatalf("direct registration policy response: status=%d body=%q", directBlocked.Code, directBlocked.Body.String())
+	}
+	if user, err := db.Users.GetByEmail(ctx, "direct@blocked.test"); err != nil || user != nil {
+		t.Fatalf("direct blocked registration created user=%#v err=%v", user, err)
+	}
+	if err := db.Settings.Set(ctx, "email_verify_enabled", true); err != nil {
+		t.Fatal(err)
+	}
+	invalidateSettings(t, redis)
+
+	blocked := doJSON(t, h, "POST", "/v2/auth/verification-code", map[string]any{"email": "user@blocked.test", "type": "register"})
+	if blocked.Code != http.StatusBadRequest || blocked.Body.String() != "{\"detail\":\"Email suffix is not allowed\"}\n" {
+		t.Fatalf("blocked suffix response: status=%d body=%q", blocked.Code, blocked.Body.String())
+	}
+	if _, err := redis.GetVerificationCode(ctx, "user@blocked.test", "register"); err == nil {
+		t.Fatal("blocked suffix should not create a verification code")
+	}
+
+	allowed := doJSON(t, h, "POST", "/v2/auth/verification-code", map[string]any{"email": "user@ALLOWED.TEST", "type": "register"})
+	if allowed.Code != http.StatusOK {
+		t.Fatalf("allowed suffix send: status=%d body=%q", allowed.Code, allowed.Body.String())
+	}
+	code, err := redis.GetVerificationCode(ctx, "user@allowed.test", "register")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.EmailPolicies.Replace(ctx, model.EmailSuffixPolicy{
+		Mode:      model.EmailSuffixModeDenylist,
+		Allowlist: []string{"@allowed.test"},
+		Denylist:  []string{"@allowed.test", "@legacy.test"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	register := doJSON(t, h, "POST", "/v2/auth/register", map[string]any{
+		"email": "user@ALLOWED.TEST", "password": "Password123!", "username": "PolicyUser", "code": code,
+	})
+	if register.Code != http.StatusBadRequest || register.Body.String() != "{\"detail\":\"Email suffix is not allowed\"}\n" {
+		t.Fatalf("policy recheck response: status=%d body=%q", register.Code, register.Body.String())
+	}
+	if user, err := db.Users.GetByEmail(ctx, "user@ALLOWED.TEST"); err != nil || user != nil {
+		t.Fatalf("blocked final registration created user=%#v err=%v", user, err)
+	}
+	if restored, err := redis.GetVerificationCode(ctx, "user@allowed.test", "register"); err != nil || restored != code {
+		t.Fatalf("policy rejection consumed code=%q err=%v want=%q", restored, err, code)
+	}
+
+	legacy := testutil.CreateUser(t, db, "member@legacy.test", "OldPassword123!", "LegacyPolicyUser", false)
+	reset := doJSON(t, h, "POST", "/v2/auth/verification-code", map[string]any{"email": legacy.Email, "type": "reset"})
+	if reset.Code != http.StatusOK || parseJSON(t, reset)["ttl"] != float64(300) {
+		t.Fatalf("denylisted existing account reset: status=%d body=%q", reset.Code, reset.Body.String())
+	}
+	if _, err := redis.GetVerificationCode(ctx, legacy.Email, "reset"); err != nil {
+		t.Fatalf("denylisted existing account should receive reset code: %v", err)
+	}
+}
 
 func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	db, h, redis := testutil.NewTestAppWithRedisTB(t)

@@ -245,6 +245,13 @@ func (s AccountService) validateEmailChangeTarget(ctx context.Context, userID, e
 	if !util.ValidEmail(email) {
 		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid email format"}
 	}
+	policy := s.EmailPolicy
+	if policy.DB == nil {
+		policy.DB = s.DB
+	}
+	if err := policy.RequireAllowed(ctx, email); err != nil {
+		return "", err
+	}
 	if strings.EqualFold(user.Email, email) {
 		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "New email must be different from current email"}
 	}

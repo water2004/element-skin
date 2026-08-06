@@ -20,7 +20,12 @@ import {
   patchProfileCape,
   patchProfileSkin,
 } from '../../admin/profiles'
-import { getAdminSettingsGroup, saveAdminSettingsGroup } from '../../admin/settings'
+import {
+  getAdminEmailSuffixPolicy,
+  getAdminSettingsGroup,
+  putAdminEmailSuffixPolicy,
+  saveAdminSettingsGroup,
+} from '../../admin/settings'
 import { deleteAdminTexture, getAdminTextures, patchAdminTexture } from '../../admin/textures'
 import {
   banUser,
@@ -291,6 +296,30 @@ function adminSettingsCases(): ApiCase[] {
       method: 'post',
       call: () => saveAdminSettingsGroup('fallback', fallbackPayload),
       args: ['/v2/admin/settings/fallback', fallbackPayload],
+    },
+    {
+      name: 'getAdminEmailSuffixPolicy gets the whole suffix policy',
+      method: 'get',
+      call: getAdminEmailSuffixPolicy,
+      args: ['/v2/admin/settings/email-suffix-policy'],
+    },
+    {
+      name: 'putAdminEmailSuffixPolicy replaces both suffix lists exactly',
+      method: 'put',
+      call: () =>
+        putAdminEmailSuffixPolicy({
+          mode: 'allowlist',
+          allowlist: ['@example.com', '@qq.com'],
+          denylist: ['@blocked.test'],
+        }),
+      args: [
+        '/v2/admin/settings/email-suffix-policy',
+        {
+          mode: 'allowlist',
+          allowlist: ['@example.com', '@qq.com'],
+          denylist: ['@blocked.test'],
+        },
+      ],
     },
   ]
 }

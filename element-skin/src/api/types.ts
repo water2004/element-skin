@@ -11,6 +11,19 @@ export interface ItemListResponse<T> {
   items: T[]
 }
 
+export type EmailSuffixPolicyMode = 'disabled' | 'allowlist' | 'denylist'
+
+export interface EmailSuffixPolicy {
+  mode: EmailSuffixPolicyMode
+  allowlist: string[]
+  denylist: string[]
+}
+
+export interface PublicEmailSuffixPolicy {
+  mode: EmailSuffixPolicyMode
+  suffixes: string[]
+}
+
 // User (returned by GET /v2/users/me, GET /v2/admin/users)
 export interface User {
   id: string
@@ -66,6 +79,7 @@ export interface SiteSettings {
   require_invite?: boolean
   enable_skin_library?: boolean
   email_verify_enabled?: boolean
+  email_suffix_policy?: PublicEmailSuffixPolicy
   footer_text?: string
   filing_icp?: string
   filing_icp_link?: string

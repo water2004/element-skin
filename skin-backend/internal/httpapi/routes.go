@@ -169,6 +169,8 @@ func (r *Router) routes() {
 	r.handle("DELETE /v2/admin/notifications/{id}", adminRoutes.Auth(adminRoutes.DeleteNotice))
 	r.handle("GET /v2/admin/settings/site", adminRoutes.Auth(adminRoutes.GetSiteSettings))
 	r.handle("POST /v2/admin/settings/site", adminRoutes.Auth(adminRoutes.SaveSiteSettings))
+	r.handle("GET /v2/admin/settings/email-suffix-policy", adminRoutes.Auth(adminRoutes.GetEmailSuffixPolicy))
+	r.handle("PUT /v2/admin/settings/email-suffix-policy", adminRoutes.Auth(adminRoutes.PutEmailSuffixPolicy))
 	r.handle("GET /v2/admin/settings/{group}", adminRoutes.Auth(adminRoutes.GetSettingsGroup))
 	r.handle("POST /v2/admin/settings/{group}", adminRoutes.Auth(adminRoutes.SaveSettingsGroup))
 	r.handle("GET /v2/admin/identity-providers", identityRoutes.Auth(identityRoutes.ListProviders))

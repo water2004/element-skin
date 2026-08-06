@@ -320,6 +320,22 @@ scope 获批时出现。grant 撤销后关联 access token、refresh token 和 u
 | POST | `/v2/imports/remote-ygg/profiles/import` | `201`，角色标识表示 |
 | POST | `/v2/imports/remote-ygg/profiles/import-batch` | 批量导入结果 |
 
+`GET /v2/public/settings` 同时公开注册交互必需的 `allow_register`、`require_invite`、
+`email_verify_enabled` 和 `email_suffix_policy`。邮箱后缀策略不分页，只返回当前生效名单：
+
+```json
+{
+  "email_suffix_policy": {
+    "mode": "allowlist",
+    "suffixes": ["@example.com", "@qq.com"]
+  }
+}
+```
+
+`mode` 只能是 `disabled`、`allowlist` 或 `denylist`。后缀按忽略大小写的字面后缀匹配；
+`@example.com` 不匹配 `@sub.example.com`。前端使用公开配置提前校验，后端仍在验证码签发和最终写入时
+重复执行同一策略。名单只限制注册和修改账户邮箱，不限制已有账户找回密码。
+
 ### 6.5 OAuth app 与 grant 管理
 
 | 方法 | 路径 | 响应 |
@@ -355,6 +371,10 @@ scope 获批时出现。grant 撤销后关联 access token、refresh token 和 u
 管理 API 与普通站点 API 使用相同响应规则。列表使用 `items` 或统一 Cursor 分页；创建返回 `201`；
 更新在需要最新资源时返回 `200`，否则返回 `204`；删除返回 `204`。
 
+邮箱设置页通过 `GET /v2/admin/settings/email-suffix-policy` 一次读取模式、白名单和黑名单完整数组，
+通过 `PUT /v2/admin/settings/email-suffix-policy` 原子替换完整策略。该资源使用
+`site_settings.read.any` 和 `site_settings.update.any` 权限，不提供分页或单条规则旁路。
+
 ## 7. 权限
 
 身份和正版绑定新增权限如下：
@@ -388,6 +408,7 @@ Microsoft adapter 不增加隐式权限。用户能否管理外部身份、创�
 - `external_identities`：本站用户与 provider subject 的长期关联；
 - `external_identity_credentials`：加密 refresh token 和已授予 scope；
 - `official_profile_bindings`：外部身份与本站角色的正版关联；
+- `email_suffix_policy`、`email_suffix_rules`：邮箱后缀模式以及分离保存的白名单、黑名单；
 - OAuth client、grant、authorization code、refresh token、pairwise subject 表：本站 provider 状态。
 
 业务字段均结构化存储。原始 OIDC JSON 不作为业务读取来源。provider 被身份引用时不能删除；身份被

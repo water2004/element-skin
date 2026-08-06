@@ -93,11 +93,12 @@ func TestPublicRoutesUseRedisCachedSettingsAndHomepageMediaExactly(t *testing.T)
 	cfg := testutil.TestConfig()
 	cache := redisstore.NewMemoryStore()
 	if err := cache.SetPublicSettings(context.Background(), map[string]any{
-		"site_name":          "Cached Site",
-		"allow_register":     false,
-		"require_invite":     false,
-		"mojang_status_urls": map[string]any{"session": "cached-session"},
-		"cached_only_marker": true,
+		"site_name":           "Cached Site",
+		"allow_register":      false,
+		"require_invite":      false,
+		"email_suffix_policy": map[string]any{"mode": "disabled", "suffixes": []string{}},
+		"mojang_status_urls":  map[string]any{"session": "cached-session"},
+		"cached_only_marker":  true,
 	}, time.Duration(cfg.PublicCacheTTL)*time.Second); err != nil {
 		t.Fatal(err)
 	}

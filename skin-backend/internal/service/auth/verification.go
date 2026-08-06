@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 
+	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
 	verificationsvc "element-skin/backend/internal/service/verification"
 	"element-skin/backend/internal/util"
 )
@@ -90,4 +91,15 @@ func (s Service) verification() verificationsvc.Service {
 		verification.Settings = s.Settings
 	}
 	return verification
+}
+
+func (s Service) emailPolicy() emailpolicysvc.Service {
+	policy := s.EmailPolicy
+	if policy.DB == nil {
+		policy.DB = s.DB
+	}
+	if policy.Redis == nil {
+		policy.Redis = s.Redis
+	}
+	return policy
 }

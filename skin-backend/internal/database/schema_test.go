@@ -13,6 +13,8 @@ func TestInitSQLContainsExpectedTablesConstraintsIndexesAndSeeds(t *testing.T) {
 	sqlFragments := []string{
 		"CREATE TABLE IF NOT EXISTS users",
 		"CREATE TABLE IF NOT EXISTS profiles",
+		"CREATE TABLE IF NOT EXISTS email_suffix_policy",
+		"CREATE TABLE IF NOT EXISTS email_suffix_rules",
 		"email TEXT UNIQUE NOT NULL",
 		"name TEXT UNIQUE NOT NULL",
 		"PRIMARY KEY(user_id, hash, texture_type)",
@@ -89,7 +91,7 @@ func TestInitSQLExecutesSuccessfullyAgainstRealDatabase(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 	expectedTables := []string{
-		"users", "profiles", "site_refresh_tokens", "invites", "settings",
+		"users", "profiles", "site_refresh_tokens", "invites", "settings", "email_suffix_policy", "email_suffix_rules",
 		"user_textures", "skin_library", "fallback_endpoints", "fallback_skin_domains", "whitelisted_users",
 		"verification_codes", "homepage_media", "enabled_easter_eggs", "notices", "notice_receipts",
 		"permission_subjects", "permission_resources", "permission_actions",

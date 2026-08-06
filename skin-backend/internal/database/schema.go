@@ -45,6 +45,21 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS email_suffix_policy (
+    singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+    mode TEXT NOT NULL CHECK (mode IN ('disabled', 'allowlist', 'denylist'))
+);
+
+INSERT INTO email_suffix_policy (singleton, mode)
+VALUES (TRUE, 'disabled')
+ON CONFLICT (singleton) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS email_suffix_rules (
+    list_type TEXT NOT NULL CHECK (list_type IN ('allowlist', 'denylist')),
+    suffix TEXT NOT NULL CHECK (suffix LIKE '@%'),
+    PRIMARY KEY(list_type, suffix)
+);
+
 CREATE TABLE IF NOT EXISTS user_textures (
     user_id TEXT NOT NULL,
     hash TEXT NOT NULL,

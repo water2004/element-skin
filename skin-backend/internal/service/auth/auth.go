@@ -13,6 +13,7 @@ import (
 	userstore "element-skin/backend/internal/database/user"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/redisstore"
+	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
 	identitysvc "element-skin/backend/internal/service/identity"
 	settingssvc "element-skin/backend/internal/service/settings"
 	verificationsvc "element-skin/backend/internal/service/verification"
@@ -28,6 +29,7 @@ type Service struct {
 	Settings     settingssvc.Settings
 	Verification verificationsvc.Service
 	Identity     identitysvc.Service
+	EmailPolicy  emailpolicysvc.Service
 }
 
 func (s Service) settings() settingssvc.Settings {
@@ -68,6 +70,9 @@ func (s Service) RegisterWithIdentity(ctx context.Context, email, password, user
 	}
 	if !validEmail(email) {
 		return "", util.HTTPError{Status: 400, Detail: "Invalid email format"}
+	}
+	if err := s.emailPolicy().RequireAllowed(ctx, email); err != nil {
+		return "", err
 	}
 	if password == "" {
 		return "", util.HTTPError{Status: 400, Detail: "Password is required"}

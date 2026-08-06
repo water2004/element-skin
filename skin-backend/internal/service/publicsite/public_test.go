@@ -31,6 +31,13 @@ func TestPublicSettingsUsesCacheAndFallbackPrimaryEndpointExactly(t *testing.T) 
 	if err := db.Settings.Set(ctx, "require_invite", true); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.EmailPolicies.Replace(ctx, model.EmailSuffixPolicy{
+		Mode:      model.EmailSuffixModeAllowlist,
+		Allowlist: []string{"@example.com", "@qq.com"},
+		Denylist:  []string{"@blocked.test"},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Fallbacks.SaveEndpoints(ctx, []dbfallback.Endpoint{{
 		Priority: 1, SessionURL: "https://session.example", AccountURL: "https://account.example",
 		ServicesURL: "https://services.example", CacheTTL: 60, Note: "primary",
@@ -51,8 +58,11 @@ func TestPublicSettingsUsesCacheAndFallbackPrimaryEndpointExactly(t *testing.T) 
 		t.Fatal(err)
 	}
 	status := first["mojang_status_urls"].(map[string]any)
+	emailPolicy := first["email_suffix_policy"].(map[string]any)
+	suffixes := emailPolicy["suffixes"].([]string)
 	if first["site_name"] != "Cached Site" || first["allow_register"] != false ||
 		first["require_invite"] != true ||
+		emailPolicy["mode"] != model.EmailSuffixModeAllowlist || len(suffixes) != 2 || suffixes[0] != "@example.com" || suffixes[1] != "@qq.com" ||
 		first["site_url"] != "https://config.example/root" || first["api_url"] != "https://api.example/v2" ||
 		status["session"] != "https://session.example" || status["account"] != "https://account.example" || status["services"] != "https://services.example" {
 		t.Fatalf("public settings mismatch: %#v", first)

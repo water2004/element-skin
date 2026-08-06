@@ -9,6 +9,7 @@ import (
 
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/redisstore"
+	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
 	mailsvc "element-skin/backend/internal/service/mail"
 	settingssvc "element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/util"
@@ -21,10 +22,11 @@ const (
 )
 
 type Service struct {
-	DB       *database.DB
-	Redis    redisstore.Store
-	Settings settingssvc.Settings
-	Sender   mailsvc.Sender
+	DB          *database.DB
+	Redis       redisstore.Store
+	Settings    settingssvc.Settings
+	Sender      mailsvc.Sender
+	EmailPolicy emailpolicysvc.Service
 }
 
 func (s Service) SendPublic(ctx context.Context, email, purpose string) (map[string]any, error) {
@@ -44,6 +46,13 @@ func (s Service) SendPublic(ctx context.Context, email, purpose string) (map[str
 	}
 	switch purpose {
 	case PurposeRegister:
+		policy := s.EmailPolicy
+		if policy.DB == nil {
+			policy.DB = s.DB
+		}
+		if err := policy.RequireAllowed(ctx, email); err != nil {
+			return nil, err
+		}
 		if existing != nil {
 			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Email already registered"}
 		}
