@@ -27,7 +27,7 @@
 - **Yggdrasil 兼容**：支持 Authlib-Injector、启动器和 Minecraft 服务器所需的认证、会话、角色查询、材质签名与服务器加入接口。
 - **Fallback 服务**：支持多个外部皮肤站作为 fallback，提供健康检查、角色与材质导入、公钥发现和缓存。
 - **用户与资源管理**：支持邮箱验证、密码找回、角色管理、皮肤与披风上传、衣柜、3D 预览和公共皮肤库。
-- **角色导入**：支持导入 Microsoft 正版角色和远程 Yggdrasil 角色，并同步处理角色资料与材质文件。
+- **外部身份与角色同步**：支持多 OIDC 身份、Microsoft 正版角色绑定与显式同步，以及远程 Yggdrasil 角色导入。
 - **细粒度权限**：支持多角色、单项权限覆盖、权限范围、受保护权限主体和按权限展示页面与操作。
 - **OAuth 第三方应用**：支持公开应用、机密应用、Authorization Code + PKCE、Device Code、Client Credentials、Refresh Token、撤销和权限审核。
 - **通知中心**：统一展示公告、系统消息和 OAuth 事件，支持 Markdown 长公告、短公告、定向投递、未读提醒和过期清理。
@@ -56,6 +56,7 @@ cp .env.example .env
 
 - `ELEMENT_SKIN_IMAGE`：后端镜像，默认 `ghcr.io/water2004/element-skin:latest`
 - `JWT_SECRET`：生产环境随机长密钥
+- `IDENTITY_ENCRYPTION_KEY`：使用 `openssl rand -base64 32` 生成一次并长期保存
 - `DATABASE_PASSWORD` / `REDIS_PASSWORD`：数据库和 Redis 密码
 - `SERVER_SITE_URL`：站点外部访问地址
 - `SERVER_API_URL`：后端 API 外部访问地址
@@ -63,7 +64,20 @@ cp .env.example .env
 
 后端启动时会读取环境变量，并从 `DATABASE_HOST/PORT/USER/PASSWORD/NAME/SSLMODE` 和 `REDIS_HOST/PORT` 派生连接地址。Docker 部署不需要挂载 `config.yaml`，也不维护第二份 Compose 配置。
 
-首次启动时如果 `/app/data/private.pem` 和 `/app/data/public.pem` 不存在，系统会自动生成并保存。请持久化 `./data` 目录，其中 `./data/db` 会挂载到 PostgreSQL 容器的 `/var/lib/postgresql`。后续不要删除或替换私钥，否则已有 Yggdrasil 客户端会看到服务端签名身份变化。
+首次启动时如果 Yggdrasil 的 `/app/data/private.pem`、`/app/data/public.pem` 或 OIDC 的
+`/app/data/oidc-private.pem`、`/app/data/oidc-public.pem` 不存在，系统会自动生成并保存。请持久化
+`./data` 目录，其中 `./data/db` 会挂载到 PostgreSQL 容器的 `/var/lib/postgresql`。后续不要删除或
+替换这些私钥。`IDENTITY_ENCRYPTION_KEY` 用于加密 OIDC client secret 和外部 refresh token，配置
+身份提供方后不得重新生成，否则已有密文将无法解密。
+
+从 v3.0.x 升级时，后端会把已配置的 `microsoft_client_id` 和 `microsoft_client_secret` 一次性迁移为
+只开放绑定能力的 Microsoft OIDC provider。只有 provider 创建成功后才删除旧设置；失败时保留旧值
+并终止启动。旧版导入的角色和材质保持不变，但旧流程没有持久化 Microsoft 用户 refresh token，
+因此用户仍需重新授权一次。升级前还需要在 Azure 应用中加入新的 Web 回调地址：
+
+```text
+${SERVER_API_URL}/v2/auth/oidc/callback
+```
 
 **Nginx 主机配置**
 只需将 Nginx 的 `root` 指向宿主机的 `./frontend` 目录。

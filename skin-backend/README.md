@@ -17,7 +17,7 @@ runtime small, explicit, and centered on the Go domain modules.
   concerns.
 - `internal/redisstore`: Redis-backed cache/verification/rate-limit/auth-cache
   abstractions plus the in-memory test implementation.
-- `internal/service`: site, Yggdrasil, fallback, Microsoft/import, settings, and
+- `internal/service`: site, Yggdrasil, fallback, external identity/official profile, settings, and
   texture-storage domain logic.
 - `internal/util`: small security, pagination, JWT, URL, and response helpers.
 - `internal/integration`: end-to-end backend tests against a real PostgreSQL

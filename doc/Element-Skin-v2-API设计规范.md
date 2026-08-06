@@ -393,6 +393,13 @@ Microsoft adapter 不增加隐式权限。用户能否管理外部身份、创�
 业务字段均结构化存储。原始 OIDC JSON 不作为业务读取来源。provider 被身份引用时不能删除；身份被
 正版绑定引用时不能删除；删除用户或角色按 schema 中明确的级联约束清理关联。
 
+从旧版一次性 Microsoft 导入升级时，启动迁移读取 `microsoft_client_id`、
+`microsoft_client_secret` 和 `microsoft_redirect_uri`。完整的 client 凭据会被转换为仅启用绑定能力
+的 Microsoft provider，secret 使用当前 `identity.encryption_key` 加密；provider 创建和旧设置删除
+必须在同一数据库事务中完成。未配置的空默认值直接清理，残缺配置、discovery 失败、加密失败或
+provider 冲突均终止启动并保留旧设置。旧版没有持久化用户 refresh token，因此不伪造外部身份或
+正版绑定；已导入的本站角色与材质保持不变，用户需要重新授权后自行建立绑定。
+
 ## 9. 测试要求
 
 至少覆盖：
