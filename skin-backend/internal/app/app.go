@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"element-skin/backend/internal/httpapi"
 	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/redisstore"
+	identitysvc "element-skin/backend/internal/service/identity"
 	mailsvc "element-skin/backend/internal/service/mail"
 	noticesvc "element-skin/backend/internal/service/notice"
 	oauthsvc "element-skin/backend/internal/service/oauth"
@@ -46,6 +48,17 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	db, err := database.Open(ctx, cfg)
 	if err != nil {
 		return nil, err
+	}
+	identityService := identitysvc.Service{DB: db, Config: cfg}
+	identityMigration, err := identityService.MigrateLegacyMicrosoftProvider(ctx)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if identityMigration.ProviderCreated {
+		log.Printf("migrated legacy Microsoft configuration to an OIDC identity provider")
+	} else if identityMigration.LegacySettingsRemoved {
+		log.Printf("removed unused legacy Microsoft configuration")
 	}
 	if err := db.Tokens.DeleteExpiredRefresh(ctx, database.NowMS()); err != nil {
 		db.Close()

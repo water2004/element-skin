@@ -126,6 +126,18 @@ func (s Store) GetProvider(ctx context.Context, id string) (*model.IdentityProvi
 	return item, err
 }
 
+func (s Store) GetProviderByIssuerClient(ctx context.Context, issuerURL, clientID string) (*model.IdentityProvider, error) {
+	item, err := scanProvider(s.Pool.QueryRow(ctx, `
+		SELECT `+providerColumns+`
+		FROM identity_providers
+		WHERE issuer_url=$1 AND client_id=$2
+	`, issuerURL, clientID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	return item, err
+}
+
 func (s Store) ListProviders(ctx context.Context, publicOnly bool) ([]model.IdentityProvider, error) {
 	query := `SELECT ` + providerColumns + ` FROM identity_providers`
 	if publicOnly {

@@ -551,12 +551,13 @@ CREATE INDEX IF NOT EXISTS idx_external_identities_user ON external_identities (
 CREATE INDEX IF NOT EXISTS idx_official_profile_bindings_identity ON official_profile_bindings (identity_id, created_at, id);
 
 -- Breaking migration: the v2 identity model replaces the one-shot Microsoft import contract.
+-- Legacy Microsoft settings are retained here and migrated transactionally by the identity
+-- service after configuration and OIDC discovery are available.
 ALTER TABLE delegated_permission_grants ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
 ALTER TABLE oauth_refresh_tokens ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 DELETE FROM permissions WHERE code LIKE 'microsoft_import.%';
-DELETE FROM settings WHERE key IN ('microsoft_client_id', 'microsoft_client_secret', 'microsoft_redirect_uri');
 
 INSERT INTO settings (key, value) VALUES
 ('fallback_strategy', 'serial'),

@@ -53,9 +53,34 @@ func TestInitSQLContainsOnlyVersion241MigrationPaths(t *testing.T) {
 		"ALTER TABLE oauth_device_codes ADD COLUMN IF NOT EXISTS",
 		"ALTER TABLE permission_subjects ADD COLUMN IF NOT EXISTS protected",
 		"DELETE FROM settings WHERE key IN ('fallback_services', 'easter_eggs_enabled')",
+		"DELETE FROM settings WHERE key IN ('microsoft_client_id', 'microsoft_client_secret', 'microsoft_redirect_uri')",
 	} {
 		if strings.Contains(database.InitSQL, fragment) {
 			t.Fatalf("InitSQL contains development-only migration fragment %q", fragment)
+		}
+	}
+}
+
+func TestInitPreservesLegacyMicrosoftSettingsForTransactionalServiceMigration(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	want := map[string]string{
+		"microsoft_client_id":     "legacy-client",
+		"microsoft_client_secret": "legacy-secret",
+		"microsoft_redirect_uri":  "https://old.example/callback",
+	}
+	for key, value := range want {
+		if err := db.Settings.Set(ctx, key, value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for key, expected := range want {
+		value, err := db.Settings.Get(ctx, key, "missing")
+		if err != nil || value != expected {
+			t.Fatalf("legacy setting %s changed during schema init: value=%q want=%q err=%v", key, value, expected, err)
 		}
 	}
 }

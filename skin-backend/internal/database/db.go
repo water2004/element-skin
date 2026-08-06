@@ -15,6 +15,7 @@ import (
 	"element-skin/backend/internal/database/homepage"
 	"element-skin/backend/internal/database/identity"
 	"element-skin/backend/internal/database/invite"
+	"element-skin/backend/internal/database/migration"
 	"element-skin/backend/internal/database/notice"
 	"element-skin/backend/internal/database/oauth"
 	"element-skin/backend/internal/database/officialprofile"
@@ -43,6 +44,7 @@ type DB struct {
 	Fallbacks        fallback.Store
 	HomepageMedia    homepage.Store
 	Identities       identity.Store
+	Migrations       migration.Store
 	Verifications    verification.Store
 	Notices          notice.Store
 	OAuth            oauth.Store
@@ -85,6 +87,7 @@ func New(pool *pgxpool.Pool) *DB {
 		Fallbacks:        fallback.Store{Pool: pool},
 		HomepageMedia:    homepage.Store{Pool: pool},
 		Identities:       identity.Store{Pool: pool},
+		Migrations:       migration.Store{Pool: pool},
 		Verifications:    verification.Store{Pool: pool},
 		Notices:          notice.Store{Pool: pool},
 		OAuth:            oauth.Store{Pool: pool},
