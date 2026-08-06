@@ -10,7 +10,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import { isPathInside, resolveStaticAssetRequest } from './vite/staticAssets'
 
 const isLowMemory = process.env.BUILD_MODE === 'low-memory'
-const appVersion = 'v3.0.2'
+const appVersion = 'v3.1.0'
 
 // https://vite.dev/config/
 export default defineConfig({
