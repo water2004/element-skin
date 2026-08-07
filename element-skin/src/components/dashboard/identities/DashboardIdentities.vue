@@ -54,6 +54,13 @@
                 >
                   Microsoft
                 </el-tag>
+                <el-tag
+                  v-if="identity.authorization_status === 'reauthorization_required'"
+                  size="small"
+                  type="danger"
+                >
+                  需要重新登录
+                </el-tag>
               </div>
               <div class="mt-2 text-sm text-[var(--color-text-light)] break-all">
                 <span v-if="identity.display_name">{{ identity.display_name }}</span>
@@ -64,6 +71,20 @@
               <div class="mt-1 text-xs text-[var(--color-text-light)] break-all">
                 标识：{{ identity.subject }}
               </div>
+
+              <el-alert
+                v-if="identity.authorization_status === 'reauthorization_required'"
+                class="mt-4"
+                type="error"
+                :closable="false"
+                show-icon
+                title="此身份的长期授权已失效"
+                :description="
+                  providerCanLink(identity.provider_id)
+                    ? `请重新登录 ${identity.provider_name} 完成授权，之后才能继续使用依赖该身份的外部能力。`
+                    : `${identity.provider_name} 当前未开放重新登录，请联系管理员。`
+                "
+              />
 
               <div
                 v-if="bindingsFor(identity.id).length"
@@ -113,9 +134,18 @@
             <div class="flex flex-wrap md:justify-end gap-2">
               <el-button
                 v-if="canCreateIdentity && providerCanLink(identity.provider_id)"
+                :type="
+                  identity.authorization_status === 'reauthorization_required'
+                    ? 'primary'
+                    : undefined
+                "
                 @click="linkProvider(identity.provider_id)"
               >
-                重新授权
+                {{
+                  identity.authorization_status === 'reauthorization_required'
+                    ? '重新登录'
+                    : '重新授权'
+                }}
               </el-button>
               <el-button v-if="canUpdateIdentity" @click="renameIdentity(identity)">
                 修改标签
@@ -157,7 +187,7 @@ import {
   syncOfficialProfileBinding,
 } from '@/api/official-profiles'
 import type { ExternalIdentity, IdentityProvider, OfficialProfileBinding, User } from '@/api/types'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, isExternalIdentityReauthorizationRequired } from '@/utils/error'
 
 const user = inject<Ref<User | null>>('user', ref(null))
 const route = useRoute()
@@ -268,7 +298,12 @@ async function syncBinding(binding: OfficialProfileBinding) {
     ElMessage.success('正版角色已同步到本站角色')
     await loadIdentityState()
   } catch (e: unknown) {
-    ElMessage.error('同步失败: ' + getErrorMessage(e, '同步失败'))
+    if (isExternalIdentityReauthorizationRequired(e)) {
+      ElMessage.error('该外部身份授权已失效，请重新登录后再同步')
+      await loadIdentityState()
+    } else {
+      ElMessage.error('同步失败: ' + getErrorMessage(e, '同步失败'))
+    }
   } finally {
     syncingBindingId.value = ''
   }

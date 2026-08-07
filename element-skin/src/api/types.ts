@@ -159,6 +159,7 @@ export interface WhitelistResponse {
 }
 
 export type IdentityProviderAdapter = 'generic_oidc' | 'microsoft'
+export type ExternalIdentityAuthorizationStatus = 'active' | 'reauthorization_required'
 
 export interface IdentityProvider {
   id: string
@@ -199,6 +200,9 @@ export interface ExternalIdentity {
   created_at: number
   updated_at: number
   last_login_at: number | null
+  authorization_status: ExternalIdentityAuthorizationStatus
+  last_refresh_at: number | null
+  last_refresh_error_at: number | null
 }
 
 export interface OfficialProfileBinding {

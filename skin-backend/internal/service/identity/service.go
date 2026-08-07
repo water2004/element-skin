@@ -179,7 +179,14 @@ func (s Service) ListIdentities(ctx context.Context, actor permission.Actor) ([]
 		if provider == nil {
 			return nil, errors.New("external identity references a missing provider")
 		}
-		out = append(out, identityResponse(item, *provider))
+		credential, err := s.DB.Identities.GetCredential(ctx, item.ID)
+		if err != nil {
+			return nil, err
+		}
+		if credential == nil {
+			return nil, errors.New("external identity references a missing credential")
+		}
+		out = append(out, identityResponse(item, *provider, *credential))
 	}
 	return out, nil
 }
@@ -384,21 +391,24 @@ func adminProviderResponse(item model.IdentityProvider) map[string]any {
 	return response
 }
 
-func identityResponse(item model.ExternalIdentity, provider model.IdentityProvider) map[string]any {
+func identityResponse(item model.ExternalIdentity, provider model.IdentityProvider, credential model.ExternalIdentityCredential) map[string]any {
 	return map[string]any{
-		"id":               item.ID,
-		"provider_id":      item.ProviderID,
-		"provider_name":    provider.Name,
-		"provider_adapter": provider.Adapter,
-		"subject":          item.Subject,
-		"label":            item.Label,
-		"email":            item.Email,
-		"email_verified":   item.EmailVerified,
-		"display_name":     item.DisplayName,
-		"avatar_url":       item.AvatarURL,
-		"created_at":       item.CreatedAt,
-		"updated_at":       item.UpdatedAt,
-		"last_login_at":    item.LastLoginAt,
+		"id":                    item.ID,
+		"provider_id":           item.ProviderID,
+		"provider_name":         provider.Name,
+		"provider_adapter":      provider.Adapter,
+		"subject":               item.Subject,
+		"label":                 item.Label,
+		"email":                 item.Email,
+		"email_verified":        item.EmailVerified,
+		"display_name":          item.DisplayName,
+		"avatar_url":            item.AvatarURL,
+		"created_at":            item.CreatedAt,
+		"updated_at":            item.UpdatedAt,
+		"last_login_at":         item.LastLoginAt,
+		"authorization_status":  credential.AuthorizationStatus,
+		"last_refresh_at":       credential.LastRefreshAt,
+		"last_refresh_error_at": credential.LastRefreshErrorAt,
 	}
 }
 

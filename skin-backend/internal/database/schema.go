@@ -234,6 +234,10 @@ CREATE TABLE IF NOT EXISTS external_identity_credentials (
     identity_id TEXT PRIMARY KEY,
     refresh_token_ciphertext TEXT NOT NULL DEFAULT '',
     granted_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    authorization_status TEXT NOT NULL DEFAULT 'active'
+        CHECK(authorization_status IN ('active', 'reauthorization_required')),
+    last_refresh_at BIGINT,
+    last_refresh_error_at BIGINT,
     updated_at BIGINT NOT NULL,
     FOREIGN KEY(identity_id) REFERENCES external_identities(id) ON DELETE CASCADE
 );
@@ -504,6 +508,10 @@ ALTER TABLE skin_library ADD COLUMN IF NOT EXISTS usage_count BIGINT NOT NULL DE
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS tokens;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS authorization_status TEXT NOT NULL DEFAULT 'active'
+    CHECK(authorization_status IN ('active', 'reauthorization_required'));
+ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_at BIGINT;
+ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_error_at BIGINT;
 
 DO $$
 BEGIN

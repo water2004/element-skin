@@ -69,6 +69,9 @@ func (s Store) createRegistration(
 		if credential.GrantedScopes == nil {
 			credential.GrantedScopes = []string{}
 		}
+		if credential.AuthorizationStatus == "" {
+			credential.AuthorizationStatus = model.ExternalIdentityAuthorizationActive
+		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO external_identities (
 				id,user_id,provider_id,subject,label,email,email_verified,display_name,
@@ -81,10 +84,12 @@ func (s Store) createRegistration(
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO external_identity_credentials
-				(identity_id,refresh_token_ciphertext,granted_scopes,updated_at)
-			VALUES ($1,$2,$3,$4)
+				(identity_id,refresh_token_ciphertext,granted_scopes,authorization_status,
+				 last_refresh_at,last_refresh_error_at,updated_at)
+			VALUES ($1,$2,$3,$4,$5,$6,$7)
 		`, credential.IdentityID, credential.RefreshTokenCiphertext, credential.GrantedScopes,
-			credential.UpdatedAt); err != nil {
+			credential.AuthorizationStatus, credential.LastRefreshAt,
+			credential.LastRefreshErrorAt, credential.UpdatedAt); err != nil {
 			return err
 		}
 	}

@@ -145,7 +145,7 @@ import {
   getOfficialProfileBindings,
   syncOfficialProfileBinding,
 } from '@/api/official-profiles'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, isExternalIdentityReauthorizationRequired } from '@/utils/error'
 
 const { setAvatar } = useAvatar()
 
@@ -251,7 +251,12 @@ async function bindOfficialProfile(payload: { identity_id: string; profile_id: s
     ElMessage.success('正版角色已绑定；需要时请点击“同步”更新角色数据')
     await fetchOfficialResources()
   } catch (e: unknown) {
-    ElMessage.error('绑定失败: ' + getErrorMessage(e, '绑定失败'))
+    if (isExternalIdentityReauthorizationRequired(e)) {
+      ElMessage.error('该 Microsoft 身份授权已失效，请前往身份管理页重新登录')
+      await fetchOfficialResources()
+    } else {
+      ElMessage.error('绑定失败: ' + getErrorMessage(e, '绑定失败'))
+    }
   } finally {
     bindingLoading.value = false
   }
@@ -270,7 +275,12 @@ async function syncOfficialBinding(binding: OfficialProfileBinding) {
     if (fetchMe) await fetchMe()
   } catch (e: unknown) {
     if (e !== 'cancel' && e !== 'close') {
-      ElMessage.error('同步失败: ' + getErrorMessage(e, '同步失败'))
+      if (isExternalIdentityReauthorizationRequired(e)) {
+        ElMessage.error('该 Microsoft 身份授权已失效，请前往身份管理页重新登录')
+        await fetchOfficialResources()
+      } else {
+        ElMessage.error('同步失败: ' + getErrorMessage(e, '同步失败'))
+      }
     }
   }
 }

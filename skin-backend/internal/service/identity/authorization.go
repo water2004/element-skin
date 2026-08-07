@@ -263,7 +263,8 @@ func (s Service) credential(identityID string, tokens OIDCTokens, now int64) (mo
 	}
 	return model.ExternalIdentityCredential{
 		IdentityID: identityID, RefreshTokenCiphertext: refreshCiphertext,
-		GrantedScopes: append([]string(nil), tokens.Scopes...), UpdatedAt: now,
+		GrantedScopes:       append([]string(nil), tokens.Scopes...),
+		AuthorizationStatus: model.ExternalIdentityAuthorizationActive, UpdatedAt: now,
 	}, nil
 }
 

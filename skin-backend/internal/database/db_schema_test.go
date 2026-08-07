@@ -32,6 +32,10 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		"whitelisted_users",
 		"verification_codes",
 		"enabled_easter_eggs",
+		"identity_providers",
+		"external_identities",
+		"external_identity_credentials",
+		"official_profile_bindings",
 		"delegated_clients",
 		"delegated_client_permissions",
 		"delegated_permission_grants",
@@ -141,6 +145,10 @@ func TestInitSQLContainsExpectedConstraintsAndIndexes(t *testing.T) {
 		"idx_oauth_refresh_tokens_user_client",
 		"client_type TEXT NOT NULL DEFAULT 'confidential'",
 		"secret_hash TEXT NOT NULL DEFAULT ''",
+		"authorization_status TEXT NOT NULL DEFAULT 'active'",
+		"CHECK(authorization_status IN ('active', 'reauthorization_required'))",
+		"ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_at BIGINT",
+		"ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_error_at BIGINT",
 		"ON CONFLICT (key) DO NOTHING",
 	}
 	for _, fragment := range required {

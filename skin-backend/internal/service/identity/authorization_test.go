@@ -221,7 +221,11 @@ func TestOIDCLinkReauthorizesAnExistingOwnedIdentityThroughTheSamePath(t *testin
 		ID: "reauthorize-identity", UserID: user.ID, ProviderID: provider.ID,
 		Subject: "reauthorize-subject", Email: "old@example.com", CreatedAt: 1, UpdatedAt: 1,
 	}
-	if err := db.Identities.CreateIdentity(ctx, existing, model.ExternalIdentityCredential{IdentityID: existing.ID, UpdatedAt: 1}); err != nil {
+	failedAt := int64(1)
+	if err := db.Identities.CreateIdentity(ctx, existing, model.ExternalIdentityCredential{
+		IdentityID: existing.ID, AuthorizationStatus: model.ExternalIdentityAuthorizationReauthorizationRequired,
+		LastRefreshErrorAt: &failedAt, UpdatedAt: 1,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	cache := redisstore.NewMemoryStore()
@@ -244,7 +248,7 @@ func TestOIDCLinkReauthorizesAnExistingOwnedIdentityThroughTheSamePath(t *testin
 		t.Fatalf("reauthorized identity=%#v err=%v", stored, err)
 	}
 	credential, err := db.Identities.GetCredential(ctx, existing.ID)
-	if err != nil || credential == nil {
+	if err != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationActive || credential.LastRefreshAt != nil || credential.LastRefreshErrorAt != nil {
 		t.Fatalf("reauthorized credential=%#v err=%v", credential, err)
 	}
 	box, _ := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)

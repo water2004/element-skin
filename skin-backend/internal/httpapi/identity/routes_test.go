@@ -102,13 +102,16 @@ func TestIdentityRoutesListUpdateDeleteOnlyOwnedRecordsWithExactErrors(t *testin
 			t.Fatal(err)
 		}
 	}
+	if updated, err := db.Identities.MarkCredentialRefreshRejected(t.Context(), "identity-b", 22); err != nil || !updated {
+		t.Fatalf("mark identity-b reauthorization state updated=%v err=%v", updated, err)
+	}
 	ownerActor := identityRouteActor(t, db, owner.ID)
 	otherActor := identityRouteActor(t, db, other.ID)
 
 	req := identityRouteRequest(http.MethodGet, "/v2/users/me/identities", "", ownerActor)
 	rec := httptest.NewRecorder()
 	h.ListIdentities(rec, req)
-	wantList := `{"items":[{"avatar_url":"","created_at":10,"display_name":"Remote A","email":"a@remote.example","email_verified":true,"id":"identity-a","label":"first","last_login_at":null,"provider_adapter":"generic_oidc","provider_id":"identity-route-provider","provider_name":"Route Provider","subject":"subject-a","updated_at":11},{"avatar_url":"","created_at":20,"display_name":"Remote B","email":"b@remote.example","email_verified":false,"id":"identity-b","label":"second","last_login_at":null,"provider_adapter":"generic_oidc","provider_id":"identity-route-provider","provider_name":"Route Provider","subject":"subject-b","updated_at":21}]}` + "\n"
+	wantList := `{"items":[{"authorization_status":"active","avatar_url":"","created_at":10,"display_name":"Remote A","email":"a@remote.example","email_verified":true,"id":"identity-a","label":"first","last_login_at":null,"last_refresh_at":null,"last_refresh_error_at":null,"provider_adapter":"generic_oidc","provider_id":"identity-route-provider","provider_name":"Route Provider","subject":"subject-a","updated_at":11},{"authorization_status":"reauthorization_required","avatar_url":"","created_at":20,"display_name":"Remote B","email":"b@remote.example","email_verified":false,"id":"identity-b","label":"second","last_login_at":null,"last_refresh_at":null,"last_refresh_error_at":22,"provider_adapter":"generic_oidc","provider_id":"identity-route-provider","provider_name":"Route Provider","subject":"subject-b","updated_at":21}]}` + "\n"
 	if rec.Code != http.StatusOK || rec.Body.String() != wantList {
 		t.Fatalf("identity list response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}

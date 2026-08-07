@@ -1,5 +1,10 @@
 package model
 
+const (
+	ExternalIdentityAuthorizationActive                  = "active"
+	ExternalIdentityAuthorizationReauthorizationRequired = "reauthorization_required"
+)
+
 type User struct {
 	ID                string
 	Email             string
@@ -197,6 +202,9 @@ type ExternalIdentityCredential struct {
 	IdentityID             string
 	RefreshTokenCiphertext string
 	GrantedScopes          []string
+	AuthorizationStatus    string
+	LastRefreshAt          *int64
+	LastRefreshErrorAt     *int64
 	UpdatedAt              int64
 }
 

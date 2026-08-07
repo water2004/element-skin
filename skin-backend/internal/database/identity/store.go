@@ -18,6 +18,15 @@ type rowScanner interface {
 	Scan(dest ...any) error
 }
 
+func normalizeCredential(item *model.ExternalIdentityCredential) {
+	if item.GrantedScopes == nil {
+		item.GrantedScopes = []string{}
+	}
+	if item.AuthorizationStatus == "" {
+		item.AuthorizationStatus = model.ExternalIdentityAuthorizationActive
+	}
+}
+
 func scanProvider(row rowScanner) (*model.IdentityProvider, error) {
 	var item model.IdentityProvider
 	err := row.Scan(
@@ -169,9 +178,7 @@ func (s Store) DeleteProvider(ctx context.Context, id string) (bool, error) {
 }
 
 func (s Store) CreateIdentity(ctx context.Context, item model.ExternalIdentity, credential model.ExternalIdentityCredential) error {
-	if credential.GrantedScopes == nil {
-		credential.GrantedScopes = []string{}
-	}
+	normalizeCredential(&credential)
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -189,9 +196,12 @@ func (s Store) CreateIdentity(ctx context.Context, item model.ExternalIdentity, 
 	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO external_identity_credentials
-			(identity_id, refresh_token_ciphertext, granted_scopes, updated_at)
-		VALUES ($1,$2,$3,$4)
-	`, item.ID, credential.RefreshTokenCiphertext, credential.GrantedScopes, credential.UpdatedAt); err != nil {
+			(identity_id, refresh_token_ciphertext, granted_scopes, authorization_status,
+			 last_refresh_at, last_refresh_error_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
+	`, item.ID, credential.RefreshTokenCiphertext, credential.GrantedScopes,
+		credential.AuthorizationStatus, credential.LastRefreshAt, credential.LastRefreshErrorAt,
+		credential.UpdatedAt); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -254,9 +264,7 @@ func (s Store) UpdateIdentityClaims(ctx context.Context, item model.ExternalIden
 }
 
 func (s Store) UpdateIdentityAuthorization(ctx context.Context, item model.ExternalIdentity, credential model.ExternalIdentityCredential) (bool, error) {
-	if credential.GrantedScopes == nil {
-		credential.GrantedScopes = []string{}
-	}
+	normalizeCredential(&credential)
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return false, err
@@ -275,9 +283,12 @@ func (s Store) UpdateIdentityAuthorization(ctx context.Context, item model.Exter
 	if _, err := tx.Exec(ctx, `
 		UPDATE external_identity_credentials
 		SET refresh_token_ciphertext=CASE WHEN $2='' THEN refresh_token_ciphertext ELSE $2 END,
-			granted_scopes=$3, updated_at=$4
+			granted_scopes=$3, authorization_status=$4, last_refresh_at=$5,
+			last_refresh_error_at=$6, updated_at=$7
 		WHERE identity_id=$1
-	`, item.ID, credential.RefreshTokenCiphertext, credential.GrantedScopes, credential.UpdatedAt); err != nil {
+	`, item.ID, credential.RefreshTokenCiphertext, credential.GrantedScopes,
+		credential.AuthorizationStatus, credential.LastRefreshAt, credential.LastRefreshErrorAt,
+		credential.UpdatedAt); err != nil {
 		return false, err
 	}
 	return true, tx.Commit(ctx)
@@ -304,10 +315,12 @@ func (s Store) DeleteIdentity(ctx context.Context, id, userID string) (bool, err
 func (s Store) GetCredential(ctx context.Context, identityID string) (*model.ExternalIdentityCredential, error) {
 	var item model.ExternalIdentityCredential
 	err := s.Pool.QueryRow(ctx, `
-		SELECT identity_id, refresh_token_ciphertext, granted_scopes, updated_at
+		SELECT identity_id, refresh_token_ciphertext, granted_scopes, authorization_status,
+			last_refresh_at, last_refresh_error_at, updated_at
 		FROM external_identity_credentials
 		WHERE identity_id=$1
-	`, identityID).Scan(&item.IdentityID, &item.RefreshTokenCiphertext, &item.GrantedScopes, &item.UpdatedAt)
+	`, identityID).Scan(&item.IdentityID, &item.RefreshTokenCiphertext, &item.GrantedScopes,
+		&item.AuthorizationStatus, &item.LastRefreshAt, &item.LastRefreshErrorAt, &item.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -315,17 +328,44 @@ func (s Store) GetCredential(ctx context.Context, identityID string) (*model.Ext
 }
 
 func (s Store) UpdateCredential(ctx context.Context, item model.ExternalIdentityCredential) error {
-	if item.GrantedScopes == nil {
-		item.GrantedScopes = []string{}
-	}
+	normalizeCredential(&item)
 	_, err := s.Pool.Exec(ctx, `
 		INSERT INTO external_identity_credentials
-			(identity_id, refresh_token_ciphertext, granted_scopes, updated_at)
-		VALUES ($1,$2,$3,$4)
+			(identity_id, refresh_token_ciphertext, granted_scopes, authorization_status,
+			 last_refresh_at, last_refresh_error_at, updated_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
 		ON CONFLICT (identity_id) DO UPDATE
 		SET refresh_token_ciphertext=EXCLUDED.refresh_token_ciphertext,
 			granted_scopes=EXCLUDED.granted_scopes,
+			authorization_status=EXCLUDED.authorization_status,
+			last_refresh_at=EXCLUDED.last_refresh_at,
+			last_refresh_error_at=EXCLUDED.last_refresh_error_at,
 			updated_at=EXCLUDED.updated_at
-	`, item.IdentityID, item.RefreshTokenCiphertext, item.GrantedScopes, item.UpdatedAt)
+	`, item.IdentityID, item.RefreshTokenCiphertext, item.GrantedScopes,
+		item.AuthorizationStatus, item.LastRefreshAt, item.LastRefreshErrorAt, item.UpdatedAt)
 	return err
+}
+
+func (s Store) MarkCredentialRefreshRejected(ctx context.Context, identityID string, failedAt int64) (bool, error) {
+	tag, err := s.Pool.Exec(ctx, `
+		UPDATE external_identity_credentials
+		SET authorization_status='reauthorization_required', last_refresh_error_at=$2, updated_at=$2
+		WHERE identity_id=$1
+	`, identityID, failedAt)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (s Store) MarkCredentialRefreshFailed(ctx context.Context, identityID string, failedAt int64) (bool, error) {
+	tag, err := s.Pool.Exec(ctx, `
+		UPDATE external_identity_credentials
+		SET last_refresh_error_at=$2, updated_at=$2
+		WHERE identity_id=$1
+	`, identityID, failedAt)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
 }

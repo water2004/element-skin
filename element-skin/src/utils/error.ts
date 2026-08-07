@@ -33,6 +33,14 @@ export function getErrorStatus(error: unknown) {
   return typeof error.response?.status === 'number' ? error.response.status : null
 }
 
+export function isExternalIdentityReauthorizationRequired(error: unknown) {
+  if (!isApiErrorLike(error)) return false
+  return (
+    error.response?.status === 409 &&
+    error.response?.data?.detail === 'external identity must be reauthorized'
+  )
+}
+
 export function isValidationError(error: unknown) {
   if (!isApiErrorLike(error)) return false
   return typeof error.message === 'string' && error.message.includes('validate')

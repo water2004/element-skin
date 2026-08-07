@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getErrorMessage } from '../error'
+import { getErrorMessage, isExternalIdentityReauthorizationRequired } from '../error'
 
 describe('getErrorMessage', () => {
   it('prefers detail over OAuth error description', () => {
@@ -26,5 +26,32 @@ describe('getErrorMessage', () => {
         },
       }),
     ).toBe('invalid refresh_token')
+  })
+})
+
+describe('isExternalIdentityReauthorizationRequired', () => {
+  it('matches only the exact external identity reauthorization contract', () => {
+    expect(
+      isExternalIdentityReauthorizationRequired({
+        response: {
+          status: 409,
+          data: { detail: 'external identity must be reauthorized' },
+        },
+      }),
+    ).toBe(true)
+    expect(
+      isExternalIdentityReauthorizationRequired({
+        response: {
+          status: 502,
+          data: { detail: 'external identity must be reauthorized' },
+        },
+      }),
+    ).toBe(false)
+    expect(
+      isExternalIdentityReauthorizationRequired({
+        response: { status: 409, data: { detail: 'another conflict' } },
+      }),
+    ).toBe(false)
+    expect(isExternalIdentityReauthorizationRequired(new Error('network failed'))).toBe(false)
   })
 })

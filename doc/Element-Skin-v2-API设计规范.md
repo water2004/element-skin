@@ -186,7 +186,15 @@ display name 或 email_verified 不补全也不覆盖这些字段。失败时 ti
 - 外部 refresh token 使用 `identity.encryption_key` 经 AES-256-GCM 加密后存数据库。
 - 不设置定时刷新任务。只有依赖外部能力的显式操作需要 access token 时才按需刷新。
 - 并发刷新由单航班合并；provider 轮换 refresh token 时原子保存新值。
-- refresh 被拒绝时要求用户通过同一 `link` 流程重新授权，不建立备用链路。
+- 凭据以 `active` 或 `reauthorization_required` 保存结构化授权状态，同时记录最近刷新成功和
+  失败时间。身份列表返回 `authorization_status`、`last_refresh_at` 和
+  `last_refresh_error_at`，供所有 adapter 和前端统一消费。
+- refresh 返回 `invalid_grant` 或 `invalid_request` 时清除 access token 缓存，将凭据标记为
+  `reauthorization_required`，并以 `409 external identity must be reauthorized` 提醒用户通过
+  同一 `link` 流程重新登录。成功重新授权更新原身份和凭据并恢复 `active`，不建立备用链路。
+- 暂时网络错误或上游 `5xx` 只记录失败时间并返回 `502`，不得误标记为需要重新授权。
+- 能力 adapter 发现一个尚未到本地过期时间的 access token 被上游以 `401` 拒绝时，必须调用
+  身份服务的强制刷新入口并且只重试一次；adapter 不直接读取、保存或刷新凭据。
 
 ## 4. 正版角色绑定
 
@@ -429,6 +437,7 @@ provider 冲突均终止启动并保留旧设置。旧版没有持久化用户 r
 - 同 provider 多身份、重复 subject、跨用户冲突、重新授权和并发刷新；
 - OIDC 未匹配账户时完整注册字段、验证码、邀请码、ticket 重放与失败回滚；
 - 外部 token 加密、Redis access 缓存、refresh 轮换和并发单航班；
+- refresh 被拒绝后的结构化状态、重新授权恢复，以及上游 `401` 强制刷新单次重试；
 - 正版绑定与角色 API 解耦、显式同步、图片失败清理和数据库事务；
 - OIDC-only client 的零站点权限、pairwise subject、userinfo、refresh 和 grant 撤销；
 - `/v2` 精确 method/path/body/status/response，旧 `/v1` 与旧未版本化站点路径返回 `404`；

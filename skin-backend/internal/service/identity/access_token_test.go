@@ -98,7 +98,7 @@ func TestExternalIdentityAccessTokenRefreshesOnDemandAndPersistsRotationExactly(
 	}
 }
 
-func TestExternalIdentityAccessTokenRejectsForeignAndRejectedRefreshWithoutMutation(t *testing.T) {
+func TestExternalIdentityAccessTokenRejectsForeignAndMarksRejectedRefreshForReauthorization(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user, _, external := createRefreshIdentity(t, db)
@@ -114,13 +114,54 @@ func TestExternalIdentityAccessTokenRejectsForeignAndRejectedRefreshWithoutMutat
 	_, err = service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
 	assertHTTPError(t, err, 409, "external identity must be reauthorized")
 	credential, getErr := db.Identities.GetCredential(ctx, external.ID)
-	if getErr != nil || credential == nil {
+	if getErr != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationReauthorizationRequired || credential.LastRefreshErrorAt == nil {
 		t.Fatalf("credential lookup after rejected refresh=%#v err=%v", credential, getErr)
 	}
 	box, _ := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
 	refreshToken, decryptErr := box.Decrypt(credential.RefreshTokenCiphertext)
 	if decryptErr != nil || refreshToken != "stored-refresh" || refresher.calls != 1 {
 		t.Fatalf("rejected refresh mutated token=%q calls=%d err=%v", refreshToken, refresher.calls, decryptErr)
+	}
+	_, err = service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
+	assertHTTPError(t, err, 409, "external identity must be reauthorized")
+	if refresher.calls != 1 {
+		t.Fatalf("reauthorization-required identity refreshed again: calls=%d", refresher.calls)
+	}
+}
+
+func TestExternalIdentityForcedRefreshIgnoresValidCacheAndReplacesItExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user, _, external := createRefreshIdentity(t, db)
+	cache := redisstore.NewMemoryStore()
+	if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{
+		IdentityID: external.ID, AccessToken: "revoked-but-unexpired", TokenType: "Bearer",
+		ExpiresAt: time.Now().Add(time.Hour).UnixMilli(),
+	}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	expires := time.Now().Add(45 * time.Minute)
+	refresher := &fakeTokenRefresher{tokens: identity.OIDCTokens{
+		AccessToken: "forced-access", RefreshToken: "", TokenType: "Bearer", Expiry: expires,
+	}}
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: cache, TokenRefresher: refresher}
+
+	result, err := service.ForceRefreshAccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
+	if err != nil || result.AccessToken != "forced-access" || refresher.calls != 1 {
+		t.Fatalf("forced refresh result=%#v calls=%d err=%v", result, refresher.calls, err)
+	}
+	cached, err := cache.GetExternalAccessToken(ctx, external.ID)
+	if err != nil || cached.AccessToken != "forced-access" || cached.ExpiresAt != expires.UnixMilli() {
+		t.Fatalf("forced refresh cache=%#v err=%v", cached, err)
+	}
+	credential, err := db.Identities.GetCredential(ctx, external.ID)
+	if err != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationActive || credential.LastRefreshAt == nil || credential.LastRefreshErrorAt != nil {
+		t.Fatalf("forced refresh credential=%#v err=%v", credential, err)
+	}
+	box, _ := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
+	refreshToken, decryptErr := box.Decrypt(credential.RefreshTokenCiphertext)
+	if decryptErr != nil || refreshToken != "stored-refresh" {
+		t.Fatalf("provider omitted refresh token; stored token=%q err=%v", refreshToken, decryptErr)
 	}
 }
 

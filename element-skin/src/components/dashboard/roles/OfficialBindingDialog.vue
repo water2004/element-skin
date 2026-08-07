@@ -22,7 +22,7 @@
             placeholder="请选择 Microsoft 身份"
           >
             <el-option
-              v-for="identity in microsoftIdentities"
+              v-for="identity in activeMicrosoftIdentities"
               :key="identity.id"
               :value="identity.id"
               :label="identityLabel(identity)"
@@ -37,8 +37,12 @@
       </el-form>
 
       <el-empty
-        v-if="!microsoftIdentities.length"
-        description="请先在身份管理页绑定 Microsoft 账号"
+        v-if="!activeMicrosoftIdentities.length"
+        :description="
+          microsoftIdentities.length
+            ? 'Microsoft 身份需要重新登录后才能绑定正版角色'
+            : '请先在身份管理页绑定 Microsoft 账号'
+        "
         :image-size="72"
       >
         <el-button type="primary" @click="$emit('manage-identities')">前往身份管理</el-button>
@@ -81,6 +85,9 @@ const selectedIdentityId = ref('')
 const microsoftIdentities = computed(() =>
   props.identities.filter((identity) => identity.provider_adapter === 'microsoft'),
 )
+const activeMicrosoftIdentities = computed(() =>
+  microsoftIdentities.value.filter((identity) => identity.authorization_status === 'active'),
+)
 
 function identityLabel(identity: ExternalIdentity) {
   return identity.label || identity.display_name || identity.email || identity.provider_name
@@ -92,6 +99,6 @@ function confirm() {
 }
 
 watch(visible, (opened) => {
-  if (opened) selectedIdentityId.value = microsoftIdentities.value[0]?.id || ''
+  if (opened) selectedIdentityId.value = activeMicrosoftIdentities.value[0]?.id || ''
 })
 </script>

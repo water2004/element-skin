@@ -4,12 +4,27 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 )
+
+type UpstreamHTTPError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *UpstreamHTTPError) Error() string {
+	return fmt.Sprintf("microsoft request failed: status=%d body=%s", e.StatusCode, e.Body)
+}
+
+func IsUnauthorized(err error) bool {
+	var upstreamErr *UpstreamHTTPError
+	return errors.As(err, &upstreamErr) && upstreamErr.StatusCode == http.StatusUnauthorized
+}
 
 type MicrosoftHTTPClient struct {
 	Client       *http.Client
@@ -54,7 +69,7 @@ func (c MicrosoftHTTPClient) do(ctx context.Context, method, endpoint string, bo
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		return fmt.Errorf("microsoft request failed: status=%d body=%s", resp.StatusCode, string(b))
+		return &UpstreamHTTPError{StatusCode: resp.StatusCode, Body: string(b)}
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }

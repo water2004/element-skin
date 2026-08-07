@@ -2,6 +2,7 @@ package microsoft_test
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -42,6 +43,20 @@ func TestMicrosoftHTTPClientRejectsNonSuccessWithStatusAndBody(t *testing.T) {
 	_, err := client.CheckGameOwnership(context.Background(), "mc_access")
 	if err == nil || !strings.Contains(err.Error(), "status=502") || !strings.Contains(err.Error(), "upstream failed") {
 		t.Fatalf("expected status/body error, got %v", err)
+	}
+}
+
+func TestMicrosoftHTTPClientClassifiesUnauthorizedWithoutFlatteningOtherFailures(t *testing.T) {
+	client := microsoft.MicrosoftHTTPClient{Client: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusUnauthorized, Body: io.NopCloser(strings.NewReader("expired")), Header: make(http.Header)}, nil
+	})}}
+	_, err := client.CheckGameOwnership(context.Background(), "expired-access")
+	var upstreamErr *microsoft.UpstreamHTTPError
+	if !errors.As(err, &upstreamErr) || upstreamErr.StatusCode != http.StatusUnauthorized || upstreamErr.Body != "expired" || !microsoft.IsUnauthorized(err) {
+		t.Fatalf("unauthorized classification mismatch: err=%#v upstream=%#v", err, upstreamErr)
+	}
+	if microsoft.IsUnauthorized(errors.New("network failed")) {
+		t.Fatal("non-HTTP failure must not be classified as unauthorized")
 	}
 }
 

@@ -145,6 +145,13 @@ func (s Service) resolve(ctx context.Context, userID, identityID string) (identi
 		resolver = microsoftsvc.ProfileFlow{Client: microsoftsvc.MicrosoftHTTPClient{Client: s.HTTPClient}}
 	}
 	result, err := resolver.Resolve(ctx, access.AccessToken)
+	if microsoftsvc.IsUnauthorized(err) {
+		access, err = s.Identities.ForceRefreshAccessTokenForOwnedIdentity(ctx, userID, identityID)
+		if err != nil {
+			return identitysvc.AuthorizedIdentity{}, nil, err
+		}
+		result, err = resolver.Resolve(ctx, access.AccessToken)
+	}
 	if err != nil {
 		return identitysvc.AuthorizedIdentity{}, nil, util.HTTPError{Status: http.StatusBadGateway, Detail: "Microsoft profile request failed"}
 	}

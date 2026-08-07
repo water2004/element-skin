@@ -23,16 +23,39 @@ import (
 )
 
 type fakeMicrosoftResolver struct {
-	calls       int
-	accessToken string
-	result      microsoftsvc.ProfileResult
-	err         error
+	calls        int
+	accessToken  string
+	accessTokens []string
+	result       microsoftsvc.ProfileResult
+	err          error
+	responses    []resolverResponse
+}
+
+type resolverResponse struct {
+	result microsoftsvc.ProfileResult
+	err    error
 }
 
 func (f *fakeMicrosoftResolver) Resolve(_ context.Context, accessToken string) (microsoftsvc.ProfileResult, error) {
 	f.calls++
 	f.accessToken = accessToken
+	f.accessTokens = append(f.accessTokens, accessToken)
+	if len(f.responses) >= f.calls {
+		response := f.responses[f.calls-1]
+		return response.result, response.err
+	}
 	return f.result, f.err
+}
+
+type fakeOfficialTokenRefresher struct {
+	calls  int
+	tokens identitysvc.OIDCTokens
+	err    error
+}
+
+func (f *fakeOfficialTokenRefresher) Refresh(context.Context, model.IdentityProvider, string, string, []string) (identitysvc.OIDCTokens, error) {
+	f.calls++
+	return f.tokens, f.err
 }
 
 func TestOfficialBindingCreationRecordsRelationshipWithoutMutatingProfile(t *testing.T) {
@@ -167,6 +190,58 @@ func TestOfficialBindingRejectsWrongAdapterAndPermissionsBeforeRemoteCalls(t *te
 	}
 }
 
+func TestOfficialBindingRetriesOneUnauthorizedResponseWithForcedIdentityRefresh(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user, external, profile, identities, cache := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	refresher := &fakeOfficialTokenRefresher{tokens: identitysvc.OIDCTokens{
+		AccessToken: "refreshed-microsoft-access", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour),
+	}}
+	identities.TokenRefresher = refresher
+	resolver := &fakeMicrosoftResolver{responses: []resolverResponse{
+		{err: &microsoftsvc.UpstreamHTTPError{StatusCode: 401, Body: "expired"}},
+		{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}},
+	}}
+	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+
+	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID, profile.ID)
+	if err != nil || created["identity_id"] != external.ID {
+		t.Fatalf("binding after access refresh=%#v err=%v", created, err)
+	}
+	if resolver.calls != 2 || len(resolver.accessTokens) != 2 || resolver.accessTokens[0] != "microsoft-access" || resolver.accessTokens[1] != "refreshed-microsoft-access" || refresher.calls != 1 {
+		t.Fatalf("unauthorized retry resolver=%#v refresher_calls=%d", resolver, refresher.calls)
+	}
+	cached, err := cache.GetExternalAccessToken(ctx, external.ID)
+	if err != nil || cached.AccessToken != "refreshed-microsoft-access" {
+		t.Fatalf("refreshed Microsoft token cache=%#v err=%v", cached, err)
+	}
+}
+
+func TestOfficialBindingStopsAfterOneUnauthorizedRetry(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user, external, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	refresher := &fakeOfficialTokenRefresher{tokens: identitysvc.OIDCTokens{
+		AccessToken: "still-rejected-access", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour),
+	}}
+	identities.TokenRefresher = refresher
+	resolver := &fakeMicrosoftResolver{responses: []resolverResponse{
+		{err: &microsoftsvc.UpstreamHTTPError{StatusCode: 401}},
+		{err: &microsoftsvc.UpstreamHTTPError{StatusCode: 401}},
+	}}
+	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+
+	_, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID, profile.ID)
+	assertOfficialHTTPError(t, err, 502, "Microsoft profile request failed")
+	if resolver.calls != 2 || refresher.calls != 1 {
+		t.Fatalf("unauthorized retry count resolver=%d refresh=%d; want 2/1", resolver.calls, refresher.calls)
+	}
+	bindings, listErr := db.OfficialProfiles.ListByUser(ctx, user.ID)
+	if listErr != nil || len(bindings) != 0 {
+		t.Fatalf("failed unauthorized retry created bindings=%#v err=%v", bindings, listErr)
+	}
+}
+
 func officialFixture(t *testing.T, db *database.DB, adapter string) (model.User, model.ExternalIdentity, model.Profile, identitysvc.Service, redisstore.Store) {
 	t.Helper()
 	ctx := context.Background()
@@ -177,11 +252,26 @@ func officialFixture(t *testing.T, db *database.DB, adapter string) (model.User,
 		JWKSURI: "https://login.example/jwks", ClientID: "client", Adapter: adapter, Enabled: true,
 		CreatedAt: 1, UpdatedAt: 1,
 	}
+	box, err := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.ClientSecretCiphertext, err = box.Encrypt("client-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Identities.CreateProvider(ctx, provider); err != nil {
 		t.Fatal(err)
 	}
 	identity := model.ExternalIdentity{ID: "official-identity-" + adapter, UserID: user.ID, ProviderID: provider.ID, Subject: "subject", Label: "Microsoft account", CreatedAt: 2, UpdatedAt: 2}
-	if err := db.Identities.CreateIdentity(ctx, identity, model.ExternalIdentityCredential{IdentityID: identity.ID, UpdatedAt: 2}); err != nil {
+	refreshToken, err := box.Encrypt("stored-refresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Identities.CreateIdentity(ctx, identity, model.ExternalIdentityCredential{
+		IdentityID: identity.ID, RefreshTokenCiphertext: refreshToken,
+		GrantedScopes: []string{"openid", "offline_access"}, UpdatedAt: 2,
+	}); err != nil {
 		t.Fatal(err)
 	}
 	profile := testutil.CreateProfile(t, db, user.ID, "official-profile-"+adapter, "LocalRole")
