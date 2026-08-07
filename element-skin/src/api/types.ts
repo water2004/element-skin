@@ -191,6 +191,9 @@ export interface ExternalIdentity {
   provider_id: string
   provider_name: string
   provider_adapter: IdentityProviderAdapter
+  provider_icon_url: string
+  provider_enabled: boolean
+  provider_link_enabled: boolean
   subject: string
   label: string
   email: string

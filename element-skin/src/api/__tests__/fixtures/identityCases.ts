@@ -51,6 +51,20 @@ export function identityApiCases(): ApiCase[] {
       args: ['/v2/identity-authorizations', { provider_id: 'provider-1', intent: 'link' }],
     },
     {
+      name: 'startIdentityAuthorization targets one identity when reconnecting',
+      method: 'post',
+      call: () =>
+        startIdentityAuthorization({
+          provider_id: 'provider-1',
+          intent: 'link',
+          identity_id: 'identity-1',
+        }),
+      args: [
+        '/v2/identity-authorizations',
+        { provider_id: 'provider-1', intent: 'link', identity_id: 'identity-1' },
+      ],
+    },
+    {
       name: 'getExternalIdentities gets owned identities',
       method: 'get',
       call: getExternalIdentities,

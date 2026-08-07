@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -111,7 +112,7 @@ func TestIdentityRoutesListUpdateDeleteOnlyOwnedRecordsWithExactErrors(t *testin
 	req := identityRouteRequest(http.MethodGet, "/v2/users/me/identities", "", ownerActor)
 	rec := httptest.NewRecorder()
 	h.ListIdentities(rec, req)
-	wantList := `{"items":[{"authorization_status":"active","avatar_url":"","created_at":10,"display_name":"Remote A","email":"a@remote.example","email_verified":true,"id":"identity-a","label":"first","last_login_at":null,"last_refresh_at":null,"last_refresh_error_at":null,"provider_adapter":"generic_oidc","provider_id":"identity-route-provider","provider_name":"Route Provider","subject":"subject-a","updated_at":11},{"authorization_status":"reauthorization_required","avatar_url":"","created_at":20,"display_name":"Remote B","email":"b@remote.example","email_verified":false,"id":"identity-b","label":"second","last_login_at":null,"last_refresh_at":null,"last_refresh_error_at":22,"provider_adapter":"generic_oidc","provider_id":"identity-route-provider","provider_name":"Route Provider","subject":"subject-b","updated_at":21}]}` + "\n"
+	wantList := `{"items":[{"authorization_status":"active","avatar_url":"","created_at":10,"display_name":"Remote A","email":"a@remote.example","email_verified":true,"id":"identity-a","label":"first","last_login_at":null,"last_refresh_at":null,"last_refresh_error_at":null,"provider_adapter":"generic_oidc","provider_enabled":true,"provider_icon_url":"","provider_id":"identity-route-provider","provider_link_enabled":true,"provider_name":"Route Provider","subject":"subject-a","updated_at":11},{"authorization_status":"reauthorization_required","avatar_url":"","created_at":20,"display_name":"Remote B","email":"b@remote.example","email_verified":false,"id":"identity-b","label":"second","last_login_at":null,"last_refresh_at":null,"last_refresh_error_at":22,"provider_adapter":"generic_oidc","provider_enabled":true,"provider_icon_url":"","provider_id":"identity-route-provider","provider_link_enabled":true,"provider_name":"Route Provider","subject":"subject-b","updated_at":21}]}` + "\n"
 	if rec.Code != http.StatusOK || rec.Body.String() != wantList {
 		t.Fatalf("identity list response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -167,6 +168,52 @@ func TestIdentityRoutesRejectInvalidJSONAndMissingPermissionsExactly(t *testing.
 	h.ListIdentities(rec, req)
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
 		t.Fatalf("identity permission response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestIdentityAuthorizationCancellationReturnsToIdentityManagementExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	redis := testutil.NewMemoryRedis()
+	h := identityapi.New(testutil.TestConfig(), db, redis, nil)
+	owner := testutil.CreateUser(t, db, "identity-callback-owner@example.com", "Password123", "IdentityCallbackOwner", false)
+	provider := model.IdentityProvider{
+		ID: "identity-callback-provider", Name: "Callback Provider", IssuerURL: "https://callback.example",
+		AuthorizationEndpoint: "https://callback.example/authorize", TokenEndpoint: "https://callback.example/token",
+		JWKSURI: "https://callback.example/jwks", ClientID: "client", Scopes: []string{"openid"},
+		Adapter: identitysvc.AdapterGenericOIDC, Enabled: true, LoginEnabled: true, LinkEnabled: true,
+		RegistrationEnabled: true, CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := db.Identities.CreateProvider(t.Context(), provider); err != nil {
+		t.Fatal(err)
+	}
+	actor := identityRouteActor(t, db, owner.ID)
+
+	req := identityRouteRequest(http.MethodPost, "/v2/identity-authorizations", `{"provider_id":"identity-callback-provider","intent":"link"}`, actor)
+	rec := httptest.NewRecorder()
+	h.StartAuthorization(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("start authorization status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var started struct {
+		AuthorizationURL string `json:"authorization_url"`
+		ExpiresIn        int    `json:"expires_in"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &started); err != nil {
+		t.Fatal(err)
+	}
+	authorizationURL, err := url.Parse(started.AuthorizationURL)
+	if err != nil || authorizationURL.Query().Get("state") == "" || started.ExpiresIn != 600 {
+		t.Fatalf("authorization start mismatch: result=%#v err=%v", started, err)
+	}
+
+	callbackTarget := "/v2/auth/oidc/callback?state=" + url.QueryEscape(authorizationURL.Query().Get("state")) + "&error=access_denied"
+	req = identityRouteRequest(http.MethodGet, callbackTarget, "", permission.GuestActor())
+	rec = httptest.NewRecorder()
+	h.AuthorizationCallback(rec, req)
+	wantLocation := "http://test/dashboard/identities?identity_error=authorization_incomplete"
+	wantBody := `<a href="http://test/dashboard/identities?identity_error=authorization_incomplete">See Other</a>.` + "\n\n"
+	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != wantLocation || rec.Body.String() != wantBody {
+		t.Fatalf("cancel callback mismatch: status=%d location=%q body=%q", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
 }
 

@@ -8,6 +8,7 @@ export function getIdentityProviders(): Promise<{ data: ItemListResponse<Identit
 export function startIdentityAuthorization(data: {
   provider_id: string
   intent: 'login' | 'link'
+  identity_id?: string
 }): Promise<{ data: { authorization_url: string; expires_in: number } }> {
   return client.post('/v2/identity-authorizations', data)
 }

@@ -125,7 +125,8 @@ Content-Type: application/json
 
 {
   "provider_id": "provider-id",
-  "intent": "login"
+  "intent": "link",
+  "identity_id": "optional-existing-identity-id"
 }
 ```
 
@@ -133,6 +134,10 @@ Content-Type: application/json
 
 - `login`：公开登录或进入完整注册流程；
 - `link`：为当前本站用户添加或重新授权身份，需要 `external_identity.create.owned`。
+
+`identity_id` 只允许用于 `link`。省略时表示在该 provider 下添加身份；传入时表示重新连接当前用户
+已有的指定身份。服务端把目标 identity 和 subject 写入一次性 state，并可用已有 email 发送
+`login_hint`；callback 得到的 subject 必须与目标身份完全一致，否则返回 `409`，不得创建另一个身份。
 
 响应为 `201`：
 
@@ -144,7 +149,11 @@ Content-Type: application/json
 ```
 
 服务端生成一次性的 state、nonce 和 PKCE S256 verifier。`link` 额外发送标准
-`prompt=select_account`，允许同一 provider 选择另一个账号。
+`prompt=select_account`。添加身份时允许选择另一个账号；重新连接时即使用户在上游选错账号，也不会
+改变目标身份或意外新增身份。
+
+连接授权被取消，或重新连接时选择了不匹配的外部账号，callback 均以稳定错误码重定向回身份管理页。
+前端说明原有身份未改变，不向用户展示普通 API JSON 错误页。
 
 统一 callback 为：
 
@@ -438,6 +447,8 @@ provider 冲突均终止启动并保留旧设置。旧版没有持久化用户 r
 - OIDC 未匹配账户时完整注册字段、验证码、邀请码、ticket 重放与失败回滚；
 - 外部 token 加密、Redis access 缓存、refresh 轮换和并发单航班；
 - refresh 被拒绝后的结构化状态、重新授权恢复，以及上游 `401` 强制刷新单次重试；
+- 指定 `identity_id` 的重新连接必须拒绝错误 subject，并验证失败后身份、凭据和缓存均不变；
+- 连接授权取消和目标 subject 不匹配时，callback 必须以精确错误码返回身份管理页；
 - 正版绑定与角色 API 解耦、显式同步、图片失败清理和数据库事务；
 - OIDC-only client 的零站点权限、pairwise subject、userinfo、refresh 和 grant 撤销；
 - `/v2` 精确 method/path/body/status/response，旧 `/v1` 与旧未版本化站点路径返回 `404`；

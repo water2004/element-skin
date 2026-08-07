@@ -22,6 +22,9 @@ const (
 	AuthorizationIntentLogin = "login"
 	AuthorizationIntentLink  = "link"
 
+	AuthorizationAccountMismatchDetail = "authorized account does not match the external identity being reconnected"
+	AuthorizationLinkIncompleteDetail  = "external identity authorization was not completed"
+
 	authorizationStateKind = "oidc_authorization"
 	registrationStateKind  = "oidc_registration"
 	authorizationStateTTL  = 10 * time.Minute
@@ -41,7 +44,7 @@ type AuthorizationResult struct {
 	ProviderID         string
 }
 
-func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor, providerID, intent string) (AuthorizationStart, error) {
+func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor, providerID, intent, identityID string) (AuthorizationStart, error) {
 	provider, err := s.DB.Identities.GetProvider(ctx, strings.TrimSpace(providerID))
 	if err != nil {
 		return AuthorizationStart{}, err
@@ -50,8 +53,13 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 		return AuthorizationStart{}, notFound("identity provider not found")
 	}
 	intent = strings.TrimSpace(intent)
+	identityID = strings.TrimSpace(identityID)
+	var targetIdentity *model.ExternalIdentity
 	switch intent {
 	case AuthorizationIntentLogin:
+		if identityID != "" {
+			return AuthorizationStart{}, badRequest("identity_id is only allowed for link authorization")
+		}
 		if !provider.LoginEnabled {
 			return AuthorizationStart{}, forbiddenDetail("login is disabled for this identity provider")
 		}
@@ -61,6 +69,15 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 		}
 		if !provider.LinkEnabled {
 			return AuthorizationStart{}, forbiddenDetail("linking is disabled for this identity provider")
+		}
+		if identityID != "" {
+			targetIdentity, err = s.DB.Identities.GetIdentity(ctx, identityID)
+			if err != nil {
+				return AuthorizationStart{}, err
+			}
+			if targetIdentity == nil || targetIdentity.UserID != actor.UserID || targetIdentity.ProviderID != provider.ID {
+				return AuthorizationStart{}, notFound("external identity not found")
+			}
 		}
 	default:
 		return AuthorizationStart{}, badRequest("intent must be login or link")
@@ -80,17 +97,24 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 	if s.Redis == nil {
 		return AuthorizationStart{}, errors.New("identity state store is not configured")
 	}
-	if err := s.Redis.SetState(ctx, state, map[string]any{
+	storedState := map[string]any{
 		"kind":          authorizationStateKind,
 		"provider_id":   provider.ID,
 		"intent":        intent,
 		"user_id":       actor.UserID,
 		"nonce":         nonce,
 		"pkce_verifier": pkceVerifier,
-	}, authorizationStateTTL); err != nil {
+	}
+	loginHint := ""
+	if targetIdentity != nil {
+		storedState["target_identity_id"] = targetIdentity.ID
+		storedState["target_subject"] = targetIdentity.Subject
+		loginHint = targetIdentity.Email
+	}
+	if err := s.Redis.SetState(ctx, state, storedState, authorizationStateTTL); err != nil {
 		return AuthorizationStart{}, err
 	}
-	authorizationURL, err := buildAuthorizationURL(*provider, s.redirectURI(), state, nonce, pkceVerifier, intent)
+	authorizationURL, err := buildAuthorizationURL(*provider, s.redirectURI(), state, nonce, pkceVerifier, intent, loginHint)
 	if err != nil {
 		_ = s.Redis.DeleteState(ctx, state)
 		return AuthorizationStart{}, err
@@ -116,6 +140,9 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		return AuthorizationResult{}, badRequest("invalid or expired OIDC state")
 	}
 	if providerError != "" {
+		if stateString(stored, "intent") == AuthorizationIntentLink {
+			return AuthorizationResult{}, badRequest(AuthorizationLinkIncompleteDetail)
+		}
 		return AuthorizationResult{}, badRequest("OIDC authorization was denied")
 	}
 	if strings.TrimSpace(code) == "" {
@@ -164,6 +191,17 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		if userID == "" {
 			return AuthorizationResult{}, forbidden()
 		}
+		targetIdentityID := stateString(stored, "target_identity_id")
+		if targetIdentityID != "" {
+			if existing == nil || existing.ID != targetIdentityID || existing.UserID != userID ||
+				claims.Subject != stateString(stored, "target_subject") {
+				return AuthorizationResult{}, conflict(AuthorizationAccountMismatchDetail)
+			}
+			if err := s.updateIdentityAuthorization(ctx, *existing, claims, tokens); err != nil {
+				return AuthorizationResult{}, err
+			}
+			return AuthorizationResult{Intent: intent, UserID: userID, IdentityID: existing.ID, ProviderID: provider.ID}, nil
+		}
 		if existing != nil {
 			if existing.UserID == userID {
 				if err := s.updateIdentityAuthorization(ctx, *existing, claims, tokens); err != nil {
@@ -195,6 +233,21 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		return AuthorizationResult{Intent: "registration", RegistrationTicket: ticket, ProviderID: provider.ID}, nil
 	default:
 		return AuthorizationResult{}, badRequest("invalid OIDC authorization intent")
+	}
+}
+
+func AuthorizationLinkErrorCode(err error) (string, bool) {
+	httpError, ok := err.(util.HTTPError)
+	if !ok {
+		return "", false
+	}
+	switch httpError.Detail {
+	case AuthorizationAccountMismatchDetail:
+		return "account_mismatch", true
+	case AuthorizationLinkIncompleteDetail:
+		return "authorization_incomplete", true
+	default:
+		return "", false
 	}
 }
 
@@ -312,7 +365,7 @@ func (s Service) createRegistrationTicket(ctx context.Context, provider model.Id
 	return ticket, nil
 }
 
-func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, nonce, pkceVerifier, intent string) (string, error) {
+func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, nonce, pkceVerifier, intent, loginHint string) (string, error) {
 	u, err := url.Parse(provider.AuthorizationEndpoint)
 	if err != nil {
 		return "", err
@@ -329,6 +382,9 @@ func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, 
 	query.Set("code_challenge_method", "S256")
 	if intent == AuthorizationIntentLink {
 		query.Set("prompt", "select_account")
+	}
+	if strings.TrimSpace(loginHint) != "" {
+		query.Set("login_hint", strings.TrimSpace(loginHint))
 	}
 	u.RawQuery = query.Encode()
 	return u.String(), nil

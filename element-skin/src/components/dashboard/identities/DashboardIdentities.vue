@@ -1,169 +1,67 @@
 <template>
-  <div class="max-w-[1000px] mx-auto py-5 animate-fade-in">
-    <PageHeader title="身份管理" subtitle="管理用于登录和外部能力授权的多个身份">
+  <div class="mx-auto max-w-[1000px] py-5 animate-fade-in">
+    <PageHeader title="身份管理" subtitle="连接并管理用于第三方登录和外部能力的账号">
       <template #icon><Connection /></template>
+      <template v-if="canCreateIdentity" #actions>
+        <el-button
+          type="primary"
+          :disabled="!linkProviders.length"
+          @click="showAddIdentityDialog = true"
+        >
+          <el-icon><Plus /></el-icon>
+          添加身份
+        </el-button>
+      </template>
     </PageHeader>
 
-    <UiCard v-if="canCreateIdentity" class="mb-6">
-      <template #header>
-        <div>
-          <div class="font-semibold text-[var(--color-heading)]">添加外部身份</div>
-          <div class="text-xs text-[var(--color-text-light)] mt-1">
-            同一个身份提供方可以绑定多个账号；授权时会让您选择具体账号。
-          </div>
-        </div>
-      </template>
-      <div v-if="linkProviders.length" class="flex flex-wrap gap-3">
-        <el-button
-          v-for="provider in linkProviders"
-          :key="provider.id"
-          :loading="authorizingProviderId === provider.id"
-          :disabled="!!authorizingProviderId"
-          @click="linkProvider(provider.id)"
+    <div v-loading="loading" class="min-h-[280px]">
+      <div v-if="identityGroups.length" class="grid gap-5">
+        <div
+          class="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-[var(--color-text-light)]"
         >
-          <img
-            v-if="provider.icon_url"
-            :src="provider.icon_url"
-            alt=""
-            class="w-5 h-5 rounded-sm object-contain"
-          />
-          <el-icon v-else><Link /></el-icon>
-          添加 {{ provider.name }} 身份
+          <span>已连接 {{ identities.length }} 个身份</span>
+          <span>来自 {{ identityGroups.length }} 个提供方</span>
+          <span v-if="reauthorizationCount" class="text-[var(--el-color-danger)]">
+            {{ reauthorizationCount }} 个需要重新连接
+          </span>
+        </div>
+
+        <IdentityProviderSection
+          v-for="group in identityGroups"
+          :key="group.id"
+          :group="group"
+          :bindings="bindings"
+          :can-add="canCreateIdentity"
+          :can-update="canUpdateIdentity"
+          :can-delete="canDeleteIdentity"
+          :authorizing-provider-id="authorizingProviderId"
+          :reconnecting-identity-id="reconnectingIdentityId"
+          @add="connectProvider"
+          @reconnect="reconnectIdentity"
+          @rename="renameIdentity"
+          @remove="removeIdentity"
+          @manage-roles="goToRoles"
+        />
+      </div>
+
+      <el-empty v-else-if="!loading" description="尚未连接外部身份">
+        <el-button
+          v-if="canCreateIdentity && linkProviders.length"
+          type="primary"
+          @click="showAddIdentityDialog = true"
+        >
+          添加第一个身份
         </el-button>
-      </div>
-      <el-empty v-else description="管理员尚未开放可绑定的身份提供方" :image-size="64" />
-    </UiCard>
-
-    <div v-loading="loading" class="min-h-[240px]">
-      <div v-if="identities.length" class="grid gap-4">
-        <UiCard v-for="identity in identities" :key="identity.id" hoverable>
-          <div class="flex flex-col md:flex-row md:items-start gap-4">
-            <el-avatar :size="52" :src="identity.avatar_url || undefined">
-              {{ identityInitial(identity) }}
-            </el-avatar>
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class="font-semibold text-lg text-[var(--color-heading)]">
-                  {{ identity.label || identity.display_name || identity.provider_name }}
-                </span>
-                <el-tag size="small">{{ identity.provider_name }}</el-tag>
-                <el-tag
-                  v-if="identity.provider_adapter === 'microsoft'"
-                  size="small"
-                  type="success"
-                >
-                  Microsoft
-                </el-tag>
-                <el-tag
-                  v-if="identity.authorization_status === 'reauthorization_required'"
-                  size="small"
-                  type="danger"
-                >
-                  需要重新登录
-                </el-tag>
-              </div>
-              <div class="mt-2 text-sm text-[var(--color-text-light)] break-all">
-                <span v-if="identity.display_name">{{ identity.display_name }}</span>
-                <span v-if="identity.email">
-                  {{ identity.display_name ? ' · ' : '' }}{{ identity.email }}
-                </span>
-              </div>
-              <div class="mt-1 text-xs text-[var(--color-text-light)] break-all">
-                标识：{{ identity.subject }}
-              </div>
-
-              <el-alert
-                v-if="identity.authorization_status === 'reauthorization_required'"
-                class="mt-4"
-                type="error"
-                :closable="false"
-                show-icon
-                title="此身份的长期授权已失效"
-                :description="
-                  providerCanLink(identity.provider_id)
-                    ? `请重新登录 ${identity.provider_name} 完成授权，之后才能继续使用依赖该身份的外部能力。`
-                    : `${identity.provider_name} 当前未开放重新登录，请联系管理员。`
-                "
-              />
-
-              <div
-                v-if="bindingsFor(identity.id).length"
-                class="mt-4 rounded-xl border border-[var(--color-border)] p-3"
-              >
-                <div class="text-xs font-semibold text-[var(--color-text-light)] mb-2">
-                  已绑定正版角色
-                </div>
-                <div class="grid gap-2">
-                  <div
-                    v-for="binding in bindingsFor(identity.id)"
-                    :key="binding.id"
-                    class="flex flex-wrap items-center justify-between gap-2"
-                  >
-                    <div>
-                      <span class="font-medium text-[var(--color-heading)]">
-                        {{ binding.profile.name }}
-                      </span>
-                      <span class="text-xs text-[var(--color-text-light)] ml-2">
-                        远端 {{ binding.remote_name }}
-                      </span>
-                    </div>
-                    <div class="flex gap-2">
-                      <el-button
-                        v-if="canRefreshOfficialProfile"
-                        link
-                        type="primary"
-                        :loading="syncingBindingId === binding.id"
-                        @click="syncBinding(binding)"
-                      >
-                        同步
-                      </el-button>
-                      <el-button
-                        v-if="canDeleteOfficialProfile"
-                        link
-                        type="danger"
-                        @click="removeBinding(binding)"
-                      >
-                        解除绑定
-                      </el-button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="flex flex-wrap md:justify-end gap-2">
-              <el-button
-                v-if="canCreateIdentity && providerCanLink(identity.provider_id)"
-                :type="
-                  identity.authorization_status === 'reauthorization_required'
-                    ? 'primary'
-                    : undefined
-                "
-                @click="linkProvider(identity.provider_id)"
-              >
-                {{
-                  identity.authorization_status === 'reauthorization_required'
-                    ? '重新登录'
-                    : '重新授权'
-                }}
-              </el-button>
-              <el-button v-if="canUpdateIdentity" @click="renameIdentity(identity)">
-                修改标签
-              </el-button>
-              <el-button
-                v-if="canDeleteIdentity"
-                type="danger"
-                plain
-                @click="removeIdentity(identity)"
-              >
-                删除身份
-              </el-button>
-            </div>
-          </div>
-        </UiCard>
-      </div>
-      <el-empty v-else-if="!loading" description="尚未绑定外部身份" />
+      </el-empty>
     </div>
+
+    <AddIdentityDialog
+      v-model="showAddIdentityDialog"
+      :providers="linkProviders"
+      :identities="identities"
+      :authorizing-provider-id="authorizingProviderId"
+      @connect="connectProvider"
+    />
   </div>
 </template>
 
@@ -171,9 +69,10 @@
 import { computed, inject, onMounted, ref, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Link } from '@element-plus/icons-vue'
+import { Connection, Plus } from '@element-plus/icons-vue'
 import PageHeader from '@/components/common/PageHeader.vue'
-import UiCard from '@/components/ui/UiCard.vue'
+import AddIdentityDialog from './AddIdentityDialog.vue'
+import IdentityProviderSection from './IdentityProviderSection.vue'
 import {
   deleteExternalIdentity,
   getExternalIdentities,
@@ -181,20 +80,18 @@ import {
   patchExternalIdentity,
   startIdentityAuthorization,
 } from '@/api/identity'
-import {
-  deleteOfficialProfileBinding,
-  getOfficialProfileBindings,
-  syncOfficialProfileBinding,
-} from '@/api/official-profiles'
+import { getOfficialProfileBindings } from '@/api/official-profiles'
 import type { ExternalIdentity, IdentityProvider, OfficialProfileBinding, User } from '@/api/types'
-import { getErrorMessage, isExternalIdentityReauthorizationRequired } from '@/utils/error'
+import type { IdentityProviderGroup } from './viewTypes'
+import { getErrorMessage } from '@/utils/error'
 
 const user = inject<Ref<User | null>>('user', ref(null))
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
+const showAddIdentityDialog = ref(false)
 const authorizingProviderId = ref('')
-const syncingBindingId = ref('')
+const reconnectingIdentityId = ref('')
 const providers = ref<IdentityProvider[]>([])
 const identities = ref<ExternalIdentity[]>([])
 const bindings = ref<OfficialProfileBinding[]>([])
@@ -205,27 +102,39 @@ const canReadOfficialProfile = computed(() => permissions.value.has('official_pr
 const canCreateIdentity = computed(() => permissions.value.has('external_identity.create.owned'))
 const canUpdateIdentity = computed(() => permissions.value.has('external_identity.update.owned'))
 const canDeleteIdentity = computed(() => permissions.value.has('external_identity.delete.owned'))
-const canRefreshOfficialProfile = computed(() =>
-  permissions.value.has('official_profile.refresh.owned'),
-)
-const canDeleteOfficialProfile = computed(() =>
-  permissions.value.has('official_profile.delete.owned'),
-)
 const linkProviders = computed(() => providers.value.filter((provider) => provider.link_enabled))
+const reauthorizationCount = computed(
+  () =>
+    identities.value.filter(
+      (identity) => identity.authorization_status === 'reauthorization_required',
+    ).length,
+)
 
-function bindingsFor(identityId: string) {
-  return bindings.value.filter((binding) => binding.identity_id === identityId)
-}
-
-function providerCanLink(providerId: string) {
-  return linkProviders.value.some((provider) => provider.id === providerId)
-}
-
-function identityInitial(identity: ExternalIdentity) {
-  return (identity.label || identity.display_name || identity.provider_name || '?')
-    .charAt(0)
-    .toUpperCase()
-}
+const identityGroups = computed<IdentityProviderGroup[]>(() => {
+  const grouped = new Map<string, IdentityProviderGroup>()
+  for (const identity of identities.value) {
+    const current = grouped.get(identity.provider_id)
+    if (current) {
+      current.identities.push(identity)
+      continue
+    }
+    grouped.set(identity.provider_id, {
+      id: identity.provider_id,
+      name: identity.provider_name,
+      adapter: identity.provider_adapter,
+      icon_url: identity.provider_icon_url,
+      enabled: identity.provider_enabled,
+      link_enabled: identity.provider_link_enabled,
+      identities: [identity],
+    })
+  }
+  const order = new Map(providers.value.map((provider, index) => [provider.id, index]))
+  return [...grouped.values()].sort((left, right) => {
+    const leftOrder = order.get(left.id) ?? Number.MAX_SAFE_INTEGER
+    const rightOrder = order.get(right.id) ?? Number.MAX_SAFE_INTEGER
+    return leftOrder - rightOrder || left.name.localeCompare(right.name)
+  })
+})
 
 async function loadIdentityState() {
   loading.value = true
@@ -238,27 +147,42 @@ async function loadIdentityState() {
     providers.value = providerResponse.data.items
     identities.value = identityResponse?.data.items || []
     bindings.value = bindingResponse?.data.items || []
-  } catch (e: unknown) {
-    ElMessage.error('加载身份失败: ' + getErrorMessage(e, '加载失败'))
+  } catch (error: unknown) {
+    ElMessage.error('加载身份失败: ' + getErrorMessage(error, '加载失败'))
   } finally {
     loading.value = false
   }
 }
 
-async function linkProvider(providerId: string) {
+async function connectProvider(providerId: string) {
   try {
     authorizingProviderId.value = providerId
     const response = await startIdentityAuthorization({ provider_id: providerId, intent: 'link' })
     window.location.assign(response.data.authorization_url)
-  } catch (e: unknown) {
+  } catch (error: unknown) {
     authorizingProviderId.value = ''
-    ElMessage.error('授权失败: ' + getErrorMessage(e, '无法开始授权'))
+    ElMessage.error('无法连接身份: ' + getErrorMessage(error, '无法开始授权'))
+  }
+}
+
+async function reconnectIdentity(identity: ExternalIdentity) {
+  try {
+    reconnectingIdentityId.value = identity.id
+    const response = await startIdentityAuthorization({
+      provider_id: identity.provider_id,
+      intent: 'link',
+      identity_id: identity.id,
+    })
+    window.location.assign(response.data.authorization_url)
+  } catch (error: unknown) {
+    reconnectingIdentityId.value = ''
+    ElMessage.error('无法重新连接: ' + getErrorMessage(error, '无法开始授权'))
   }
 }
 
 async function renameIdentity(identity: ExternalIdentity) {
   try {
-    const result = await ElMessageBox.prompt('设置便于区分多个账号的标签', '修改身份标签', {
+    const result = await ElMessageBox.prompt('设置一个只在本站显示的标签', '修改身份标签', {
       inputValue: identity.label,
       inputPlaceholder: identity.display_name || identity.email || identity.provider_name,
       inputValidator: (value) =>
@@ -267,9 +191,9 @@ async function renameIdentity(identity: ExternalIdentity) {
     await patchExternalIdentity(identity.id, { label: result.value.trim() })
     ElMessage.success('身份标签已更新')
     await loadIdentityState()
-  } catch (e: unknown) {
-    if (e !== 'cancel' && e !== 'close') {
-      ElMessage.error('更新失败: ' + getErrorMessage(e, '更新失败'))
+  } catch (error: unknown) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error('更新失败: ' + getErrorMessage(error, '更新失败'))
     }
   }
 }
@@ -277,59 +201,38 @@ async function renameIdentity(identity: ExternalIdentity) {
 async function removeIdentity(identity: ExternalIdentity) {
   try {
     await ElMessageBox.confirm(
-      '删除身份不会删除本站账号或角色；若它仍绑定正版角色，需要先解除绑定。',
+      '删除身份不会删除本站账号或角色；如果它仍关联正版角色，需要先在角色管理中解除关系。',
       '删除外部身份',
       { type: 'warning', confirmButtonText: '删除身份', cancelButtonText: '取消' },
     )
     await deleteExternalIdentity(identity.id)
     ElMessage.success('身份已删除')
     await loadIdentityState()
-  } catch (e: unknown) {
-    if (e !== 'cancel' && e !== 'close') {
-      ElMessage.error('删除失败: ' + getErrorMessage(e, '删除失败'))
+  } catch (error: unknown) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error('删除失败: ' + getErrorMessage(error, '删除失败'))
     }
   }
 }
 
-async function syncBinding(binding: OfficialProfileBinding) {
-  try {
-    syncingBindingId.value = binding.id
-    await syncOfficialProfileBinding(binding.id)
-    ElMessage.success('正版角色已同步到本站角色')
-    await loadIdentityState()
-  } catch (e: unknown) {
-    if (isExternalIdentityReauthorizationRequired(e)) {
-      ElMessage.error('该外部身份授权已失效，请重新登录后再同步')
-      await loadIdentityState()
-    } else {
-      ElMessage.error('同步失败: ' + getErrorMessage(e, '同步失败'))
-    }
-  } finally {
-    syncingBindingId.value = ''
-  }
-}
-
-async function removeBinding(binding: OfficialProfileBinding) {
-  try {
-    await ElMessageBox.confirm(
-      `解除 ${binding.profile.name} 与 ${binding.remote_name} 的绑定？本站角色和材质不会被删除。`,
-      '解除正版绑定',
-      { type: 'warning', confirmButtonText: '解除绑定', cancelButtonText: '取消' },
-    )
-    await deleteOfficialProfileBinding(binding.id)
-    ElMessage.success('已解除正版绑定')
-    await loadIdentityState()
-  } catch (e: unknown) {
-    if (e !== 'cancel' && e !== 'close') {
-      ElMessage.error('解除失败: ' + getErrorMessage(e, '解除失败'))
-    }
-  }
+function goToRoles() {
+  void router.push('/dashboard/roles')
 }
 
 onMounted(async () => {
-  if (typeof route.query.linked_identity_id === 'string') {
-    ElMessage.success('外部身份已绑定或重新授权')
-    await router.replace({ query: {} })
+  const identityError = route.query.identity_error
+  if (identityError === 'account_mismatch') {
+    ElMessage.error('重新连接失败：请选择这个身份原来对应的外部账号')
+  } else if (identityError === 'authorization_incomplete') {
+    ElMessage.info('身份连接未完成，原有身份没有改变')
+  } else if (typeof route.query.linked_identity_id === 'string') {
+    ElMessage.success('身份连接已更新')
+  }
+  if (typeof identityError === 'string' || typeof route.query.linked_identity_id === 'string') {
+    const query = { ...route.query }
+    delete query.identity_error
+    delete query.linked_identity_id
+    await router.replace({ query })
   }
   await loadIdentityState()
 })

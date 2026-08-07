@@ -14,12 +14,19 @@ func (h Handler) StartAuthorization(w http.ResponseWriter, req *http.Request) {
 	var body struct {
 		ProviderID string `json:"provider_id"`
 		Intent     string `json:"intent"`
+		IdentityID string `json:"identity_id"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
 		return
 	}
-	result, err := h.service.StartAuthorization(req.Context(), shared.CurrentActor(req), body.ProviderID, body.Intent)
+	result, err := h.service.StartAuthorization(
+		req.Context(),
+		shared.CurrentActor(req),
+		body.ProviderID,
+		body.Intent,
+		body.IdentityID,
+	)
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -35,6 +42,12 @@ func (h Handler) AuthorizationCallback(w http.ResponseWriter, req *http.Request)
 		req.URL.Query().Get("error"),
 	)
 	if err != nil {
+		if code, ok := identitysvc.AuthorizationLinkErrorCode(err); ok {
+			h.redirectToSite(w, req, "/dashboard/identities", url.Values{
+				"identity_error": []string{code},
+			})
+			return
+		}
 		util.Error(w, err)
 		return
 	}

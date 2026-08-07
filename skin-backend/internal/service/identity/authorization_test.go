@@ -2,6 +2,7 @@ package identity_test
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
 	"testing"
@@ -73,7 +74,7 @@ func TestOIDCAuthorizationLinkUsesStateNoncePKCEAndStoresCredentialsExactly(t *t
 	}
 	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redis, OIDCClient: client}
 	actor := actorWithPermissions(user.ID, "external_identity.create.owned")
-	started, err := service.StartAuthorization(ctx, actor, provider.ID, identity.AuthorizationIntentLink)
+	started, err := service.StartAuthorization(ctx, actor, provider.ID, identity.AuthorizationIntentLink, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +159,7 @@ func TestOIDCLoginReturnsExistingUserOrRegistrationTicketWithoutCreatingAccount(
 	if err := db.Identities.CreateIdentity(ctx, existing, model.ExternalIdentityCredential{IdentityID: existing.ID, UpdatedAt: 10}); err != nil {
 		t.Fatal(err)
 	}
-	started, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login")
+	started, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +182,7 @@ func TestOIDCLoginReturnsExistingUserOrRegistrationTicketWithoutCreatingAccount(
 	}
 	client.claims = identity.OIDCClaims{Subject: "new-subject", Email: "suggested@example.com", EmailVerified: true, DisplayName: "Suggested"}
 	client.tokens = identity.OIDCTokens{AccessToken: "registration-access", RefreshToken: "registration-refresh", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour), Scopes: []string{"openid", "email"}}
-	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login")
+	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,11 +236,21 @@ func TestOIDCLinkReauthorizesAnExistingOwnedIdentityThroughTheSamePath(t *testin
 	}
 	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: cache, OIDCClient: client}
 	actor := actorWithPermissions(user.ID, "external_identity.create.owned")
-	started, err := service.StartAuthorization(ctx, actor, provider.ID, "link")
+	started, err := service.StartAuthorization(ctx, actor, provider.ID, "link", existing.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := service.CompleteAuthorization(ctx, "reauthorize-code", mustAuthorizationState(t, started.AuthorizationURL), "")
+	authorizationURL, err := url.Parse(started.AuthorizationURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := mustAuthorizationState(t, started.AuthorizationURL)
+	storedState, err := cache.GetState(ctx, state)
+	if err != nil || authorizationURL.Query().Get("login_hint") != existing.Email ||
+		storedState["target_identity_id"] != existing.ID || storedState["target_subject"] != existing.Subject {
+		t.Fatalf("targeted reauthorization state=%#v url=%s err=%v", storedState, started.AuthorizationURL, err)
+	}
+	result, err := service.CompleteAuthorization(ctx, "reauthorize-code", state, "")
 	if err != nil || result.Intent != "link" || result.UserID != user.ID || result.IdentityID != existing.ID || result.ProviderID != provider.ID {
 		t.Fatalf("reauthorization result=%#v err=%v", result, err)
 	}
@@ -261,15 +272,68 @@ func TestOIDCLinkReauthorizesAnExistingOwnedIdentityThroughTheSamePath(t *testin
 	}
 }
 
+func TestOIDCTargetedReauthorizationRejectsAnotherSelectedAccountWithoutMutation(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oidc-target-mismatch@test.com", "pw", "OIDCTargetMismatch", false)
+	provider := oidcTestProvider(t, db, "oidc-target-mismatch-provider")
+	target := model.ExternalIdentity{
+		ID: "target-identity", UserID: user.ID, ProviderID: provider.ID,
+		Subject: "target-subject", Email: "target@example.com", CreatedAt: 1, UpdatedAt: 1,
+	}
+	failedAt := int64(2)
+	if err := db.Identities.CreateIdentity(ctx, target, model.ExternalIdentityCredential{
+		IdentityID: target.ID, RefreshTokenCiphertext: "original-ciphertext",
+		AuthorizationStatus: model.ExternalIdentityAuthorizationReauthorizationRequired,
+		LastRefreshErrorAt:  &failedAt, UpdatedAt: 2,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cache := redisstore.NewMemoryStore()
+	client := &fakeOIDCClient{
+		claims: identity.OIDCClaims{Subject: "different-subject", Email: "different@example.com"},
+		tokens: identity.OIDCTokens{AccessToken: "different-access", RefreshToken: "different-refresh", Expiry: time.Now().Add(time.Hour)},
+	}
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: cache, OIDCClient: client}
+	actor := actorWithPermissions(user.ID, "external_identity.create.owned")
+	other := testutil.CreateUser(t, db, "oidc-target-other@test.com", "pw", "OIDCTargetOther", false)
+	_, err := service.StartAuthorization(ctx, actorWithPermissions(other.ID, "external_identity.create.owned"), provider.ID, "link", target.ID)
+	assertHTTPError(t, err, 404, "external identity not found")
+	_, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", target.ID)
+	assertHTTPError(t, err, 400, "identity_id is only allowed for link authorization")
+	started, err := service.StartAuthorization(ctx, actor, provider.ID, "link", target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.CompleteAuthorization(ctx, "wrong-account-code", mustAuthorizationState(t, started.AuthorizationURL), "")
+	assertHTTPError(t, err, 409, identity.AuthorizationAccountMismatchDetail)
+	if code, ok := identity.AuthorizationLinkErrorCode(err); !ok || code != "account_mismatch" {
+		t.Fatalf("mismatched reauthorization error code=%q ok=%v", code, ok)
+	}
+	credential, getErr := db.Identities.GetCredential(ctx, target.ID)
+	if getErr != nil || credential == nil || credential.RefreshTokenCiphertext != "original-ciphertext" ||
+		credential.AuthorizationStatus != model.ExternalIdentityAuthorizationReauthorizationRequired ||
+		credential.LastRefreshErrorAt == nil || *credential.LastRefreshErrorAt != failedAt {
+		t.Fatalf("mismatched reauthorization credential=%#v err=%v", credential, getErr)
+	}
+	var identityCount int
+	if countErr := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM external_identities WHERE user_id=$1`, user.ID).Scan(&identityCount); countErr != nil || identityCount != 1 {
+		t.Fatalf("mismatched reauthorization identities=%d err=%v", identityCount, countErr)
+	}
+	if _, cacheErr := cache.GetExternalAccessToken(ctx, target.ID); !errors.Is(cacheErr, redisstore.ErrCacheMiss) {
+		t.Fatalf("mismatched reauthorization cached token err=%v", cacheErr)
+	}
+}
+
 func TestOIDCAuthorizationRejectsUnauthorizedLinkAndConsumesDeniedStateExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	provider := oidcTestProvider(t, db, "oidc-denied-provider")
 	redis := redisstore.NewMemoryStore()
 	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redis, OIDCClient: &fakeOIDCClient{}}
-	_, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "link")
+	_, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "link", "")
 	assertHTTPError(t, err, 403, "permission denied")
-	started, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login")
+	started, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "")
 	if err != nil {
 		t.Fatal(err)
 	}

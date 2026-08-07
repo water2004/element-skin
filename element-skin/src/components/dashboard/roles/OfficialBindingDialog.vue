@@ -14,7 +14,7 @@
         :description="`这里仅把本站角色 ${profile.name} 关联到 Microsoft 身份。绑定后请在角色卡片上点击“同步”，才会更新名称、皮肤和披风。`"
       />
 
-      <el-form label-position="top">
+      <el-form v-if="usableMicrosoftIdentities.length" label-position="top">
         <el-form-item label="选择已绑定的 Microsoft 身份" required>
           <el-select
             v-model="selectedIdentityId"
@@ -22,7 +22,7 @@
             placeholder="请选择 Microsoft 身份"
           >
             <el-option
-              v-for="identity in activeMicrosoftIdentities"
+              v-for="identity in usableMicrosoftIdentities"
               :key="identity.id"
               :value="identity.id"
               :label="identityLabel(identity)"
@@ -36,11 +36,22 @@
         </el-form-item>
       </el-form>
 
+      <div
+        v-if="usableMicrosoftIdentities.length && attentionMicrosoftIdentities.length"
+        class="flex flex-col gap-2 rounded-xl border border-[var(--el-color-warning-light-5)] bg-[var(--el-color-warning-light-9)] p-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <div class="text-sm text-[var(--el-color-warning-dark-2)]">
+          {{ attentionMicrosoftIdentities.length }} 个 Microsoft
+          身份当前不可用，需要重新连接或由管理员恢复提供方。
+        </div>
+        <el-button link type="primary" @click="$emit('manage-identities')"> 管理身份 </el-button>
+      </div>
+
       <el-empty
-        v-if="!activeMicrosoftIdentities.length"
+        v-if="!usableMicrosoftIdentities.length"
         :description="
           microsoftIdentities.length
-            ? 'Microsoft 身份需要重新登录后才能绑定正版角色'
+            ? '当前没有可用于正版绑定的 Microsoft 身份'
             : '请先在身份管理页绑定 Microsoft 账号'
         "
         :image-size="72"
@@ -85,8 +96,15 @@ const selectedIdentityId = ref('')
 const microsoftIdentities = computed(() =>
   props.identities.filter((identity) => identity.provider_adapter === 'microsoft'),
 )
-const activeMicrosoftIdentities = computed(() =>
-  microsoftIdentities.value.filter((identity) => identity.authorization_status === 'active'),
+const usableMicrosoftIdentities = computed(() =>
+  microsoftIdentities.value.filter(
+    (identity) => identity.authorization_status === 'active' && identity.provider_enabled,
+  ),
+)
+const attentionMicrosoftIdentities = computed(() =>
+  microsoftIdentities.value.filter(
+    (identity) => identity.authorization_status !== 'active' || !identity.provider_enabled,
+  ),
 )
 
 function identityLabel(identity: ExternalIdentity) {
@@ -99,6 +117,6 @@ function confirm() {
 }
 
 watch(visible, (opened) => {
-  if (opened) selectedIdentityId.value = activeMicrosoftIdentities.value[0]?.id || ''
+  if (opened) selectedIdentityId.value = usableMicrosoftIdentities.value[0]?.id || ''
 })
 </script>
