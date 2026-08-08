@@ -10,6 +10,108 @@ import (
 	"element-skin/backend/internal/testutil"
 )
 
+func TestUpsertActiveGrantReusesLogicalGrantAndRollsBackAuthorizationCodeFailureExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oauth-grant-upsert@test.com", "pw", "OAuthGrantUpsert", false)
+	client := model.OAuthClient{
+		ID:          "client-grant-upsert",
+		OwnerUserID: user.ID,
+		Name:        "Grant upsert client",
+		RedirectURI: "https://grant-upsert.example/callback",
+		ClientType:  "public",
+		Status:      "active",
+		CreatedAt:   1000,
+		UpdatedAt:   1000,
+	}
+	firstPermissions := permissionIDs("account.read.self")
+	secondPermissions := permissionIDs("account.read.self", "profile.read.owned")
+	if err := db.OAuth.CreateClient(ctx, client, secondPermissions); err != nil {
+		t.Fatal(err)
+	}
+	first := model.OAuthGrant{
+		ID:         "grant-upsert-first",
+		UserID:     user.ID,
+		SubjectID:  permissiondb.SubjectIDForUser(user.ID),
+		ClientID:   client.ID,
+		OIDCScopes: []string{"openid"},
+		Status:     "active",
+		CreatedAt:  1100,
+	}
+	firstCode := model.OAuthAuthorizationCode{
+		CodeHash:            "grant-upsert-first-code",
+		ClientID:            client.ID,
+		UserID:              user.ID,
+		RedirectURI:         client.RedirectURI,
+		CodeChallenge:       "challenge",
+		CodeChallengeMethod: "S256",
+		OIDCScopes:          []string{"openid"},
+		ExpiresAt:           5000,
+		CreatedAt:           1100,
+	}
+	grantID, err := db.OAuth.UpsertActiveGrantAndCreateAuthorizationCode(ctx, first, firstPermissions, firstCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grantID != first.ID {
+		t.Fatalf("initial upsert grant id=%q want %q", grantID, first.ID)
+	}
+
+	second := first
+	second.ID = "grant-upsert-second"
+	second.OIDCScopes = []string{"email", "openid"}
+	second.CreatedAt = 1200
+	secondCode := firstCode
+	secondCode.CodeHash = "grant-upsert-second-code"
+	secondCode.OIDCScopes = append([]string(nil), second.OIDCScopes...)
+	secondCode.CreatedAt = 1200
+	grantID, err = db.OAuth.UpsertActiveGrantAndCreateAuthorizationCode(ctx, second, secondPermissions, secondCode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if grantID != first.ID {
+		t.Fatalf("repeated upsert grant id=%q want existing %q", grantID, first.ID)
+	}
+	grants, err := db.OAuth.ListGrantsByUser(ctx, user.ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantGrant := first
+	wantGrant.OIDCScopes = []string{"email", "openid"}
+	if !reflect.DeepEqual(grants, []model.OAuthGrant{wantGrant}) {
+		t.Fatalf("upserted grants mismatch:\n got=%#v\nwant=%#v", grants, []model.OAuthGrant{wantGrant})
+	}
+	gotPermissions, err := db.OAuth.GrantPermissionIDs(ctx, first.ID)
+	if err != nil || !reflect.DeepEqual(gotPermissions, secondPermissions) {
+		t.Fatalf("updated grant permissions=%v err=%v want=%v", gotPermissions, err, secondPermissions)
+	}
+	if err := db.OAuth.CreateGrant(ctx, second, firstPermissions); err == nil {
+		t.Fatal("direct duplicate active grant should violate the unique constraint")
+	} else {
+		assertPgCode(t, err, "23505")
+	}
+
+	failing := second
+	failing.ID = "grant-upsert-failing"
+	failing.OIDCScopes = []string{"openid"}
+	failing.CreatedAt = 1300
+	duplicateCode := secondCode
+	duplicateCode.CreatedAt = 1300
+	if _, err := db.OAuth.UpsertActiveGrantAndCreateAuthorizationCode(ctx, failing, firstPermissions, duplicateCode); err == nil {
+		t.Fatal("duplicate authorization code should fail the complete grant transaction")
+	} else {
+		assertPgCode(t, err, "23505")
+	}
+	gotPermissions, err = db.OAuth.GrantPermissionIDs(ctx, first.ID)
+	if err != nil || !reflect.DeepEqual(gotPermissions, secondPermissions) {
+		t.Fatalf("failed code insert changed grant permissions=%v err=%v want=%v", gotPermissions, err, secondPermissions)
+	}
+	gotScopes, active, err := db.OAuth.ActiveGrantOIDCScopes(ctx, first.ID, user.ID, client.ID)
+	if err != nil || !active || !reflect.DeepEqual(gotScopes, []string{"email", "openid"}) {
+		t.Fatalf("failed code insert changed grant scopes=%v active=%v err=%v", gotScopes, active, err)
+	}
+}
+
 func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()

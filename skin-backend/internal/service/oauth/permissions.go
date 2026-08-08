@@ -114,6 +114,20 @@ func permissionCodesFromIDs(ids []int64) []string {
 	return codes
 }
 
+func intersectPermissionCodes(left, right []string) []string {
+	allowed := make(map[string]bool, len(right))
+	for _, code := range right {
+		allowed[code] = true
+	}
+	out := make([]string, 0, len(left))
+	for _, code := range left {
+		if allowed[code] {
+			out = append(out, code)
+		}
+	}
+	return out
+}
+
 func permissionCodesFromBitSet(bits permission.BitSet) []string {
 	codes := make([]string, 0, len(permission.Definitions))
 	for _, def := range permission.Definitions {

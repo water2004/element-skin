@@ -103,6 +103,10 @@ func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Acto
 	}
 	permissionIDs := permissionIDsFromCodes(scopes.Permissions)
 	now := database.NowMS()
+	rawCode, codeHash, err := generateToken()
+	if err != nil {
+		return nil, err
+	}
 	grantID, err := util.GenerateUUIDNoDash()
 	if err != nil {
 		return nil, err
@@ -115,13 +119,6 @@ func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Acto
 		OIDCScopes: scopes.OIDC,
 		Status:     StatusActive,
 		CreatedAt:  now,
-	}
-	if err := s.DB.OAuth.CreateGrant(ctx, grant, permissionIDs); err != nil {
-		return nil, err
-	}
-	rawCode, codeHash, err := generateToken()
-	if err != nil {
-		return nil, err
 	}
 	code := model.OAuthAuthorizationCode{
 		CodeHash:            codeHash,
@@ -136,7 +133,7 @@ func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Acto
 		ExpiresAt:           now + int64(authorizationCodeTTL/time.Millisecond),
 		CreatedAt:           now,
 	}
-	if err := s.DB.OAuth.CreateAuthorizationCode(ctx, code, permissionIDs); err != nil {
+	if _, err := s.DB.OAuth.UpsertActiveGrantAndCreateAuthorizationCode(ctx, grant, permissionIDs, code); err != nil {
 		return nil, err
 	}
 	redirectURL, err := authorizationRedirect(req.RedirectURI, rawCode, req.State)

@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"element-skin/backend/internal/database"
+	permissiondb "element-skin/backend/internal/database/permission"
+	"element-skin/backend/internal/model"
+	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/testutil"
 )
 
@@ -22,6 +25,7 @@ func TestInitSQLContainsExpectedTablesConstraintsIndexesAndSeeds(t *testing.T) {
 		"UNIQUE(username, endpoint_id)",
 		"idx_profiles_user_id",
 		"idx_site_refresh_expires",
+		"idx_delegated_permission_grants_active_user_client",
 		"('site_name', '皮肤站')",
 		"ON CONFLICT (key) DO NOTHING",
 	}
@@ -29,6 +33,82 @@ func TestInitSQLContainsExpectedTablesConstraintsIndexesAndSeeds(t *testing.T) {
 		if !strings.Contains(database.InitSQL, fragment) {
 			t.Fatalf("InitSQL missing fragment %q", fragment)
 		}
+	}
+}
+
+func TestInitConsolidatesDuplicateActiveOAuthGrantsAndInvalidatesOldCredentialsExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "schema-duplicate-grants@test.com", "Password123", "SchemaDuplicateGrants", false)
+	permissionID := int64(permission.MustDefinitionByCode("account.read.self").ID)
+	client := model.OAuthClient{
+		ID:          "schema-duplicate-grant-client",
+		OwnerUserID: user.ID,
+		Name:        "Schema duplicate grant client",
+		RedirectURI: "https://schema-duplicate-grants.example/callback",
+		ClientType:  "public",
+		Status:      "active",
+		CreatedAt:   1000,
+		UpdatedAt:   1000,
+	}
+	if err := db.OAuth.CreateClient(ctx, client, []int64{permissionID}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `DROP INDEX idx_delegated_permission_grants_active_user_client`); err != nil {
+		t.Fatal(err)
+	}
+	oldGrant := model.OAuthGrant{ID: "schema-old-active-grant", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1100}
+	newGrant := model.OAuthGrant{ID: "schema-new-active-grant", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1200}
+	for _, grant := range []model.OAuthGrant{oldGrant, newGrant} {
+		if err := db.OAuth.CreateGrant(ctx, grant, []int64{permissionID}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.OAuth.CreateRefreshToken(ctx, model.OAuthToken{TokenHash: "schema-old-refresh", ClientID: client.ID, UserID: user.ID, GrantID: oldGrant.ID, ExpiresAt: 9999, CreatedAt: 1300}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.OAuth.CreateAuthorizationCode(ctx, model.OAuthAuthorizationCode{
+		CodeHash:            "schema-old-code",
+		ClientID:            client.ID,
+		UserID:              user.ID,
+		GrantID:             oldGrant.ID,
+		RedirectURI:         client.RedirectURI,
+		CodeChallenge:       "challenge",
+		CodeChallengeMethod: "S256",
+		ExpiresAt:           9999,
+		CreatedAt:           1300,
+	}, []int64{permissionID}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var oldStatus, newStatus string
+	var oldRevokedAt, refreshRevokedAt *int64
+	if err := db.Pool.QueryRow(ctx, `SELECT status, revoked_at FROM delegated_permission_grants WHERE id=$1`, oldGrant.ID).Scan(&oldStatus, &oldRevokedAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT status FROM delegated_permission_grants WHERE id=$1`, newGrant.ID).Scan(&newStatus); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT revoked_at FROM oauth_refresh_tokens WHERE token_hash='schema-old-refresh'`).Scan(&refreshRevokedAt); err != nil {
+		t.Fatal(err)
+	}
+	var oldCodeCount, activeCount int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM oauth_authorization_codes WHERE code_hash='schema-old-code'`).Scan(&oldCodeCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM delegated_permission_grants WHERE user_id=$1 AND client_id=$2 AND status='active'`, user.ID, client.ID).Scan(&activeCount); err != nil {
+		t.Fatal(err)
+	}
+	if oldStatus != "revoked" || oldRevokedAt == nil || *oldRevokedAt <= 0 || refreshRevokedAt == nil || *refreshRevokedAt != *oldRevokedAt || oldCodeCount != 0 || newStatus != "active" || activeCount != 1 {
+		t.Fatalf("grant migration mismatch: old_status=%q old_revoked_at=%v refresh_revoked_at=%v old_codes=%d new_status=%q active=%d", oldStatus, oldRevokedAt, refreshRevokedAt, oldCodeCount, newStatus, activeCount)
+	}
+	third := newGrant
+	third.ID = "schema-third-active-grant"
+	if err := db.OAuth.CreateGrant(ctx, third, []int64{permissionID}); err == nil {
+		t.Fatal("restored unique index should reject another active grant")
 	}
 }
 

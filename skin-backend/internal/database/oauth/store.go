@@ -22,6 +22,16 @@ type queryer interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 }
 
+type queryRower interface {
+	queryer
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+type transactionQueryer interface {
+	queryRower
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}
+
 func insertClientPermissions(ctx context.Context, q queryer, clientID string, permissionIDs []int64, createdAt int64) error {
 	for _, permissionID := range permissionIDs {
 		if _, err := q.Exec(ctx, `
@@ -44,6 +54,30 @@ func insertGrantPermissions(ctx context.Context, q queryer, grantID string, perm
 		}
 	}
 	return nil
+}
+
+func upsertActiveGrant(ctx context.Context, q queryRower, grant model.OAuthGrant, permissionIDs []int64) (string, error) {
+	var grantID string
+	err := q.QueryRow(ctx, `
+		INSERT INTO delegated_permission_grants
+			(id, user_id, subject_id, client_id, oidc_scopes, status, created_at, revoked_at)
+		VALUES ($1,$2,$3,$4,$5,'active',$6,NULL)
+		ON CONFLICT (user_id, client_id) WHERE status='active'
+		DO UPDATE SET
+			subject_id=EXCLUDED.subject_id,
+			oidc_scopes=EXCLUDED.oidc_scopes
+		RETURNING id
+	`, grant.ID, grant.UserID, grant.SubjectID, grant.ClientID, nonNilStrings(grant.OIDCScopes), grant.CreatedAt).Scan(&grantID)
+	if err != nil {
+		return "", err
+	}
+	if _, err := q.Exec(ctx, `DELETE FROM delegated_grant_permissions WHERE grant_id=$1`, grantID); err != nil {
+		return "", err
+	}
+	if err := insertGrantPermissions(ctx, q, grantID, permissionIDs, grant.CreatedAt); err != nil {
+		return "", err
+	}
+	return grantID, nil
 }
 
 func scanClient(row rowScanner) (*model.OAuthClient, error) {

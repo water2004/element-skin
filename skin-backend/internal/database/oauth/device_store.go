@@ -80,7 +80,41 @@ func (s Store) ConsumeApprovedDeviceCode(ctx context.Context, deviceCodeHash str
 		return nil, nil, err
 	}
 	defer tx.Rollback(ctx)
-	row := tx.QueryRow(ctx, `
+	code, permissions, err := consumeApprovedDeviceCode(ctx, tx, deviceCodeHash, consumedAt)
+	if err != nil || code == nil {
+		return code, permissions, err
+	}
+	return code, permissions, tx.Commit(ctx)
+}
+
+func (s Store) ConsumeApprovedDeviceCodeAndUpsertGrant(ctx context.Context, deviceCodeHash string, consumedAt int64, grant model.OAuthGrant) (*model.OAuthDeviceCode, []int64, string, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	defer tx.Rollback(ctx)
+	code, permissionIDs, err := consumeApprovedDeviceCode(ctx, tx, deviceCodeHash, consumedAt)
+	if err != nil || code == nil {
+		return code, permissionIDs, "", err
+	}
+	if code.UserID == nil || code.SubjectID == nil {
+		return code, permissionIDs, "", nil
+	}
+	grant.UserID = *code.UserID
+	grant.SubjectID = *code.SubjectID
+	grant.ClientID = code.ClientID
+	grantID, err := upsertActiveGrant(ctx, tx, grant, permissionIDs)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, nil, "", err
+	}
+	return code, permissionIDs, grantID, nil
+}
+
+func consumeApprovedDeviceCode(ctx context.Context, q transactionQueryer, deviceCodeHash string, consumedAt int64) (*model.OAuthDeviceCode, []int64, error) {
+	row := q.QueryRow(ctx, `
 		UPDATE oauth_device_codes
 		SET status='consumed', consumed_at=$2
 		WHERE device_code_hash=$1 AND status='approved' AND consumed_at IS NULL AND expires_at>$2
@@ -93,11 +127,11 @@ func (s Store) ConsumeApprovedDeviceCode(ctx context.Context, deviceCodeHash str
 	if err != nil {
 		return nil, nil, err
 	}
-	permissions, err := deviceCodePermissionIDs(ctx, tx, deviceCodeHash)
+	permissions, err := deviceCodePermissionIDs(ctx, q, deviceCodeHash)
 	if err != nil {
 		return nil, nil, err
 	}
-	return code, permissions, tx.Commit(ctx)
+	return code, permissions, nil
 }
 
 func (s Store) getDeviceCode(ctx context.Context, column, value string) (*model.OAuthDeviceCode, []int64, error) {

@@ -162,31 +162,25 @@ func (s Service) deviceCodeToken(ctx context.Context, req TokenRequest) (TokenRe
 	default:
 		return TokenResponse{}, oauthError("invalid_grant")
 	}
-	consumed, consumedPermissionIDs, err := s.DB.OAuth.ConsumeApprovedDeviceCode(ctx, deviceHash, now)
-	if err != nil {
-		return TokenResponse{}, err
-	}
-	if consumed == nil || consumed.UserID == nil || consumed.SubjectID == nil {
-		return TokenResponse{}, oauthError("invalid_grant")
-	}
-	codes := permissionCodesFromIDs(consumedPermissionIDs)
-	if len(codes) == 0 {
-		codes = permissionCodesFromIDs(permissionIDs)
-	}
 	grantID, err := util.GenerateUUIDNoDash()
 	if err != nil {
 		return TokenResponse{}, err
 	}
 	grant := model.OAuthGrant{
 		ID:        grantID,
-		UserID:    *consumed.UserID,
-		SubjectID: *consumed.SubjectID,
-		ClientID:  client.ID,
 		Status:    StatusActive,
 		CreatedAt: now,
 	}
-	if err := s.DB.OAuth.CreateGrant(ctx, grant, permissionIDsFromCodes(codes)); err != nil {
+	consumed, consumedPermissionIDs, grantID, err := s.DB.OAuth.ConsumeApprovedDeviceCodeAndUpsertGrant(ctx, deviceHash, now, grant)
+	if err != nil {
 		return TokenResponse{}, err
+	}
+	if consumed == nil || consumed.UserID == nil || consumed.SubjectID == nil || grantID == "" {
+		return TokenResponse{}, oauthError("invalid_grant")
+	}
+	codes := permissionCodesFromIDs(consumedPermissionIDs)
+	if len(codes) == 0 {
+		codes = permissionCodesFromIDs(permissionIDs)
 	}
 	return s.issueTokens(ctx, client.ID, *consumed.UserID, grantID, codes, nil, "")
 }

@@ -19,7 +19,7 @@ func (s Service) exchangeAuthorizationCode(ctx context.Context, req TokenRequest
 		return TokenResponse{}, err
 	}
 	codeHash := util.HashRefreshToken(req.Code)
-	code, _, err := s.DB.OAuth.ConsumeAuthorizationCode(ctx, codeHash, client.ID, req.RedirectURI, database.NowMS())
+	code, codePermissionIDs, err := s.DB.OAuth.ConsumeAuthorizationCode(ctx, codeHash, client.ID, req.RedirectURI, database.NowMS())
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -29,14 +29,16 @@ func (s Service) exchangeAuthorizationCode(ctx context.Context, req TokenRequest
 	if !validPKCE(req.CodeVerifier, code.CodeChallenge) {
 		return TokenResponse{}, badRequest("invalid code_verifier")
 	}
-	codes, err := s.activeGrantPermissionCodes(ctx, code.GrantID, code.UserID, client.ID)
+	activeCodes, err := s.activeGrantPermissionCodes(ctx, code.GrantID, code.UserID, client.ID)
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	oidcScopes, active, err := s.DB.OAuth.ActiveGrantOIDCScopes(ctx, code.GrantID, code.UserID, client.ID)
+	grantOIDCScopes, active, err := s.DB.OAuth.ActiveGrantOIDCScopes(ctx, code.GrantID, code.UserID, client.ID)
 	if err != nil {
 		return TokenResponse{}, err
 	}
+	codes := intersectPermissionCodes(permissionCodesFromIDs(codePermissionIDs), activeCodes)
+	oidcScopes := intersectOIDCScopes(code.OIDCScopes, grantOIDCScopes)
 	if !active || (len(codes) == 0 && len(oidcScopes) == 0) {
 		return TokenResponse{}, badRequest("invalid authorization code")
 	}

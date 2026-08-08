@@ -561,6 +561,42 @@ CREATE INDEX IF NOT EXISTS idx_subject_roles_role ON subject_roles (role_id, sub
 CREATE INDEX IF NOT EXISTS idx_subject_permission_overrides_permission ON subject_permission_overrides (permission_id, subject_id);
 CREATE INDEX IF NOT EXISTS idx_session_permission_policies_permission ON session_permission_policies (permission_id, session_kind, entrypoint);
 CREATE INDEX IF NOT EXISTS idx_delegated_clients_owner ON delegated_clients (owner_user_id);
+
+-- A user and an OAuth client share one logical active authorization. Keep the
+-- newest legacy row before installing the constraint, and invalidate database
+-- credentials that still point at the superseded grants.
+WITH ranked_active_grants AS (
+    SELECT id,
+           ROW_NUMBER() OVER (
+               PARTITION BY user_id, client_id
+               ORDER BY created_at DESC, id DESC
+           ) AS position
+    FROM delegated_permission_grants
+    WHERE status = 'active'
+)
+UPDATE delegated_permission_grants AS g
+SET status = 'revoked',
+    revoked_at = COALESCE(
+        g.revoked_at,
+        (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+    )
+FROM ranked_active_grants AS ranked
+WHERE g.id = ranked.id AND ranked.position > 1;
+
+UPDATE oauth_refresh_tokens AS token
+SET revoked_at = g.revoked_at
+FROM delegated_permission_grants AS g
+WHERE token.grant_id = g.id
+  AND g.status = 'revoked'
+  AND token.revoked_at IS NULL;
+
+DELETE FROM oauth_authorization_codes AS code
+USING delegated_permission_grants AS g
+WHERE code.grant_id = g.id AND g.status = 'revoked';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_delegated_permission_grants_active_user_client
+    ON delegated_permission_grants (user_id, client_id)
+    WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_delegated_permission_grants_user_client ON delegated_permission_grants (user_id, client_id, status);
 CREATE INDEX IF NOT EXISTS idx_delegated_permission_grants_active_created ON delegated_permission_grants (created_at, id) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_client_user ON oauth_authorization_codes (client_id, user_id, expires_at);

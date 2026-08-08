@@ -27,6 +27,22 @@ func (s Store) CreateGrant(ctx context.Context, grant model.OAuthGrant, permissi
 	return tx.Commit(ctx)
 }
 
+func (s Store) UpsertActiveGrant(ctx context.Context, grant model.OAuthGrant, permissionIDs []int64) (string, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+	grantID, err := upsertActiveGrant(ctx, tx, grant, permissionIDs)
+	if err != nil {
+		return "", err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", err
+	}
+	return grantID, nil
+}
+
 func (s Store) RevokeGrant(ctx context.Context, grantID, userID string, revokedAt int64) (bool, error) {
 	tag, err := s.Pool.Exec(ctx, `
 		UPDATE delegated_permission_grants
