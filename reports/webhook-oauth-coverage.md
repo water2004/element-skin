@@ -12,17 +12,18 @@
 - OAuth 应用 API wrapper；
 - 第三方应用列表以及独立创建、修改页面；
 - 权限变化对可选 Webhook 事件和提交 payload 的影响。
+- OAuth 创建、读取、更新、删除与 grant 读取、撤销权限的独立组合。
 
 ## 2. 后端结果
 
 全仓命令：
 
 ```powershell
-go test ./... -coverprofile=<system-temp>/element-skin-backend-full-coverage.out
+go test -p 2 ./... -coverprofile=<system-temp>/element-skin-backend-full-coverage.out
 go tool cover -func=<system-temp>/element-skin-backend-full-coverage.out
 ```
 
-结果：全部包通过，全仓 statement coverage 为 **82.5%**。
+结果：全部包通过，全仓 statement coverage 为 **82.6%**。
 
 本次相关包在全仓覆盖中的结果：
 
@@ -30,25 +31,25 @@ go tool cover -func=<system-temp>/element-skin-backend-full-coverage.out
 | --- | ---: |
 | `internal/webhook` | 100.0% |
 | `internal/database/webhook` | 78.4% |
-| `internal/service/webhook` | 81.9% |
+| `internal/service/webhook` | 81.8% |
 | `internal/httpapi/oauth` | 87.5% |
-| `internal/service/oauth` | 76.6% |
+| `internal/service/oauth` | 77.4% |
 
 使用 `-coverpkg` 让 HTTP、service 和 database 测试共同计入本次相关实现后，目标包组合 statement
-coverage 为 **83.8%**。关键函数结果包括：
+coverage 为 **81.8%**。该结果使用 atomic profile，并按源码 block 合并各测试包的覆盖数据。关键函数结果包括：
 
 | 函数 | Statements |
 | --- | ---: |
 | `prepareWebhookEndpoints` | 87.5% |
 | `validateWebhookEventTypes` | 100.0% |
-| `WebhookEventCatalog` | 88.9% |
+| `WebhookEventCatalog` | 100.0% |
 | `DispatchBatch` | 84.0% |
 | `DeliverBatch` | 86.4% |
 | `deliver` | 80.5% |
 | `endpointAuthorized` | 82.1% |
 | `retryOrDead` | 80.0% |
 | `retryDelay` | 90.9% |
-| `sign`、`truncateDetail`、`publicIP` | 100.0% |
+| `sign`、`truncateDetail`、`IsPublicIP` | 100.0% |
 
 `cmd/webhook-worker` 是信号、配置和依赖装配入口，没有独立业务分支，当前显示 0%；真正的 worker
 行为位于 `internal/service/webhook`，覆盖率为 81.9%。
@@ -70,14 +71,16 @@ npm run test:coverage:oauth
 
 | 指标 | 结果 | 阈值 |
 | --- | ---: | ---: |
-| Statements | 83.72% | 80% |
-| Branches | 79.54% | 75% |
-| Functions | 81.20% | 80% |
-| Lines | 87.36% | 80% |
+| Statements | 84.61% | 80% |
+| Branches | 81.01% | 75% |
+| Functions | 83.22% | 80% |
+| Lines | 88.29% | 80% |
 
 其中 `oauthAppFormState.ts` 的 statements、functions、lines 为 100%，branches 为 83.33%。Vue
 页面使用真实 Vue Router 与 Element Plus 在 jsdom 中挂载，覆盖创建 payload、一次性 secret、读取编辑
 数据、endpoint 增删、secret 轮换、重新提交、删除应用、grant 撤销和编辑页跳转。
+新增权限矩阵还会精确断言只加载允许的应用或 grant 区块、隐藏无权操作，以及读取加删除权限下的
+只读应用表单。
 
 ## 4. 精确行为与失败路径
 
@@ -98,9 +101,9 @@ npm run test:coverage:oauth
 ## 5. 最终验证
 
 ```text
-go test ./...                         PASS
-go test ./... -coverprofile=...       PASS, 82.5% statements
-npm run test                          PASS, 24 files / 280 tests
+go test -p 2 ./...                    PASS
+go test -p 2 ./... -coverprofile=...  PASS, 82.6% statements
+npm run test                          PASS, 24 files / 283 tests
 npm run build                         PASS
 npm run test:coverage:oauth           PASS
 ```
