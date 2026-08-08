@@ -113,6 +113,20 @@ table growth and autovacuum behavior require a separate soak test. The worker
 opens a separate five-connection database pool, matching the production worker
 process instead of borrowing connections from the site pool.
 
+To profile Worker SQL calls without changing production logging or exposing a
+pprof endpoint, run the opt-in traced worker benchmark:
+
+```powershell
+$env:WEBHOOK_SQL_PROFILE_ENABLE='1'
+$env:WEBHOOK_SQL_PROFILE_EVENTS='1000'
+go test ./cmd/loadtest -run TestWebhookWorkerSQLProfile -count=1 -v
+```
+
+It writes `../reports/webhook-worker-sql-profile.md` by default. Override the
+path with `WEBHOOK_SQL_PROFILE_REPORT`. The tracer is attached only to the
+isolated five-connection Worker pool and records query fingerprints, calls,
+errors, cumulative duration, average, P95, and maximum duration by phase.
+
 The harness uses `TEST_DATABASE_DSN`/`ADMIN_DATABASE_DSN` when set, otherwise it
 follows the same local PostgreSQL defaults as the integration tests.
 

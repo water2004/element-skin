@@ -103,14 +103,7 @@ func TestWebhookLoadImpact(t *testing.T) {
 
 	db, handler, _ := testutil.NewTestAppWithMaxConnectionsAndRedisTB(t, int32(loadConfig.MaxDBConns))
 	loadConfig.MaxDBConns = int(db.Pool.Stat().MaxConns())
-	workerDBConfig := testutil.TestConfig()
-	workerDBConfig.DatabaseDSN = db.Pool.Config().ConnConfig.ConnString()
-	workerDBConfig.MaxConnections = webhookWorkerMaxDBConns
-	workerDB, err := database.OpenExisting(t.Context(), workerDBConfig)
-	if err != nil {
-		t.Fatalf("open isolated webhook worker database pool: %v", err)
-	}
-	t.Cleanup(workerDB.Close)
+	workerDB := openWebhookLoadWorkerDB(t, db, nil)
 	if err := db.Settings.Set(t.Context(), "rate_limit_enabled", false); err != nil {
 		t.Fatalf("disable load-test auth rate limit: %v", err)
 	}
@@ -404,6 +397,7 @@ func startWebhookLoadWorker(ctx context.Context, worker webhookservice.Worker, e
 	}
 	stop := make(chan struct{})
 	var once sync.Once
+	ctx = withWebhookSQLPhase(ctx, "concurrent-worker")
 	go func() {
 		defer close(errors)
 		ticker := time.NewTicker(500 * time.Millisecond)
@@ -539,6 +533,7 @@ func seedWebhookWorkerEvents(t *testing.T, db *database.DB, seed webhookLoadSeed
 func runWebhookWorkerSustained(t *testing.T, db *database.DB, worker webhookservice.Worker, total int) time.Duration {
 	t.Helper()
 	ctx, cancel := context.WithCancel(t.Context())
+	ctx = withWebhookSQLPhase(ctx, "production-loop")
 	done := make(chan struct{})
 	start := time.Now()
 	go func() {
@@ -579,21 +574,22 @@ func runWebhookWorkerSustained(t *testing.T, db *database.DB, worker webhookserv
 
 func drainWebhookDispatch(t *testing.T, db *database.DB, worker webhookservice.Worker) int {
 	t.Helper()
+	ctx := withWebhookSQLPhase(t.Context(), "tight-dispatch")
 	batches := 0
 	for {
 		var before int
-		if err := db.Pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM webhook_events WHERE expanded_at IS NULL`).Scan(&before); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM webhook_events WHERE expanded_at IS NULL`).Scan(&before); err != nil {
 			t.Fatal(err)
 		}
 		if before == 0 {
 			return batches
 		}
-		if err := worker.DispatchBatch(t.Context()); err != nil {
+		if err := worker.DispatchBatch(ctx); err != nil {
 			t.Fatal(err)
 		}
 		batches++
 		var after int
-		if err := db.Pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM webhook_events WHERE expanded_at IS NULL`).Scan(&after); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM webhook_events WHERE expanded_at IS NULL`).Scan(&after); err != nil {
 			t.Fatal(err)
 		}
 		if after >= before {
@@ -604,21 +600,22 @@ func drainWebhookDispatch(t *testing.T, db *database.DB, worker webhookservice.W
 
 func drainWebhookDeliveries(t *testing.T, db *database.DB, worker webhookservice.Worker, total int) int {
 	t.Helper()
+	ctx := withWebhookSQLPhase(t.Context(), "tight-delivery")
 	batches := 0
 	for {
 		var succeeded int
-		if err := db.Pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM webhook_deliveries WHERE status='succeeded'`).Scan(&succeeded); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM webhook_deliveries WHERE status='succeeded'`).Scan(&succeeded); err != nil {
 			t.Fatal(err)
 		}
 		if succeeded == total {
 			return batches
 		}
-		if err := worker.DeliverBatch(t.Context()); err != nil {
+		if err := worker.DeliverBatch(ctx); err != nil {
 			t.Fatal(err)
 		}
 		batches++
 		var nextSucceeded int
-		if err := db.Pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM webhook_deliveries WHERE status='succeeded'`).Scan(&nextSucceeded); err != nil {
+		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM webhook_deliveries WHERE status='succeeded'`).Scan(&nextSucceeded); err != nil {
 			t.Fatal(err)
 		}
 		if nextSucceeded <= succeeded {

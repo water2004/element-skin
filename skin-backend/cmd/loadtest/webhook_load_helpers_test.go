@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"math"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 func TestWebhookLoadConfigUsesBalancedDefaults(t *testing.T) {
@@ -171,6 +175,99 @@ func TestWebhookLoadReportPathUsesExactOverride(t *testing.T) {
 	t.Setenv("WEBHOOK_LOADTEST_REPORT", "reports/custom-webhook-load.md")
 	if got := webhookLoadReportPath(); got != "reports/custom-webhook-load.md" {
 		t.Fatalf("webhook report path=%q", got)
+	}
+}
+
+func TestWebhookSQLProfileNamesAndReportAreExact(t *testing.T) {
+	queries := map[string]string{
+		"SELECT id FROM webhook_events WHERE expanded_at IS NULL ORDER BY id":                                    "events.list_pending",
+		"SELECT endpoint.id FROM webhook_endpoint_events AS subscription JOIN webhook_endpoints AS endpoint":     "endpoints.list_subscribed",
+		"SELECT permission_id FROM delegated_client_permissions WHERE client_id=$1 ORDER BY permission_id":       "permissions.client_requested",
+		"SELECT id FROM delegated_permission_grants WHERE user_id=$1 AND client_id=$2 AND status='active'":       "grants.active_by_user_client",
+		"SELECT EXISTS(SELECT 1 FROM permission_subjects WHERE id=$1)":                                           "permissions.ensure_user_subject",
+		"SELECT rp.permission_id FROM subject_roles sr JOIN role_permissions rp ON rp.role_id=sr.role_id":        "permissions.subject_roles",
+		"SELECT spo.permission_id FROM subject_permission_overrides spo WHERE spo.subject_id=$1":                 "permissions.subject_overrides",
+		"SELECT spp.permission_id FROM session_permission_policies spp WHERE spp.session_kind=$1":                "permissions.session_policy",
+		"SELECT gp.permission_id FROM delegated_permission_grants g JOIN delegated_grant_permissions gp ON TRUE": "permissions.delegation_policy",
+		"INSERT INTO webhook_deliveries (id) VALUES ($1)":                                                        "deliveries.insert",
+		"UPDATE webhook_events SET expanded_at=$2 WHERE id=$1":                                                   "events.complete_expansion",
+		"WITH picked AS (SELECT id FROM webhook_deliveries) UPDATE webhook_deliveries SET status='processing'":   "deliveries.claim_due",
+		"UPDATE webhook_deliveries SET status='succeeded' WHERE id=$1":                                           "deliveries.complete",
+		"begin":                    "transaction.begin",
+		"SELECT current_timestamp": "other: SELECT current_timestamp",
+	}
+	for query, want := range queries {
+		if got := webhookSQLQueryName(query); got != want {
+			t.Fatalf("query name=%q want=%q query=%q", got, want, query)
+		}
+	}
+
+	report := webhookSQLProfileReport(
+		100,
+		webhookWorkerResult{
+			DispatchDuration:  200 * time.Millisecond,
+			DeliveryDuration:  400 * time.Millisecond,
+			SustainedDuration: 2 * time.Second,
+		},
+		[]webhookSQLTraceStat{{
+			Phase:   "tight-dispatch",
+			Query:   "permissions.client_requested",
+			Calls:   100,
+			Total:   500 * time.Millisecond,
+			Average: 5 * time.Millisecond,
+			P95:     8 * time.Millisecond,
+			Maximum: 10 * time.Millisecond,
+		}},
+		time.Date(2026, time.August, 8, 23, 30, 0, 0, time.FixedZone("CST", 8*60*60)),
+	)
+	for _, fragment := range []string{
+		"- 生成时间：`2026-08-08T23:30:00+08:00`",
+		"事件：`100`；Worker 独立数据库连接池：`5`",
+		"| `tight-dispatch` | `permissions.client_requested` | 100 | 500.0ms | 5.0ms | 8.0ms | 10.0ms | 0 |",
+	} {
+		if !strings.Contains(report, fragment) {
+			t.Fatalf("SQL profile report missing %q:\n%s", fragment, report)
+		}
+	}
+}
+
+func TestWebhookSQLTracerRecordsExactPhaseQueryAndError(t *testing.T) {
+	times := []time.Time{
+		time.Unix(0, 100*time.Millisecond.Nanoseconds()),
+		time.Unix(0, 107*time.Millisecond.Nanoseconds()),
+	}
+	timeIndex := 0
+	tracer := &webhookSQLTracer{
+		stats: make(map[string]*webhookSQLTraceStat),
+		now: func() time.Time {
+			value := times[timeIndex]
+			timeIndex++
+			return value
+		},
+	}
+	ctx := withWebhookSQLPhase(context.Background(), "profile-phase")
+	ctx = tracer.TraceQueryStart(ctx, nil, pgx.TraceQueryStartData{
+		SQL: "SELECT permission_id FROM delegated_client_permissions WHERE client_id=$1",
+	})
+	tracer.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{Err: errors.New("profile error")})
+
+	rows := tracer.Snapshot()
+	if len(rows) != 1 {
+		t.Fatalf("SQL trace rows=%#v want exactly one", rows)
+	}
+	row := rows[0]
+	if row.Phase != "profile-phase" || row.Query != "permissions.client_requested" || row.Calls != 1 || row.Errors != 1 {
+		t.Fatalf("SQL trace row=%#v", row)
+	}
+	if row.Total != 7*time.Millisecond || row.Average != row.Total || row.P95 != row.Total || row.Maximum != row.Total {
+		t.Fatalf("SQL trace durations=%#v", row)
+	}
+}
+
+func TestWebhookSQLProfileReportPathUsesExactOverride(t *testing.T) {
+	t.Setenv("WEBHOOK_SQL_PROFILE_REPORT", "reports/custom-webhook-sql-profile.md")
+	if got := webhookSQLProfileReportPath(); got != "reports/custom-webhook-sql-profile.md" {
+		t.Fatalf("webhook SQL profile path=%q", got)
 	}
 }
 
