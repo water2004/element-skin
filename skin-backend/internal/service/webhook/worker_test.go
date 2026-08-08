@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -345,18 +344,5 @@ func TestWorkerConstructionCancellationAndSafetyHelpersExactly(t *testing.T) {
 	longDetail := strings.Repeat("x", 600)
 	if got := truncateDetail(longDetail); len(got) != 500 || got != longDetail[:500] {
 		t.Fatalf("truncated detail length=%d", len(got))
-	}
-}
-
-func TestPublicIPRejectsEveryPrivateWebhookAddressClassExactly(t *testing.T) {
-	for _, raw := range []string{"127.0.0.1", "10.0.0.1", "172.16.0.1", "192.168.0.1", "169.254.1.1", "224.0.0.1", "0.0.0.0", "::1", "fc00::1", "fe80::1"} {
-		if publicIP(net.ParseIP(raw)) {
-			t.Fatalf("private or special address %s accepted", raw)
-		}
-	}
-	for _, raw := range []string{"1.1.1.1", "8.8.8.8", "2606:4700:4700::1111"} {
-		if !publicIP(net.ParseIP(raw)) {
-			t.Fatalf("public address %s rejected", raw)
-		}
 	}
 }

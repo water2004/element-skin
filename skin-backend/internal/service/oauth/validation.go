@@ -7,6 +7,8 @@ import (
 	"net"
 	"net/url"
 	"strings"
+
+	corewebhook "element-skin/backend/internal/webhook"
 )
 
 func validPKCE(verifier, challenge string) bool {
@@ -27,20 +29,10 @@ func validWebhookURL(raw string) bool {
 	if hostname == "" || hostname == "localhost" || strings.HasSuffix(hostname, ".localhost") {
 		return false
 	}
-	if ip := net.ParseIP(hostname); ip != nil && !publicWebhookIP(ip) {
+	if ip := net.ParseIP(hostname); ip != nil && !corewebhook.IsPublicIP(ip) {
 		return false
 	}
 	return true
-}
-
-func publicWebhookIP(ip net.IP) bool {
-	return ip != nil &&
-		!ip.IsLoopback() &&
-		!ip.IsPrivate() &&
-		!ip.IsLinkLocalUnicast() &&
-		!ip.IsLinkLocalMulticast() &&
-		!ip.IsMulticast() &&
-		!ip.IsUnspecified()
 }
 
 func validHTTPURL(raw string) bool {

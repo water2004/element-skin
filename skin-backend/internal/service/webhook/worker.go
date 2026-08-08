@@ -357,7 +357,7 @@ func newSafeHTTPClient() *http.Client {
 			return nil, err
 		}
 		for _, address := range addresses {
-			if !publicIP(address.IP) {
+			if !corewebhook.IsPublicIP(address.IP) {
 				continue
 			}
 			connection, err := dialer.DialContext(ctx, network, net.JoinHostPort(address.IP.String(), port))
@@ -374,14 +374,4 @@ func newSafeHTTPClient() *http.Client {
 			return errors.New("webhook redirects are not followed")
 		},
 	}
-}
-
-func publicIP(ip net.IP) bool {
-	return ip != nil &&
-		!ip.IsLoopback() &&
-		!ip.IsPrivate() &&
-		!ip.IsLinkLocalUnicast() &&
-		!ip.IsLinkLocalMulticast() &&
-		!ip.IsMulticast() &&
-		!ip.IsUnspecified()
 }
