@@ -174,6 +174,8 @@ v1=hex(HMAC-SHA256(signing_secret, timestamp + "." + raw_body))
 
 当前隔离压测使用 50 并发、20 个主站数据库连接和独立的 5 连接 Worker 池。各模式先在同一轮内与关闭触发器的近似基线配对，再取变化中位数：无订阅检查降低 7.4% 写吞吐，仅写 outbox 降低 16.4%，worker 同时运行降低 18.5%，四种模式均为 0 失败。worker 相对同轮仅写 outbox 额外降低 6.5%，中位 P95 增加 0.8ms，说明外部 HTTP 已经脱离主请求，但 Worker 对同一 PostgreSQL 的查询和 I/O 竞争仍有成本。零延迟接收端下，当前生产轮询循环持续端到端吞吐为 104.7 events/s；持续事件速率超过该值会积压，需要增加 Worker 实例或调整调度。具体轮次、紧循环批处理上限和限制见 `reports/webhook-load-test.md`；这些结果用于相对比较，不作为生产 SLA。
 
+CPU、block、mutex 和 Worker SQL profile 进一步确认：生产轮询的 9.55 秒中有 8.42 秒累计阻塞在调度选择上；1000 个事件执行 18,040 次 Worker SQL，其中权限与授权查询为 12,000 次。完整证据、限制和由 profile 支持的优化顺序见 `reports/webhook-performance-profile.md`。
+
 ## 10. 数据模型
 
 - `webhook_endpoints`：endpoint URL、加密签名密钥、状态和所属 client。

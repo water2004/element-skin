@@ -347,6 +347,8 @@ Webhook 压测以同一个 profile 更新接口为负载，使用 50 并发、�
 
 在本机零延迟 `204` 接收端下，1000 个固定事件的紧循环 outbox 展开、HTTP 投递落库和组合吞吐分别为 1225.2、4678.3 和 970.9 events/s；包含当前 500ms 轮询、每批 200 个事件和 50 个投递限制的生产 Worker 持续端到端吞吐只有 104.7 events/s。Worker 同时运行相对同轮“仅写 outbox”再降低 6.5% 主站写吞吐，中位 P95 增加 0.8ms：异步拆分避免了第三方 HTTP 直接阻塞主站请求，但共享 PostgreSQL 的查询和 I/O 竞争仍存在。持续事件速率超过单 Worker 吞吐时会积压，应增加 Worker 实例或调整批次与调度策略；实际投递能力还需结合第三方网络延迟复测。完整方法、原始轮次和限制见 [`reports/webhook-load-test.md`](reports/webhook-load-test.md)。
 
+进一步的 CPU、block、mutex 和 Worker SQL profile 见 [`reports/webhook-performance-profile.md`](reports/webhook-performance-profile.md)。Profile 显示 1000 个事件会执行 18,040 次 Worker SQL，其中 12,000 次属于权限与授权路径；后续优化将以该基线复测，不以代码推断代替证据。
+
 ## 📄 许可证
 
 [MIT License](LICENSE)
