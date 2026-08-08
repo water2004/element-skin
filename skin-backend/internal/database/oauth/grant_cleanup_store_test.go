@@ -24,7 +24,7 @@ func TestDeleteRevokedGrantsDeletesOnlyExpiredRevokedRowsAndDependenciesExactly(
 		UpdatedAt:   1000,
 	}
 	permissions := permissionIDs("profile.read.owned", "notice.read.owned")
-	if err := db.OAuth.CreateClient(ctx, client, permissions); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, permissions, nil); err != nil {
 		t.Fatal(err)
 	}
 	oldRevokedAt := int64(1000)
@@ -120,7 +120,7 @@ func TestRevokeInactiveGrantsUsesRefreshCodeAndIssuanceBoundariesExactly(t *test
 			CreatedAt:   100,
 			UpdatedAt:   100,
 		}
-		if err := db.OAuth.CreateClient(ctx, client, permissions); err != nil {
+		if err := db.OAuth.CreateClient(ctx, client, permissions, nil); err != nil {
 			t.Fatal(err)
 		}
 		grant.ClientID = client.ID

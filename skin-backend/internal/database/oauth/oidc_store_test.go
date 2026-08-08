@@ -17,7 +17,7 @@ func TestOIDCPairwiseSubjectsAreStablePerClientAndIsolatedAcrossClients(t *testi
 			ID: clientID, OwnerUserID: user.ID, Name: clientID,
 			RedirectURI: "https://" + clientID + ".example/callback", ClientType: "public",
 			Status: "active", CreatedAt: 1, UpdatedAt: 1,
-		}, nil); err != nil {
+		}, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

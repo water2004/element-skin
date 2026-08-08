@@ -25,7 +25,7 @@ func TestDeviceCodeLifecyclePreservesExactFieldsPermissionsAndStates(t *testing.
 		UpdatedAt:   1000,
 	}
 	permissions := permissionIDs("account.read.self", "minecraft_profile.read.public")
-	if err := db.OAuth.CreateClient(ctx, client, permissions); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, permissions, nil); err != nil {
 		t.Fatal(err)
 	}
 	subjectID := permissiondb.SubjectIDForUser(user.ID)

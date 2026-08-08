@@ -31,7 +31,7 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 		CreatedAt:   1000,
 		UpdatedAt:   1000,
 	}
-	if err := db.OAuth.CreateClient(ctx, client, initialPermissions); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, initialPermissions, nil); err != nil {
 		t.Fatal(err)
 	}
 	var subjectKind, subjectStatus string
@@ -76,7 +76,7 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 		CreatedAt:   1500,
 		UpdatedAt:   1500,
 	}
-	if err := db.OAuth.CreateClient(ctx, otherClient, []int64{}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, otherClient, []int64{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	allClients, err := db.OAuth.ListClients(ctx, 10)
@@ -130,7 +130,7 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	client.ClientType = "public"
 	client.Status = "disabled"
 	client.UpdatedAt = 2000
-	updated, err := db.OAuth.UpdateClient(ctx, client, updatedPermissions)
+	updated, err := db.OAuth.UpdateClient(ctx, client, updatedPermissions, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +192,7 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	}
 	missingUpdate := client
 	missingUpdate.ID = "missing-client"
-	if updated, err := db.OAuth.UpdateClient(ctx, missingUpdate, updatedPermissions); err != nil || updated {
+	if updated, err := db.OAuth.UpdateClient(ctx, missingUpdate, updatedPermissions, nil); err != nil || updated {
 		t.Fatalf("UpdateClient should miss unknown client: updated=%v err=%v", updated, err)
 	}
 	if deleted, err := db.OAuth.DeleteClient(ctx, client.ID, "other-user"); err != nil || deleted {

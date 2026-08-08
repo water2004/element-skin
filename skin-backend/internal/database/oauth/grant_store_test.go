@@ -26,7 +26,7 @@ func TestUpsertActiveGrantReusesLogicalGrantAndRollsBackAuthorizationCodeFailure
 	}
 	firstPermissions := permissionIDs("account.read.self")
 	secondPermissions := permissionIDs("account.read.self", "profile.read.owned")
-	if err := db.OAuth.CreateClient(ctx, client, secondPermissions); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, secondPermissions, nil); err != nil {
 		t.Fatal(err)
 	}
 	first := model.OAuthGrant{
@@ -131,7 +131,7 @@ func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 		CreatedAt:   1000,
 		UpdatedAt:   1000,
 	}
-	if err := db.OAuth.CreateClient(ctx, client, clientPermissions); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, clientPermissions, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -336,7 +336,7 @@ func TestActiveGrantPermissionIDsIntersectsActiveClientPermissionsExactly(t *tes
 		CreatedAt:   1000,
 		UpdatedAt:   1000,
 	}
-	if err := db.OAuth.CreateClient(ctx, client, clientPermissions); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, clientPermissions, nil); err != nil {
 		t.Fatal(err)
 	}
 	grant := model.OAuthGrant{

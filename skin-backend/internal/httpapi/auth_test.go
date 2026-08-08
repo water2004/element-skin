@@ -514,7 +514,7 @@ func createActiveOAuthClientForAuthTest(t *testing.T, db *database.DB, ownerUser
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := db.OAuth.CreateClient(t.Context(), client, permissionIDs); err != nil {
+	if err := db.OAuth.CreateClient(t.Context(), client, permissionIDs, nil); err != nil {
 		t.Fatal(err)
 	}
 	return id

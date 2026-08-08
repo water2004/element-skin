@@ -21,7 +21,7 @@ func TestOAuthCredentialLifecycleStorePrimitivesTargetExactClientAndGrant(t *tes
 		{ID: "lifecycle-client-b", OwnerUserID: owner.ID, Name: "Lifecycle B", RedirectURI: "https://b.example/callback", ClientType: "confidential", SecretHash: "secret-b", Status: "active", CreatedAt: 1100, UpdatedAt: 1100},
 	}
 	for _, client := range clients {
-		if err := db.OAuth.CreateClient(ctx, client, permissionSet); err != nil {
+		if err := db.OAuth.CreateClient(ctx, client, permissionSet, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

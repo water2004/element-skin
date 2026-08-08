@@ -51,7 +51,7 @@ func TestInitConsolidatesDuplicateActiveOAuthGrantsAndInvalidatesOldCredentialsE
 		CreatedAt:   1000,
 		UpdatedAt:   1000,
 	}
-	if err := db.OAuth.CreateClient(ctx, client, []int64{permissionID}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, []int64{permissionID}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `DROP INDEX idx_delegated_permission_grants_active_user_client`); err != nil {

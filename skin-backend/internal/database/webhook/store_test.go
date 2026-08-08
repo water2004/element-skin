@@ -36,7 +36,7 @@ func TestWebhookOutboxTriggerExpansionClaimAndCompletionLifecycleExactly(t *test
 		CreatedAt:        1000,
 		UpdatedAt:        1000,
 	}
-	if err := db.OAuth.CreateClientWithEndpoints(ctx, client, []int64{profileReadID}, []model.WebhookEndpoint{endpoint}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, []int64{profileReadID}, []model.WebhookEndpoint{endpoint}); err != nil {
 		t.Fatal(err)
 	}
 	storedEndpoints, err := db.Webhooks.ListEndpointsByClient(ctx, client.ID)

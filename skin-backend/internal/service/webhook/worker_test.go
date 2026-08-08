@@ -48,7 +48,7 @@ func TestWorkerDispatchesAndSignsTargetedGrantEventExactly(t *testing.T) {
 	permissionID := int64(permission.MustDefinitionByCode("oauth_grant.read.owned").ID)
 	client := model.OAuthClient{ID: "worker-grant-client", OwnerUserID: user.ID, Name: "Worker grant client", ClientType: "public", Status: "active", CreatedAt: 1000, UpdatedAt: 1000}
 	endpoint := model.WebhookEndpoint{ID: "wh_worker_grant", ClientID: client.ID, URL: server.URL, SecretCiphertext: ciphertext, Status: "active", EventTypes: []string{"oauth_grant.revoked"}, CreatedAt: 1000, UpdatedAt: 1000}
-	if err := db.OAuth.CreateClientWithEndpoints(ctx, client, []int64{permissionID}, []model.WebhookEndpoint{endpoint}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, []int64{permissionID}, []model.WebhookEndpoint{endpoint}); err != nil {
 		t.Fatal(err)
 	}
 	grant := model.OAuthGrant{ID: "worker-target-grant", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1100}
@@ -114,7 +114,7 @@ func TestWorkerRechecksDelegatedPermissionBeforeDeliveryAndMarksStaleEventDeadEx
 	profileReadID := int64(permission.MustDefinitionByCode("profile.read.owned").ID)
 	client := model.OAuthClient{ID: "worker-permission-client", OwnerUserID: user.ID, Name: "Worker permission client", ClientType: "public", Status: "active", CreatedAt: 1000, UpdatedAt: 1000}
 	endpoint := model.WebhookEndpoint{ID: "wh_worker_permission", ClientID: client.ID, URL: server.URL, SecretCiphertext: ciphertext, Status: "active", EventTypes: []string{"profile.updated"}, CreatedAt: 1000, UpdatedAt: 1000}
-	if err := db.OAuth.CreateClientWithEndpoints(ctx, client, []int64{profileReadID}, []model.WebhookEndpoint{endpoint}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, []int64{profileReadID}, []model.WebhookEndpoint{endpoint}); err != nil {
 		t.Fatal(err)
 	}
 	grant := model.OAuthGrant{ID: "worker-permission-grant", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1100}
@@ -165,7 +165,7 @@ func TestWorkerRetriesNonSuccessWithDeterministicBackoffExactly(t *testing.T) {
 	permissionID := int64(permission.MustDefinitionByCode("oauth_grant.read.owned").ID)
 	client := model.OAuthClient{ID: "worker-retry-client", OwnerUserID: user.ID, Name: "Worker retry client", ClientType: "public", Status: "active", CreatedAt: 1000, UpdatedAt: 1000}
 	endpoint := model.WebhookEndpoint{ID: "wh_worker_retry", ClientID: client.ID, URL: server.URL, SecretCiphertext: ciphertext, Status: "active", EventTypes: []string{"oauth_grant.revoked"}, CreatedAt: 1000, UpdatedAt: 1000}
-	if err := db.OAuth.CreateClientWithEndpoints(ctx, client, []int64{permissionID}, []model.WebhookEndpoint{endpoint}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, []int64{permissionID}, []model.WebhookEndpoint{endpoint}); err != nil {
 		t.Fatal(err)
 	}
 	grant := model.OAuthGrant{ID: "worker-retry-grant", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1100}
@@ -232,7 +232,7 @@ func TestWorkerUsesConfidentialApplicationPermissionAndStopsDisabledEndpointExac
 	definition := permission.MustDefinitionByCode("profile.read.any")
 	client := model.OAuthClient{ID: "worker-application-client", OwnerUserID: owner.ID, Name: "Worker application client", ClientType: "confidential", Status: "active", CreatedAt: 1000, UpdatedAt: 1000}
 	endpoint := model.WebhookEndpoint{ID: "wh_worker_application", ClientID: client.ID, URL: server.URL, SecretCiphertext: ciphertext, Status: "active", EventTypes: []string{"profile.created"}, CreatedAt: 1000, UpdatedAt: 1000}
-	if err := db.OAuth.CreateClientWithEndpoints(ctx, client, []int64{int64(definition.ID)}, []model.WebhookEndpoint{endpoint}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, []int64{int64(definition.ID)}, []model.WebhookEndpoint{endpoint}); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Permissions.SetPermissionOverrideForSubject(ctx, permissiondb.SubjectIDForClient(client.ID), definition, "allow", ""); err != nil {

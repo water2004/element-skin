@@ -49,7 +49,7 @@ func createAccountOAuthClient(t testing.TB, db *database.DB, ownerUserID, client
 		CreatedAt:   2000,
 		UpdatedAt:   2000,
 	}
-	if err := db.OAuth.CreateClient(context.Background(), client, accountOAuthPermissionIDs(codes...)); err != nil {
+	if err := db.OAuth.CreateClient(context.Background(), client, accountOAuthPermissionIDs(codes...), nil); err != nil {
 		t.Fatal(err)
 	}
 	return client

@@ -323,7 +323,7 @@ func seedOAuthLoadTokens(tb testing.TB, db *database.DB, redis redisstore.Store,
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := db.OAuth.CreateClient(ctx, client, permissionIDs); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, permissionIDs, nil); err != nil {
 		tb.Fatalf("seed oauth client: %v", err)
 	}
 	clientSubjectID := permissiondb.SubjectIDForClient(clientID)

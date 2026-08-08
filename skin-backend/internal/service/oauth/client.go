@@ -36,7 +36,7 @@ func (s Service) CreateClient(ctx context.Context, actor permission.Actor, input
 	if err != nil {
 		return nil, err
 	}
-	if err := s.DB.OAuth.CreateClientWithEndpoints(ctx, client, permissionIDs, endpoints); err != nil {
+	if err := s.DB.OAuth.CreateClient(ctx, client, permissionIDs, endpoints); err != nil {
 		return nil, err
 	}
 	if err := s.notifyAdminsClientSubmitted(ctx, client); err != nil {
@@ -135,7 +135,7 @@ func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clien
 	if err != nil {
 		return nil, err
 	}
-	updated, err := s.DB.OAuth.UpdateClientWithEndpoints(ctx, client, permissionIDs, endpoints)
+	updated, err := s.DB.OAuth.UpdateClient(ctx, client, permissionIDs, endpoints)
 	if err != nil {
 		return nil, err
 	}
