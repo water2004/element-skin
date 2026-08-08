@@ -172,7 +172,7 @@ v1=hex(HMAC-SHA256(signing_secret, timestamp + "." + raw_body))
 
 成功和最终失败的事件保留 7 天后由 worker 分批清理。待投递和处理中任务不参与清理。Webhook 表不作为长期审计存储。
 
-当前隔离压测在 50 并发、20 个数据库连接下测得：无订阅检查相对关闭触发器的近似基线降低 4.1% 写吞吐，仅写 outbox 降低 12.1%，worker 同时运行降低 12.3%，四种模式均为 0 失败。worker 相对仅写 outbox 的额外吞吐差异约为 0.2%，且没有进一步放大中位 P95，说明外部投递已经与主站请求有效隔离。具体轮次、延迟和本机零延迟接收端的吞吐见 `reports/webhook-load-test.md`；这些结果用于相对比较，不作为生产 SLA。
+当前隔离压测使用 50 并发、20 个主站数据库连接和独立的 5 连接 Worker 池。各模式先在同一轮内与关闭触发器的近似基线配对，再取变化中位数：无订阅检查降低 7.4% 写吞吐，仅写 outbox 降低 16.4%，worker 同时运行降低 18.5%，四种模式均为 0 失败。worker 相对同轮仅写 outbox 额外降低 6.5%，中位 P95 增加 0.8ms，说明外部 HTTP 已经脱离主请求，但 Worker 对同一 PostgreSQL 的查询和 I/O 竞争仍有成本。零延迟接收端下，当前生产轮询循环持续端到端吞吐为 104.7 events/s；持续事件速率超过该值会积压，需要增加 Worker 实例或调整调度。具体轮次、紧循环批处理上限和限制见 `reports/webhook-load-test.md`；这些结果用于相对比较，不作为生产 SLA。
 
 ## 10. 数据模型
 
@@ -199,7 +199,7 @@ v1=hex(HMAC-SHA256(signing_secret, timestamp + "." + raw_body))
 - 私网地址、localhost、HTTP、重定向和 DNS 解析结果的 SSRF 防护测试。
 - 前端 API exact request 测试、TypeScript 类型检查、生产构建以及桌面端和移动端表单检查。
 - 独立压测同一 profile 写入在关闭触发器、无订阅、仅写 outbox、worker 同时运行四种模式下的吞吐与延迟；短预热后默认四轮轮换执行顺序。
-- 以固定事件数和本机零延迟接收端分别测量 outbox 展开、HTTP 投递与状态落库吞吐，结果写入 `reports/webhook-load-test.md`。
+- 以固定事件数和本机零延迟接收端分别测量紧循环批处理能力和包含 500ms 调度间隔的生产 Worker 持续吞吐，结果写入 `reports/webhook-load-test.md`。
 
 ## 13. 待确认问题
 

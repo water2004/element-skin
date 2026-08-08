@@ -26,9 +26,10 @@ import (
 )
 
 const (
-	webhookLoadClientID   = "webhook-load-client"
-	webhookLoadEndpointID = "webhook-load-endpoint"
-	webhookLoadGrantID    = "webhook-load-grant"
+	webhookLoadClientID     = "webhook-load-client"
+	webhookLoadEndpointID   = "webhook-load-endpoint"
+	webhookLoadGrantID      = "webhook-load-grant"
+	webhookWorkerMaxDBConns = 5
 )
 
 type webhookLoadConfig struct {
@@ -57,13 +58,16 @@ type webhookWriteResult struct {
 }
 
 type webhookWorkerResult struct {
-	Events            int
-	DispatchBatches   int
-	DispatchDuration  time.Duration
-	DeliveryBatches   int
-	DeliveryDuration  time.Duration
-	ReceiverRequests  int64
-	SucceededDelivery int
+	Events                    int
+	DispatchBatches           int
+	DispatchDuration          time.Duration
+	DeliveryBatches           int
+	DeliveryDuration          time.Duration
+	ReceiverRequests          int64
+	SucceededDelivery         int
+	SustainedDuration         time.Duration
+	SustainedReceiverRequests int64
+	SustainedDelivery         int
 }
 
 type webhookLoadSeed struct {
@@ -72,12 +76,13 @@ type webhookLoadSeed struct {
 }
 
 type webhookModeAggregate struct {
-	Mode             webhookLoadMode
-	MedianRPS        float64
-	MedianP95        time.Duration
-	MedianFailurePct float64
-	MedianEventRatio float64
-	MedianDeliveries float64
+	Mode              webhookLoadMode
+	MedianRPS         float64
+	MedianRelativePct float64
+	MedianP95         time.Duration
+	MedianFailurePct  float64
+	MedianEventRatio  float64
+	MedianDeliveries  float64
 }
 
 var webhookLoadModes = []webhookLoadMode{
@@ -98,6 +103,14 @@ func TestWebhookLoadImpact(t *testing.T) {
 
 	db, handler, _ := testutil.NewTestAppWithMaxConnectionsAndRedisTB(t, int32(loadConfig.MaxDBConns))
 	loadConfig.MaxDBConns = int(db.Pool.Stat().MaxConns())
+	workerDBConfig := testutil.TestConfig()
+	workerDBConfig.DatabaseDSN = db.Pool.Config().ConnConfig.ConnString()
+	workerDBConfig.MaxConnections = webhookWorkerMaxDBConns
+	workerDB, err := database.OpenExisting(t.Context(), workerDBConfig)
+	if err != nil {
+		t.Fatalf("open isolated webhook worker database pool: %v", err)
+	}
+	t.Cleanup(workerDB.Close)
 	if err := db.Settings.Set(t.Context(), "rate_limit_enabled", false); err != nil {
 		t.Fatalf("disable load-test auth rate limit: %v", err)
 	}
@@ -125,7 +138,7 @@ func TestWebhookLoadImpact(t *testing.T) {
 		_, _ = db.Pool.Exec(context.Background(), `ALTER TABLE profiles ENABLE TRIGGER profiles_webhook_event`)
 	})
 	worker := webhookservice.Worker{
-		DB:         db,
+		DB:         workerDB,
 		Config:     testutil.TestConfig(),
 		HTTPClient: receiver.Client(),
 		Now:        time.Now,
@@ -231,7 +244,7 @@ func webhookLoadConfigFromEnv() (webhookLoadConfig, error) {
 	if err != nil {
 		return webhookLoadConfig{}, err
 	}
-	duration := time.Second
+	duration := 3 * time.Second
 	if raw := strings.TrimSpace(os.Getenv("WEBHOOK_LOADTEST_DURATION")); raw != "" {
 		duration, err = time.ParseDuration(raw)
 		if err != nil || duration <= 0 || duration > time.Minute {
@@ -327,20 +340,22 @@ func configureWebhookLoadMode(ctx context.Context, db *database.DB, mode webhook
 	if _, err := db.Pool.Exec(ctx, "ALTER TABLE profiles "+triggerState+" TRIGGER profiles_webhook_event"); err != nil {
 		return err
 	}
-	if _, err := db.Pool.Exec(ctx, `DELETE FROM webhook_events`); err != nil {
+	if _, err := db.Pool.Exec(ctx, `TRUNCATE webhook_events CASCADE`); err != nil {
 		return err
 	}
 	if _, err := db.Pool.Exec(ctx, `DELETE FROM webhook_endpoint_events WHERE endpoint_id=$1`, webhookLoadEndpointID); err != nil {
 		return err
 	}
 	if mode.Subscribed {
-		_, err := db.Pool.Exec(ctx, `
+		if _, err := db.Pool.Exec(ctx, `
 			INSERT INTO webhook_endpoint_events (endpoint_id,event_type,created_at)
 			VALUES ($1,'profile.updated',$2)
-		`, webhookLoadEndpointID, database.NowMS())
-		return err
+		`, webhookLoadEndpointID, database.NowMS()); err != nil {
+			return err
+		}
 	}
-	return nil
+	_, err := db.Pool.Exec(ctx, `VACUUM (ANALYZE) profiles`)
+	return err
 }
 
 func runWebhookWriteStep(client *http.Client, baseURL, cookie string, profileIDs []string, profileStates []bool, concurrency int, duration time.Duration) stepSummary {
@@ -450,19 +465,7 @@ func benchmarkWebhookWorker(t *testing.T, db *database.DB, worker webhookservice
 	if err := configureWebhookLoadMode(t.Context(), db, mode); err != nil {
 		t.Fatal(err)
 	}
-	prefix := fmt.Sprintf("evt_load_%d_", time.Now().UnixNano())
-	now := database.NowMS()
-	if _, err := db.Pool.Exec(t.Context(), `
-		INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
-		SELECT $1::TEXT || item::TEXT,
-		       'profile.updated',
-		       $2::TEXT,
-		       jsonb_build_object('user_id',$2::TEXT,'profile_id',$3::TEXT),
-		       $4::BIGINT + item
-		FROM generate_series(1,$5::INT) AS item
-	`, prefix, seed.User.ID, seed.ProfileIDs[0], now, total); err != nil {
-		t.Fatalf("seed worker events: %v", err)
-	}
+	seedWebhookWorkerEvents(t, db, seed, total)
 
 	dispatchStart := time.Now()
 	dispatchBatches := drainWebhookDispatch(t, db, worker)
@@ -487,14 +490,90 @@ func benchmarkWebhookWorker(t *testing.T, db *database.DB, worker webhookservice
 	if succeeded != total || received != int64(total) {
 		t.Fatalf("worker succeeded=%d received=%d want=%d", succeeded, received, total)
 	}
+
+	if err := configureWebhookLoadMode(t.Context(), db, mode); err != nil {
+		t.Fatal(err)
+	}
+	seedWebhookWorkerEvents(t, db, seed, total)
+	beforeSustainedReceiver := receiverRequests.Load()
+	sustainedDuration := runWebhookWorkerSustained(t, db, worker, total)
+	sustainedReceived := receiverRequests.Load() - beforeSustainedReceiver
+	_, sustainedSucceeded, err := webhookLoadCounts(t.Context(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sustainedSucceeded != total || sustainedReceived != int64(total) {
+		t.Fatalf("sustained worker succeeded=%d received=%d want=%d", sustainedSucceeded, sustainedReceived, total)
+	}
 	return webhookWorkerResult{
-		Events:            total,
-		DispatchBatches:   dispatchBatches,
-		DispatchDuration:  dispatchDuration,
-		DeliveryBatches:   deliveryBatches,
-		DeliveryDuration:  deliveryDuration,
-		ReceiverRequests:  received,
-		SucceededDelivery: succeeded,
+		Events:                    total,
+		DispatchBatches:           dispatchBatches,
+		DispatchDuration:          dispatchDuration,
+		DeliveryBatches:           deliveryBatches,
+		DeliveryDuration:          deliveryDuration,
+		ReceiverRequests:          received,
+		SucceededDelivery:         succeeded,
+		SustainedDuration:         sustainedDuration,
+		SustainedReceiverRequests: sustainedReceived,
+		SustainedDelivery:         sustainedSucceeded,
+	}
+}
+
+func seedWebhookWorkerEvents(t *testing.T, db *database.DB, seed webhookLoadSeed, total int) {
+	t.Helper()
+	prefix := fmt.Sprintf("evt_load_%d_", time.Now().UnixNano())
+	now := database.NowMS()
+	if _, err := db.Pool.Exec(t.Context(), `
+		INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+		SELECT $1::TEXT || item::TEXT,
+		       'profile.updated',
+		       $2::TEXT,
+		       jsonb_build_object('user_id',$2::TEXT,'profile_id',$3::TEXT),
+		       $4::BIGINT + item
+		FROM generate_series(1,$5::INT) AS item
+	`, prefix, seed.User.ID, seed.ProfileIDs[0], now, total); err != nil {
+		t.Fatalf("seed worker events: %v", err)
+	}
+}
+
+func runWebhookWorkerSustained(t *testing.T, db *database.DB, worker webhookservice.Worker, total int) time.Duration {
+	t.Helper()
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	start := time.Now()
+	go func() {
+		defer close(done)
+		worker.Run(ctx)
+	}()
+	checkTicker := time.NewTicker(50 * time.Millisecond)
+	defer checkTicker.Stop()
+	deadline := time.NewTimer(max(30*time.Second, time.Duration(total)*30*time.Millisecond))
+	defer deadline.Stop()
+	for {
+		select {
+		case <-checkTicker.C:
+			var succeeded int
+			if err := db.Pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM webhook_deliveries WHERE status='succeeded'`).Scan(&succeeded); err != nil {
+				cancel()
+				<-done
+				t.Fatal(err)
+			}
+			if succeeded == total {
+				duration := time.Since(start)
+				cancel()
+				<-done
+				return duration
+			}
+			if succeeded > total {
+				cancel()
+				<-done
+				t.Fatalf("sustained worker succeeded=%d exceeds total=%d", succeeded, total)
+			}
+		case <-deadline.C:
+			cancel()
+			<-done
+			t.Fatalf("sustained worker did not deliver %d events before deadline", total)
+		}
 	}
 }
 
@@ -549,9 +628,16 @@ func drainWebhookDeliveries(t *testing.T, db *database.DB, worker webhookservice
 }
 
 func aggregateWebhookModes(results []webhookWriteResult) []webhookModeAggregate {
+	baselineRPS := make(map[int]float64)
+	for _, result := range results {
+		if result.Mode.Name == webhookLoadModes[0].Name {
+			baselineRPS[result.Repeat] = result.Summary.SuccessRPS
+		}
+	}
 	aggregates := make([]webhookModeAggregate, 0, len(webhookLoadModes))
 	for _, mode := range webhookLoadModes {
 		var rpsValues []float64
+		var relativeValues []float64
 		var p95Values []time.Duration
 		var failureValues []float64
 		var eventRatios []float64
@@ -561,6 +647,9 @@ func aggregateWebhookModes(results []webhookWriteResult) []webhookModeAggregate 
 				continue
 			}
 			rpsValues = append(rpsValues, result.Summary.SuccessRPS)
+			if baseline := baselineRPS[result.Repeat]; baseline > 0 {
+				relativeValues = append(relativeValues, percentChange(result.Summary.SuccessRPS, baseline))
+			}
 			p95Values = append(p95Values, result.Summary.P95)
 			failureValues = append(failureValues, result.Summary.FailurePct)
 			ratio := 0.0
@@ -571,12 +660,13 @@ func aggregateWebhookModes(results []webhookWriteResult) []webhookModeAggregate 
 			deliveries = append(deliveries, float64(result.SucceededDelivery))
 		}
 		aggregates = append(aggregates, webhookModeAggregate{
-			Mode:             mode,
-			MedianRPS:        medianFloat(rpsValues),
-			MedianP95:        medianDuration(p95Values),
-			MedianFailurePct: medianFloat(failureValues),
-			MedianEventRatio: medianFloat(eventRatios),
-			MedianDeliveries: medianFloat(deliveries),
+			Mode:              mode,
+			MedianRPS:         medianFloat(rpsValues),
+			MedianRelativePct: medianFloat(relativeValues),
+			MedianP95:         medianDuration(p95Values),
+			MedianFailurePct:  medianFloat(failureValues),
+			MedianEventRatio:  medianFloat(eventRatios),
+			MedianDeliveries:  medianFloat(deliveries),
 		})
 	}
 	return aggregates
@@ -611,24 +701,26 @@ func medianDuration(values []time.Duration) time.Duration {
 func webhookLoadReport(loadConfig webhookLoadConfig, writeResults []webhookWriteResult, worker webhookWorkerResult, generatedAt time.Time) string {
 	aggregates := aggregateWebhookModes(writeResults)
 	baseline := aggregates[0]
+	workerVsEnqueue := medianWebhookModeChange(writeResults, "worker-running", "enqueue-only")
 	var report strings.Builder
 	fmt.Fprintf(&report, "# Webhook 性能影响压测报告\n\n")
 	fmt.Fprintf(&report, "- 生成时间：`%s`\n", generatedAt.Format(time.RFC3339))
 	fmt.Fprintf(&report, "- 命令：`WEBHOOK_LOADTEST_ENABLE=1 go test ./cmd/loadtest -run TestWebhookLoadImpact -count=1 -v`\n")
 	fmt.Fprintf(&report, "- 写请求：`PATCH /v2/users/me/profiles/{profile_id}`，每个并发 worker 独占一个 profile 并交替修改名称\n")
-	fmt.Fprintf(&report, "- 并发：`%d`；每阶段时长：`%s`；重复：`%d`；数据库连接池：`%d`\n", loadConfig.Concurrency, loadConfig.Duration, loadConfig.Repeats, loadConfig.MaxDBConns)
+	fmt.Fprintf(&report, "- 并发：`%d`；每阶段时长：`%s`；重复：`%d`；主站连接池：`%d`；独立 Worker 连接池：`%d`\n", loadConfig.Concurrency, loadConfig.Duration, loadConfig.Repeats, loadConfig.MaxDBConns, webhookWorkerMaxDBConns)
 	fmt.Fprintf(&report, "- Worker 固定事件数：`%d`；接收端：进程内零延迟 `204` HTTP server\n", loadConfig.WorkerEvents)
 	fmt.Fprintf(&report, "- 数据隔离：临时 PostgreSQL 数据库和独立 Redis prefix，测试结束自动清理\n")
-	fmt.Fprintf(&report, "- 预热：正式轮次前以关闭触发器模式运行最多 `250ms`，不计入结果\n\n")
+	fmt.Fprintf(&report, "- 预热：正式轮次前以关闭触发器模式运行最多 `250ms`，不计入结果\n")
+	fmt.Fprintf(&report, "- 阶段隔离：每阶段前清空 outbox 并对测试 profile 表执行 `VACUUM ANALYZE`，避免前序阶段 dead tuples 污染对照\n\n")
 
 	fmt.Fprintf(&report, "## 主站写请求影响\n\n")
-	fmt.Fprintf(&report, "| 模式 | 中位成功 req/s | 相对基线 | 中位 P95 | P95 增量 | 失败率 | event/成功请求 | worker 阶段内中位成功投递 |\n")
+	fmt.Fprintf(&report, "| 模式 | 中位成功 req/s | 相对同轮基线中位数 | 中位 P95 | P95 增量 | 失败率 | event/成功请求 | worker 阶段内中位成功投递 |\n")
 	fmt.Fprintf(&report, "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, aggregate := range aggregates {
 		fmt.Fprintf(&report, "| %s | %.1f | %+.1f%% | %s | %s | %.2f%% | %.3f | %.0f |\n",
 			aggregate.Mode.Label,
 			aggregate.MedianRPS,
-			percentChange(aggregate.MedianRPS, baseline.MedianRPS),
+			aggregate.MedianRelativePct,
 			formatDuration(aggregate.MedianP95),
 			formatSignedDuration(aggregate.MedianP95-baseline.MedianP95),
 			aggregate.MedianFailurePct,
@@ -636,6 +728,7 @@ func webhookLoadReport(loadConfig webhookLoadConfig, writeResults []webhookWrite
 			aggregate.MedianDeliveries,
 		)
 	}
+	fmt.Fprintf(&report, "\n`worker-running` 相对同轮 `enqueue-only` 的成功吞吐变化中位数为 `%+.1f%%`。\n", workerVsEnqueue)
 
 	fmt.Fprintf(&report, "\n## 原始写请求结果\n\n")
 	fmt.Fprintf(&report, "每轮旋转模式执行顺序，降低固定顺序带来的缓存和温度偏差。\n\n")
@@ -662,18 +755,40 @@ func webhookLoadReport(loadConfig webhookLoadConfig, writeResults []webhookWrite
 	fmt.Fprintf(&report, "\n## 独立 Worker 吞吐\n\n")
 	fmt.Fprintf(&report, "| 阶段 | 事件 | 批次 | 耗时 | 吞吐 |\n")
 	fmt.Fprintf(&report, "| --- | ---: | ---: | ---: | ---: |\n")
-	fmt.Fprintf(&report, "| outbox 展开 | %d | %d | %s | %.1f events/s |\n", worker.Events, worker.DispatchBatches, formatDuration(worker.DispatchDuration), dispatchRate)
-	fmt.Fprintf(&report, "| HTTP 投递并落成功状态 | %d | %d | %s | %.1f deliveries/s |\n", worker.Events, worker.DeliveryBatches, formatDuration(worker.DeliveryDuration), deliveryRate)
-	fmt.Fprintf(&report, "| 展开加投递 | %d | %d | %s | %.1f events/s |\n", worker.Events, worker.DispatchBatches+worker.DeliveryBatches, formatDuration(endToEnd), ratePerSecond(worker.Events, endToEnd))
-	fmt.Fprintf(&report, "\n接收端收到 `%d` 个请求，数据库记录 `%d` 个成功投递，两者与固定事件数完全一致。\n", worker.ReceiverRequests, worker.SucceededDelivery)
+	fmt.Fprintf(&report, "| outbox 展开（紧循环批处理能力） | %d | %d | %s | %.1f events/s |\n", worker.Events, worker.DispatchBatches, formatDuration(worker.DispatchDuration), dispatchRate)
+	fmt.Fprintf(&report, "| HTTP 投递并落成功状态（紧循环批处理能力） | %d | %d | %s | %.1f deliveries/s |\n", worker.Events, worker.DeliveryBatches, formatDuration(worker.DeliveryDuration), deliveryRate)
+	fmt.Fprintf(&report, "| 展开加投递（紧循环批处理能力） | %d | %d | %s | %.1f events/s |\n", worker.Events, worker.DispatchBatches+worker.DeliveryBatches, formatDuration(endToEnd), ratePerSecond(worker.Events, endToEnd))
+	fmt.Fprintf(&report, "| 生产轮询循环端到端 | %d | - | %s | %.1f events/s |\n", worker.Events, formatDuration(worker.SustainedDuration), ratePerSecond(worker.Events, worker.SustainedDuration))
+	fmt.Fprintf(&report, "\n紧循环阶段接收端收到 `%d` 个请求、数据库记录 `%d` 个成功投递；生产轮询阶段分别为 `%d` 和 `%d`，均与固定事件数完全一致。\n", worker.ReceiverRequests, worker.SucceededDelivery, worker.SustainedReceiverRequests, worker.SustainedDelivery)
 
 	fmt.Fprintf(&report, "\n## 如何解读\n\n")
 	fmt.Fprintf(&report, "- “关闭触发器”近似表示没有 Webhook 功能时的写路径；“无订阅”测量每次业务写入执行索引化订阅存在性检查的固定成本。\n")
 	fmt.Fprintf(&report, "- “仅写 outbox”包含存在订阅时在业务事务内新增一条不可变事件快照的成本，不包含外部 HTTP。\n")
-	fmt.Fprintf(&report, "- “worker 同时运行”额外反映异步 worker 与主站共享 PostgreSQL 时的连接池和 I/O 竞争，但回调仍不会占用主站请求 goroutine。\n")
-	fmt.Fprintf(&report, "- Worker 的 HTTP 数字使用本机零延迟接收端，表示站点自身上限；真实吞吐会受第三方网络延迟、TLS 和接收方响应时间影响。\n")
+	fmt.Fprintf(&report, "- “worker 同时运行”使用独立的 5 连接池，反映两个进程共享 PostgreSQL 服务时的查询和 I/O 竞争；它不占用主站连接池或请求 goroutine。\n")
+	fmt.Fprintf(&report, "- 紧循环数字排除固定轮询等待，用于定位数据库与 HTTP 批处理能力；生产轮询数字包含当前 `500ms` tick、每批最多 200 个事件和 50 个投递的调度上限。\n")
+	fmt.Fprintf(&report, "- Worker 使用本机零延迟接收端；真实吞吐会受第三方网络延迟、TLS 和接收方响应时间影响。持续事件速率超过生产轮询吞吐时会形成积压，需要增加 worker 实例或调整批次与调度策略。\n")
+	fmt.Fprintf(&report, "- 阶段间维护用于隔离功能增量成本，不覆盖长时间持续写入时的表膨胀和 autovacuum 影响；这部分应另做 soak test。\n")
 	fmt.Fprintf(&report, "- 单机短窗口结果用于比较相对变化，不应直接作为生产 SLA；容量规划应在接近生产的数据库、网络和 endpoint 延迟下复测。\n")
 	return report.String()
+}
+
+func medianWebhookModeChange(results []webhookWriteResult, modeName, baselineModeName string) float64 {
+	baselineByRepeat := make(map[int]float64)
+	for _, result := range results {
+		if result.Mode.Name == baselineModeName {
+			baselineByRepeat[result.Repeat] = result.Summary.SuccessRPS
+		}
+	}
+	var changes []float64
+	for _, result := range results {
+		if result.Mode.Name != modeName {
+			continue
+		}
+		if baseline := baselineByRepeat[result.Repeat]; baseline > 0 {
+			changes = append(changes, percentChange(result.Summary.SuccessRPS, baseline))
+		}
+	}
+	return medianFloat(changes)
 }
 
 func percentChange(value, baseline float64) float64 {

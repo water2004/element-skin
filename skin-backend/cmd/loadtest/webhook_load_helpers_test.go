@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -12,7 +13,7 @@ func TestWebhookLoadConfigUsesBalancedDefaults(t *testing.T) {
 	got, err := webhookLoadConfigFromEnv()
 	want := webhookLoadConfig{
 		Concurrency:  50,
-		Duration:     time.Second,
+		Duration:     3 * time.Second,
 		Repeats:      4,
 		WorkerEvents: 1000,
 		MaxDBConns:   20,
@@ -126,7 +127,7 @@ func TestWebhookLoadAggregateAndReportUseMedianComparisonsExactly(t *testing.T) 
 	if aggregates[2].MedianRPS != 90 || aggregates[2].MedianEventRatio != 1 {
 		t.Fatalf("enqueue aggregate=%#v", aggregates[2])
 	}
-	if aggregates[3].MedianRPS != 80 || aggregates[3].MedianDeliveries != 21 {
+	if aggregates[3].MedianRPS != 80 || math.Abs(aggregates[3].MedianRelativePct-(-20)) > 0.000001 || aggregates[3].MedianDeliveries != 21 {
 		t.Fatalf("worker aggregate=%#v", aggregates[3])
 	}
 
@@ -134,24 +135,31 @@ func TestWebhookLoadAggregateAndReportUseMedianComparisonsExactly(t *testing.T) 
 		webhookLoadConfig{Concurrency: 50, Duration: time.Second, Repeats: 3, WorkerEvents: 100, MaxDBConns: 20},
 		results,
 		webhookWorkerResult{
-			Events:            100,
-			DispatchBatches:   1,
-			DispatchDuration:  200 * time.Millisecond,
-			DeliveryBatches:   2,
-			DeliveryDuration:  400 * time.Millisecond,
-			ReceiverRequests:  100,
-			SucceededDelivery: 100,
+			Events:                    100,
+			DispatchBatches:           1,
+			DispatchDuration:          200 * time.Millisecond,
+			DeliveryBatches:           2,
+			DeliveryDuration:          400 * time.Millisecond,
+			ReceiverRequests:          100,
+			SucceededDelivery:         100,
+			SustainedDuration:         2 * time.Second,
+			SustainedReceiverRequests: 100,
+			SustainedDelivery:         100,
 		},
 		time.Date(2026, time.August, 8, 16, 0, 0, 0, time.FixedZone("CST", 8*60*60)),
 	)
 	for _, fragment := range []string{
 		"- 生成时间：`2026-08-08T16:00:00+08:00`",
+		"主站连接池：`20`；独立 Worker 连接池：`5`",
 		"- 预热：正式轮次前以关闭触发器模式运行最多 `250ms`，不计入结果",
+		"- 阶段隔离：每阶段前清空 outbox 并对测试 profile 表执行 `VACUUM ANALYZE`",
 		"| 启用触发器，无订阅 | 95.0 | -5.0% | 11.0ms | +1.0ms | 0.00% | 0.000 | 0 |",
 		"| 有订阅，仅写 outbox | 90.0 | -10.0% | 12.0ms | +2.0ms | 0.00% | 1.000 | 0 |",
-		"| outbox 展开 | 100 | 1 | 200.0ms | 500.0 events/s |",
-		"| HTTP 投递并落成功状态 | 100 | 2 | 400.0ms | 250.0 deliveries/s |",
-		"接收端收到 `100` 个请求，数据库记录 `100` 个成功投递",
+		"`worker-running` 相对同轮 `enqueue-only` 的成功吞吐变化中位数为 `-11.1%`",
+		"| outbox 展开（紧循环批处理能力） | 100 | 1 | 200.0ms | 500.0 events/s |",
+		"| HTTP 投递并落成功状态（紧循环批处理能力） | 100 | 2 | 400.0ms | 250.0 deliveries/s |",
+		"| 生产轮询循环端到端 | 100 | - | 2.00s | 50.0 events/s |",
+		"生产轮询阶段分别为 `100` 和 `100`",
 	} {
 		if !strings.Contains(report, fragment) {
 			t.Fatalf("report missing %q:\n%s", fragment, report)

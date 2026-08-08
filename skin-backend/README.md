@@ -96,7 +96,7 @@ zero-latency `204` receiver:
 ```powershell
 $env:WEBHOOK_LOADTEST_ENABLE='1'
 $env:WEBHOOK_LOADTEST_CONCURRENCY='50'
-$env:WEBHOOK_LOADTEST_DURATION='1s'
+$env:WEBHOOK_LOADTEST_DURATION='3s'
 $env:WEBHOOK_LOADTEST_REPEATS='4'
 $env:WEBHOOK_LOADTEST_EVENTS='1000'
 go test ./cmd/loadtest -run TestWebhookLoadImpact -count=1 -v
@@ -106,7 +106,12 @@ The Webhook harness writes `../reports/webhook-load-test.md` by default. Use
 `WEBHOOK_LOADTEST_REPORT` to change the output path and
 `WEBHOOK_LOADTEST_DB_MAX_CONNECTIONS` to change the isolated database pool.
 It uses the same temporary PostgreSQL database and isolated Redis prefix as the
-real-backend harness, and never sends requests to a third-party endpoint.
+real-backend harness, and never sends requests to a third-party endpoint. Each
+comparison phase truncates the isolated outbox and vacuums the test profile
+table so earlier phases do not bias later phases with dead tuples; long-running
+table growth and autovacuum behavior require a separate soak test. The worker
+opens a separate five-connection database pool, matching the production worker
+process instead of borrowing connections from the site pool.
 
 The harness uses `TEST_DATABASE_DSN`/`ADMIN_DATABASE_DSN` when set, otherwise it
 follows the same local PostgreSQL defaults as the integration tests.
