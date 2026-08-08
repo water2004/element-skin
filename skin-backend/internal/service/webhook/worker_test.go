@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -191,6 +192,159 @@ func TestWorkerRetriesNonSuccessWithDeterministicBackoffExactly(t *testing.T) {
 	wantNext := now.UnixMilli() + int64(retryDelay(deliveryID, 1)/time.Millisecond)
 	if status != "pending" || attempts != 1 || nextAttemptAt != wantNext || lastHTTPStatus != 503 || detail != "webhook endpoint returned HTTP 503" {
 		t.Fatalf("retry fields id=%q status=%q attempts=%d next=%d want_next=%d http=%d detail=%q", deliveryID, status, attempts, nextAttemptAt, wantNext, lastHTTPStatus, detail)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		UPDATE webhook_deliveries
+		SET attempt_count=11, next_attempt_at=$2
+		WHERE id=$1
+	`, deliveryID, wantNext); err != nil {
+		t.Fatal(err)
+	}
+	now = time.UnixMilli(wantNext)
+	if err := worker.DeliverBatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT status, attempt_count, last_http_status, last_error
+		FROM webhook_deliveries WHERE id=$1
+	`, deliveryID).Scan(&status, &attempts, &lastHTTPStatus, &detail); err != nil {
+		t.Fatal(err)
+	}
+	if status != "dead" || attempts != 12 || lastHTTPStatus != 503 || detail != "webhook endpoint returned HTTP 503" {
+		t.Fatalf("terminal retry status=%q attempts=%d http=%d detail=%q", status, attempts, lastHTTPStatus, detail)
+	}
+}
+
+func TestWorkerUsesConfidentialApplicationPermissionAndStopsDisabledEndpointExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	owner := testutil.CreateUser(t, db, "webhook-worker-app-owner@test.com", "Password123", "WebhookWorkerAppOwner", false)
+	target := testutil.CreateUser(t, db, "webhook-worker-app-target@test.com", "Password123", "WebhookWorkerAppTarget", false)
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	cfg := testutil.TestConfig()
+	box, _ := util.NewSecretBox(cfg.IdentityEncryptionKey)
+	ciphertext, _ := box.Encrypt("application-secret")
+	definition := permission.MustDefinitionByCode("profile.read.any")
+	client := model.OAuthClient{ID: "worker-application-client", OwnerUserID: owner.ID, Name: "Worker application client", ClientType: "confidential", Status: "active", CreatedAt: 1000, UpdatedAt: 1000}
+	endpoint := model.WebhookEndpoint{ID: "wh_worker_application", ClientID: client.ID, URL: server.URL, SecretCiphertext: ciphertext, Status: "active", EventTypes: []string{"profile.created"}, CreatedAt: 1000, UpdatedAt: 1000}
+	if err := db.OAuth.CreateClientWithEndpoints(ctx, client, []int64{int64(definition.ID)}, []model.WebhookEndpoint{endpoint}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Permissions.SetPermissionOverrideForSubject(ctx, permissiondb.SubjectIDForClient(client.ID), definition, "allow", ""); err != nil {
+		t.Fatal(err)
+	}
+	firstProfile := model.Profile{ID: "worker-application-profile-1", UserID: target.ID, Name: "WorkerApplication1", TextureModel: "default"}
+	if err := db.Profiles.Create(ctx, firstProfile); err != nil {
+		t.Fatal(err)
+	}
+	worker := Worker{DB: db, Config: cfg, HTTPClient: server.Client(), Now: func() time.Time { return time.UnixMilli(8000) }}
+	if err := worker.RunOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if requests != 1 {
+		t.Fatalf("application permission delivery requests=%d want=1", requests)
+	}
+
+	secondProfile := model.Profile{ID: "worker-application-profile-2", UserID: target.ID, Name: "WorkerApplication2", TextureModel: "default"}
+	if err := db.Profiles.Create(ctx, secondProfile); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.DispatchBatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `UPDATE webhook_endpoints SET status='disabled' WHERE id=$1`, endpoint.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := worker.DeliverBatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Pool.Query(ctx, `
+		SELECT event.data->>'profile_id', delivery.status
+		FROM webhook_deliveries AS delivery
+		JOIN webhook_events AS event ON event.id=delivery.event_id
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	statuses := map[string]string{}
+	for rows.Next() {
+		var profileID, status string
+		if err := rows.Scan(&profileID, &status); err != nil {
+			t.Fatal(err)
+		}
+		statuses[profileID] = status
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	wantStatuses := map[string]string{firstProfile.ID: "succeeded", secondProfile.ID: "dead"}
+	if !reflect.DeepEqual(statuses, wantStatuses) || requests != 1 {
+		t.Fatalf("application delivery statuses=%v requests=%d", statuses, requests)
+	}
+}
+
+func TestWorkerExpandsUnknownEventsWithoutDeliveryExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO webhook_events (id,event_type,data,created_at)
+		VALUES ('evt_unknown','profile.unknown','{}'::jsonb,1000)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	worker := Worker{DB: db, Config: testutil.TestConfig(), Now: func() time.Time { return time.UnixMilli(9000) }}
+	if err := worker.DispatchBatch(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var expandedAt *int64
+	var deliveries int
+	if err := db.Pool.QueryRow(ctx, `SELECT expanded_at FROM webhook_events WHERE id='evt_unknown'`).Scan(&expandedAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM webhook_deliveries WHERE event_id='evt_unknown'`).Scan(&deliveries); err != nil {
+		t.Fatal(err)
+	}
+	if expandedAt == nil || *expandedAt != 9000 || deliveries != 0 {
+		t.Fatalf("unknown event expanded_at=%v deliveries=%d", expandedAt, deliveries)
+	}
+}
+
+func TestWorkerConstructionCancellationAndSafetyHelpersExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	cfg := testutil.TestConfig()
+	worker := NewWorker(db, cfg)
+	if worker.DB != db || worker.Config.IdentityEncryptionKey != cfg.IdentityEncryptionKey || worker.HTTPClient == nil || worker.Now == nil {
+		t.Fatalf("new worker fields mismatch: %#v", worker)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	worker.Run(ctx)
+
+	if _, err := worker.HTTPClient.Get("http://127.0.0.1:1/private"); err == nil || !strings.Contains(err.Error(), "public address") {
+		t.Fatalf("safe client private address error=%v", err)
+	}
+	if fallback := (Worker{}).httpClient(); fallback == nil {
+		t.Fatal("nil worker should construct a safe HTTP client")
+	}
+	before := time.Now().UnixMilli()
+	gotNow := (Worker{}).nowMS()
+	after := time.Now().UnixMilli()
+	if gotNow < before || gotNow > after {
+		t.Fatalf("worker default time=%d outside [%d,%d]", gotNow, before, after)
+	}
+	maxDelay := retryDelay("delivery-max", 100)
+	if maxDelay < 6*time.Hour || maxDelay > 6*time.Hour+72*time.Minute {
+		t.Fatalf("capped retry delay=%s", maxDelay)
+	}
+	longDetail := strings.Repeat("x", 600)
+	if got := truncateDetail(longDetail); len(got) != 500 || got != longDetail[:500] {
+		t.Fatalf("truncated detail length=%d", len(got))
 	}
 }
 

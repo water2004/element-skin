@@ -13,9 +13,12 @@ import {
   getPermissionCatalog,
   listAdminOAuthApps,
   listOAuthApps,
+  listOAuthGrants,
+  revokeOAuthGrant,
   rotateOAuthSecret,
   reviewAdminOAuthApp,
   setOAuthClientPermission,
+  submitOAuthAppReview,
   updateOAuthApp,
 } from '../../oauth'
 import type { ApiCase } from './types'
@@ -67,6 +70,18 @@ export function oauthApiCases(): ApiCase[] {
       args: ['/v2/oauth/webhook-events'],
     },
     {
+      name: 'listOAuthGrants gets grant list with limit',
+      method: 'get',
+      call: () => listOAuthGrants(15),
+      args: ['/v2/oauth/grants', { params: { limit: 15 } }],
+    },
+    {
+      name: 'revokeOAuthGrant deletes one grant',
+      method: 'delete',
+      call: () => revokeOAuthGrant('grant-1'),
+      args: ['/v2/oauth/grants/grant-1'],
+    },
+    {
       name: 'updateOAuthApp patches app payload',
       method: 'patch',
       call: () => updateOAuthApp('client-1', { ...oauthPayload, status: 'disabled' }),
@@ -83,6 +98,12 @@ export function oauthApiCases(): ApiCase[] {
       method: 'post',
       call: () => rotateOAuthSecret('client-1'),
       args: ['/v2/oauth/apps/client-1/secret'],
+    },
+    {
+      name: 'submitOAuthAppReview posts review submission',
+      method: 'post',
+      call: () => submitOAuthAppReview('client-1'),
+      args: ['/v2/oauth/apps/client-1/review-submission'],
     },
     {
       name: 'getPermissionCatalog gets catalog',

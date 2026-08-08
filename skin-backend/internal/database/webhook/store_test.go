@@ -39,6 +39,11 @@ func TestWebhookOutboxTriggerExpansionClaimAndCompletionLifecycleExactly(t *test
 	if err := db.OAuth.CreateClientWithEndpoints(ctx, client, []int64{profileReadID}, []model.WebhookEndpoint{endpoint}); err != nil {
 		t.Fatal(err)
 	}
+	storedEndpoints, err := db.Webhooks.ListEndpointsByClient(ctx, client.ID)
+	if err != nil || len(storedEndpoints) != 1 || storedEndpoints[0].ID != endpoint.ID ||
+		!reflect.DeepEqual(storedEndpoints[0].EventTypes, []string{"profile.created", "profile.updated"}) {
+		t.Fatalf("stored webhook endpoints=%#v err=%v", storedEndpoints, err)
+	}
 	for _, tc := range []struct {
 		name           string
 		targetClientID string
@@ -72,6 +77,14 @@ func TestWebhookOutboxTriggerExpansionClaimAndCompletionLifecycleExactly(t *test
 	eventID := events[0].ID
 	if eventID == "" {
 		t.Fatal("outbox event id should not be empty")
+	}
+	storedEvent, err := db.Webhooks.GetEvent(ctx, eventID)
+	if err != nil || storedEvent == nil || !reflect.DeepEqual(*storedEvent, events[0]) {
+		t.Fatalf("stored webhook event=%#v want=%#v err=%v", storedEvent, events[0], err)
+	}
+	missingEvent, err := db.Webhooks.GetEvent(ctx, "evt_missing")
+	if err != nil || missingEvent != nil {
+		t.Fatalf("missing webhook event=%#v err=%v", missingEvent, err)
 	}
 	if err := db.Webhooks.CompleteExpansion(ctx, eventID, []string{endpoint.ID}, 2000); err != nil {
 		t.Fatal(err)

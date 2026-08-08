@@ -185,7 +185,7 @@
                   <el-checkbox
                     v-for="event in availableWebhookEvents"
                     :key="event.type"
-                    :label="event.type"
+                    :value="event.type"
                     class="!m-0 !h-auto items-start rounded-lg border border-[var(--color-border)] bg-[var(--color-card-background)] p-3"
                   >
                     <span class="min-w-0">
@@ -265,21 +265,22 @@ import {
   type OAuthClientInput,
   type OAuthClientStatus,
   type OAuthWebhookEndpoint,
-  type OAuthWebhookEndpointInput,
   type OAuthWebhookEventDefinition,
 } from '@/api/oauth'
 import type { PermissionDefinition, User } from '@/api/types'
 import PermissionTagPicker from '@/components/permissions/PermissionTagPicker.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { getErrorMessage } from '@/utils/error'
-
-interface WebhookEndpointForm extends OAuthWebhookEndpointInput {
-  key: string
-}
-
-interface OAuthAppFormState extends Omit<OAuthClientInput, 'webhook_endpoints'> {
-  webhook_endpoints: WebhookEndpointForm[]
-}
+import {
+  availableOAuthWebhookEvents,
+  delegableOAuthPermissions,
+  endpointsWithAllowedEvents,
+  oauthAppValidationError,
+  oauthClientPayload,
+  permissionsForOAuthClientType,
+  type OAuthAppFormState,
+  type WebhookEndpointForm,
+} from './oauthAppFormState'
 
 const route = useRoute()
 const router = useRouter()
@@ -310,25 +311,11 @@ const primaryLabel = computed(() => {
   if (!app.value) return '提交审核'
   return app.value.status === 'pending' ? '保存修改' : '保存并重新提交'
 })
-const userPermissionSet = computed(() => new Set(user.value?.permissions ?? []))
-const permissionByCode = computed(() => {
-  const out = new Map<string, PermissionDefinition>()
-  for (const item of catalog.value) out.set(item.code, item)
-  return out
-})
 const delegablePermissions = computed(() =>
-  catalog.value.filter(
-    (item) =>
-      item.scope !== 'system' &&
-      ((form.client_type === 'confidential' && item.scope === 'server') ||
-        userPermissionSet.value.has(item.code)),
-  ),
+  delegableOAuthPermissions(catalog.value, user.value?.permissions ?? [], form.client_type),
 )
-const selectedPermissionSet = computed(() => new Set(form.permissions))
 const availableWebhookEvents = computed(() =>
-  webhookCatalog.value.filter((event) =>
-    event.required_permissions.some((code) => selectedPermissionSet.value.has(code)),
-  ),
+  availableOAuthWebhookEvents(webhookCatalog.value, form.permissions),
 )
 const availableWebhookEventSet = computed(
   () => new Set(availableWebhookEvents.value.map((event) => event.type)),
@@ -346,17 +333,12 @@ onMounted(load)
 watch(
   () => form.client_type,
   (clientType) => {
-    if (clientType === 'confidential') return
-    form.permissions = form.permissions.filter(
-      (code) => permissionByCode.value.get(code)?.scope !== 'server',
-    )
+    form.permissions = permissionsForOAuthClientType(form.permissions, catalog.value, clientType)
   },
 )
 
 watch(availableWebhookEventSet, (available) => {
-  for (const endpoint of form.webhook_endpoints) {
-    endpoint.events = endpoint.events.filter((eventType) => available.has(eventType))
-  }
+  form.webhook_endpoints = endpointsWithAllowedEvents(form.webhook_endpoints, available)
 })
 
 async function load() {
@@ -417,37 +399,13 @@ function removeEndpoint(index: number) {
 }
 
 function payload(): OAuthClientInput {
-  return {
-    name: form.name.trim(),
-    description: (form.description ?? '').trim(),
-    redirect_uri: form.redirect_uri.trim(),
-    website_url: (form.website_url ?? '').trim(),
-    client_type: form.client_type,
-    permissions: [...form.permissions],
-    webhook_endpoints: form.webhook_endpoints.map((endpoint) => ({
-      ...(endpoint.id ? { id: endpoint.id } : {}),
-      url: endpoint.url.trim(),
-      enabled: endpoint.enabled,
-      events: [...endpoint.events],
-    })),
-  }
+  return oauthClientPayload(form)
 }
 
 function validateForm() {
-  if (!form.name.trim()) {
-    ElMessage.warning('请填写应用名称')
-    return false
-  }
-  for (const endpoint of form.webhook_endpoints) {
-    if (!endpoint.url.trim()) {
-      ElMessage.warning('请填写 Webhook 接收地址')
-      return false
-    }
-    if (endpoint.events.length === 0) {
-      ElMessage.warning('每个 Webhook endpoint 至少选择一个监听事件')
-      return false
-    }
-  }
+  const detail = oauthAppValidationError(form)
+  if (detail) ElMessage.warning(detail)
+  if (detail) return false
   return true
 }
 
