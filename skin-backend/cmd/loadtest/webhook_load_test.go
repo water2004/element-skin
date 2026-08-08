@@ -26,18 +26,21 @@ import (
 )
 
 const (
-	webhookLoadClientID     = "webhook-load-client"
-	webhookLoadEndpointID   = "webhook-load-endpoint"
-	webhookLoadGrantID      = "webhook-load-grant"
-	webhookWorkerMaxDBConns = 5
+	webhookLoadClientID                  = "webhook-load-client"
+	webhookLoadEndpointID                = "webhook-load-endpoint"
+	webhookLoadGrantID                   = "webhook-load-grant"
+	suggestedWebhookWorkerMaxDBConns     = 2
+	suggestedWebhookWorkerActiveInterval = 3 * time.Second
 )
 
 type webhookLoadConfig struct {
-	Concurrency  int
-	Duration     time.Duration
-	Repeats      int
-	WorkerEvents int
-	MaxDBConns   int
+	Concurrency          int
+	Duration             time.Duration
+	Repeats              int
+	WorkerEvents         int
+	MaxDBConns           int
+	WorkerMaxDBConns     int
+	WorkerActiveInterval time.Duration
 }
 
 type webhookLoadMode struct {
@@ -101,9 +104,9 @@ func TestWebhookLoadImpact(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, handler, _ := testutil.NewTestAppWithMaxConnectionsAndRedisTB(t, int32(loadConfig.MaxDBConns))
+	db, handler, redis := testutil.NewTestAppWithMaxConnectionsAndRedisTB(t, int32(loadConfig.MaxDBConns))
 	loadConfig.MaxDBConns = int(db.Pool.Stat().MaxConns())
-	workerDB := openWebhookLoadWorkerDB(t, db, nil)
+	workerDB := openWebhookLoadWorkerDB(t, db, nil, int32(loadConfig.WorkerMaxDBConns), &permissiondb.RedisPermCache{Store: redis})
 	if err := db.Settings.Set(t.Context(), "rate_limit_enabled", false); err != nil {
 		t.Fatalf("disable load-test auth rate limit: %v", err)
 	}
@@ -131,10 +134,11 @@ func TestWebhookLoadImpact(t *testing.T) {
 		_, _ = db.Pool.Exec(context.Background(), `ALTER TABLE profiles ENABLE TRIGGER profiles_webhook_event`)
 	})
 	worker := webhookservice.Worker{
-		DB:         workerDB,
-		Config:     testutil.TestConfig(),
-		HTTPClient: receiver.Client(),
-		Now:        time.Now,
+		DB:             workerDB,
+		Config:         testutil.TestConfig(),
+		HTTPClient:     receiver.Client(),
+		Now:            time.Now,
+		ActiveInterval: loadConfig.WorkerActiveInterval,
 	}
 	profileStates := make([]bool, loadConfig.Concurrency)
 	warmupMode := webhookLoadModes[0]
@@ -217,7 +221,12 @@ func TestWebhookLoadImpact(t *testing.T) {
 }
 
 func webhookLoadModeFor(repeat, order int) webhookLoadMode {
-	return webhookLoadModes[(repeat+order)%len(webhookLoadModes)]
+	index := repeat + order
+	if repeat%2 == 1 {
+		index = repeat - order
+	}
+	index = (index%len(webhookLoadModes) + len(webhookLoadModes)) % len(webhookLoadModes)
+	return webhookLoadModes[index]
 }
 
 func webhookLoadConfigFromEnv() (webhookLoadConfig, error) {
@@ -237,6 +246,10 @@ func webhookLoadConfigFromEnv() (webhookLoadConfig, error) {
 	if err != nil {
 		return webhookLoadConfig{}, err
 	}
+	workerMaxDBConns, err := webhookLoadPositiveInt("WEBHOOK_LOADTEST_WORKER_DB_MAX_CONNECTIONS", suggestedWebhookWorkerMaxDBConns, 100)
+	if err != nil {
+		return webhookLoadConfig{}, err
+	}
 	duration := 3 * time.Second
 	if raw := strings.TrimSpace(os.Getenv("WEBHOOK_LOADTEST_DURATION")); raw != "" {
 		duration, err = time.ParseDuration(raw)
@@ -244,12 +257,21 @@ func webhookLoadConfigFromEnv() (webhookLoadConfig, error) {
 			return webhookLoadConfig{}, fmt.Errorf("invalid WEBHOOK_LOADTEST_DURATION %q", raw)
 		}
 	}
+	workerActiveInterval := suggestedWebhookWorkerActiveInterval
+	if raw := strings.TrimSpace(os.Getenv("WEBHOOK_LOADTEST_WORKER_ACTIVE_INTERVAL")); raw != "" {
+		workerActiveInterval, err = time.ParseDuration(raw)
+		if err != nil || workerActiveInterval <= 0 || workerActiveInterval > time.Minute {
+			return webhookLoadConfig{}, fmt.Errorf("invalid WEBHOOK_LOADTEST_WORKER_ACTIVE_INTERVAL %q", raw)
+		}
+	}
 	return webhookLoadConfig{
-		Concurrency:  concurrency,
-		Duration:     duration,
-		Repeats:      repeats,
-		WorkerEvents: workerEvents,
-		MaxDBConns:   maxDBConns,
+		Concurrency:          concurrency,
+		Duration:             duration,
+		Repeats:              repeats,
+		WorkerEvents:         workerEvents,
+		MaxDBConns:           maxDBConns,
+		WorkerMaxDBConns:     workerMaxDBConns,
+		WorkerActiveInterval: workerActiveInterval,
 	}, nil
 }
 
@@ -403,9 +425,31 @@ func startWebhookLoadWorker(ctx context.Context, worker webhookservice.Worker, e
 		ticker := time.NewTicker(500 * time.Millisecond)
 		defer ticker.Stop()
 		for {
-			if err := worker.RunOnce(ctx); err != nil {
+			result, err := worker.RunOnce(ctx)
+			if err != nil {
 				errors <- err
 				return
+			}
+			select {
+			case <-stop:
+				errors <- nil
+				return
+			default:
+			}
+			if result.Worked() {
+				activeTimer := time.NewTimer(worker.ActiveWorkInterval())
+				select {
+				case <-stop:
+					activeTimer.Stop()
+					errors <- nil
+					return
+				case <-ctx.Done():
+					activeTimer.Stop()
+					errors <- ctx.Err()
+					return
+				case <-activeTimer.C:
+				}
+				continue
 			}
 			select {
 			case <-stop:
@@ -448,7 +492,7 @@ func assertWebhookWriteResult(t *testing.T, mode webhookLoadMode, summary stepSu
 	if !mode.WorkerRunning && (succeededDelivery != 0 || receiverRequests != 0) {
 		t.Fatalf("mode %s delivered=%d receiver_requests=%d want=0", mode.Name, succeededDelivery, receiverRequests)
 	}
-	if mode.WorkerRunning && (succeededDelivery != int(receiverRequests) || succeededDelivery > eventRows) {
+	if mode.WorkerRunning && (succeededDelivery == 0 || succeededDelivery != int(receiverRequests) || succeededDelivery > eventRows) {
 		t.Fatalf("mode %s delivered=%d receiver_requests=%d events=%d", mode.Name, succeededDelivery, receiverRequests, eventRows)
 	}
 }
@@ -584,7 +628,8 @@ func drainWebhookDispatch(t *testing.T, db *database.DB, worker webhookservice.W
 		if before == 0 {
 			return batches
 		}
-		if err := worker.DispatchBatch(ctx); err != nil {
+		processed, err := worker.DispatchBatch(ctx)
+		if err != nil {
 			t.Fatal(err)
 		}
 		batches++
@@ -592,8 +637,8 @@ func drainWebhookDispatch(t *testing.T, db *database.DB, worker webhookservice.W
 		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM webhook_events WHERE expanded_at IS NULL`).Scan(&after); err != nil {
 			t.Fatal(err)
 		}
-		if after >= before {
-			t.Fatalf("dispatch made no progress: before=%d after=%d", before, after)
+		if processed != before-after || after >= before {
+			t.Fatalf("dispatch progress processed=%d before=%d after=%d", processed, before, after)
 		}
 	}
 }
@@ -610,7 +655,8 @@ func drainWebhookDeliveries(t *testing.T, db *database.DB, worker webhookservice
 		if succeeded == total {
 			return batches
 		}
-		if err := worker.DeliverBatch(ctx); err != nil {
+		processed, err := worker.DeliverBatch(ctx)
+		if err != nil {
 			t.Fatal(err)
 		}
 		batches++
@@ -618,8 +664,8 @@ func drainWebhookDeliveries(t *testing.T, db *database.DB, worker webhookservice
 		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM webhook_deliveries WHERE status='succeeded'`).Scan(&nextSucceeded); err != nil {
 			t.Fatal(err)
 		}
-		if nextSucceeded <= succeeded {
-			t.Fatalf("delivery made no progress: before=%d after=%d", succeeded, nextSucceeded)
+		if processed != nextSucceeded-succeeded || nextSucceeded <= succeeded {
+			t.Fatalf("delivery progress processed=%d before=%d after=%d", processed, succeeded, nextSucceeded)
 		}
 	}
 }
@@ -704,8 +750,9 @@ func webhookLoadReport(loadConfig webhookLoadConfig, writeResults []webhookWrite
 	fmt.Fprintf(&report, "- 生成时间：`%s`\n", generatedAt.Format(time.RFC3339))
 	fmt.Fprintf(&report, "- 命令：`WEBHOOK_LOADTEST_ENABLE=1 go test ./cmd/loadtest -run TestWebhookLoadImpact -count=1 -v`\n")
 	fmt.Fprintf(&report, "- 写请求：`PATCH /v2/users/me/profiles/{profile_id}`，每个并发 worker 独占一个 profile 并交替修改名称\n")
-	fmt.Fprintf(&report, "- 并发：`%d`；每阶段时长：`%s`；重复：`%d`；主站连接池：`%d`；独立 Worker 连接池：`%d`\n", loadConfig.Concurrency, loadConfig.Duration, loadConfig.Repeats, loadConfig.MaxDBConns, webhookWorkerMaxDBConns)
+	fmt.Fprintf(&report, "- 并发：`%d`；每阶段时长：`%s`；重复：`%d`；主站连接池：`%d`；独立 Worker 连接池：`%d`\n", loadConfig.Concurrency, loadConfig.Duration, loadConfig.Repeats, loadConfig.MaxDBConns, loadConfig.WorkerMaxDBConns)
 	fmt.Fprintf(&report, "- Worker 固定事件数：`%d`；接收端：进程内零延迟 `204` HTTP server\n", loadConfig.WorkerEvents)
+	fmt.Fprintf(&report, "- Worker 调度：有工作批次间协作等待 `%s`；空闲轮询 `500ms`\n", loadConfig.WorkerActiveInterval)
 	fmt.Fprintf(&report, "- 数据隔离：临时 PostgreSQL 数据库和独立 Redis prefix，测试结束自动清理\n")
 	fmt.Fprintf(&report, "- 预热：正式轮次前以关闭触发器模式运行最多 `250ms`，不计入结果\n")
 	fmt.Fprintf(&report, "- 阶段隔离：每阶段前清空 outbox 并对测试 profile 表执行 `VACUUM ANALYZE`，避免前序阶段 dead tuples 污染对照\n\n")
@@ -728,7 +775,7 @@ func webhookLoadReport(loadConfig webhookLoadConfig, writeResults []webhookWrite
 	fmt.Fprintf(&report, "\n`worker-running` 相对同轮 `enqueue-only` 的成功吞吐变化中位数为 `%+.1f%%`。\n", workerVsEnqueue)
 
 	fmt.Fprintf(&report, "\n## 原始写请求结果\n\n")
-	fmt.Fprintf(&report, "每轮旋转模式执行顺序，降低固定顺序带来的缓存和温度偏差。\n\n")
+	fmt.Fprintf(&report, "每轮平衡模式执行顺序，并保证 `enqueue-only` 与 `worker-running` 相邻且交替先后，降低缓存、温度和整机漂移对配对结果的影响。\n\n")
 	fmt.Fprintf(&report, "| 重复 | 执行顺序 | 模式 | 请求 | 成功 req/s | P50 | P95 | P99 | event | 成功投递 |\n")
 	fmt.Fprintf(&report, "| ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, result := range writeResults {
@@ -761,9 +808,9 @@ func webhookLoadReport(loadConfig webhookLoadConfig, writeResults []webhookWrite
 	fmt.Fprintf(&report, "\n## 如何解读\n\n")
 	fmt.Fprintf(&report, "- “关闭触发器”近似表示没有 Webhook 功能时的写路径；“无订阅”测量每次业务写入执行索引化订阅存在性检查的固定成本。\n")
 	fmt.Fprintf(&report, "- “仅写 outbox”包含存在订阅时在业务事务内新增一条不可变事件快照的成本，不包含外部 HTTP。\n")
-	fmt.Fprintf(&report, "- “worker 同时运行”使用独立的 5 连接池，反映两个进程共享 PostgreSQL 服务时的查询和 I/O 竞争；它不占用主站连接池或请求 goroutine。\n")
-	fmt.Fprintf(&report, "- 紧循环数字排除固定轮询等待，用于定位数据库与 HTTP 批处理能力；生产轮询数字包含当前 `500ms` tick、每批最多 200 个事件和 50 个投递的调度上限。\n")
-	fmt.Fprintf(&report, "- Worker 使用本机零延迟接收端；真实吞吐会受第三方网络延迟、TLS 和接收方响应时间影响。持续事件速率超过生产轮询吞吐时会形成积压，需要增加 worker 实例或调整批次与调度策略。\n")
+	fmt.Fprintf(&report, "- “worker 同时运行”使用独立的 %d 连接池，反映两个进程共享 PostgreSQL 服务时的查询和 I/O 竞争；它不占用主站连接池或请求 goroutine。\n", loadConfig.WorkerMaxDBConns)
+	fmt.Fprintf(&report, "- 紧循环数字排除调度等待，用于定位数据库与 HTTP 批处理能力；生产循环数字包含有工作批次间的 `%s` 协作等待，每轮最多展开 200 个事件并投递 4 批、每批 50 个。\n", loadConfig.WorkerActiveInterval)
+	fmt.Fprintf(&report, "- Worker 使用本机零延迟接收端；真实吞吐会受第三方网络延迟、TLS 和接收方响应时间影响。持续事件速率超过预算场景吞吐时会形成积压，应在接近生产的环境调整 Worker 连接池与活跃间隔，再决定是否增加实例。\n")
 	fmt.Fprintf(&report, "- 阶段间维护用于隔离功能增量成本，不覆盖长时间持续写入时的表膨胀和 autovacuum 影响；这部分应另做 soak test。\n")
 	fmt.Fprintf(&report, "- 单机短窗口结果用于比较相对变化，不应直接作为生产 SLA；容量规划应在接近生产的数据库、网络和 endpoint 延迟下复测。\n")
 	return report.String()

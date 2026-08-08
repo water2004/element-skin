@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"element-skin/backend/internal/database"
+	permissiondb "element-skin/backend/internal/database/permission"
 	webhookservice "element-skin/backend/internal/service/webhook"
 	"element-skin/backend/internal/testutil"
 
@@ -60,7 +61,7 @@ func TestWebhookWorkerSQLProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	db, _ := testutil.NewTestAppWithMaxConnectionsTB(t, 20)
+	db, _, redis := testutil.NewTestAppWithMaxConnectionsAndRedisTB(t, 20)
 	var receiverRequests atomic.Int64
 	receiver := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		defer request.Body.Close()
@@ -72,7 +73,7 @@ func TestWebhookWorkerSQLProfile(t *testing.T) {
 
 	seed := seedWebhookLoadData(t, db, 1, receiver.URL)
 	tracer := &webhookSQLTracer{stats: make(map[string]*webhookSQLTraceStat)}
-	workerDB := openWebhookLoadWorkerDB(t, db, tracer)
+	workerDB := openWebhookLoadWorkerDB(t, db, tracer, suggestedWebhookWorkerMaxDBConns, &permissiondb.RedisPermCache{Store: redis})
 	worker := webhookservice.Worker{
 		DB:         workerDB,
 		Config:     testutil.TestConfig(),
@@ -90,19 +91,20 @@ func TestWebhookWorkerSQLProfile(t *testing.T) {
 	}
 }
 
-func openWebhookLoadWorkerDB(t *testing.T, siteDB *database.DB, tracer pgx.QueryTracer) *database.DB {
+func openWebhookLoadWorkerDB(t *testing.T, siteDB *database.DB, tracer pgx.QueryTracer, maxConnections int32, permissionCache permissiondb.PermissionCache) *database.DB {
 	t.Helper()
 	poolConfig, err := pgxpool.ParseConfig(siteDB.Pool.Config().ConnConfig.ConnString())
 	if err != nil {
 		t.Fatalf("parse isolated webhook worker database config: %v", err)
 	}
-	poolConfig.MaxConns = webhookWorkerMaxDBConns
+	poolConfig.MaxConns = maxConnections
 	poolConfig.ConnConfig.Tracer = tracer
 	pool, err := pgxpool.NewWithConfig(t.Context(), poolConfig)
 	if err != nil {
 		t.Fatalf("open isolated webhook worker database pool: %v", err)
 	}
 	workerDB := database.New(pool)
+	workerDB.Permissions.Cache = permissionCache
 	t.Cleanup(workerDB.Close)
 	return workerDB
 }
@@ -182,10 +184,16 @@ func (t *webhookSQLTracer) Snapshot() []webhookSQLTraceStat {
 func webhookSQLQueryName(sql string) string {
 	normalized := strings.Join(strings.Fields(sql), " ")
 	switch {
-	case strings.Contains(normalized, "FROM webhook_events WHERE expanded_at IS NULL"):
-		return "events.list_pending"
+	case strings.Contains(normalized, "WITH completion_input AS"):
+		return "expansions.complete_batch"
+	case strings.Contains(normalized, "FROM webhook_events") && strings.Contains(normalized, "FOR UPDATE SKIP LOCKED"):
+		return "events.claim_pending"
 	case strings.Contains(normalized, "FROM webhook_endpoint_events AS subscription"):
 		return "endpoints.list_subscribed"
+	case strings.Contains(normalized, "FROM delegated_permission_grants AS grant_record") && strings.Contains(normalized, "owned_granted.permission_id"):
+		return "grants.authorization_permission_state"
+	case strings.Contains(normalized, "FROM delegated_clients AS client") && strings.Contains(normalized, "requested.permission_id"):
+		return "permissions.client_requested_one"
 	case strings.Contains(normalized, "FROM delegated_client_permissions WHERE client_id=$1"):
 		return "permissions.client_requested"
 	case strings.Contains(normalized, "FROM delegated_permission_grants WHERE user_id=$1"):
@@ -200,12 +208,10 @@ func webhookSQLQueryName(sql string) string {
 		return "permissions.session_policy"
 	case strings.Contains(normalized, "JOIN delegated_grant_permissions gp"):
 		return "permissions.delegation_policy"
-	case strings.Contains(normalized, "INSERT INTO webhook_deliveries"):
-		return "deliveries.insert"
-	case strings.Contains(normalized, "UPDATE webhook_events SET expanded_at"):
-		return "events.complete_expansion"
 	case strings.Contains(normalized, "WITH picked AS") && strings.Contains(normalized, "FROM webhook_deliveries"):
 		return "deliveries.claim_due"
+	case strings.Contains(normalized, "UPDATE webhook_deliveries AS delivery") && strings.Contains(normalized, "input.lease_token"):
+		return "deliveries.complete_batch"
 	case strings.Contains(normalized, "UPDATE webhook_deliveries SET status='succeeded'"):
 		return "deliveries.complete"
 	case normalized == "begin":
@@ -226,7 +232,7 @@ func webhookSQLProfileReport(events int, worker webhookWorkerResult, rows []webh
 	fmt.Fprintf(&report, "# Webhook Worker SQL Profile\n\n")
 	fmt.Fprintf(&report, "- 生成时间：`%s`\n", generatedAt.Format(time.RFC3339))
 	fmt.Fprintf(&report, "- 命令：`WEBHOOK_SQL_PROFILE_ENABLE=1 go test ./cmd/loadtest -run TestWebhookWorkerSQLProfile -count=1 -v`\n")
-	fmt.Fprintf(&report, "- 事件：`%d`；Worker 独立数据库连接池：`%d`；接收端：进程内零延迟 `204`\n", events, webhookWorkerMaxDBConns)
+	fmt.Fprintf(&report, "- 事件：`%d`；Worker 独立数据库连接池：`%d`；接收端：进程内零延迟 `204`\n", events, suggestedWebhookWorkerMaxDBConns)
 	fmt.Fprintf(&report, "- 紧循环展开：`%s`；紧循环投递：`%s`；生产轮询端到端：`%s`\n", formatDuration(worker.DispatchDuration), formatDuration(worker.DeliveryDuration), formatDuration(worker.SustainedDuration))
 	fmt.Fprintf(&report, "- 说明：累计 SQL 耗时按调用求和，并发查询可能重叠，因此不能直接等同于墙钟时间。\n\n")
 	fmt.Fprintf(&report, "| 阶段 | SQL | 调用 | 累计 | 平均 | P95 | 最大 | 错误 |\n")
