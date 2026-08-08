@@ -43,7 +43,7 @@ func TestConcurrentEmailChangesConsumeOneCodeExactlyOnce(t *testing.T) {
 	}, func(actor permission.Actor) error {
 		return svc.ChangeEmailSelf(context.Background(), actor, targetEmail, code)
 	})
-	assertOneSelfUpdateConflict(t, results, "Invalid or expired verification code")
+	assertOneSelfUpdateConflict(t, results, "Invalid or expired verification code", "Email already in use")
 	var targetCount, originalCount int
 	if err := db.Pool.QueryRow(ctx, `
 		SELECT
