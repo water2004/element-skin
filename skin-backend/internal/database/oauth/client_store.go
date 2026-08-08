@@ -184,3 +184,16 @@ func (s Store) ClientPermissionIDs(ctx context.Context, clientID string) ([]int6
 	defer rows.Close()
 	return scanInt64Rows(rows)
 }
+
+func (s Store) ClientHasPermission(ctx context.Context, clientID string, permissionID int64) (bool, error) {
+	var allowed bool
+	err := s.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM delegated_clients AS client
+			JOIN delegated_client_permissions AS requested ON requested.client_id=client.id
+			WHERE client.id=$1 AND client.status='active' AND requested.permission_id=$2
+		)
+	`, clientID, permissionID).Scan(&allowed)
+	return allowed, err
+}

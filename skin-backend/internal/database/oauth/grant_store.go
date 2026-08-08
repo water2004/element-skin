@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
@@ -213,6 +214,46 @@ func (s Store) ActiveGrantByUserClient(ctx context.Context, userID, clientID str
 		grant.OIDCScopes = nil
 	}
 	return &grant, nil
+}
+
+type AuthorizationPermissionState struct {
+	ApplicationRequested bool
+	OwnedGranted         bool
+}
+
+func (s Store) AuthorizationPermissionState(ctx context.Context, userID, clientID string, ownedPermissionID, applicationPermissionID int64) (AuthorizationPermissionState, error) {
+	var state AuthorizationPermissionState
+	err := s.Pool.QueryRow(ctx, `
+		SELECT
+			EXISTS (
+				SELECT 1
+				FROM delegated_clients AS application_client
+				JOIN delegated_client_permissions AS application_requested
+				  ON application_requested.client_id=application_client.id
+				WHERE application_client.id=$3
+				  AND application_client.status='active'
+				  AND application_requested.permission_id=$5
+			),
+			EXISTS (
+				SELECT 1
+				FROM delegated_permission_grants AS grant_record
+				JOIN delegated_clients AS owned_client ON owned_client.id=grant_record.client_id
+				JOIN delegated_grant_permissions AS owned_granted ON owned_granted.grant_id=grant_record.id
+				JOIN delegated_client_permissions AS owned_requested
+				  ON owned_requested.client_id=grant_record.client_id
+				 AND owned_requested.permission_id=owned_granted.permission_id
+				WHERE grant_record.user_id=$1
+				  AND grant_record.subject_id=$2
+				  AND grant_record.client_id=$3
+				  AND grant_record.status='active'
+				  AND owned_client.status='active'
+				  AND owned_granted.permission_id=$4
+			)
+	`, userID, permissiondb.SubjectIDForUser(userID), clientID, ownedPermissionID, applicationPermissionID).Scan(
+		&state.ApplicationRequested,
+		&state.OwnedGranted,
+	)
+	return state, err
 }
 
 func (s Store) ActiveGrantOIDCScopes(ctx context.Context, grantID, userID, clientID string) ([]string, bool, error) {

@@ -11,38 +11,40 @@ import (
 )
 
 type Config struct {
-	DatabaseDSN           string
-	DatabaseHost          string
-	DatabasePort          string
-	DatabaseUser          string
-	DatabasePassword      string
-	DatabaseName          string
-	DatabaseSSLMode       string
-	MaxConnections        int32
-	JWTSecret             string
-	JWTExpireDays         int
-	AccessMinutes         int
-	SiteURL               string
-	APIURL                string
-	ServerHost            string
-	ServerPort            string
-	TexturesDir           string
-	CarouselDir           string
-	RedisAddr             string
-	RedisHost             string
-	RedisPort             string
-	RedisPassword         string
-	RedisDB               int
-	RedisKeyPrefix        string
-	PublicCacheTTL        int
-	AuthCacheTTL          int
-	PrivateKeyPath        string
-	PublicKeyPath         string
-	OIDCPrivateKeyPath    string
-	OIDCPublicKeyPath     string
-	IdentityEncryptionKey string
-	CORSOrigins           []string
-	CORSCredentials       bool
+	DatabaseDSN                   string
+	DatabaseHost                  string
+	DatabasePort                  string
+	DatabaseUser                  string
+	DatabasePassword              string
+	DatabaseName                  string
+	DatabaseSSLMode               string
+	MaxConnections                int32
+	WebhookWorkerMaxConnections   int32
+	WebhookWorkerActiveIntervalMS int
+	JWTSecret                     string
+	JWTExpireDays                 int
+	AccessMinutes                 int
+	SiteURL                       string
+	APIURL                        string
+	ServerHost                    string
+	ServerPort                    string
+	TexturesDir                   string
+	CarouselDir                   string
+	RedisAddr                     string
+	RedisHost                     string
+	RedisPort                     string
+	RedisPassword                 string
+	RedisDB                       int
+	RedisKeyPrefix                string
+	PublicCacheTTL                int
+	AuthCacheTTL                  int
+	PrivateKeyPath                string
+	PublicKeyPath                 string
+	OIDCPrivateKeyPath            string
+	OIDCPublicKeyPath             string
+	IdentityEncryptionKey         string
+	CORSOrigins                   []string
+	CORSCredentials               bool
 }
 
 type rawConfig = map[string]any
@@ -90,6 +92,12 @@ func (c *Config) apply(raw rawConfig) {
 	c.DatabaseSSLMode = getString(raw, "database.sslmode", c.DatabaseSSLMode)
 	if n := getInt(raw, "database.max_connections", int(c.MaxConnections)); n > 0 && n <= math.MaxInt32 {
 		c.MaxConnections = int32(n)
+	}
+	if n := getInt(raw, "webhook_worker.max_database_connections", int(c.WebhookWorkerMaxConnections)); n > 0 && n <= math.MaxInt32 {
+		c.WebhookWorkerMaxConnections = int32(n)
+	}
+	if n := getInt(raw, "webhook_worker.active_interval_ms", c.WebhookWorkerActiveIntervalMS); n > 0 {
+		c.WebhookWorkerActiveIntervalMS = n
 	}
 	c.JWTSecret = getString(raw, "jwt.secret", c.JWTSecret)
 	c.JWTExpireDays = getInt(raw, "jwt.expire_days", c.JWTExpireDays)

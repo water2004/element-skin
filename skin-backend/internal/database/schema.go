@@ -510,7 +510,9 @@ CREATE TABLE IF NOT EXISTS webhook_events (
     subject_user_id TEXT,
     data JSONB NOT NULL CHECK(jsonb_typeof(data) = 'object'),
     created_at BIGINT NOT NULL,
-    expanded_at BIGINT
+    expanded_at BIGINT,
+    expansion_lease_until BIGINT,
+    expansion_lease_token TEXT
 );
 
 CREATE TABLE IF NOT EXISTS webhook_deliveries (
@@ -521,6 +523,7 @@ CREATE TABLE IF NOT EXISTS webhook_deliveries (
     attempt_count INTEGER NOT NULL DEFAULT 0,
     next_attempt_at BIGINT NOT NULL,
     lease_until BIGINT,
+    lease_token TEXT,
     delivered_at BIGINT,
     last_http_status INTEGER,
     last_error TEXT NOT NULL DEFAULT '',
@@ -560,6 +563,9 @@ ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS authorization
     CHECK(authorization_status IN ('active', 'reauthorization_required'));
 ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_at BIGINT;
 ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_error_at BIGINT;
+ALTER TABLE webhook_events ADD COLUMN IF NOT EXISTS expansion_lease_until BIGINT;
+ALTER TABLE webhook_events ADD COLUMN IF NOT EXISTS expansion_lease_token TEXT;
+ALTER TABLE webhook_deliveries ADD COLUMN IF NOT EXISTS lease_token TEXT;
 
 DO $$
 BEGIN

@@ -49,6 +49,12 @@ func validateRequiredConfig(cfg Config, raw rawConfig) error {
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config fields: %s", strings.Join(missing, ", "))
 	}
+	if _, configured := lookup(raw, "webhook_worker.max_database_connections"); configured && cfg.WebhookWorkerMaxConnections <= 0 {
+		return fmt.Errorf("invalid config webhook_worker.max_database_connections")
+	}
+	if _, configured := lookup(raw, "webhook_worker.active_interval_ms"); configured && cfg.WebhookWorkerActiveIntervalMS <= 0 {
+		return fmt.Errorf("invalid config webhook_worker.active_interval_ms")
+	}
 	if cfg.CORSCredentials && containsString(cfg.CORSOrigins, "*") {
 		return fmt.Errorf("invalid config cors.allow_origins: wildcard is not allowed when credentials are enabled")
 	}

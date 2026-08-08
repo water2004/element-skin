@@ -32,6 +32,11 @@ database:
   sslmode: "disable"
   max_connections: 20
 
+# Webhook Worker 使用独立进程和连接池；默认预算优先保护主站请求
+webhook_worker:
+  max_database_connections: 2
+  active_interval_ms: 3000
+
 # Redis 配置
 # Redis 是验证码、限流、公开设置/首页媒体缓存和短期鉴权缓存的必需依赖
 redis:

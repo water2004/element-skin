@@ -3,11 +3,14 @@ package webhook
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -60,10 +63,10 @@ func TestWorkerDispatchesAndSignsTargetedGrantEventExactly(t *testing.T) {
 
 	fixedNow := time.UnixMilli(5000)
 	worker := Worker{DB: db, Config: cfg, HTTPClient: server.Client(), Now: func() time.Time { return fixedNow }}
-	if err := worker.DispatchBatch(ctx); err != nil {
+	if _, err := worker.DispatchBatch(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := worker.DeliverBatch(ctx); err != nil {
+	if _, err := worker.DeliverBatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	var eventID, deliveryID, status string
@@ -128,13 +131,13 @@ func TestWorkerRechecksDelegatedPermissionBeforeDeliveryAndMarksStaleEventDeadEx
 		t.Fatal(err)
 	}
 	worker := Worker{DB: db, Config: cfg, HTTPClient: server.Client(), Now: func() time.Time { return time.UnixMilli(6000) }}
-	if err := worker.DispatchBatch(ctx); err != nil {
+	if _, err := worker.DispatchBatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if revoked, err := db.OAuth.RevokeGrant(ctx, grant.ID, user.ID, 6100); err != nil || !revoked {
 		t.Fatalf("revoke delegated grant: revoked=%v err=%v", revoked, err)
 	}
-	if err := worker.DeliverBatch(ctx); err != nil {
+	if _, err := worker.DeliverBatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	var status, detail string
@@ -176,7 +179,7 @@ func TestWorkerRetriesNonSuccessWithDeterministicBackoffExactly(t *testing.T) {
 	}
 	now := time.UnixMilli(7000)
 	worker := Worker{DB: db, Config: cfg, HTTPClient: server.Client(), Now: func() time.Time { return now }}
-	if err := worker.RunOnce(ctx); err != nil {
+	if _, err := worker.RunOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
 	var deliveryID, status, detail string
@@ -200,7 +203,7 @@ func TestWorkerRetriesNonSuccessWithDeterministicBackoffExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 	now = time.UnixMilli(wantNext)
-	if err := worker.DeliverBatch(ctx); err != nil {
+	if _, err := worker.DeliverBatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Pool.QueryRow(ctx, `
@@ -242,7 +245,7 @@ func TestWorkerUsesConfidentialApplicationPermissionAndStopsDisabledEndpointExac
 		t.Fatal(err)
 	}
 	worker := Worker{DB: db, Config: cfg, HTTPClient: server.Client(), Now: func() time.Time { return time.UnixMilli(8000) }}
-	if err := worker.RunOnce(ctx); err != nil {
+	if _, err := worker.RunOnce(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if requests != 1 {
@@ -253,13 +256,13 @@ func TestWorkerUsesConfidentialApplicationPermissionAndStopsDisabledEndpointExac
 	if err := db.Profiles.Create(ctx, secondProfile); err != nil {
 		t.Fatal(err)
 	}
-	if err := worker.DispatchBatch(ctx); err != nil {
+	if _, err := worker.DispatchBatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.Pool.Exec(ctx, `UPDATE webhook_endpoints SET status='disabled' WHERE id=$1`, endpoint.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := worker.DeliverBatch(ctx); err != nil {
+	if _, err := worker.DeliverBatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	rows, err := db.Pool.Query(ctx, `
@@ -298,7 +301,7 @@ func TestWorkerExpandsUnknownEventsWithoutDeliveryExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 	worker := Worker{DB: db, Config: testutil.TestConfig(), Now: func() time.Time { return time.UnixMilli(9000) }}
-	if err := worker.DispatchBatch(ctx); err != nil {
+	if _, err := worker.DispatchBatch(ctx); err != nil {
 		t.Fatal(err)
 	}
 	var expandedAt *int64
@@ -314,12 +317,148 @@ func TestWorkerExpandsUnknownEventsWithoutDeliveryExactly(t *testing.T) {
 	}
 }
 
+func TestWorkerDrainsActiveExpansionQueueWithoutWaitingForPollIntervalExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	if _, err := db.Pool.Exec(t.Context(), `
+		INSERT INTO webhook_events (id,event_type,data,created_at)
+		SELECT 'evt_drain_' || item::TEXT, 'profile.unknown', '{}'::JSONB, item
+		FROM generate_series(1,201) AS item
+	`); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	worker := Worker{
+		DB:             db,
+		Config:         testutil.TestConfig(),
+		Now:            func() time.Time { return time.UnixMilli(10000) },
+		PollInterval:   time.Hour,
+		ActiveInterval: time.Millisecond,
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		worker.Run(ctx)
+	}()
+
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			var expanded, deliveries int
+			if err := db.Pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM webhook_events WHERE expanded_at=10000`).Scan(&expanded); err != nil {
+				cancel()
+				<-done
+				t.Fatal(err)
+			}
+			if err := db.Pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM webhook_deliveries`).Scan(&deliveries); err != nil {
+				cancel()
+				<-done
+				t.Fatal(err)
+			}
+			if expanded == 201 {
+				cancel()
+				<-done
+				if deliveries != 0 {
+					t.Fatalf("unknown event deliveries=%d want=0", deliveries)
+				}
+				return
+			}
+			if expanded > 201 || deliveries != 0 {
+				cancel()
+				<-done
+				t.Fatalf("drain state expanded=%d deliveries=%d", expanded, deliveries)
+			}
+		case <-ctx.Done():
+			<-done
+			t.Fatalf("worker waited for poll interval with active queue: expanded queue did not drain: %v", ctx.Err())
+		}
+	}
+}
+
+func TestBatchAuthorizationCacheCoalescesOnlyMatchingConcurrentChecksExactly(t *testing.T) {
+	cache := newBatchAuthorizationCache()
+	key := authorizationCacheKey{
+		EventType:        "profile.updated",
+		SubjectUserID:    "user-1",
+		EndpointClientID: "client-1",
+	}
+	const callers = 20
+	var calls atomic.Int32
+	release := make(chan struct{})
+	results := make(chan struct {
+		allowed bool
+		err     error
+	}, callers)
+	var ready sync.WaitGroup
+	ready.Add(callers)
+	for range callers {
+		go func() {
+			ready.Done()
+			allowed, err := cache.resolve(t.Context(), key, func() (bool, error) {
+				calls.Add(1)
+				<-release
+				return true, nil
+			})
+			results <- struct {
+				allowed bool
+				err     error
+			}{allowed: allowed, err: err}
+		}()
+	}
+	ready.Wait()
+	close(release)
+	for range callers {
+		result := <-results
+		if !result.allowed || result.err != nil {
+			t.Fatalf("coalesced authorization result allowed=%v err=%v", result.allowed, result.err)
+		}
+	}
+	if got := calls.Load(); got != 1 {
+		t.Fatalf("matching authorization loads=%d want=1", got)
+	}
+
+	differentKey := key
+	differentKey.SubjectUserID = "user-2"
+	allowed, err := cache.resolve(t.Context(), differentKey, func() (bool, error) {
+		calls.Add(1)
+		return false, nil
+	})
+	if allowed || err != nil || calls.Load() != 2 {
+		t.Fatalf("different authorization result allowed=%v err=%v loads=%d want false,nil,2", allowed, err, calls.Load())
+	}
+
+	wantErr := errors.New("authorization unavailable")
+	errorKey := key
+	errorKey.SubjectUserID = "user-3"
+	var errorCalls int
+	for index := range 2 {
+		allowed, err = cache.resolve(t.Context(), errorKey, func() (bool, error) {
+			errorCalls++
+			return false, wantErr
+		})
+		if allowed || !errors.Is(err, wantErr) {
+			t.Fatalf("cached error result %d allowed=%v err=%v", index, allowed, err)
+		}
+	}
+	if errorCalls != 1 {
+		t.Fatalf("matching failed authorization loads=%d want=1", errorCalls)
+	}
+}
+
 func TestWorkerConstructionCancellationAndSafetyHelpersExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	cfg := testutil.TestConfig()
 	worker := NewWorker(db, cfg)
 	if worker.DB != db || worker.Config.IdentityEncryptionKey != cfg.IdentityEncryptionKey || worker.HTTPClient == nil || worker.Now == nil {
 		t.Fatalf("new worker fields mismatch: %#v", worker)
+	}
+	if worker.ActiveWorkInterval() != 3*time.Second {
+		t.Fatalf("default active work interval=%s want=3s", worker.ActiveWorkInterval())
+	}
+	worker.ActiveInterval = 75 * time.Millisecond
+	if worker.ActiveWorkInterval() != 75*time.Millisecond {
+		t.Fatalf("custom active work interval=%s want=75ms", worker.ActiveWorkInterval())
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

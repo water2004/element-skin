@@ -76,6 +76,8 @@ func setCompleteConfigEnv(t *testing.T) {
 	t.Setenv("DATABASE_NAME", "env-db-name")
 	t.Setenv("DATABASE_SSLMODE", "require")
 	t.Setenv("DATABASE_MAX_CONNECTIONS", "31")
+	t.Setenv("WEBHOOK_WORKER_MAX_DATABASE_CONNECTIONS", "3")
+	t.Setenv("WEBHOOK_WORKER_ACTIVE_INTERVAL_MS", "1750")
 	t.Setenv("SERVER_SITE_URL", "https://env.example")
 	t.Setenv("SERVER_API_URL", "https://env.example/api")
 	t.Setenv("SERVER_HOST", "0.0.0.0")
@@ -103,6 +105,8 @@ func clearConfigEnv(t *testing.T) {
 		"DATABASE_NAME",
 		"DATABASE_SSLMODE",
 		"DATABASE_MAX_CONNECTIONS",
+		"WEBHOOK_WORKER_MAX_DATABASE_CONNECTIONS",
+		"WEBHOOK_WORKER_ACTIVE_INTERVAL_MS",
 		"JWT_SECRET",
 		"JWT_EXPIRE_DAYS",
 		"JWT_ACCESS_EXPIRE_MINUTES",

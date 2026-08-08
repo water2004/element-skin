@@ -48,6 +48,12 @@ func applyEnvOverrides(cfg *Config, raw rawConfig) (bool, error) {
 		func() (bool, error) {
 			return applyInt32Env(raw, "DATABASE_MAX_CONNECTIONS", "database.max_connections", &cfg.MaxConnections, positiveInt)
 		},
+		func() (bool, error) {
+			return applyInt32Env(raw, "WEBHOOK_WORKER_MAX_DATABASE_CONNECTIONS", "webhook_worker.max_database_connections", &cfg.WebhookWorkerMaxConnections, positiveInt)
+		},
+		func() (bool, error) {
+			return applyIntEnv(raw, "WEBHOOK_WORKER_ACTIVE_INTERVAL_MS", "webhook_worker.active_interval_ms", &cfg.WebhookWorkerActiveIntervalMS, positiveInt)
+		},
 		func() (bool, error) { return applyStringEnv(raw, "SERVER_SITE_URL", "server.site_url", &cfg.SiteURL) },
 		func() (bool, error) { return applyStringEnv(raw, "SERVER_API_URL", "server.api_url", &cfg.APIURL) },
 		func() (bool, error) { return applyStringEnv(raw, "SERVER_HOST", "server.host", &cfg.ServerHost) },

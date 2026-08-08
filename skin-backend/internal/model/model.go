@@ -173,13 +173,21 @@ type WebhookEndpoint struct {
 }
 
 type WebhookEvent struct {
-	ID             string         `json:"id"`
-	Type           string         `json:"type"`
-	TargetClientID string         `json:"-"`
-	SubjectUserID  string         `json:"-"`
-	Data           map[string]any `json:"data"`
-	CreatedAt      int64          `json:"created_at"`
-	ExpandedAt     *int64         `json:"-"`
+	ID                  string         `json:"id"`
+	Type                string         `json:"type"`
+	TargetClientID      string         `json:"-"`
+	SubjectUserID       string         `json:"-"`
+	Data                map[string]any `json:"data"`
+	CreatedAt           int64          `json:"created_at"`
+	ExpandedAt          *int64         `json:"-"`
+	ExpansionLeaseUntil *int64         `json:"-"`
+	ExpansionLeaseToken string         `json:"-"`
+}
+
+type WebhookExpansion struct {
+	EventID     string
+	LeaseToken  string
+	EndpointIDs []string
 }
 
 type WebhookDelivery struct {
@@ -188,6 +196,18 @@ type WebhookDelivery struct {
 	Endpoint     WebhookEndpoint
 	AttemptCount int
 	CreatedAt    int64
+	LeaseToken   string
+}
+
+type WebhookDeliveryOutcome struct {
+	DeliveryID    string
+	LeaseToken    string
+	Status        string
+	NextAttemptAt int64
+	UpdatedAt     int64
+	HTTPStatus    *int
+	Detail        string
+	DeliveredAt   *int64
 }
 
 type IdentityProvider struct {

@@ -103,6 +103,10 @@ func TestStoreClosedPoolReturnsExactDependencyErrorsForEveryOAuthTable(t *testin
 			_, err := db.OAuth.ClientPermissionIDs(ctx, client.ID)
 			return err
 		}},
+		{name: "client has permission", call: func() error {
+			_, err := db.OAuth.ClientHasPermission(ctx, client.ID, 1)
+			return err
+		}},
 		{name: "create grant", call: func() error { return db.OAuth.CreateGrant(ctx, grant, permissionIDs("account.read.self")) }},
 		{name: "revoke grant", call: func() error {
 			_, err := db.OAuth.RevokeGrant(ctx, grant.ID, grant.UserID, 2000)
@@ -122,6 +126,10 @@ func TestStoreClosedPoolReturnsExactDependencyErrorsForEveryOAuthTable(t *testin
 		}},
 		{name: "grant permission ids", call: func() error {
 			_, err := db.OAuth.GrantPermissionIDs(ctx, grant.ID)
+			return err
+		}},
+		{name: "authorization permission state", call: func() error {
+			_, err := db.OAuth.AuthorizationPermissionState(ctx, grant.UserID, grant.ClientID, 1, 2)
 			return err
 		}},
 		{name: "create authorization code", call: func() error {
