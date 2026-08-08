@@ -7,7 +7,7 @@
       </div>
     </div>
 
-    <UiCard class="p-6">
+    <UiCard v-if="showAppSection" class="p-6">
       <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">作为应用开发者</h2>
@@ -16,18 +16,28 @@
           </p>
         </div>
         <div class="flex flex-wrap gap-2">
-          <el-button :loading="loading" @click="loadApps">
+          <el-button v-if="canReadApps" :loading="loading" @click="loadApps">
             <el-icon><Refresh /></el-icon>
             刷新
           </el-button>
-          <el-button type="primary" @click="router.push({ name: 'dashboard-oauth-app-create' })">
+          <el-button
+            v-if="canCreateApps"
+            type="primary"
+            @click="router.push({ name: 'dashboard-oauth-app-create' })"
+          >
             <el-icon><Plus /></el-icon>
             申请新应用
           </el-button>
         </div>
       </div>
 
-      <el-empty v-if="!loading && apps.length === 0" description="还没有申请应用" />
+      <el-alert
+        v-if="!canReadApps"
+        type="info"
+        :closable="false"
+        title="当前权限不能读取已申请应用"
+      />
+      <el-empty v-else-if="!loading && apps.length === 0" description="还没有申请应用" />
       <div v-else v-loading="loading" class="divide-y divide-[var(--color-border)]">
         <div
           v-for="app in apps"
@@ -70,6 +80,7 @@
             </div>
             <div class="flex justify-end">
               <el-button
+                v-if="canManageApps"
                 type="primary"
                 plain
                 @click="
@@ -80,7 +91,7 @@
                 "
               >
                 <el-icon><Edit /></el-icon>
-                编辑
+                管理
               </el-button>
             </div>
           </div>
@@ -88,7 +99,7 @@
       </div>
     </UiCard>
 
-    <UiCard class="p-6">
+    <UiCard v-if="showGrantSection" class="p-6">
       <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">作为用户已授权</h2>
@@ -96,13 +107,19 @@
             管理外部应用已经获得的用户委托权限。
           </p>
         </div>
-        <el-button :loading="grantsLoading" @click="loadGrants">
+        <el-button v-if="canReadGrants" :loading="grantsLoading" @click="loadGrants">
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
       </div>
 
-      <el-empty v-if="!grantsLoading && grants.length === 0" description="暂无已授权应用" />
+      <el-alert
+        v-if="!canReadGrants"
+        type="info"
+        :closable="false"
+        title="当前权限不能读取已授权应用"
+      />
+      <el-empty v-else-if="!grantsLoading && grants.length === 0" description="暂无已授权应用" />
       <div v-else v-loading="grantsLoading" class="grid gap-3">
         <div
           v-for="grant in grants"
@@ -139,7 +156,7 @@
           </p>
           <div class="mt-3 flex justify-end">
             <el-button
-              v-if="grant.status === 'active'"
+              v-if="grant.status === 'active' && canRevokeGrants"
               type="danger"
               link
               :loading="revokingGrantId === grant.id"
@@ -155,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, inject, ref, watch, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Edit, Plus, Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
@@ -168,12 +185,13 @@ import {
   type OAuthClientStatus,
   type OAuthGrant,
 } from '@/api/oauth'
-import type { PermissionDefinition } from '@/api/types'
+import type { PermissionDefinition, User } from '@/api/types'
 import UiCard from '@/components/ui/UiCard.vue'
 import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
+const user = inject<Ref<User | null>>('user', ref(null))
 
 const apps = ref<OAuthClient[]>([])
 const grants = ref<OAuthGrant[]>([])
@@ -183,6 +201,20 @@ const grantsLoading = ref(false)
 const revokingGrantId = ref('')
 
 const revokedGrantRetentionMs = 30 * 24 * 60 * 60 * 1000
+const userPermissions = computed(() => new Set(user.value?.permissions ?? []))
+const canReadApps = computed(() => userPermissions.value.has('oauth_app.read.owned'))
+const canCreateApps = computed(() => userPermissions.value.has('oauth_app.create.owned'))
+const canUpdateApps = computed(() => userPermissions.value.has('oauth_app.update.owned'))
+const canDeleteApps = computed(() => userPermissions.value.has('oauth_app.delete.owned'))
+const canManageApps = computed(
+  () => canReadApps.value && (canUpdateApps.value || canDeleteApps.value),
+)
+const showAppSection = computed(
+  () => canReadApps.value || canCreateApps.value || canUpdateApps.value || canDeleteApps.value,
+)
+const canReadGrants = computed(() => userPermissions.value.has('oauth_grant.read.owned'))
+const canRevokeGrants = computed(() => userPermissions.value.has('oauth_grant.revoke.owned'))
+const showGrantSection = computed(() => canReadGrants.value || canRevokeGrants.value)
 
 const permissionByCode = computed(() => {
   const out = new Map<string, PermissionDefinition>()
@@ -190,16 +222,31 @@ const permissionByCode = computed(() => {
   return out
 })
 
-onMounted(async () => {
-  await Promise.all([loadCatalog(), loadApps(), loadGrants()])
-})
+watch(
+  () => user.value?.permissions,
+  (permissions, previousPermissions) => {
+    if (!permissions) return
+    const previous = new Set(previousPermissions ?? [])
+    const requests: Promise<void>[] = []
+    if (!previousPermissions) requests.push(loadCatalog())
+    if (canReadApps.value && !previous.has('oauth_app.read.owned')) requests.push(loadApps())
+    if (canReadGrants.value && !previous.has('oauth_grant.read.owned')) requests.push(loadGrants())
+    void Promise.all(requests)
+  },
+  { immediate: true },
+)
 
 async function loadCatalog() {
-  const res = await getPermissionCatalog()
-  catalog.value = res.data.permissions
+  try {
+    const res = await getPermissionCatalog()
+    catalog.value = res.data.permissions
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '加载权限目录失败'))
+  }
 }
 
 async function loadApps() {
+  if (!canReadApps.value) return
   loading.value = true
   try {
     const res = await listOAuthApps()
@@ -212,6 +259,7 @@ async function loadApps() {
 }
 
 async function loadGrants() {
+  if (!canReadGrants.value) return
   grantsLoading.value = true
   try {
     const res = await listOAuthGrants()
@@ -224,6 +272,7 @@ async function loadGrants() {
 }
 
 async function revokeGrant(grantId: string) {
+  if (!canRevokeGrants.value) return
   revokingGrantId.value = grantId
   try {
     await revokeOAuthGrant(grantId)

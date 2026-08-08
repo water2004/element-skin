@@ -86,7 +86,7 @@
             OAuth 回调地址与 Webhook endpoint 相互独立，均可按实际授权方式选择配置。
           </p>
         </div>
-        <el-form label-position="top">
+        <el-form label-position="top" :disabled="!canEditFields">
           <div class="grid gap-4 md:grid-cols-2">
             <el-form-item label="应用名称" required>
               <el-input v-model="form.name" maxlength="80" show-word-limit />
@@ -129,7 +129,11 @@
             Webhook 可监听事件会根据这里申请的权限实时收窄；移除权限时，对应事件也会被移除。
           </p>
         </div>
-        <PermissionTagPicker v-model="form.permissions" :permissions="delegablePermissions" />
+        <PermissionTagPicker
+          v-model="form.permissions"
+          :permissions="delegablePermissions"
+          :disabled="!canEditFields"
+        />
         <div class="form-tip mt-3">
           只使用 OIDC 登录的应用可以不选择 API 权限；openid、profile、email 和 offline_access
           仍由授权请求的 scope 参数声明。
@@ -144,7 +148,10 @@
               完全可选。站点只异步发送基础标识，接收方再使用 API 获取所需信息。
             </p>
           </div>
-          <el-button :disabled="form.webhook_endpoints.length >= 5" @click="addEndpoint">
+          <el-button
+            :disabled="!canEditFields || form.webhook_endpoints.length >= 5"
+            @click="addEndpoint"
+          >
             <el-icon><Plus /></el-icon>
             添加 endpoint
           </el-button>
@@ -164,14 +171,24 @@
             <div class="mb-4 flex items-center justify-between gap-3">
               <div class="font-semibold text-[var(--color-heading)]">Endpoint {{ index + 1 }}</div>
               <div class="flex items-center gap-3">
-                <el-switch v-model="endpoint.enabled" active-text="启用" inactive-text="停用" />
-                <el-button type="danger" link @click="removeEndpoint(index)">
+                <el-switch
+                  v-model="endpoint.enabled"
+                  :disabled="!canEditFields"
+                  active-text="启用"
+                  inactive-text="停用"
+                />
+                <el-button
+                  type="danger"
+                  link
+                  :disabled="!canEditFields"
+                  @click="removeEndpoint(index)"
+                >
                   <el-icon><Delete /></el-icon>
                   移除
                 </el-button>
               </div>
             </div>
-            <el-form label-position="top">
+            <el-form label-position="top" :disabled="!canEditFields">
               <el-form-item label="接收地址" required>
                 <el-input v-model="endpoint.url" placeholder="https://hooks.example/events" />
                 <div class="form-tip">仅允许公网 HTTPS 地址，不跟随重定向。</div>
@@ -215,14 +232,20 @@
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div class="flex flex-wrap gap-2">
             <el-button
-              v-if="app?.client_type === 'confidential'"
+              v-if="app?.client_type === 'confidential' && canUpdateApps"
               :loading="rotating"
               @click="rotateSecret"
             >
               <el-icon><Key /></el-icon>
               轮换 Client Secret
             </el-button>
-            <el-button v-if="app" type="danger" plain :loading="deleting" @click="deleteApp">
+            <el-button
+              v-if="app && canDeleteApps"
+              type="danger"
+              plain
+              :loading="deleting"
+              @click="deleteApp"
+            >
               <el-icon><Delete /></el-icon>
               删除应用
             </el-button>
@@ -230,13 +253,18 @@
           <div class="flex flex-wrap justify-end gap-2">
             <el-button @click="router.push({ name: 'dashboard-oauth' })">取消</el-button>
             <el-button
-              v-if="app && app.status !== 'pending'"
+              v-if="app && canUpdateApps && app.status !== 'pending'"
               :loading="saving"
               @click="save(false)"
             >
               仅保存
             </el-button>
-            <el-button type="primary" :loading="saving" @click="save(app?.status !== 'pending')">
+            <el-button
+              v-if="canEditFields"
+              type="primary"
+              :loading="saving"
+              @click="save(app?.status !== 'pending')"
+            >
               <el-icon><Upload v-if="app" /><Plus v-else /></el-icon>
               {{ primaryLabel }}
             </el-button>
@@ -307,6 +335,11 @@ const form = reactive<OAuthAppFormState>({
 })
 
 const clientId = computed(() => String(route.params.client_id ?? ''))
+const userPermissions = computed(() => new Set(user.value?.permissions ?? []))
+const canCreateApps = computed(() => userPermissions.value.has('oauth_app.create.owned'))
+const canUpdateApps = computed(() => userPermissions.value.has('oauth_app.update.owned'))
+const canDeleteApps = computed(() => userPermissions.value.has('oauth_app.delete.owned'))
+const canEditFields = computed(() => (app.value ? canUpdateApps.value : canCreateApps.value))
 const primaryLabel = computed(() => {
   if (!app.value) return '提交审核'
   return app.value.status === 'pending' ? '保存修改' : '保存并重新提交'
@@ -410,6 +443,7 @@ function validateForm() {
 }
 
 async function save(resubmit: boolean) {
+  if (!canEditFields.value) return
   if (!validateForm()) return
   saving.value = true
   clientSecret.value = ''
@@ -454,7 +488,7 @@ function captureSecrets(next: OAuthClient) {
 }
 
 async function rotateSecret() {
-  if (!app.value) return
+  if (!app.value || !canUpdateApps.value) return
   rotating.value = true
   try {
     const res = await rotateOAuthSecret(app.value.client_id)
@@ -469,7 +503,7 @@ async function rotateSecret() {
 }
 
 async function deleteApp() {
-  if (!app.value) return
+  if (!app.value || !canDeleteApps.value) return
   await ElMessageBox.confirm(
     '删除后应用、Webhook endpoints 和授权都会被清除，确认删除？',
     '删除应用',

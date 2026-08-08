@@ -19,7 +19,9 @@
           <span class="text-sm font-semibold text-[var(--color-heading)]">
             {{ selectedGroup.resourceDescription }}
           </span>
-          <span class="text-xs text-[var(--color-text-light)]">{{ selectedGroup.items.length }} 项</span>
+          <span class="text-xs text-[var(--color-text-light)]"
+            >{{ selectedGroup.items.length }} 项</span
+          >
         </div>
         <div class="flex flex-wrap gap-2">
           <PermissionToneTag
@@ -29,7 +31,7 @@
             :title="item.code"
             :tone="selectedGroup.tone"
             :badge-label="selectedSet.has(item.code) ? '已选' : ''"
-            clickable
+            :clickable="!disabled"
             @click="toggle(item.code)"
           />
         </div>
@@ -45,7 +47,7 @@
           :label="item.label"
           :title="item.code"
           :tone="toneFor(item.resource)"
-          removable
+          :removable="!disabled"
           @remove="remove(item.code)"
         />
       </div>
@@ -69,6 +71,7 @@ import {
 const props = defineProps<{
   modelValue: string[]
   permissions: PermissionDefinition[]
+  disabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -93,7 +96,10 @@ const selectedSet = computed(() => new Set(props.modelValue))
 const selectedItems = computed(() =>
   props.modelValue
     .map((code) => createPermissionDisplayItem(code, permissionByCode.value.get(code)))
-    .sort((a, b) => a.resourceDescription.localeCompare(b.resourceDescription) || a.code.localeCompare(b.code)),
+    .sort(
+      (a, b) =>
+        a.resourceDescription.localeCompare(b.resourceDescription) || a.code.localeCompare(b.code),
+    ),
 )
 
 watch(
@@ -105,11 +111,13 @@ watch(
 )
 
 function toggle(code: string) {
+  if (props.disabled) return
   if (selectedSet.value.has(code)) remove(code)
   else emit('update:modelValue', [...props.modelValue, code].sort())
 }
 
 function remove(code: string) {
+  if (props.disabled) return
   emit(
     'update:modelValue',
     props.modelValue.filter((item) => item !== code),

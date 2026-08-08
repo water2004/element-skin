@@ -119,19 +119,29 @@ describe('OAuth application pages', () => {
   })
 
   it('loads the application list, revokes a grant, and navigates to the editor', async () => {
-    const mounted = await mountPage('/dashboard/oauth', [
-      { path: '/dashboard/oauth', name: 'dashboard-oauth', component: DashboardOAuthApps },
-      {
-        path: '/dashboard/oauth/apps/new',
-        name: 'dashboard-oauth-app-create',
-        component: blankComponent(),
-      },
-      {
-        path: '/dashboard/oauth/apps/:client_id/edit',
-        name: 'dashboard-oauth-app-edit',
-        component: blankComponent(),
-      },
-    ])
+    const mounted = await mountPage(
+      '/dashboard/oauth',
+      [
+        { path: '/dashboard/oauth', name: 'dashboard-oauth', component: DashboardOAuthApps },
+        {
+          path: '/dashboard/oauth/apps/new',
+          name: 'dashboard-oauth-app-create',
+          component: blankComponent(),
+        },
+        {
+          path: '/dashboard/oauth/apps/:client_id/edit',
+          name: 'dashboard-oauth-app-edit',
+          component: blankComponent(),
+        },
+      ],
+      [
+        'oauth_app.read.owned',
+        'oauth_app.create.owned',
+        'oauth_app.update.owned',
+        'oauth_grant.read.owned',
+        'oauth_grant.revoke.owned',
+      ],
+    )
     await flushUI()
 
     expect(mounted.root.textContent).toContain('Coverage app')
@@ -142,7 +152,7 @@ describe('OAuth application pages', () => {
     expect(apiMocks.revokeOAuthGrant).toHaveBeenCalledWith('grant-1')
     expect(apiMocks.listOAuthGrants).toHaveBeenCalledTimes(2)
 
-    findButton(mounted.root, '编辑').click()
+    findButton(mounted.root, '管理').click()
     await flushUI()
     expect(mounted.router.currentRoute.value.name).toBe('dashboard-oauth-app-edit')
     expect(mounted.router.currentRoute.value.params.client_id).toBe(client.client_id)
@@ -195,14 +205,18 @@ describe('OAuth application pages', () => {
     apiMocks.deleteOAuthApp.mockResolvedValue({ data: undefined })
     vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
 
-    const mounted = await mountPage('/dashboard/oauth/apps/client-1/edit', [
-      { path: '/dashboard/oauth', name: 'dashboard-oauth', component: blankComponent() },
-      {
-        path: '/dashboard/oauth/apps/:client_id/edit',
-        name: 'dashboard-oauth-app-edit',
-        component: DashboardOAuthAppForm,
-      },
-    ])
+    const mounted = await mountPage(
+      '/dashboard/oauth/apps/client-1/edit',
+      [
+        { path: '/dashboard/oauth', name: 'dashboard-oauth', component: blankComponent() },
+        {
+          path: '/dashboard/oauth/apps/:client_id/edit',
+          name: 'dashboard-oauth-app-edit',
+          component: DashboardOAuthAppForm,
+        },
+      ],
+      ['oauth_app.read.owned', 'oauth_app.update.owned', 'oauth_app.delete.owned'],
+    )
     await flushUI()
 
     expect(mounted.root.textContent).toContain('应用审核未通过')
@@ -258,9 +272,91 @@ describe('OAuth application pages', () => {
     expect(mounted.router.currentRoute.value.name).toBe('dashboard-oauth')
     mounted.unmount()
   })
+
+  it('loads only permitted sections and exposes only permitted actions', async () => {
+    const routes: RouteRecordRaw[] = [
+      { path: '/dashboard/oauth', name: 'dashboard-oauth', component: DashboardOAuthApps },
+      {
+        path: '/dashboard/oauth/apps/new',
+        name: 'dashboard-oauth-app-create',
+        component: blankComponent(),
+      },
+      {
+        path: '/dashboard/oauth/apps/:client_id/edit',
+        name: 'dashboard-oauth-app-edit',
+        component: blankComponent(),
+      },
+    ]
+
+    const appReader = await mountPage('/dashboard/oauth', routes, ['oauth_app.read.owned'])
+    await flushUI()
+    expect(apiMocks.listOAuthApps).toHaveBeenCalledTimes(1)
+    expect(apiMocks.listOAuthGrants).not.toHaveBeenCalled()
+    expect(appReader.root.textContent).toContain('Coverage app')
+    expect(buttonText(appReader.root)).not.toContain('申请新应用')
+    expect(buttonText(appReader.root)).not.toContain('管理')
+    appReader.unmount()
+
+    vi.clearAllMocks()
+    apiMocks.getPermissionCatalog.mockResolvedValue({ data: { permissions: [] } })
+    apiMocks.listOAuthApps.mockResolvedValue({ data: { items: [client] } })
+    apiMocks.listOAuthGrants.mockResolvedValue({ data: { items: [activeGrant] } })
+    const grantReader = await mountPage('/dashboard/oauth', routes, ['oauth_grant.read.owned'])
+    await flushUI()
+    expect(apiMocks.listOAuthApps).not.toHaveBeenCalled()
+    expect(apiMocks.listOAuthGrants).toHaveBeenCalledTimes(1)
+    expect(grantReader.root.textContent).toContain('profile.read.owned')
+    expect(buttonText(grantReader.root)).not.toContain('撤销授权')
+    grantReader.unmount()
+
+    vi.clearAllMocks()
+    apiMocks.getPermissionCatalog.mockResolvedValue({ data: { permissions: [] } })
+    const creator = await mountPage('/dashboard/oauth', routes, ['oauth_app.create.owned'])
+    await flushUI()
+    expect(apiMocks.listOAuthApps).not.toHaveBeenCalled()
+    expect(apiMocks.listOAuthGrants).not.toHaveBeenCalled()
+    expect(buttonText(creator.root)).toContain('申请新应用')
+    creator.unmount()
+  })
+
+  it('keeps an application read-only when the user can only read and delete it', async () => {
+    apiMocks.getOAuthApp.mockResolvedValue({ data: { ...client, status: 'active' } })
+    apiMocks.deleteOAuthApp.mockResolvedValue({ data: undefined })
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
+    const mounted = await mountPage(
+      '/dashboard/oauth/apps/client-1/edit',
+      [
+        { path: '/dashboard/oauth', name: 'dashboard-oauth', component: blankComponent() },
+        {
+          path: '/dashboard/oauth/apps/:client_id/edit',
+          name: 'dashboard-oauth-app-edit',
+          component: DashboardOAuthAppForm,
+        },
+      ],
+      ['oauth_app.read.owned', 'oauth_app.delete.owned'],
+    )
+    await flushUI()
+
+    const nameInput = [...mounted.root.querySelectorAll('input')].find(
+      (input) => input.value === client.name,
+    )
+    expect(nameInput?.disabled).toBe(true)
+    expect(buttonText(mounted.root)).toContain('删除应用')
+    expect(buttonText(mounted.root)).not.toContain('轮换 Client Secret')
+    expect(buttonText(mounted.root)).not.toContain('仅保存')
+    expect(buttonText(mounted.root)).not.toContain('保存修改')
+    findButton(mounted.root, '删除应用').click()
+    await flushUI()
+    expect(apiMocks.deleteOAuthApp).toHaveBeenCalledWith(client.client_id)
+    mounted.unmount()
+  })
 })
 
-async function mountPage(path: string, routes: RouteRecordRaw[]) {
+async function mountPage(
+  path: string,
+  routes: RouteRecordRaw[],
+  permissions: string[] = ['oauth_app.create.owned'],
+) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/', component: blankComponent() }, ...routes],
@@ -270,10 +366,7 @@ async function mountPage(path: string, routes: RouteRecordRaw[]) {
   const app = createApp({ render: () => h(RouterView) })
   app.use(router)
   app.use(ElementPlus)
-  app.provide(
-    'user',
-    ref({ id: 'user-1', permissions: ['oauth_app.create.owned'] } as unknown as User),
-  )
+  app.provide('user', ref({ id: 'user-1', permissions } as unknown as User))
   await router.push(path)
   await router.isReady()
   app.mount(host)
@@ -297,6 +390,10 @@ function findButton(root: HTMLElement, text: string) {
   )
   if (!button) throw new Error(`button not found: ${text}`)
   return button
+}
+
+function buttonText(root: HTMLElement) {
+  return [...root.querySelectorAll('button')].map((button) => button.textContent?.trim() ?? '')
 }
 
 function setInputValue(input: HTMLInputElement, value: string) {
