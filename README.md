@@ -334,6 +334,19 @@ v2.4.1 没有对应 OAuth 功能，因此以下场景不参与跨版本对比：
 
 完整报告见 [`reports/concurrency-load-test.md`](reports/concurrency-load-test.md)。压测报告使用隔离 PostgreSQL 数据库和 Redis key 前缀，测试结束后自动清理测试数据。
 
+### Webhook 性能影响
+
+Webhook 压测以同一个 profile 更新接口为负载，使用 50 并发、每阶段 1 秒、四轮平衡轮换和 20 个数据库连接，对比关闭触发器、无订阅、仅写 outbox、worker 同时运行四种模式。所有写请求均成功：
+
+| 模式 | 中位成功 req/s | 相对功能前基线 | 中位 P95 |
+| --- | ---: | ---: | ---: |
+| 关闭触发器（功能前近似基线） | 16008.1 | 0.0% | 4.9ms |
+| 启用触发器，无订阅 | 15348.2 | -4.1% | 5.0ms |
+| 有订阅，仅写 outbox | 14065.1 | -12.1% | 5.5ms |
+| 有订阅，worker 同时运行 | 14040.7 | -12.3% | 5.4ms |
+
+在本机零延迟 `204` 接收端下，1000 个固定事件的 outbox 展开吞吐为 1052.8 events/s，HTTP 投递并落库吞吐为 5324.1 deliveries/s，端到端吞吐为 879.0 events/s。worker 同时运行相对“仅写 outbox”只再降低约 0.2% 写吞吐，且没有进一步放大中位 P95，说明异步拆分避免了第三方 HTTP 直接阻塞主站请求；实际投递能力仍需结合第三方网络延迟复测。完整方法、原始轮次和限制见 [`reports/webhook-load-test.md`](reports/webhook-load-test.md)。
+
 ## 📄 许可证
 
 [MIT License](LICENSE)
