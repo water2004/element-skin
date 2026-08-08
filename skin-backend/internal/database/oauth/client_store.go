@@ -4,12 +4,17 @@ import (
 	"context"
 	"errors"
 
+	webhookdb "element-skin/backend/internal/database/webhook"
 	"element-skin/backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
 )
 
 func (s Store) CreateClient(ctx context.Context, client model.OAuthClient, permissionIDs []int64) error {
+	return s.CreateClientWithEndpoints(ctx, client, permissionIDs, nil)
+}
+
+func (s Store) CreateClientWithEndpoints(ctx context.Context, client model.OAuthClient, permissionIDs []int64, endpoints []model.WebhookEndpoint) error {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
@@ -33,10 +38,17 @@ func (s Store) CreateClient(ctx context.Context, client model.OAuthClient, permi
 	`, "client:"+client.ID, client.CreatedAt); err != nil {
 		return err
 	}
+	if err := webhookdb.ReplaceEndpoints(ctx, tx, client.ID, endpoints); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
 func (s Store) UpdateClient(ctx context.Context, client model.OAuthClient, permissionIDs []int64) (bool, error) {
+	return s.UpdateClientWithEndpoints(ctx, client, permissionIDs, nil)
+}
+
+func (s Store) UpdateClientWithEndpoints(ctx context.Context, client model.OAuthClient, permissionIDs []int64, endpoints []model.WebhookEndpoint) (bool, error) {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return false, err
@@ -54,6 +66,9 @@ func (s Store) UpdateClient(ctx context.Context, client model.OAuthClient, permi
 		return false, err
 	}
 	if err := insertClientPermissions(ctx, tx, client.ID, permissionIDs, client.UpdatedAt); err != nil {
+		return false, err
+	}
+	if err := webhookdb.ReplaceEndpoints(ctx, tx, client.ID, endpoints); err != nil {
 		return false, err
 	}
 	return true, tx.Commit(ctx)

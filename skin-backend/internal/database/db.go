@@ -27,6 +27,7 @@ import (
 	"element-skin/backend/internal/database/token"
 	"element-skin/backend/internal/database/user"
 	"element-skin/backend/internal/database/verification"
+	webhookdb "element-skin/backend/internal/database/webhook"
 	"element-skin/backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
@@ -52,9 +53,28 @@ type DB struct {
 	OAuth            oauth.Store
 	OfficialProfiles officialprofile.Store
 	Permissions      permissiondb.Store
+	Webhooks         webhookdb.Store
 }
 
 func Open(ctx context.Context, cfg config.Config) (*DB, error) {
+	db, err := OpenExisting(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Init(ctx); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := db.MigrateHomepageMediaFiles(ctx, cfg.CarouselDir); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// OpenExisting creates a pool for a process that consumes an already initialized schema.
+// Schema creation and file migrations remain owned by the main site process.
+func OpenExisting(ctx context.Context, cfg config.Config) (*DB, error) {
 	pcfg, err := pgxpool.ParseConfig(cfg.DatabaseDSN)
 	if err != nil {
 		return nil, err
@@ -64,16 +84,7 @@ func Open(ctx context.Context, cfg config.Config) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db := New(pool)
-	if err := db.Init(ctx); err != nil {
-		pool.Close()
-		return nil, err
-	}
-	if err := db.MigrateHomepageMediaFiles(ctx, cfg.CarouselDir); err != nil {
-		pool.Close()
-		return nil, err
-	}
-	return db, nil
+	return New(pool), nil
 }
 
 func New(pool *pgxpool.Pool) *DB {
@@ -96,6 +107,7 @@ func New(pool *pgxpool.Pool) *DB {
 		OAuth:            oauth.Store{Pool: pool},
 		OfficialProfiles: officialprofile.Store{Pool: pool},
 		Permissions:      permissiondb.Store{Pool: pool},
+		Webhooks:         webhookdb.Store{Pool: pool},
 	}
 }
 

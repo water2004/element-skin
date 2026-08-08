@@ -85,6 +85,7 @@ func (r *Router) routes() {
 	r.handle("POST /v2/notifications/{id}/read", noticeRoutes.Auth(noticeRoutes.MarkRead))
 	r.handle("POST /v2/notifications/{id}/dismiss", noticeRoutes.Auth(noticeRoutes.Dismiss))
 	r.handle("GET /v2/oauth/apps", oauthRoutes.Auth(oauthRoutes.ListApps))
+	r.handle("GET /v2/oauth/webhook-events", oauthRoutes.Auth(oauthRoutes.WebhookEvents))
 	r.handle("POST /v2/oauth/apps", oauthRoutes.Auth(oauthRoutes.CreateApp))
 	r.handle("GET /v2/oauth/apps/{client_id}", oauthRoutes.Auth(oauthRoutes.GetApp))
 	r.handle("PATCH /v2/oauth/apps/{client_id}", oauthRoutes.Auth(oauthRoutes.UpdateApp))

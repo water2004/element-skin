@@ -195,6 +195,26 @@ func (s Store) ListGrantsByUser(ctx context.Context, userID string, limit int) (
 	return grants, rows.Err()
 }
 
+func (s Store) ActiveGrantByUserClient(ctx context.Context, userID, clientID string) (*model.OAuthGrant, error) {
+	row := s.Pool.QueryRow(ctx, `
+		SELECT id, user_id, subject_id, client_id, oidc_scopes, status, created_at, revoked_at
+		FROM delegated_permission_grants
+		WHERE user_id=$1 AND client_id=$2 AND status='active'
+	`, userID, clientID)
+	var grant model.OAuthGrant
+	err := row.Scan(&grant.ID, &grant.UserID, &grant.SubjectID, &grant.ClientID, &grant.OIDCScopes, &grant.Status, &grant.CreatedAt, &grant.RevokedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(grant.OIDCScopes) == 0 {
+		grant.OIDCScopes = nil
+	}
+	return &grant, nil
+}
+
 func (s Store) ActiveGrantOIDCScopes(ctx context.Context, grantID, userID, clientID string) ([]string, bool, error) {
 	var scopes []string
 	err := s.Pool.QueryRow(ctx, `

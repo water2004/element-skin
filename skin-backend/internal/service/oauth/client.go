@@ -32,13 +32,17 @@ func (s Service) CreateClient(ctx context.Context, actor permission.Actor, input
 			return nil, err
 		}
 	}
-	if err := s.DB.OAuth.CreateClient(ctx, client, permissionIDs); err != nil {
+	endpoints, endpointSecrets, err := s.prepareWebhookEndpoints(ctx, client.ID, input.WebhookEndpoints, permissionCodes, client.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.DB.OAuth.CreateClientWithEndpoints(ctx, client, permissionIDs, endpoints); err != nil {
 		return nil, err
 	}
 	if err := s.notifyAdminsClientSubmitted(ctx, client); err != nil {
 		return nil, err
 	}
-	return clientResponse(client, permissionCodes, secret), nil
+	return clientResponse(client, permissionCodes, secret, endpoints, endpointSecrets), nil
 }
 
 func (s Service) ListClients(ctx context.Context, actor permission.Actor, limit int) ([]map[string]any, error) {
@@ -55,7 +59,11 @@ func (s Service) ListClients(ctx context.Context, actor permission.Actor, limit 
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, clientResponse(client, codes, ""))
+		endpoints, err := s.DB.Webhooks.ListEndpointsByClient(ctx, client.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, clientResponse(client, codes, "", endpoints, nil))
 	}
 	return out, nil
 }
@@ -88,7 +96,11 @@ func (s Service) GetClient(ctx context.Context, actor permission.Actor, clientID
 	if err != nil {
 		return nil, err
 	}
-	return clientResponse(*client, codes, ""), nil
+	endpoints, err := s.DB.Webhooks.ListEndpointsByClient(ctx, client.ID)
+	if err != nil {
+		return nil, err
+	}
+	return clientResponse(*client, codes, "", endpoints, nil), nil
 }
 
 func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clientID string, input ClientInput, status string) (map[string]any, error) {
@@ -119,7 +131,11 @@ func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clien
 	client.Status = status
 	client.CreatedAt = current.CreatedAt
 	client.UpdatedAt = database.NowMS()
-	updated, err := s.DB.OAuth.UpdateClient(ctx, client, permissionIDs)
+	endpoints, endpointSecrets, err := s.prepareWebhookEndpoints(ctx, client.ID, input.WebhookEndpoints, permissionCodes, client.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := s.DB.OAuth.UpdateClientWithEndpoints(ctx, client, permissionIDs, endpoints)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +167,7 @@ func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clien
 			return nil, err
 		}
 	}
-	return clientResponse(client, permissionCodes, ""), nil
+	return clientResponse(client, permissionCodes, "", endpoints, endpointSecrets), nil
 }
 
 func (s Service) SubmitClientForReview(ctx context.Context, actor permission.Actor, clientID string) (map[string]any, error) {
@@ -178,7 +194,11 @@ func (s Service) SubmitClientForReview(ctx context.Context, actor permission.Act
 	if err != nil {
 		return nil, err
 	}
-	return clientResponse(*client, codes, ""), nil
+	endpoints, err := s.DB.Webhooks.ListEndpointsByClient(ctx, client.ID)
+	if err != nil {
+		return nil, err
+	}
+	return clientResponse(*client, codes, "", endpoints, nil), nil
 }
 
 func (s Service) DeleteClient(ctx context.Context, actor permission.Actor, clientID string) error {

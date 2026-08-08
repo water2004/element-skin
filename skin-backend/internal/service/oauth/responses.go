@@ -2,9 +2,14 @@ package oauth
 
 import "element-skin/backend/internal/model"
 
-func clientResponse(client model.OAuthClient, permissions []string, secret string) map[string]any {
+func clientResponse(client model.OAuthClient, permissions []string, secret string, endpoints []model.WebhookEndpoint, endpointSecrets map[string]string) map[string]any {
 	out := publicClient(client)
 	out["permissions"] = permissions
+	endpointItems := make([]map[string]any, 0, len(endpoints))
+	for _, endpoint := range endpoints {
+		endpointItems = append(endpointItems, webhookEndpointResponse(endpoint, endpointSecrets[endpoint.ID]))
+	}
+	out["webhook_endpoints"] = endpointItems
 	if secret != "" {
 		out["client_secret"] = secret
 	}

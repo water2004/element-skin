@@ -14,7 +14,7 @@ func (s Service) clientFromInput(actor permission.Actor, input ClientInput) (mod
 		return model.OAuthClient{}, nil, nil, badRequest("invalid name")
 	}
 	redirectURI := strings.TrimSpace(input.RedirectURI)
-	if !validHTTPURL(redirectURI) {
+	if redirectURI != "" && !validHTTPURL(redirectURI) {
 		return model.OAuthClient{}, nil, nil, badRequest("invalid redirect_uri")
 	}
 	websiteURL := strings.TrimSpace(input.WebsiteURL)

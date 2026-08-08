@@ -483,6 +483,54 @@ CREATE TABLE IF NOT EXISTS oauth_device_code_permissions (
     FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS webhook_endpoints (
+    id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    secret_ciphertext TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('active', 'disabled')),
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE(client_id, url),
+    FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS webhook_endpoint_events (
+    endpoint_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY(endpoint_id, event_type),
+    FOREIGN KEY(endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS webhook_events (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    target_client_id TEXT,
+    subject_user_id TEXT,
+    data JSONB NOT NULL CHECK(jsonb_typeof(data) = 'object'),
+    created_at BIGINT NOT NULL,
+    expanded_at BIGINT
+);
+
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    endpoint_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('pending', 'processing', 'succeeded', 'dead')),
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at BIGINT NOT NULL,
+    lease_until BIGINT,
+    delivered_at BIGINT,
+    last_http_status INTEGER,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE(event_id, endpoint_id),
+    FOREIGN KEY(event_id) REFERENCES webhook_events(id) ON DELETE CASCADE,
+    FOREIGN KEY(endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS permission_audit_logs (
     id TEXT PRIMARY KEY,
     actor_subject_id TEXT,
@@ -605,6 +653,9 @@ CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user_client ON oauth_refresh
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_grant_active_expiry ON oauth_refresh_tokens (grant_id, expires_at) WHERE revoked_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_oidc_pairwise_subjects_user ON oidc_pairwise_subjects (user_id, client_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_device_codes_client_status ON oauth_device_codes (client_id, status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_endpoint_events_type ON webhook_endpoint_events (event_type, endpoint_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_unexpanded ON webhook_events (created_at, id) WHERE expanded_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_due ON webhook_deliveries (next_attempt_at, id) WHERE status IN ('pending', 'processing');
 CREATE INDEX IF NOT EXISTS idx_identity_providers_public ON identity_providers (display_order, created_at, id) WHERE enabled=TRUE;
 CREATE INDEX IF NOT EXISTS idx_external_identities_user ON external_identities (user_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_official_profile_bindings_identity ON official_profile_bindings (identity_id, created_at, id);
@@ -617,6 +668,154 @@ ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[
 ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
 ALTER TABLE oauth_refresh_tokens ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 DELETE FROM permissions WHERE code LIKE 'microsoft_import.%';
+
+CREATE OR REPLACE FUNCTION webhook_event_has_subscribers(wanted_event_type TEXT)
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM webhook_endpoint_events AS subscription
+        JOIN webhook_endpoints AS endpoint ON endpoint.id = subscription.endpoint_id
+        JOIN delegated_clients AS client ON client.id = endpoint.client_id
+        WHERE subscription.event_type = wanted_event_type
+          AND endpoint.status = 'active'
+          AND client.status = 'active'
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION enqueue_profile_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_user_id TEXT;
+    next_profile_id TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        next_type := 'profile.created';
+        next_user_id := NEW.user_id;
+        next_profile_id := NEW.id;
+    ELSIF TG_OP = 'UPDATE' THEN
+        next_type := 'profile.updated';
+        next_user_id := NEW.user_id;
+        next_profile_id := NEW.id;
+    ELSE
+        next_type := 'profile.deleted';
+        next_user_id := OLD.user_id;
+        next_profile_id := OLD.id;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            next_user_id,
+            jsonb_build_object('user_id', next_user_id, 'profile_id', next_profile_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS profiles_webhook_event ON profiles;
+CREATE TRIGGER profiles_webhook_event
+AFTER INSERT OR UPDATE OF name, texture_model, skin_hash, cape_hash OR DELETE ON profiles
+FOR EACH ROW EXECUTE FUNCTION enqueue_profile_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_texture_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_user_id TEXT;
+    next_hash TEXT;
+    next_texture_type TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        next_type := 'texture.created';
+        next_user_id := NEW.user_id;
+        next_hash := NEW.hash;
+        next_texture_type := NEW.texture_type;
+    ELSIF TG_OP = 'UPDATE' THEN
+        next_type := 'texture.updated';
+        next_user_id := NEW.user_id;
+        next_hash := NEW.hash;
+        next_texture_type := NEW.texture_type;
+    ELSE
+        next_type := 'texture.deleted';
+        next_user_id := OLD.user_id;
+        next_hash := OLD.hash;
+        next_texture_type := OLD.texture_type;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            next_user_id,
+            jsonb_build_object(
+                'user_id', next_user_id,
+                'texture_hash', next_hash,
+                'texture_type', next_texture_type
+            ),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS user_textures_webhook_event ON user_textures;
+CREATE TRIGGER user_textures_webhook_event
+AFTER INSERT OR UPDATE OF note, model, is_public OR DELETE ON user_textures
+FOR EACH ROW EXECUTE FUNCTION enqueue_texture_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_oauth_grant_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' AND NEW.status = 'active' THEN
+        next_type := 'oauth_grant.created';
+    ELSIF TG_OP = 'UPDATE' AND OLD.status = 'active' AND NEW.status = 'revoked' THEN
+        next_type := 'oauth_grant.revoked';
+    ELSIF TG_OP = 'UPDATE' AND NEW.status = 'active' THEN
+        next_type := 'oauth_grant.updated';
+    ELSE
+        RETURN NEW;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,target_client_id,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            NEW.client_id,
+            NEW.user_id,
+            jsonb_build_object('user_id', NEW.user_id, 'grant_id', NEW.id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS delegated_permission_grants_webhook_event ON delegated_permission_grants;
+CREATE TRIGGER delegated_permission_grants_webhook_event
+AFTER INSERT OR UPDATE OF oidc_scopes, status ON delegated_permission_grants
+FOR EACH ROW EXECUTE FUNCTION enqueue_oauth_grant_webhook_event();
 
 INSERT INTO settings (key, value) VALUES
 ('fallback_strategy', 'serial'),

@@ -17,6 +17,15 @@ func (h Handler) ListApps(w http.ResponseWriter, req *http.Request) {
 	util.JSON(w, http.StatusOK, map[string]any{"items": res})
 }
 
+func (h Handler) WebhookEvents(w http.ResponseWriter, req *http.Request) {
+	items, err := h.oauth.WebhookEventCatalog(shared.CurrentActor(req))
+	if err != nil {
+		util.Error(w, err)
+		return
+	}
+	util.JSON(w, http.StatusOK, map[string]any{"events": items})
+}
+
 func (h Handler) ListAdminApps(w http.ResponseWriter, req *http.Request) {
 	res, err := h.oauth.ListClientsForAdmin(req.Context(), shared.CurrentActor(req), req.URL.Query().Get("status"), util.ClampLimit(req.URL.Query().Get("limit")))
 	if err != nil {
@@ -104,13 +113,21 @@ func (h Handler) DeleteApp(w http.ResponseWriter, req *http.Request) {
 }
 
 type appBody struct {
-	Name            string   `json:"name"`
-	Description     string   `json:"description"`
-	RedirectURI     string   `json:"redirect_uri"`
-	WebsiteURL      string   `json:"website_url"`
-	ClientType      string   `json:"client_type"`
-	Status          string   `json:"status"`
-	PermissionCodes []string `json:"permissions"`
+	Name             string                `json:"name"`
+	Description      string                `json:"description"`
+	RedirectURI      string                `json:"redirect_uri"`
+	WebsiteURL       string                `json:"website_url"`
+	ClientType       string                `json:"client_type"`
+	Status           string                `json:"status"`
+	PermissionCodes  []string              `json:"permissions"`
+	WebhookEndpoints []webhookEndpointBody `json:"webhook_endpoints"`
+}
+
+type webhookEndpointBody struct {
+	ID      string   `json:"id"`
+	URL     string   `json:"url"`
+	Events  []string `json:"events"`
+	Enabled *bool    `json:"enabled"`
 }
 
 type appReviewBody struct {
@@ -119,12 +136,22 @@ type appReviewBody struct {
 }
 
 func (b appBody) input() oauthsvc.ClientInput {
+	endpoints := make([]oauthsvc.WebhookEndpointInput, 0, len(b.WebhookEndpoints))
+	for _, endpoint := range b.WebhookEndpoints {
+		endpoints = append(endpoints, oauthsvc.WebhookEndpointInput{
+			ID:         endpoint.ID,
+			URL:        endpoint.URL,
+			EventTypes: endpoint.Events,
+			Enabled:    endpoint.Enabled,
+		})
+	}
 	return oauthsvc.ClientInput{
-		Name:            b.Name,
-		Description:     b.Description,
-		RedirectURI:     b.RedirectURI,
-		WebsiteURL:      b.WebsiteURL,
-		ClientType:      b.ClientType,
-		PermissionCodes: b.PermissionCodes,
+		Name:             b.Name,
+		Description:      b.Description,
+		RedirectURI:      b.RedirectURI,
+		WebsiteURL:       b.WebsiteURL,
+		ClientType:       b.ClientType,
+		PermissionCodes:  b.PermissionCodes,
+		WebhookEndpoints: endpoints,
 	}
 }

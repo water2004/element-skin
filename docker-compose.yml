@@ -31,7 +31,7 @@ services:
   backend:
     image: ${ELEMENT_SKIN_IMAGE:?ELEMENT_SKIN_IMAGE is required}
     restart: always
-    environment:
+    environment: &backend-environment
       VITE_BASE_PATH: ${VITE_BASE_PATH:?VITE_BASE_PATH is required}
       VITE_API_BASE: ${VITE_API_BASE:?VITE_API_BASE is required}
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
@@ -74,3 +74,13 @@ services:
       - ./data:/app/data
     ports:
       - "8000:8000"
+
+  webhook-worker:
+    image: ${ELEMENT_SKIN_IMAGE:?ELEMENT_SKIN_IMAGE is required}
+    restart: always
+    entrypoint: ["/app/webhook-worker"]
+    command: []
+    environment: *backend-environment
+    depends_on:
+      backend:
+        condition: service_started

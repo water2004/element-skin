@@ -31,12 +31,20 @@ type Service struct {
 }
 
 type ClientInput struct {
-	Name            string
-	Description     string
-	RedirectURI     string
-	WebsiteURL      string
-	ClientType      string
-	PermissionCodes []string
+	Name             string
+	Description      string
+	RedirectURI      string
+	WebsiteURL       string
+	ClientType       string
+	PermissionCodes  []string
+	WebhookEndpoints []WebhookEndpointInput
+}
+
+type WebhookEndpointInput struct {
+	ID         string
+	URL        string
+	EventTypes []string
+	Enabled    *bool
 }
 
 type AuthorizationRequest struct {

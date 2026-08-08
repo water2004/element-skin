@@ -51,7 +51,11 @@ func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clien
 	if err := s.notifyOwnerReviewResult(ctx, *client, status, reason); err != nil {
 		return nil, err
 	}
-	return clientResponse(*client, codes, ""), nil
+	endpoints, err := s.DB.Webhooks.ListEndpointsByClient(ctx, client.ID)
+	if err != nil {
+		return nil, err
+	}
+	return clientResponse(*client, codes, "", endpoints, nil), nil
 }
 
 func (s Service) RotateClientSecret(ctx context.Context, actor permission.Actor, clientID string) (map[string]any, error) {
@@ -83,5 +87,9 @@ func (s Service) RotateClientSecret(ctx context.Context, actor permission.Actor,
 	if err != nil {
 		return nil, err
 	}
-	return clientResponse(*client, codes, raw), nil
+	endpoints, err := s.DB.Webhooks.ListEndpointsByClient(ctx, client.ID)
+	if err != nil {
+		return nil, err
+	}
+	return clientResponse(*client, codes, raw, endpoints, nil), nil
 }

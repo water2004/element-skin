@@ -161,6 +161,35 @@ type OAuthDeviceCode struct {
 	LastPolledAt   *int64
 }
 
+type WebhookEndpoint struct {
+	ID               string   `json:"id"`
+	ClientID         string   `json:"client_id"`
+	URL              string   `json:"url"`
+	SecretCiphertext string   `json:"-"`
+	Status           string   `json:"status"`
+	EventTypes       []string `json:"events"`
+	CreatedAt        int64    `json:"created_at"`
+	UpdatedAt        int64    `json:"updated_at"`
+}
+
+type WebhookEvent struct {
+	ID             string         `json:"id"`
+	Type           string         `json:"type"`
+	TargetClientID string         `json:"-"`
+	SubjectUserID  string         `json:"-"`
+	Data           map[string]any `json:"data"`
+	CreatedAt      int64          `json:"created_at"`
+	ExpandedAt     *int64         `json:"-"`
+}
+
+type WebhookDelivery struct {
+	ID           string
+	Event        WebhookEvent
+	Endpoint     WebhookEndpoint
+	AttemptCount int
+	CreatedAt    int64
+}
+
 type IdentityProvider struct {
 	ID                     string   `json:"id"`
 	Name                   string   `json:"name"`

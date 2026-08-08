@@ -43,6 +43,10 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		"oauth_authorization_codes",
 		"oauth_authorization_code_permissions",
 		"oauth_refresh_tokens",
+		"webhook_endpoints",
+		"webhook_endpoint_events",
+		"webhook_events",
+		"webhook_deliveries",
 		"permission_audit_logs",
 	} {
 		var exists bool
