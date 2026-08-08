@@ -86,6 +86,28 @@ with `LOADTEST_REPORT` when you want a different report path.
 Use `LOADTEST_DB_MAX_CONNECTIONS` to match the backend database pool size you
 want to measure; the harness defaults this to `20`.
 
+The Webhook-specific harness compares the same profile write in four modes:
+without the database trigger, with no subscriber, with outbox enqueueing, and
+with the asynchronous worker running. Four rotated repeats give every mode each
+execution position once after an unreported warmup. It also measures dispatch
+and delivery throughput for a fixed event count against an in-process
+zero-latency `204` receiver:
+
+```powershell
+$env:WEBHOOK_LOADTEST_ENABLE='1'
+$env:WEBHOOK_LOADTEST_CONCURRENCY='50'
+$env:WEBHOOK_LOADTEST_DURATION='1s'
+$env:WEBHOOK_LOADTEST_REPEATS='4'
+$env:WEBHOOK_LOADTEST_EVENTS='1000'
+go test ./cmd/loadtest -run TestWebhookLoadImpact -count=1 -v
+```
+
+The Webhook harness writes `../reports/webhook-load-test.md` by default. Use
+`WEBHOOK_LOADTEST_REPORT` to change the output path and
+`WEBHOOK_LOADTEST_DB_MAX_CONNECTIONS` to change the isolated database pool.
+It uses the same temporary PostgreSQL database and isolated Redis prefix as the
+real-backend harness, and never sends requests to a third-party endpoint.
+
 The harness uses `TEST_DATABASE_DSN`/`ADMIN_DATABASE_DSN` when set, otherwise it
 follows the same local PostgreSQL defaults as the integration tests.
 
