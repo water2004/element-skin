@@ -2,6 +2,30 @@ import type { PermissionDefinition, PermissionOverrideEffect } from '../types'
 
 export type OAuthClientStatus = 'pending' | 'active' | 'rejected' | 'disabled'
 
+export interface OAuthWebhookEndpoint {
+  id: string
+  url: string
+  status: 'active' | 'disabled'
+  enabled: boolean
+  events: string[]
+  created_at: number
+  updated_at: number
+  signing_secret?: string
+}
+
+export interface OAuthWebhookEndpointInput {
+  id?: string
+  url: string
+  enabled: boolean
+  events: string[]
+}
+
+export interface OAuthWebhookEventDefinition {
+  type: string
+  description: string
+  required_permissions: string[]
+}
+
 export interface OAuthClient {
   client_id: string
   owner_user_id: string
@@ -14,12 +38,13 @@ export interface OAuthClient {
   created_at: number
   updated_at: number
   permissions: string[]
+  webhook_endpoints: OAuthWebhookEndpoint[]
   client_secret?: string
 }
 
 export type OAuthClientSummary = Omit<
   OAuthClient,
-  'redirect_uri' | 'website_url' | 'permissions' | 'client_secret'
+  'redirect_uri' | 'website_url' | 'permissions' | 'webhook_endpoints' | 'client_secret'
 >
 
 export interface OAuthGrant {
@@ -40,6 +65,7 @@ export interface OAuthClientInput {
   website_url?: string
   client_type: 'public' | 'confidential'
   permissions: string[]
+  webhook_endpoints: OAuthWebhookEndpointInput[]
 }
 
 export interface OAuthClientPermissions {
@@ -98,4 +124,8 @@ export interface DeviceAuthorizationDetails {
 
 export interface PermissionCatalogResponse {
   permissions: PermissionDefinition[]
+}
+
+export interface OAuthWebhookEventCatalogResponse {
+  events: OAuthWebhookEventDefinition[]
 }

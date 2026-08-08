@@ -16,6 +16,7 @@ import DashboardRoles from '@/components/dashboard/roles/DashboardRoles.vue'
 import DashboardProfile from '@/components/dashboard/profile/DashboardProfile.vue'
 import DashboardHome from '@/components/dashboard/home/DashboardHome.vue'
 import DashboardOAuthApps from '@/components/dashboard/oauth/DashboardOAuthApps.vue'
+import DashboardOAuthAppForm from '@/components/dashboard/oauth/DashboardOAuthAppForm.vue'
 import DashboardIdentities from '@/components/dashboard/identities/DashboardIdentities.vue'
 
 // Admin Components
@@ -158,6 +159,16 @@ const router = createRouter({
           path: 'oauth',
           name: 'dashboard-oauth',
           component: DashboardOAuthApps,
+        },
+        {
+          path: 'oauth/apps/new',
+          name: 'dashboard-oauth-app-create',
+          component: DashboardOAuthAppForm,
+        },
+        {
+          path: 'oauth/apps/:client_id/edit',
+          name: 'dashboard-oauth-app-edit',
+          component: DashboardOAuthAppForm,
         },
         {
           path: 'identities',

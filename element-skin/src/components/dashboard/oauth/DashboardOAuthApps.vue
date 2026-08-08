@@ -20,7 +20,7 @@
             <el-icon><Refresh /></el-icon>
             刷新
           </el-button>
-          <el-button type="primary" @click="openCreateDialog">
+          <el-button type="primary" @click="router.push({ name: 'dashboard-oauth-app-create' })">
             <el-icon><Plus /></el-icon>
             申请新应用
           </el-button>
@@ -69,7 +69,16 @@
               </el-text>
             </div>
             <div class="flex justify-end">
-              <el-button type="primary" plain @click="openEditDialog(app)">
+              <el-button
+                type="primary"
+                plain
+                @click="
+                  router.push({
+                    name: 'dashboard-oauth-app-edit',
+                    params: { client_id: app.client_id },
+                  })
+                "
+              >
                 <el-icon><Edit /></el-icon>
                 编辑
               </el-button>
@@ -142,62 +151,36 @@
         </div>
       </div>
     </UiCard>
-
-    <DashboardOAuthAppDialog
-      v-model:visible="appDialogVisible"
-      :app="editingApp"
-      :catalog="catalog"
-      :user-permissions="user?.permissions ?? []"
-      :new-secret="newSecret"
-      :saving="saving"
-      :rotating="rotating"
-      :deleting="deleting"
-      @save="saveApp"
-      @rotate="rotateSecret"
-      @delete="deleteApp"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, type Ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Edit, Plus, Refresh } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import {
-  createOAuthApp,
-  deleteOAuthApp,
   getPermissionCatalog,
   listOAuthApps,
   listOAuthGrants,
   revokeOAuthGrant,
-  rotateOAuthSecret,
-  submitOAuthAppReview,
-  updateOAuthApp,
   type OAuthClient,
-  type OAuthClientInput,
   type OAuthClientStatus,
   type OAuthGrant,
 } from '@/api/oauth'
-import type { PermissionDefinition, User } from '@/api/types'
+import type { PermissionDefinition } from '@/api/types'
 import UiCard from '@/components/ui/UiCard.vue'
 import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
-import DashboardOAuthAppDialog from '@/components/dashboard/oauth/DashboardOAuthAppDialog.vue'
 import { getErrorMessage } from '@/utils/error'
 
-const user = inject<Ref<User | null>>('user', ref(null))
+const router = useRouter()
 
 const apps = ref<OAuthClient[]>([])
 const grants = ref<OAuthGrant[]>([])
 const catalog = ref<PermissionDefinition[]>([])
 const loading = ref(false)
 const grantsLoading = ref(false)
-const saving = ref(false)
-const rotating = ref(false)
-const deleting = ref(false)
 const revokingGrantId = ref('')
-const appDialogVisible = ref(false)
-const editingApp = ref<OAuthClient | null>(null)
-const newSecret = ref('')
 
 const revokedGrantRetentionMs = 30 * 24 * 60 * 60 * 1000
 
@@ -240,86 +223,6 @@ async function loadGrants() {
   }
 }
 
-function openCreateDialog() {
-  editingApp.value = null
-  newSecret.value = ''
-  appDialogVisible.value = true
-}
-
-function openEditDialog(app: OAuthClient) {
-  editingApp.value = app
-  newSecret.value = ''
-  appDialogVisible.value = true
-}
-
-async function saveApp(payload: OAuthClientInput, options: { resubmit: boolean }) {
-  if (!payload.name || !payload.redirect_uri) {
-    ElMessage.warning('请填写名称和回调地址')
-    return
-  }
-
-  saving.value = true
-  try {
-    if (!editingApp.value) {
-      const res = await createOAuthApp(payload)
-      apps.value.unshift(res.data)
-      editingApp.value = res.data
-      newSecret.value = res.data.client_secret ?? ''
-      ElMessage.success('应用已提交审核')
-      return
-    }
-
-    const clientId = editingApp.value.client_id
-    const updated = await updateOAuthApp(clientId, payload)
-    let next = updated.data
-    if (options.resubmit && next.status !== 'pending') {
-      const submitted = await submitOAuthAppReview(clientId)
-      next = submitted.data
-    }
-    replaceApp(next)
-    editingApp.value = next
-    ElMessage.success(
-      options.resubmit && next.status === 'pending' ? '应用已重新提交审核' : '应用已保存',
-    )
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, editingApp.value ? '保存应用失败' : '提交应用失败'))
-  } finally {
-    saving.value = false
-  }
-}
-
-async function rotateSecret(clientId: string) {
-  rotating.value = true
-  try {
-    const res = await rotateOAuthSecret(clientId)
-    replaceApp(res.data)
-    editingApp.value = res.data
-    newSecret.value = res.data.client_secret ?? ''
-    ElMessage.success('密钥已轮换')
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, '轮换失败'))
-  } finally {
-    rotating.value = false
-  }
-}
-
-async function deleteApp(clientId: string) {
-  await ElMessageBox.confirm('删除后应用将无法继续完成 OAuth 授权，确认删除？', '删除应用')
-  deleting.value = true
-  try {
-    await deleteOAuthApp(clientId)
-    apps.value = apps.value.filter((app) => app.client_id !== clientId)
-    if (editingApp.value?.client_id === clientId) editingApp.value = null
-    appDialogVisible.value = false
-    newSecret.value = ''
-    ElMessage.success('应用已删除')
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, '删除失败'))
-  } finally {
-    deleting.value = false
-  }
-}
-
 async function revokeGrant(grantId: string) {
   revokingGrantId.value = grantId
   try {
@@ -331,10 +234,6 @@ async function revokeGrant(grantId: string) {
   } finally {
     revokingGrantId.value = ''
   }
-}
-
-function replaceApp(next: OAuthClient) {
-  apps.value = apps.value.map((app) => (app.client_id === next.client_id ? next : app))
 }
 
 function clientName(clientId: string) {

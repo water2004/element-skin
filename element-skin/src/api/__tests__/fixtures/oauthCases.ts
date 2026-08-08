@@ -7,7 +7,9 @@ import {
   getAdminOAuthApp,
   getDeviceAuthorization,
   getOAuthAuthorizationDetails,
+  getOAuthApp,
   getOAuthClientPermissions,
+  getOAuthWebhookEventCatalog,
   getPermissionCatalog,
   listAdminOAuthApps,
   listOAuthApps,
@@ -25,6 +27,7 @@ const oauthPayload = {
   website_url: 'https://app.example',
   client_type: 'confidential' as const,
   permissions: ['account.read.self'],
+  webhook_endpoints: [],
 }
 
 const authorizationRequest = {
@@ -50,6 +53,18 @@ export function oauthApiCases(): ApiCase[] {
       method: 'post',
       call: () => createOAuthApp(oauthPayload),
       args: ['/v2/oauth/apps', oauthPayload],
+    },
+    {
+      name: 'getOAuthApp gets owned app detail',
+      method: 'get',
+      call: () => getOAuthApp('client-1'),
+      args: ['/v2/oauth/apps/client-1'],
+    },
+    {
+      name: 'getOAuthWebhookEventCatalog gets subscribable event definitions',
+      method: 'get',
+      call: getOAuthWebhookEventCatalog,
+      args: ['/v2/oauth/webhook-events'],
     },
     {
       name: 'updateOAuthApp patches app payload',

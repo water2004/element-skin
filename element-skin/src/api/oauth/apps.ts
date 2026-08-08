@@ -5,11 +5,20 @@ import type {
   OAuthClientInput,
   OAuthClientPermissions,
   OAuthGrant,
+  OAuthWebhookEventCatalogResponse,
   PermissionCatalogResponse,
 } from './types'
 
 export function listOAuthApps(limit = 50) {
   return apiClient.get<{ items: OAuthClient[] }>('/v2/oauth/apps', { params: { limit } })
+}
+
+export function getOAuthApp(clientId: string) {
+  return apiClient.get<OAuthClient>(`/v2/oauth/apps/${clientId}`)
+}
+
+export function getOAuthWebhookEventCatalog() {
+  return apiClient.get<OAuthWebhookEventCatalogResponse>('/v2/oauth/webhook-events')
 }
 
 export function listOAuthGrants(limit = 50) {
