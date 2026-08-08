@@ -358,7 +358,8 @@ scope 获批时出现。grant 撤销后关联 access token、refresh token 和 u
 | 方法 | 路径 | 响应 |
 | --- | --- | --- |
 | GET | `/v2/oauth/apps` | app `items` |
-| POST | `/v2/oauth/apps` | `201`，新 app；secret 仅在创建/轮换响应出现 |
+| GET | `/v2/oauth/webhook-events` | 当前 Webhook 事件目录及所需权限 |
+| POST | `/v2/oauth/apps` | `201`，新 app；client 与新 endpoint secret 仅在创建响应出现 |
 | GET | `/v2/oauth/apps/{client_id}` | app |
 | PATCH | `/v2/oauth/apps/{client_id}` | 更新后的 app |
 | DELETE | `/v2/oauth/apps/{client_id}` | `204` |
@@ -369,6 +370,14 @@ scope 获批时出现。grant 撤销后关联 access token、refresh token 和 u
 | DELETE | `/v2/oauth/apps/{client_id}/permissions/{permission_code}` | `204` |
 | GET | `/v2/oauth/grants` | grant `items` |
 | DELETE | `/v2/oauth/grants/{grant_id}` | `204` |
+
+`redirect_uri` 可为空；只有 Authorization Code 流程要求应用配置并精确匹配回调地址。应用的
+`webhook_endpoints` 是最多 5 项的可选完整替换数组，事件选择必须在应用申请权限允许的目录内。
+Webhook 只异步发送用户 UUID 和资源 ID 等基础信息，接收方通过 `/v2` API 读取当前资源。完整事件、
+签名、重试和权限重检规则见《Webhook 设计与开发者契约》。
+
+同一用户对同一应用只允许一条 active grant。用户再次批准同一应用时更新原有逻辑授权；grant 撤销
+后关联 access token、refresh token 与授权码按 OAuth 生命周期立即失效。
 
 ### 6.6 管理 API
 
@@ -427,6 +436,7 @@ Microsoft adapter 不增加隐式权限。用户能否管理外部身份、创�
 - `official_profile_bindings`：外部身份与本站角色的正版关联；
 - `email_suffix_policy`、`email_suffix_rules`：邮箱后缀模式以及分离保存的白名单、黑名单；
 - OAuth client、grant、authorization code、refresh token、pairwise subject 表：本站 provider 状态。
+- Webhook endpoint、事件 outbox 和投递表：第三方事件订阅与异步投递状态。
 
 业务字段均结构化存储。原始 OIDC JSON 不作为业务读取来源。provider 被身份引用时不能删除；身份被
 正版绑定引用时不能删除；删除用户或角色按 schema 中明确的级联约束清理关联。

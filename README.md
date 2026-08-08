@@ -29,7 +29,7 @@
 - **用户与资源管理**：支持邮箱验证、密码找回、角色管理、皮肤与披风上传、衣柜、3D 预览和公共皮肤库。
 - **外部身份与角色同步**：支持多 OIDC 身份、Microsoft 正版角色绑定与显式同步，以及远程 Yggdrasil 角色导入。
 - **细粒度权限**：支持多角色、单项权限覆盖、权限范围、受保护权限主体和按权限展示页面与操作。
-- **OAuth 第三方应用**：支持公开应用、机密应用、Authorization Code + PKCE、Device Code、Client Credentials、Refresh Token、撤销和权限审核。
+- **OAuth 第三方应用**：支持公开应用、机密应用、Authorization Code + PKCE、Device Code、Client Credentials、Refresh Token、撤销、权限审核和按权限订阅的异步 Webhook。
 - **通知中心**：统一展示公告、系统消息和 OAuth 事件，支持 Markdown 长公告、短公告、定向投递、未读提醒和过期清理。
 - **Minecraft 能力 API**：通过 `/v2/minecraft` 提供公开角色查询、材质属性读取和服务器加入结果校验，不替代 Yggdrasil 协议。
 - **首页与仪表盘**：支持普通背景图、Minecraft 全景背景、首页媒体管理、服务状态监测、公告侧栏和节日彩蛋。
@@ -63,6 +63,10 @@ cp .env.example .env
 - `CORS_ALLOW_ORIGINS`：允许访问 API 的前端来源
 
 后端启动时会读取环境变量，并从 `DATABASE_HOST/PORT/USER/PASSWORD/NAME/SSLMODE` 和 `REDIS_HOST/PORT` 派生连接地址。Docker 部署不需要挂载 `config.yaml`，也不维护第二份 Compose 配置。
+
+Compose 会从同一镜像启动 `backend` 和独立的 `webhook-worker`。主站请求只在业务事务内写入轻量
+outbox；签名、第三方 HTTP 请求、退避重试和历史清理由 worker 完成。worker 不暴露端口，并使用
+独立且最多 5 个连接的数据库池，慢或故障的第三方 endpoint 不占用主站请求线程。
 
 首次启动时如果 Yggdrasil 的 `/app/data/private.pem`、`/app/data/public.pem` 或 OIDC 的
 `/app/data/oidc-private.pem`、`/app/data/oidc-public.pem` 不存在，系统会自动生成并保存。请持久化

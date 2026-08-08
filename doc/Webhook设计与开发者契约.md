@@ -1,0 +1,202 @@
+# Webhook 设计与开发者契约
+
+## 1. 背景
+
+Element Skin 面向公开应用和机密应用提供同一套第三方开发能力。Webhook 用于提示应用“某个资源发生了变化”，而不是替代 `/v2` API 传输完整资源。应用收到事件后，应使用自己的有效 OAuth access token 调用 API 获取当前状态。
+
+Webhook 完全可选。应用不需要事件通知时不配置 endpoint，站点不会为该应用创建投递任务。OAuth `redirect_uri` 与 Webhook endpoint 也是两个独立概念：只使用 Device Code 或 Client Credentials 的应用可以不配置 OAuth 回调地址。
+
+## 2. 目标
+
+- 站点业务事务不执行第三方 HTTP 请求，只写入轻量、可恢复的 outbox 事件。
+- 公开应用、机密应用、用户委托和 Client Credentials 使用同一套事件名称、信封、签名与重试契约。
+- endpoint 可订阅事件必须受应用申请权限约束，投递前再次按当前有效权限检查。
+- 事件只携带稳定标识和基础上下文，避免生成昂贵载荷和泄露不必要数据。
+- 提供至少一次投递、幂等标识、超时、退避重试、SSRF 防护和有界资源占用。
+
+## 3. 非目标
+
+- 不保证恰好一次投递；接收方必须自行去重。
+- 不保证不同事件或同一资源事件的全局投递顺序。
+- 不把 Webhook 作为资源快照、审计日志或消息队列消费接口。
+- 不允许 endpoint 指向内网、回环、链路本地地址，也不跟随 HTTP 重定向。
+- 不为事件名加入 `.v1` 或额外的 aspect 层级。
+
+## 4. 事件目录与命名
+
+事件名固定使用 `<resource>.<action>` 两段格式。resource 与权限目录中的资源概念保持一致；action 使用过去式状态变化。事件目录可以新增类型，但已发布类型不会通过版本后缀改变语义。
+
+当前目录如下：
+
+| 事件 | 基础数据 | 可申请权限 |
+| --- | --- | --- |
+| `oauth_grant.created` | `grant_id`、`user_id` | `oauth_grant.read.owned` |
+| `oauth_grant.updated` | `grant_id`、`user_id` | `oauth_grant.read.owned` |
+| `oauth_grant.revoked` | `grant_id`、`user_id` | `oauth_grant.read.owned` |
+| `profile.created` | `profile_id`、`user_id` | `profile.read.owned` 或 `profile.read.any` |
+| `profile.updated` | `profile_id`、`user_id` | `profile.read.owned` 或 `profile.read.any` |
+| `profile.deleted` | `profile_id`、`user_id` | `profile.read.owned` 或 `profile.read.any` |
+| `texture.created` | `texture_hash`、`texture_type`、`user_id` | `texture.read.owned` 或 `texture.read.any` |
+| `texture.updated` | `texture_hash`、`texture_type`、`user_id` | `texture.read.owned` 或 `texture.read.any` |
+| `texture.deleted` | `texture_hash`、`texture_type`、`user_id` | `texture.read.owned` 或 `texture.read.any` |
+
+`user_id` 是站点用户 UUID。grant 事件同时提供 `grant_id`，便于应用关联自己的授权记录；公开应用和机密应用收到的字段一致。
+
+事件目录 API：
+
+```http
+GET /v2/oauth/webhook-events
+```
+
+```json
+{
+  "events": [
+    {
+      "type": "profile.updated",
+      "description": "用户角色发生变化",
+      "required_permissions": ["profile.read.any", "profile.read.owned"]
+    }
+  ]
+}
+```
+
+前端应使用该目录和应用当前申请的权限动态计算可选事件，不维护另一份硬编码目录。
+
+## 5. 应用与 endpoint API
+
+创建或修改应用时，`webhook_endpoints` 是完整替换语义，最多包含 5 项。传入空数组或不传该字段表示应用不配置 Webhook。
+
+```json
+{
+  "name": "Example integration",
+  "client_type": "confidential",
+  "redirect_uri": "",
+  "permissions": ["profile.read.any"],
+  "webhook_endpoints": [
+    {
+      "url": "https://hooks.example.com/element-skin",
+      "enabled": true,
+      "events": ["profile.created", "profile.updated", "profile.deleted"]
+    }
+  ]
+}
+```
+
+修改已有 endpoint 时必须回传其 `id`；不在数组中的旧 endpoint 会被删除。URL 必须是公网 HTTPS 地址，同一应用内不能重复。每个 endpoint 至少选择一个当前应用权限允许的事件。
+
+新建 endpoint 的响应会额外包含仅展示一次的 `signing_secret`：
+
+```json
+{
+  "id": "wh_...",
+  "url": "https://hooks.example.com/element-skin",
+  "status": "active",
+  "enabled": true,
+  "events": ["profile.updated"],
+  "created_at": 1786118400000,
+  "updated_at": 1786118400000,
+  "signing_secret": "..."
+}
+```
+
+后续读取应用不会再次返回明文密钥。服务端只保存加密密文。删除 endpoint 后重新创建可生成新密钥。
+
+## 6. 权限与授权语义
+
+endpoint 的事件选择与应用申请权限是同一个上限：
+
+- 创建或修改应用时，如果事件所需权限不在 `permissions` 中，请求返回 `400`。
+- 应用权限被移除时，前端同步移除已经不再可选的事件；后端仍会拒绝越权配置。
+- 应用未处于 `active`、endpoint 被停用或权限不再有效时，不执行投递。
+- `*.read.owned` 资源事件要求事件所属用户对该应用存在有效 grant，且当前委托 actor 仍拥有对应读取权限。
+- `*.read.any` 资源事件只适用于机密应用的有效 app-only actor，并同时受应用申请权限和管理员配置的 client 权限上限约束。
+- `oauth_grant.*` 只投递给 grant 所属应用，不广播给其他应用。
+
+同一用户对同一应用最多存在一个 active grant。再次授权会更新这条逻辑授权，不会并存多个有效 grant；撤销后原 grant 保留用于历史和排错。
+
+投递展开和真正发出 HTTP 请求前都会重新检查权限。因此，从产生事件到投递之间发生 grant 撤销、应用停用或权限收窄时，旧任务会停止而不是继续泄露事件。
+
+## 7. HTTP 投递契约
+
+站点使用 `POST` 发送 JSON，任意 `2xx` 都视为成功。请求最长等待 10 秒，不跟随重定向。
+
+```http
+POST /element-skin HTTP/1.1
+Content-Type: application/json
+Webhook-Id: evt_...
+Webhook-Delivery: whd_...
+Webhook-Timestamp: 1786118400123
+Webhook-Signature: v1=...
+```
+
+```json
+{
+  "id": "evt_...",
+  "type": "profile.updated",
+  "created_at": 1786118399000,
+  "data": {
+    "user_id": "...",
+    "profile_id": "..."
+  }
+}
+```
+
+字段含义：
+
+- `id` / `Webhook-Id`：稳定事件 ID，接收方应以它作为业务幂等键。
+- `Webhook-Delivery`：本 endpoint 的投递任务 ID，用于排错；重试时保持不变。
+- `created_at`、`Webhook-Timestamp`：毫秒时间戳。
+- `data`：只包含定位资源所需的基础字段，不保证资源此时仍然存在。
+
+## 8. 签名验证
+
+签名输入是 `Webhook-Timestamp + "." + 原始请求体字节`。服务端计算：
+
+```text
+v1=hex(HMAC-SHA256(signing_secret, timestamp + "." + raw_body))
+```
+
+接收方应：
+
+1. 读取原始 body，不要先解析再重新序列化。
+2. 拒绝与当前时间差距过大的时间戳，建议允许 5 分钟时钟偏差。
+3. 使用恒定时间比较验证签名。
+4. 在验证成功后按 `Webhook-Id` 幂等处理。
+5. 尽快返回 `2xx`，耗时业务应进入接收方自己的异步队列。
+
+## 9. 重试、性能与保留
+
+站点采用至少一次投递。网络错误、超时或非 `2xx` 响应使用指数退避重试：首次约 30 秒，单次间隔最多 6 小时，最多尝试 12 次且总投递年龄不超过 72 小时。接收方可能在“已处理请求但成功响应丢失”时收到重复事件。
+
+站点业务事务只执行一次带索引的订阅存在性检查；没有任何有效订阅时不会创建 event。存在订阅时，事务只写一条不可变 outbox 快照，不按 endpoint 放大写入。独立 worker 再批量展开投递，使用最多 5 个数据库连接和有界并发 HTTP 请求，因此慢 endpoint 不占用站点请求线程或主站数据库连接池。
+
+成功和最终失败的事件保留 7 天后由 worker 分批清理。待投递和处理中任务不参与清理。Webhook 表不作为长期审计存储。
+
+## 10. 数据模型
+
+- `webhook_endpoints`：endpoint URL、加密签名密钥、状态和所属 client。
+- `webhook_endpoint_events`：endpoint 与事件类型的结构化订阅关系。
+- `webhook_events`：事务内写入的不可变事件快照；`target_client_id`、`subject_user_id` 为结构化列，`data` 只保存不可变协议载荷。
+- `webhook_deliveries`：每个 event/endpoint 唯一任务、lease、尝试次数、下次时间和最后结果。
+
+业务表触发器与业务变更处于同一 PostgreSQL 事务，事务回滚时 outbox 事件也回滚。worker 通过 `FOR UPDATE SKIP LOCKED` lease 领取任务，支持多个 worker 实例并行运行和进程崩溃后的重新领取。
+
+## 11. 前端交互
+
+第三方应用列表只负责展示和导航。创建应用和修改应用分别进入独立页面，不使用弹窗。页面同时维护基本信息、应用类型、权限与可选 Webhook endpoints，并在权限或应用类型改变时立即收窄可选项。
+
+`client_secret` 与 Webhook `signing_secret` 都必须在一次性响应区明确提示并支持复制，离开页面后不能假设可以再次读取。
+
+## 12. 测试计划
+
+- 事件目录名称、权限引用和资源/动作两段格式的精确测试。
+- endpoint 创建、更新、停用、删除、密钥只显示一次和事务失败不留脏数据测试。
+- 无订阅不写 event、outbox 展开幂等、lease 重领、完成、失败和清理测试。
+- 用户委托、机密应用 app-only、grant 撤销及权限收窄后的投递重检测试。
+- HMAC 头、原始载荷、`2xx`、非 `2xx`、超时与确定性退避测试。
+- 私网地址、localhost、HTTP、重定向和 DNS 解析结果的 SSRF 防护测试。
+- 前端 API exact request 测试、TypeScript 类型检查、生产构建以及桌面端和移动端表单检查。
+
+## 13. 待确认问题
+
+当前契约没有阻塞实现的待确认项。后续若增加批量事件、endpoint 独立密钥轮换或开发者投递日志查询，应新增明确 API，不改变现有事件语义。
