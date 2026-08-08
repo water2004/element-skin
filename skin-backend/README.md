@@ -99,19 +99,25 @@ $env:WEBHOOK_LOADTEST_CONCURRENCY='50'
 $env:WEBHOOK_LOADTEST_DURATION='3s'
 $env:WEBHOOK_LOADTEST_REPEATS='4'
 $env:WEBHOOK_LOADTEST_EVENTS='1000'
+$env:WEBHOOK_LOADTEST_WORKER_DB_MAX_CONNECTIONS='2'
+$env:WEBHOOK_LOADTEST_WORKER_ACTIVE_INTERVAL='3s'
 go test ./cmd/loadtest -run TestWebhookLoadImpact -count=1 -v
 ```
 
 The Webhook harness writes `../reports/webhook-load-test.md` by default. Use
-`WEBHOOK_LOADTEST_REPORT` to change the output path and
-`WEBHOOK_LOADTEST_DB_MAX_CONNECTIONS` to change the isolated database pool.
+`WEBHOOK_LOADTEST_REPORT` to change the output path,
+`WEBHOOK_LOADTEST_DB_MAX_CONNECTIONS` to change the isolated site pool,
+`WEBHOOK_LOADTEST_WORKER_DB_MAX_CONNECTIONS` to change the Worker pool, and
+`WEBHOOK_LOADTEST_WORKER_ACTIVE_INTERVAL` to change the active-queue budget.
 It uses the same temporary PostgreSQL database and isolated Redis prefix as the
 real-backend harness, and never sends requests to a third-party endpoint. Each
 comparison phase truncates the isolated outbox and vacuums the test profile
 table so earlier phases do not bias later phases with dead tuples; long-running
 table growth and autovacuum behavior require a separate soak test. The worker
-opens a separate five-connection database pool, matching the production worker
-process instead of borrowing connections from the site pool.
+opens a separate configurable database pool, matching the production process
+boundary instead of borrowing connections from the site pool. Defaults of two
+connections and a three-second active interval are conservative suggested
+budgets, not production-optimal values inferred from the development machine.
 
 To profile Worker SQL calls without changing production logging or exposing a
 pprof endpoint, run the opt-in traced worker benchmark:
@@ -124,7 +130,7 @@ go test ./cmd/loadtest -run TestWebhookWorkerSQLProfile -count=1 -v
 
 It writes `../reports/webhook-worker-sql-profile.md` by default. Override the
 path with `WEBHOOK_SQL_PROFILE_REPORT`. The tracer is attached only to the
-isolated five-connection Worker pool and records query fingerprints, calls,
+isolated configurable Worker pool and records query fingerprints, calls,
 errors, cumulative duration, average, P95, and maximum duration by phase.
 
 The harness uses `TEST_DATABASE_DSN`/`ADMIN_DATABASE_DSN` when set, otherwise it

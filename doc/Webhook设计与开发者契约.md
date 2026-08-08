@@ -168,20 +168,22 @@ v1=hex(HMAC-SHA256(signing_secret, timestamp + "." + raw_body))
 
 站点采用至少一次投递。网络错误、超时或非 `2xx` 响应使用指数退避重试：首次约 30 秒，单次间隔最多 6 小时，最多尝试 12 次且总投递年龄不超过 72 小时。接收方可能在“已处理请求但成功响应丢失”时收到重复事件。
 
-站点业务事务只执行一次带索引的订阅存在性检查；没有任何有效订阅时不会创建 event。存在订阅时，事务只写一条不可变 outbox 快照，不按 endpoint 放大写入。独立 worker 再批量展开投递，使用最多 5 个数据库连接和有界并发 HTTP 请求，因此慢 endpoint 不占用站点请求线程或主站数据库连接池。
+站点业务事务只执行一次带索引的订阅存在性检查；没有任何有效订阅时不会创建 event。存在订阅时，事务只写一条不可变 outbox 快照，不按 endpoint 放大写入。独立 worker 再批量领取、展开和投递，因此慢 endpoint 不占用站点请求线程或主站数据库连接池。endpoint 查询和授权结论只在当前领取批次内按等价主体合并；下一投递批次仍会重新检查授权，不把撤权安全依赖于长期缓存。
+
+Worker 使用独立数据库连接池，并提供 `webhook_worker.max_database_connections` 与 `webhook_worker.active_interval_ms` 两项资源预算。仓库建议起点为 2 个连接和有工作批次间 `3000ms`，目的是优先保护主站，不是特定机器上测出的生产最优值。持续积压时应结合数据库池等待、PostgreSQL CPU/I/O、backlog 年龄和第三方响应延迟调整，不能直接照搬本地吞吐数字。
 
 成功和最终失败的事件保留 7 天后由 worker 分批清理。待投递和处理中任务不参与清理。Webhook 表不作为长期审计存储。
 
-当前隔离压测使用 50 并发、20 个主站数据库连接和独立的 5 连接 Worker 池。各模式先在同一轮内与关闭触发器的近似基线配对，再取变化中位数：无订阅检查降低 7.4% 写吞吐，仅写 outbox 降低 16.4%，worker 同时运行降低 18.5%，四种模式均为 0 失败。worker 相对同轮仅写 outbox 额外降低 6.5%，中位 P95 增加 0.8ms，说明外部 HTTP 已经脱离主请求，但 Worker 对同一 PostgreSQL 的查询和 I/O 竞争仍有成本。零延迟接收端下，当前生产轮询循环持续端到端吞吐为 104.7 events/s；持续事件速率超过该值会积压，需要增加 Worker 实例或调整调度。具体轮次、紧循环批处理上限和限制见 `reports/webhook-load-test.md`；这些结果用于相对比较，不作为生产 SLA。
+优化前 profile 确认 1000 个事件会执行 18,040 次 Worker SQL，并有逐事件短事务和固定调度等待。改为 lease 领取、批量完成以及批次内订阅/授权合并后，相同生产流程降至 80 次 SQL，即从 18.04 次/event 降到 0.08 次/event。未采样的本机零延迟样本中，紧循环展开加投递从 1.03 秒降至 249.1 毫秒，约 4.1 倍；该相对样本用于验证实现方向，不作为生产 SLA。
 
-CPU、block、mutex 和 Worker SQL profile 进一步确认：生产轮询的 9.55 秒中有 8.42 秒累计阻塞在调度选择上；1000 个事件执行 18,040 次 Worker SQL，其中权限与授权查询为 12,000 次。完整证据、限制和由 profile 支持的优化顺序见 `reports/webhook-performance-profile.md`。
+建议预算复测使用 50 并发、主站 20 连接、Worker 独立 2 连接和 `3000ms` 活动间隔。`worker-running` 相对相邻的 `enqueue-only` 配对吞吐变化中位数为 `+2.4%`，未观察到额外负向吞吐；正值属于短窗口波动，不能解释为 Worker 提升主站性能。优化前后完整证据分别见 `reports/webhook-performance-profile.md`、`reports/webhook-performance-profile-after.md`、`reports/webhook-load-test-after.md` 和 `reports/webhook-worker-sql-profile-after.md`。
 
 ## 10. 数据模型
 
 - `webhook_endpoints`：endpoint URL、加密签名密钥、状态和所属 client。
 - `webhook_endpoint_events`：endpoint 与事件类型的结构化订阅关系。
-- `webhook_events`：事务内写入的不可变事件快照；`target_client_id`、`subject_user_id` 为结构化列，`data` 只保存不可变协议载荷。
-- `webhook_deliveries`：每个 event/endpoint 唯一任务、lease、尝试次数、下次时间和最后结果。
+- `webhook_events`：事务内写入的不可变事件快照；`target_client_id`、`subject_user_id` 为结构化列，`data` 只保存不可变协议载荷；展开 lease 的到期时间和随机 token 用于并发领取与拒绝过期完成。
+- `webhook_deliveries`：每个 event/endpoint 唯一任务、带随机 token 的 lease、尝试次数、下次时间和最后结果。
 
 业务表触发器与业务变更处于同一 PostgreSQL 事务，事务回滚时 outbox 事件也回滚。worker 通过 `FOR UPDATE SKIP LOCKED` lease 领取任务，支持多个 worker 实例并行运行和进程崩溃后的重新领取。
 
@@ -201,7 +203,7 @@ CPU、block、mutex 和 Worker SQL profile 进一步确认：生产轮询的 9.5
 - 私网地址、localhost、HTTP、重定向和 DNS 解析结果的 SSRF 防护测试。
 - 前端 API exact request 测试、TypeScript 类型检查、生产构建以及桌面端和移动端表单检查。
 - 独立压测同一 profile 写入在关闭触发器、无订阅、仅写 outbox、worker 同时运行四种模式下的吞吐与延迟；短预热后默认四轮轮换执行顺序。
-- 以固定事件数和本机零延迟接收端分别测量紧循环批处理能力和包含 500ms 调度间隔的生产 Worker 持续吞吐，结果写入 `reports/webhook-load-test.md`。
+- 以固定事件数和本机零延迟接收端分别测量排除等待的紧循环架构能力，以及包含可配置活动间隔和独立连接预算的生产 Worker 行为；优化前后报告分开保存，不能把建议预算吞吐当成生产最优值。
 
 ## 13. 待确认问题
 
