@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "element-skin-sdk"
 version = "0.1.0"
-description = "Python SDK for Element Skin OAuth and API access"
+description = "Python SDK for Element Skin OAuth, API, and Webhook access"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -15,6 +15,13 @@ dependencies = [
 [project.optional-dependencies]
 test = [
   "pytest>=7",
+]
+webhook-fastapi = [
+  "fastapi>=0.100",
+  "uvicorn>=0.23",
+]
+webhook-flask = [
+  "flask>=2.3",
 ]
 
 [tool.setuptools.packages.find]

@@ -49,3 +49,27 @@ class NotFound(APIError):
 
 class OAuthError(APIError):
     """Raised for OAuth protocol errors."""
+
+
+class WebhookError(ValidationError):
+    """Base class for Webhook verification errors."""
+
+
+class WebhookHeaderError(WebhookError):
+    """Raised when required Webhook headers are missing or malformed."""
+
+
+class WebhookSignatureError(WebhookError):
+    """Raised when the Webhook signature is malformed or invalid."""
+
+
+class WebhookTimestampError(WebhookError):
+    """Raised when the Webhook timestamp is malformed or outside the allowed window."""
+
+
+class WebhookPayloadError(WebhookError):
+    """Raised when the authenticated Webhook payload violates the event contract."""
+
+
+class WebhookReplayError(WebhookError):
+    """Raised when a replay guard has already claimed the delivery."""
