@@ -194,6 +194,7 @@
 - 权限、认证、OAuth、缓存、数据库查询路径发生重要变更时，应评估是否运行 loadtest。
 - OAuth 性能验证应同时覆盖 cookie 和 bearer token 路径，必要时加入混合并发场景。
 - 压测数据应可重复、可隔离，不依赖真实用户密钥或开发者本地 token。
+- 后端全量行覆盖率不得低于 90%；统一使用 `go test -p 2 -count=1 ./... -coverpkg=./... -covermode=atomic` 跨包插桩，并以 `go tool cover` 输出的 `total` statement coverage 作为 CI 门槛。
 - 覆盖率目标不能靠无意义测试刷数字；新增测试必须覆盖真实业务路径、边界条件和失败状态。
 - SDK 这类独立发布组件应追求接近或达到 100% 行覆盖和分支覆盖。
 
