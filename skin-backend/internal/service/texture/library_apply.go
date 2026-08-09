@@ -55,13 +55,13 @@ func (s LibraryService) ApplyTextureToProfile(ctx context.Context, actor permiss
 		modelName, _ := info["model"].(string)
 		return profileUpdateError(s.DB.Profiles.UpdateSkinAndModel(ctx, profileID, &hash, profilestore.NormalizeModel(modelName)))
 	case "cape":
-		return s.setProfileTexture(ctx, profileID, "cape", &hash)
+		return s.setProfileCape(ctx, profileID, &hash)
 	default:
 		return util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid texture_type"}
 	}
 }
 
-func (s LibraryService) setProfileTexture(ctx context.Context, profileID, textureType string, hash *string) error {
+func (s LibraryService) setProfileCape(ctx context.Context, profileID string, hash *string) error {
 	p, err := s.DB.Profiles.GetByID(ctx, profileID)
 	if err != nil {
 		return err
@@ -69,23 +69,8 @@ func (s LibraryService) setProfileTexture(ctx context.Context, profileID, textur
 	if p == nil {
 		return util.HTTPError{Status: http.StatusNotFound, Detail: "profile not found"}
 	}
-	switch strings.ToLower(textureType) {
-	case "skin":
-		if sameHash(p.SkinHash, hash) {
-			return nil
-		}
-		if err := s.DB.Profiles.UpdateSkin(ctx, profileID, hash); err != nil {
-			return profileUpdateError(err)
-		}
-	case "cape":
-		if sameHash(p.CapeHash, hash) {
-			return nil
-		}
-		if err := s.DB.Profiles.UpdateCape(ctx, profileID, hash); err != nil {
-			return profileUpdateError(err)
-		}
-	default:
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid texture_type"}
+	if sameHash(p.CapeHash, hash) {
+		return nil
 	}
-	return nil
+	return profileUpdateError(s.DB.Profiles.UpdateCape(ctx, profileID, hash))
 }
