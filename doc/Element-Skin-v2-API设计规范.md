@@ -372,7 +372,7 @@ scope 获批时出现。grant 撤销后关联 access token、refresh token 和 u
 | DELETE | `/v2/oauth/grants/{grant_id}` | `204` |
 
 `redirect_uri` 可为空；只有 Authorization Code 流程要求应用配置并精确匹配回调地址。应用的
-`webhook_endpoints` 是最多 5 项的可选完整替换数组，事件选择必须在应用申请权限允许的目录内。
+`webhook_endpoints` 是最多 5 项的可选完整替换数组，事件选择必须在应用申请权限和应用类型允许的目录内。事件目录分别返回 `delegated_permission` 和 `application_permission`；后者只允许机密应用使用。
 Webhook 只异步发送用户 UUID 和资源 ID 等基础信息，接收方通过 `/v2` API 读取当前资源。完整事件、
 签名、重试和权限重检规则见《Webhook 设计与开发者契约》。
 

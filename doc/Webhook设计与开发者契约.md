@@ -30,9 +30,15 @@ Webhook 完全可选。应用不需要事件通知时不配置 endpoint，站点
 
 | 事件 | 基础数据 | 可申请权限 |
 | --- | --- | --- |
+| `account.created` | `user_id` | `account.read.any` |
+| `account.updated` | `user_id` | `account.read.self` 或 `account.read.any` |
+| `account.deleted` | `user_id` | `account.read.any` |
 | `oauth_grant.created` | `grant_id`、`user_id` | `oauth_grant.read.owned` |
 | `oauth_grant.updated` | `grant_id`、`user_id` | `oauth_grant.read.owned` |
 | `oauth_grant.revoked` | `grant_id`、`user_id` | `oauth_grant.read.owned` |
+| `official_whitelist.added` | `username`、`endpoint_id` | `official_whitelist.read.any` |
+| `official_whitelist.removed` | `username`、`endpoint_id` | `official_whitelist.read.any` |
+| `permission.updated` | `user_id` | `permission.read.any` |
 | `profile.created` | `profile_id`、`user_id` | `profile.read.owned` 或 `profile.read.any` |
 | `profile.updated` | `profile_id`、`user_id` | `profile.read.owned` 或 `profile.read.any` |
 | `profile.deleted` | `profile_id`、`user_id` | `profile.read.owned` 或 `profile.read.any` |
@@ -40,7 +46,7 @@ Webhook 完全可选。应用不需要事件通知时不配置 endpoint，站点
 | `texture.updated` | `texture_hash`、`texture_type`、`user_id` | `texture.read.owned` 或 `texture.read.any` |
 | `texture.deleted` | `texture_hash`、`texture_type`、`user_id` | `texture.read.owned` 或 `texture.read.any` |
 
-`user_id` 是站点用户 UUID。grant 事件同时提供 `grant_id`，便于应用关联自己的授权记录；公开应用和机密应用收到的字段一致。
+`user_id` 是站点用户 UUID。grant 事件同时提供 `grant_id`，便于应用关联自己的授权记录；公开应用和机密应用收到的字段一致。`account.created`、`account.deleted`、`permission.updated` 和 `official_whitelist.*` 是管理型事件，只能由机密应用使用对应的 app-only 权限订阅。普通用户委托应用以 `oauth_grant.revoked` 作为用户授权终止信号，不订阅 `account.deleted`。
 
 事件目录 API：
 
@@ -54,13 +60,17 @@ GET /v2/oauth/webhook-events
     {
       "type": "profile.updated",
       "description": "用户角色发生变化",
-      "required_permissions": ["profile.read.any", "profile.read.owned"]
+      "required_permissions": ["profile.read.any", "profile.read.owned"],
+      "delegated_permission": "profile.read.owned",
+      "application_permission": "profile.read.any"
     }
   ]
 }
 ```
 
-前端应使用该目录和应用当前申请的权限动态计算可选事件，不维护另一份硬编码目录。
+`delegated_permission` 表示公开应用和机密应用均可通过用户 grant 使用的权限；`application_permission` 表示只有机密应用才能以 app-only actor 使用的权限。事件不支持某种模式时对应字段省略。`required_permissions` 是两种模式所需权限的有序并集，便于通用目录展示。
+
+前端应使用该目录、应用类型和应用当前申请的权限动态计算可选事件，不维护另一份硬编码目录。
 
 ## 5. 应用与 endpoint API
 
@@ -111,8 +121,12 @@ endpoint 的事件选择与应用申请权限是同一个上限：
 - `*.read.owned` 资源事件要求事件所属用户对该应用存在有效 grant，且当前委托 actor 仍拥有对应读取权限。
 - `*.read.any` 资源事件只适用于机密应用的有效 app-only actor，并同时受应用申请权限和管理员配置的 client 权限上限约束。
 - `oauth_grant.*` 只投递给 grant 所属应用，不广播给其他应用。
+- `account.created`、`account.deleted`、`permission.updated` 与 `official_whitelist.*` 只走机密应用的 app-only 权限路径；`account.updated` 同时支持用户委托和 app-only 路径。
+- `permission.updated` 表示用户角色或直接权限覆盖发生有效变化，不在事件体中展开权限集合；接收方应读取用户权限 API 获取当前结果。
 
 同一用户对同一应用最多存在一个 active grant。再次授权会更新这条逻辑授权，不会并存多个有效 grant；撤销后原 grant 保留用于历史和排错。
+
+账号删除会把该用户仍处于 active 的 grant 作为 `oauth_grant.revoked` 定向发送给对应应用。后续清理已经 revoked 的历史 grant 不重复发送事件。因此用户委托应用不依赖无法读取的 `account.deleted` 也能可靠感知授权终止。
 
 投递展开和真正发出 HTTP 请求前都会重新检查权限。因此，从产生事件到投递之间发生 grant 撤销、应用停用或权限收窄时，旧任务会停止而不是继续泄露事件。
 
@@ -187,7 +201,7 @@ Worker 使用独立数据库连接池，并提供 `webhook_worker.max_database_c
 - `webhook_events`：事务内写入的不可变事件快照；`target_client_id`、`subject_user_id` 为结构化列，`data` 只保存不可变协议载荷；展开 lease 的到期时间和随机 token 用于并发领取与拒绝过期完成。
 - `webhook_deliveries`：每个 event/endpoint 唯一任务、带随机 token 的 lease、尝试次数、下次时间和最后结果。
 
-业务表触发器与业务变更处于同一 PostgreSQL 事务，事务回滚时 outbox 事件也回滚。worker 通过 `FOR UPDATE SKIP LOCKED` lease 领取任务，支持多个 worker 实例并行运行和进程崩溃后的重新领取。
+业务表触发器与业务变更处于同一 PostgreSQL 事务，事务回滚时 outbox 事件也回滚。账号事件忽略密码哈希变化和没有实际字段变化的 UPDATE；权限覆盖写入相同 effect、重复角色授予和重复白名单添加也不会生成事件。worker 通过 `FOR UPDATE SKIP LOCKED` lease 领取任务，支持多个 worker 实例并行运行和进程崩溃后的重新领取。
 
 ## 11. 前端交互
 
