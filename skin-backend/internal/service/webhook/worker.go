@@ -350,17 +350,22 @@ func (w Worker) endpointAuthorized(ctx context.Context, event model.WebhookEvent
 		if event.TargetClientID != endpoint.ClientID {
 			return false, nil
 		}
-		owned := permission.MustDefinitionByCode(definition.OwnedPermissionCode)
-		return w.DB.OAuth.ClientHasPermission(ctx, endpoint.ClientID, int64(owned.ID))
+		delegated := permission.MustDefinitionByCode(definition.DelegatedPermissionCode)
+		return w.DB.OAuth.ClientHasPermission(ctx, endpoint.ClientID, int64(delegated.ID))
 	}
 	if definition.ApplicationPermissionCode != "" {
 		applicationPermission := permission.MustDefinitionByCode(definition.ApplicationPermissionCode)
-		ownedPermission := permission.MustDefinitionByCode(definition.OwnedPermissionCode)
+		var delegatedPermission permission.Definition
+		var delegatedPermissionID int64
+		if definition.DelegatedPermissionCode != "" {
+			delegatedPermission = permission.MustDefinitionByCode(definition.DelegatedPermissionCode)
+			delegatedPermissionID = int64(delegatedPermission.ID)
+		}
 		state, err := w.DB.OAuth.AuthorizationPermissionState(
 			ctx,
 			event.SubjectUserID,
 			endpoint.ClientID,
-			int64(ownedPermission.ID),
+			delegatedPermissionID,
 			int64(applicationPermission.ID),
 		)
 		if err != nil {
@@ -382,7 +387,7 @@ func (w Worker) endpointAuthorized(ctx context.Context, event model.WebhookEvent
 				return true, nil
 			}
 		}
-		if event.SubjectUserID == "" || !state.OwnedGranted {
+		if definition.DelegatedPermissionCode == "" || event.SubjectUserID == "" || !state.OwnedGranted {
 			return false, nil
 		}
 		permissions, err := w.DB.Permissions.EffectivePermissionsForSubject(
@@ -396,7 +401,7 @@ func (w Worker) endpointAuthorized(ctx context.Context, event model.WebhookEvent
 		if err != nil {
 			return false, err
 		}
-		return permissions.Has(ownedPermission.BitIndex), nil
+		return permissions.Has(delegatedPermission.BitIndex), nil
 	}
 	return false, nil
 }

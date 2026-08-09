@@ -291,6 +291,79 @@ func TestWorkerUsesConfidentialApplicationPermissionAndStopsDisabledEndpointExac
 	}
 }
 
+func TestWorkerDeliversApplicationOnlyEventToConfidentialClientAndRejectsPublicClientExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	owner := testutil.CreateUser(t, db, "webhook-worker-app-only-owner@test.com", "Password123", "WebhookWorkerAppOnlyOwner", false)
+	target := testutil.CreateUser(t, db, "webhook-worker-app-only-target@test.com", "Password123", "WebhookWorkerAppOnlyTarget", false)
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		requests++
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+	cfg := testutil.TestConfig()
+	box, err := util.NewSecretBox(cfg.IdentityEncryptionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := box.Encrypt("application-only-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition := permission.MustDefinitionByCode("permission.read.any")
+	clients := []model.OAuthClient{
+		{ID: "worker-app-only-confidential", OwnerUserID: owner.ID, Name: "Confidential app-only", ClientType: "confidential", SecretHash: "secret", Status: "active", CreatedAt: 1000, UpdatedAt: 1000},
+		{ID: "worker-app-only-public", OwnerUserID: owner.ID, Name: "Public app-only", ClientType: "public", Status: "active", CreatedAt: 1001, UpdatedAt: 1001},
+	}
+	for _, client := range clients {
+		endpoint := model.WebhookEndpoint{
+			ID: "wh_" + client.ID, ClientID: client.ID, URL: server.URL, SecretCiphertext: ciphertext,
+			Status: "active", EventTypes: []string{"permission.updated"}, CreatedAt: client.CreatedAt, UpdatedAt: client.UpdatedAt,
+		}
+		if err := db.OAuth.CreateClient(ctx, client, []int64{int64(definition.ID)}, []model.WebhookEndpoint{endpoint}); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Permissions.SetPermissionOverrideForSubject(ctx, permissiondb.SubjectIDForClient(client.ID), definition, "allow", ""); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Permissions.GrantRole(ctx, target.ID, permission.RoleAdmin, ""); err != nil {
+		t.Fatal(err)
+	}
+	worker := Worker{DB: db, Config: cfg, HTTPClient: server.Client(), Now: func() time.Time { return time.UnixMilli(8500) }}
+	if _, err := worker.RunOnce(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Pool.Query(ctx, `
+		SELECT endpoint.client_id,delivery.status,delivery.last_error
+		FROM webhook_deliveries AS delivery
+		JOIN webhook_endpoints AS endpoint ON endpoint.id=delivery.endpoint_id
+		ORDER BY endpoint.client_id
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	statuses := map[string][2]string{}
+	for rows.Next() {
+		var clientID, status, detail string
+		if err := rows.Scan(&clientID, &status, &detail); err != nil {
+			t.Fatal(err)
+		}
+		statuses[clientID] = [2]string{status, detail}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string][2]string{
+		"worker-app-only-confidential": {"succeeded", ""},
+	}
+	if requests != 1 || !reflect.DeepEqual(statuses, want) {
+		t.Fatalf("application-only requests=%d statuses=%#v want=1/%#v", requests, statuses, want)
+	}
+}
+
 func TestWorkerExpandsUnknownEventsWithoutDeliveryExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()

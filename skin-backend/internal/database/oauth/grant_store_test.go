@@ -359,7 +359,7 @@ func TestActiveGrantPermissionIDsIntersectsActiveClientPermissionsExactly(t *tes
 		t.Fatalf("active grant permissions=%v want client-approved intersection %v", activePermissions, clientPermissions)
 	}
 	state, err := db.OAuth.AuthorizationPermissionState(ctx, user.ID, client.ID, clientPermissions[0], clientPermissions[1])
-	if err != nil || !state.OwnedGranted || !state.ApplicationRequested {
+	if err != nil || !state.OwnedGranted || state.ApplicationRequested {
 		t.Fatalf("active authorization permission state=%#v err=%v", state, err)
 	}
 	state, err = db.OAuth.AuthorizationPermissionState(ctx, user.ID, client.ID, grantPermissions[2], grantPermissions[2])
@@ -367,7 +367,7 @@ func TestActiveGrantPermissionIDsIntersectsActiveClientPermissionsExactly(t *tes
 		t.Fatalf("permissions outside client request state=%#v err=%v", state, err)
 	}
 	state, err = db.OAuth.AuthorizationPermissionState(ctx, "other-user", client.ID, clientPermissions[0], clientPermissions[1])
-	if err != nil || state.OwnedGranted || !state.ApplicationRequested {
+	if err != nil || state.OwnedGranted || state.ApplicationRequested {
 		t.Fatalf("wrong-user authorization permission state=%#v err=%v", state, err)
 	}
 	if activePermissions, err = db.OAuth.ActiveGrantPermissionIDs(ctx, grant.ID, "other-user", client.ID); err != nil || len(activePermissions) != 0 {
@@ -383,7 +383,18 @@ func TestActiveGrantPermissionIDsIntersectsActiveClientPermissionsExactly(t *tes
 		t.Fatalf("revoked grant should return empty active permissions: permissions=%v err=%v", activePermissions, err)
 	}
 	state, err = db.OAuth.AuthorizationPermissionState(ctx, user.ID, client.ID, clientPermissions[0], clientPermissions[1])
-	if err != nil || state.OwnedGranted || !state.ApplicationRequested {
+	if err != nil || state.OwnedGranted || state.ApplicationRequested {
 		t.Fatalf("revoked authorization permission state=%#v err=%v", state, err)
+	}
+	confidential := model.OAuthClient{
+		ID: "client-application-permission", OwnerUserID: user.ID, Name: "Application permission client",
+		ClientType: "confidential", SecretHash: "secret", Status: "active", CreatedAt: 1300, UpdatedAt: 1300,
+	}
+	if err := db.OAuth.CreateClient(ctx, confidential, clientPermissions, nil); err != nil {
+		t.Fatal(err)
+	}
+	state, err = db.OAuth.AuthorizationPermissionState(ctx, "other-user", confidential.ID, clientPermissions[0], clientPermissions[1])
+	if err != nil || state.OwnedGranted || !state.ApplicationRequested {
+		t.Fatalf("confidential application permission state=%#v err=%v", state, err)
 	}
 }

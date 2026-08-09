@@ -6,15 +6,21 @@ type Definition struct {
 	Type                      string   `json:"type"`
 	Description               string   `json:"description"`
 	RequiredPermissions       []string `json:"required_permissions"`
-	OwnedPermissionCode       string   `json:"-"`
-	ApplicationPermissionCode string   `json:"-"`
+	DelegatedPermissionCode   string   `json:"delegated_permission,omitempty"`
+	ApplicationPermissionCode string   `json:"application_permission,omitempty"`
 	TargetClient              bool     `json:"-"`
 }
 
 var Definitions = []Definition{
+	definition("account.created", "站点账号创建", "", "account.read.any", false),
+	definition("account.updated", "站点账号资料发生变化", "account.read.self", "account.read.any", false),
+	definition("account.deleted", "站点账号删除", "", "account.read.any", false),
 	definition("oauth_grant.created", "用户向应用授予访问权限", "oauth_grant.read.owned", "", true),
 	definition("oauth_grant.updated", "用户更新授予应用的访问权限", "oauth_grant.read.owned", "", true),
 	definition("oauth_grant.revoked", "用户撤销授予应用的访问权限", "oauth_grant.read.owned", "", true),
+	definition("official_whitelist.added", "用户加入官方白名单", "", "official_whitelist.read.any", false),
+	definition("official_whitelist.removed", "用户移出官方白名单", "", "official_whitelist.read.any", false),
+	definition("permission.updated", "用户有效权限来源发生变化", "", "permission.read.any", false),
 	definition("profile.created", "用户创建角色", "profile.read.owned", "profile.read.any", false),
 	definition("profile.updated", "用户角色发生变化", "profile.read.owned", "profile.read.any", false),
 	definition("profile.deleted", "用户删除角色", "profile.read.owned", "profile.read.any", false),
@@ -45,8 +51,11 @@ func Types() []string {
 	return out
 }
 
-func definition(eventType, description, ownedPermission, applicationPermission string, targetClient bool) Definition {
-	permissions := []string{ownedPermission}
+func definition(eventType, description, delegatedPermission, applicationPermission string, targetClient bool) Definition {
+	permissions := make([]string, 0, 2)
+	if delegatedPermission != "" {
+		permissions = append(permissions, delegatedPermission)
+	}
 	if applicationPermission != "" {
 		permissions = append(permissions, applicationPermission)
 	}
@@ -55,7 +64,7 @@ func definition(eventType, description, ownedPermission, applicationPermission s
 		Type:                      eventType,
 		Description:               description,
 		RequiredPermissions:       permissions,
-		OwnedPermissionCode:       ownedPermission,
+		DelegatedPermissionCode:   delegatedPermission,
 		ApplicationPermissionCode: applicationPermission,
 		TargetClient:              targetClient,
 	}

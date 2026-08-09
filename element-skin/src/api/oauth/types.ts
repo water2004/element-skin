@@ -24,6 +24,8 @@ export interface OAuthWebhookEventDefinition {
   type: string
   description: string
   required_permissions: string[]
+  delegated_permission?: string
+  application_permission?: string
 }
 
 export interface OAuthClient {

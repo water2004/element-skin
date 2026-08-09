@@ -37,11 +37,20 @@ const eventCatalog: OAuthWebhookEventDefinition[] = [
     type: 'profile.updated',
     description: '角色更新',
     required_permissions: ['profile.read.any', 'profile.read.owned'],
+    delegated_permission: 'profile.read.owned',
+    application_permission: 'profile.read.any',
   },
   {
     type: 'texture.updated',
     description: '材质更新',
     required_permissions: ['texture.read.owned'],
+    delegated_permission: 'texture.read.owned',
+  },
+  {
+    type: 'permission.updated',
+    description: '权限更新',
+    required_permissions: ['permission.read.any'],
+    application_permission: 'permission.read.any',
   },
 ]
 
@@ -93,9 +102,22 @@ describe('oauthAppFormState', () => {
 
   it('filters available events and configured endpoint events by selected permissions', () => {
     expect(
-      availableOAuthWebhookEvents(eventCatalog, ['profile.read.owned']).map((event) => event.type),
+      availableOAuthWebhookEvents(eventCatalog, ['profile.read.owned'], 'public').map(
+        (event) => event.type,
+      ),
     ).toEqual(['profile.updated'])
-    expect(availableOAuthWebhookEvents(eventCatalog, ['account.read.self'])).toEqual([])
+    expect(availableOAuthWebhookEvents(eventCatalog, ['profile.read.any'], 'public')).toEqual([])
+    expect(
+      availableOAuthWebhookEvents(eventCatalog, ['profile.read.any'], 'confidential').map(
+        (event) => event.type,
+      ),
+    ).toEqual(['profile.updated'])
+    expect(
+      availableOAuthWebhookEvents(eventCatalog, ['permission.read.any'], 'confidential').map(
+        (event) => event.type,
+      ),
+    ).toEqual(['permission.updated'])
+    expect(availableOAuthWebhookEvents(eventCatalog, ['account.read.self'], 'public')).toEqual([])
     expect(
       endpointsWithAllowedEvents(
         [

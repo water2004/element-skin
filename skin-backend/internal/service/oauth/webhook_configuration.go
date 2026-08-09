@@ -12,7 +12,7 @@ import (
 
 const maxWebhookEndpointsPerClient = 5
 
-func (s Service) prepareWebhookEndpoints(ctx context.Context, clientID string, inputs []WebhookEndpointInput, permissionCodes []string, updatedAt int64) ([]model.WebhookEndpoint, map[string]string, error) {
+func (s Service) prepareWebhookEndpoints(ctx context.Context, clientID, clientType string, inputs []WebhookEndpointInput, permissionCodes []string, updatedAt int64) ([]model.WebhookEndpoint, map[string]string, error) {
 	if len(inputs) > maxWebhookEndpointsPerClient {
 		return nil, nil, badRequest("too many webhook endpoints")
 	}
@@ -45,7 +45,7 @@ func (s Service) prepareWebhookEndpoints(ctx context.Context, clientID string, i
 			return nil, nil, badRequest("duplicate webhook url")
 		}
 		seenURLs[url] = true
-		eventTypes, err := validateWebhookEventTypes(input.EventTypes, allowedPermissions)
+		eventTypes, err := validateWebhookEventTypes(input.EventTypes, clientType, allowedPermissions)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -103,7 +103,7 @@ func (s Service) prepareWebhookEndpoints(ctx context.Context, clientID string, i
 	return endpoints, newSecrets, nil
 }
 
-func validateWebhookEventTypes(raw []string, allowedPermissions map[string]bool) ([]string, error) {
+func validateWebhookEventTypes(raw []string, clientType string, allowedPermissions map[string]bool) ([]string, error) {
 	if len(raw) == 0 {
 		return nil, badRequest("webhook events are required")
 	}
@@ -115,13 +115,9 @@ func validateWebhookEventTypes(raw []string, allowedPermissions map[string]bool)
 		if !ok {
 			return nil, badRequest("invalid webhook event")
 		}
-		allowed := false
-		for _, permissionCode := range definition.RequiredPermissions {
-			if allowedPermissions[permissionCode] {
-				allowed = true
-				break
-			}
-		}
+		allowed := definition.DelegatedPermissionCode != "" && allowedPermissions[definition.DelegatedPermissionCode]
+		allowed = allowed || clientType == ClientTypeConfidential &&
+			definition.ApplicationPermissionCode != "" && allowedPermissions[definition.ApplicationPermissionCode]
 		if !allowed {
 			return nil, badRequest("webhook event exceeds client permission limit")
 		}

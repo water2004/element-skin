@@ -187,6 +187,7 @@ describe('OAuth application pages', () => {
             type: 'profile.updated',
             description: '角色更新',
             required_permissions: ['profile.read.owned'],
+            delegated_permission: 'profile.read.owned',
           },
         ],
       },

@@ -40,9 +40,15 @@ export function permissionsForOAuthClientType(
 export function availableOAuthWebhookEvents(
   catalog: OAuthWebhookEventDefinition[],
   permissionCodes: string[],
+  clientType: OAuthClientInput['client_type'],
 ) {
   const selected = new Set(permissionCodes)
-  return catalog.filter((event) => event.required_permissions.some((code) => selected.has(code)))
+  return catalog.filter(
+    (event) =>
+      Boolean(event.delegated_permission && selected.has(event.delegated_permission)) ||
+      (clientType === 'confidential' &&
+        Boolean(event.application_permission && selected.has(event.application_permission))),
+  )
 }
 
 export function endpointsWithAllowedEvents(

@@ -32,7 +32,7 @@ func (s Service) CreateClient(ctx context.Context, actor permission.Actor, input
 			return nil, err
 		}
 	}
-	endpoints, endpointSecrets, err := s.prepareWebhookEndpoints(ctx, client.ID, input.WebhookEndpoints, permissionCodes, client.CreatedAt)
+	endpoints, endpointSecrets, err := s.prepareWebhookEndpoints(ctx, client.ID, client.ClientType, input.WebhookEndpoints, permissionCodes, client.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +131,7 @@ func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clien
 	client.Status = status
 	client.CreatedAt = current.CreatedAt
 	client.UpdatedAt = database.NowMS()
-	endpoints, endpointSecrets, err := s.prepareWebhookEndpoints(ctx, client.ID, input.WebhookEndpoints, permissionCodes, client.UpdatedAt)
+	endpoints, endpointSecrets, err := s.prepareWebhookEndpoints(ctx, client.ID, client.ClientType, input.WebhookEndpoints, permissionCodes, client.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}

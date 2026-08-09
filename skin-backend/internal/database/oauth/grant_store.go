@@ -232,6 +232,7 @@ func (s Store) AuthorizationPermissionState(ctx context.Context, userID, clientI
 				  ON application_requested.client_id=application_client.id
 				WHERE application_client.id=$3
 				  AND application_client.status='active'
+				  AND application_client.client_type='confidential'
 				  AND application_requested.permission_id=$5
 			),
 			EXISTS (

@@ -601,6 +601,12 @@ CREATE INDEX IF NOT EXISTS idx_users_created_id ON users (created_at, id);
 CREATE INDEX IF NOT EXISTS idx_skin_library_public_created_hash ON skin_library (is_public, created_at, skin_hash);
 CREATE INDEX IF NOT EXISTS idx_skin_library_created_hash ON skin_library (created_at, skin_hash);
 CREATE INDEX IF NOT EXISTS idx_skin_library_public_usage_created_hash ON skin_library (is_public, usage_count DESC, created_at DESC, skin_hash DESC);
+DELETE FROM whitelisted_users duplicate
+USING whitelisted_users retained
+WHERE duplicate.id > retained.id
+  AND duplicate.username=retained.username
+  AND duplicate.endpoint_id=retained.endpoint_id;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whitelisted_users_username_endpoint ON whitelisted_users (username, endpoint_id);
 CREATE INDEX IF NOT EXISTS idx_whitelisted_users_endpoint ON whitelisted_users (endpoint_id);
 CREATE INDEX IF NOT EXISTS idx_fallback_skin_domains_order ON fallback_skin_domains (endpoint_id, sort_order, domain);
 CREATE INDEX IF NOT EXISTS idx_homepage_media_public_order ON homepage_media (enabled, sort_order, id);
@@ -690,6 +696,148 @@ AS $$
           AND client.status = 'active'
     );
 $$;
+
+CREATE OR REPLACE FUNCTION enqueue_account_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_user_id TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        next_type := 'account.created';
+        next_user_id := NEW.id;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF ROW(OLD.email, OLD.preferred_language, OLD.display_name, OLD.avatar_hash, OLD.banned_until)
+            IS NOT DISTINCT FROM
+           ROW(NEW.email, NEW.preferred_language, NEW.display_name, NEW.avatar_hash, NEW.banned_until) THEN
+            RETURN NEW;
+        END IF;
+        next_type := 'account.updated';
+        next_user_id := NEW.id;
+    ELSE
+        next_type := 'account.deleted';
+        next_user_id := OLD.id;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            next_user_id,
+            jsonb_build_object('user_id', next_user_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS users_webhook_event ON users;
+CREATE TRIGGER users_webhook_event
+AFTER INSERT OR UPDATE OF email, preferred_language, display_name, avatar_hash, banned_until OR DELETE ON users
+FOR EACH ROW EXECUTE FUNCTION enqueue_account_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_permission_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_subject_id TEXT;
+    next_user_id TEXT;
+BEGIN
+    IF NOT webhook_event_has_subscribers('permission.updated') THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        next_subject_id := OLD.subject_id;
+    ELSE
+        next_subject_id := NEW.subject_id;
+    END IF;
+    SELECT subject.user_id
+    INTO next_user_id
+    FROM permission_subjects AS subject
+    JOIN users AS site_user ON site_user.id=subject.user_id
+    WHERE subject.id=next_subject_id AND subject.kind='user';
+    IF next_user_id IS NOT NULL THEN
+        INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            'permission.updated',
+            next_user_id,
+            jsonb_build_object('user_id', next_user_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS subject_roles_webhook_event ON subject_roles;
+CREATE TRIGGER subject_roles_webhook_event
+AFTER INSERT OR DELETE ON subject_roles
+FOR EACH ROW EXECUTE FUNCTION enqueue_permission_webhook_event();
+
+DROP TRIGGER IF EXISTS subject_permission_overrides_webhook_event ON subject_permission_overrides;
+CREATE TRIGGER subject_permission_overrides_webhook_event
+AFTER INSERT OR DELETE ON subject_permission_overrides
+FOR EACH ROW EXECUTE FUNCTION enqueue_permission_webhook_event();
+
+DROP TRIGGER IF EXISTS subject_permission_overrides_update_webhook_event ON subject_permission_overrides;
+CREATE TRIGGER subject_permission_overrides_update_webhook_event
+AFTER UPDATE OF effect ON subject_permission_overrides
+FOR EACH ROW
+WHEN (OLD.effect IS DISTINCT FROM NEW.effect)
+EXECUTE FUNCTION enqueue_permission_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_official_whitelist_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_username TEXT;
+    next_endpoint_id INTEGER;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        next_type := 'official_whitelist.added';
+        next_username := NEW.username;
+        next_endpoint_id := NEW.endpoint_id;
+    ELSE
+        next_type := 'official_whitelist.removed';
+        next_username := OLD.username;
+        next_endpoint_id := OLD.endpoint_id;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            jsonb_build_object('username', next_username, 'endpoint_id', next_endpoint_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS official_whitelist_webhook_event ON whitelisted_users;
+CREATE TRIGGER official_whitelist_webhook_event
+AFTER INSERT OR DELETE ON whitelisted_users
+FOR EACH ROW EXECUTE FUNCTION enqueue_official_whitelist_webhook_event();
 
 CREATE OR REPLACE FUNCTION enqueue_profile_webhook_event()
 RETURNS TRIGGER
@@ -793,14 +941,34 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     next_type TEXT;
+    next_grant_id TEXT;
+    next_client_id TEXT;
+    next_user_id TEXT;
 BEGIN
     IF TG_OP = 'INSERT' AND NEW.status = 'active' THEN
         next_type := 'oauth_grant.created';
+        next_grant_id := NEW.id;
+        next_client_id := NEW.client_id;
+        next_user_id := NEW.user_id;
     ELSIF TG_OP = 'UPDATE' AND OLD.status = 'active' AND NEW.status = 'revoked' THEN
         next_type := 'oauth_grant.revoked';
+        next_grant_id := NEW.id;
+        next_client_id := NEW.client_id;
+        next_user_id := NEW.user_id;
     ELSIF TG_OP = 'UPDATE' AND NEW.status = 'active' THEN
         next_type := 'oauth_grant.updated';
+        next_grant_id := NEW.id;
+        next_client_id := NEW.client_id;
+        next_user_id := NEW.user_id;
+    ELSIF TG_OP = 'DELETE' AND OLD.status = 'active' THEN
+        next_type := 'oauth_grant.revoked';
+        next_grant_id := OLD.id;
+        next_client_id := OLD.client_id;
+        next_user_id := OLD.user_id;
     ELSE
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
         RETURN NEW;
     END IF;
     IF webhook_event_has_subscribers(next_type) THEN
@@ -808,11 +976,14 @@ BEGIN
         VALUES (
             'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
             next_type,
-            NEW.client_id,
-            NEW.user_id,
-            jsonb_build_object('user_id', NEW.user_id, 'grant_id', NEW.id),
+            next_client_id,
+            next_user_id,
+            jsonb_build_object('user_id', next_user_id, 'grant_id', next_grant_id),
             (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
         );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
     END IF;
     RETURN NEW;
 END;
@@ -820,7 +991,7 @@ $$;
 
 DROP TRIGGER IF EXISTS delegated_permission_grants_webhook_event ON delegated_permission_grants;
 CREATE TRIGGER delegated_permission_grants_webhook_event
-AFTER INSERT OR UPDATE OF oidc_scopes, status ON delegated_permission_grants
+AFTER INSERT OR UPDATE OF oidc_scopes, status OR DELETE ON delegated_permission_grants
 FOR EACH ROW EXECUTE FUNCTION enqueue_oauth_grant_webhook_event();
 
 INSERT INTO settings (key, value) VALUES

@@ -11,9 +11,15 @@ import (
 
 func TestEventCatalogUsesStableResourceActionNamesAndExistingPermissionsExactly(t *testing.T) {
 	wantTypes := []string{
+		"account.created",
+		"account.deleted",
+		"account.updated",
 		"oauth_grant.created",
 		"oauth_grant.revoked",
 		"oauth_grant.updated",
+		"official_whitelist.added",
+		"official_whitelist.removed",
+		"permission.updated",
 		"profile.created",
 		"profile.deleted",
 		"profile.updated",
@@ -46,5 +52,27 @@ func TestEventCatalogUsesStableResourceActionNamesAndExistingPermissionsExactly(
 		if !ok || !reflect.DeepEqual(lookedUp, definition) {
 			t.Fatalf("event lookup mismatch for %q: %#v ok=%v", definition.Type, lookedUp, ok)
 		}
+	}
+	wantPermissions := map[string][]string{
+		"account.created":            {"account.read.any"},
+		"account.updated":            {"account.read.any", "account.read.self"},
+		"account.deleted":            {"account.read.any"},
+		"official_whitelist.added":   {"official_whitelist.read.any"},
+		"official_whitelist.removed": {"official_whitelist.read.any"},
+		"permission.updated":         {"permission.read.any"},
+	}
+	for eventType, permissions := range wantPermissions {
+		definition, ok := webhook.DefinitionByType(eventType)
+		if !ok || !reflect.DeepEqual(definition.RequiredPermissions, permissions) {
+			t.Fatalf("event %q permissions=%v want=%v ok=%v", eventType, definition.RequiredPermissions, permissions, ok)
+		}
+	}
+	accountUpdated, _ := webhook.DefinitionByType("account.updated")
+	if accountUpdated.DelegatedPermissionCode != "account.read.self" || accountUpdated.ApplicationPermissionCode != "account.read.any" {
+		t.Fatalf("account.updated authorization modes=%#v", accountUpdated)
+	}
+	permissionUpdated, _ := webhook.DefinitionByType("permission.updated")
+	if permissionUpdated.DelegatedPermissionCode != "" || permissionUpdated.ApplicationPermissionCode != "permission.read.any" {
+		t.Fatalf("permission.updated authorization modes=%#v", permissionUpdated)
 	}
 }

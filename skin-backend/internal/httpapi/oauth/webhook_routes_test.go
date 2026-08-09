@@ -21,11 +21,12 @@ func TestOAuthAppRoutesCreateAndReadOptionalPermissionBoundWebhookEndpointsExact
 		t.Fatalf("webhook catalog status=%d body=%s", catalogRes.Code, catalogRes.Body.String())
 	}
 	events := decodeMap(t, catalogRes.Body.Bytes())["events"].([]any)
-	if len(events) != 9 {
+	if len(events) != 15 {
 		t.Fatalf("webhook catalog events=%#v", events)
 	}
 	first := events[0].(map[string]any)
-	if first["type"] != "oauth_grant.created" || first["description"] == "" || len(first["required_permissions"].([]any)) != 1 {
+	if first["type"] != "account.created" || first["description"] == "" ||
+		len(first["required_permissions"].([]any)) != 1 || first["application_permission"] != "account.read.any" {
 		t.Fatalf("webhook catalog first event mismatch: %#v", first)
 	}
 

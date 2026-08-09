@@ -22,7 +22,7 @@ func TestWebhookEventCatalogAllowsEveryApplicationManagementConsumerExactly(t *t
 			if err != nil {
 				t.Fatalf("WebhookEventCatalog(%q) error=%v", code, err)
 			}
-			if len(items) != 9 || items[0].Type != "oauth_grant.created" || items[8].Type != "texture.deleted" {
+			if len(items) != 15 || items[0].Type != "account.created" || items[14].Type != "texture.deleted" {
 				t.Fatalf("WebhookEventCatalog(%q)=%#v", code, items)
 			}
 		})

@@ -175,3 +175,49 @@ func TestServiceOAuthAppWebhookConfigurationRejectsUnsafeDuplicateAndUnauthorize
 		t.Fatalf("invalid webhook requests persisted clients=%d endpoints=%d", clientCount, endpointCount)
 	}
 }
+
+func TestServiceOAuthAppWebhookConfigurationRestrictsApplicationEventsToConfidentialClientsExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	admin := testutil.CreateUser(t, db, "oauth-webhook-app-only@test.com", "Password123", "OAuthWebhookAppOnly", true)
+	actor, err := db.Permissions.ActorForUser(ctx, admin.ID, permissiondb.EffectiveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc := oauth.Service{DB: db, Redis: redisstore.NewMemoryStore(), Config: testutil.TestConfig()}
+	enabled := true
+	input := oauth.ClientInput{
+		Name:            "Application webhook",
+		PermissionCodes: []string{"permission.read.any"},
+		WebhookEndpoints: []oauth.WebhookEndpointInput{{
+			URL:        "https://hooks.example/permissions",
+			EventTypes: []string{"permission.updated"},
+			Enabled:    &enabled,
+		}},
+	}
+	input.ClientType = oauth.ClientTypePublic
+	if _, err := svc.CreateClient(ctx, actor, input); err == nil {
+		t.Fatal("public client application-only webhook should be rejected")
+	} else {
+		assertHTTPError(t, err, 400, "webhook event exceeds client permission limit")
+	}
+	input.ClientType = oauth.ClientTypeConfidential
+	created, err := svc.CreateClient(ctx, actor, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	endpoints := created["webhook_endpoints"].([]map[string]any)
+	if len(endpoints) != 1 || !reflect.DeepEqual(endpoints[0]["events"], []string{"permission.updated"}) {
+		t.Fatalf("confidential application webhook endpoints=%#v", endpoints)
+	}
+	var clients, endpointsCount int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM delegated_clients`).Scan(&clients); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM webhook_endpoints`).Scan(&endpointsCount); err != nil {
+		t.Fatal(err)
+	}
+	if clients != 1 || endpointsCount != 1 {
+		t.Fatalf("application webhook rows clients=%d endpoints=%d want=1/1", clients, endpointsCount)
+	}
+}

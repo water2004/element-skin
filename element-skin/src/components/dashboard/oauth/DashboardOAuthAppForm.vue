@@ -348,7 +348,7 @@ const delegablePermissions = computed(() =>
   delegableOAuthPermissions(catalog.value, user.value?.permissions ?? [], form.client_type),
 )
 const availableWebhookEvents = computed(() =>
-  availableOAuthWebhookEvents(webhookCatalog.value, form.permissions),
+  availableOAuthWebhookEvents(webhookCatalog.value, form.permissions, form.client_type),
 )
 const availableWebhookEventSet = computed(
   () => new Set(availableWebhookEvents.value.map((event) => event.type)),
