@@ -72,6 +72,22 @@ func TestUpsertActiveGrantReusesLogicalGrantAndRollsBackAuthorizationCodeFailure
 	if grantID != first.ID {
 		t.Fatalf("repeated upsert grant id=%q want existing %q", grantID, first.ID)
 	}
+	directUpsert := second
+	directUpsert.ID = "grant-upsert-direct"
+	grantID, err = db.OAuth.UpsertActiveGrant(ctx, directUpsert, secondPermissions)
+	if err != nil || grantID != first.ID {
+		t.Fatalf("direct repeated upsert grant id=%q err=%v want existing %q", grantID, err, first.ID)
+	}
+	activeGrant, err := db.OAuth.ActiveGrantByUserClient(ctx, user.ID, client.ID)
+	if err != nil || activeGrant == nil || activeGrant.ID != first.ID || activeGrant.UserID != user.ID ||
+		activeGrant.ClientID != client.ID || activeGrant.Status != "active" ||
+		!reflect.DeepEqual(activeGrant.OIDCScopes, second.OIDCScopes) {
+		t.Fatalf("active grant lookup=%#v err=%v", activeGrant, err)
+	}
+	missingActiveGrant, err := db.OAuth.ActiveGrantByUserClient(ctx, "missing-user", client.ID)
+	if err != nil || missingActiveGrant != nil {
+		t.Fatalf("missing active grant=%#v err=%v", missingActiveGrant, err)
+	}
 	grants, err := db.OAuth.ListGrantsByUser(ctx, user.ID, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -145,6 +161,14 @@ func TestGrantAuthorizationCodeAndTokenLifecycle(t *testing.T) {
 	}
 	if err := db.OAuth.CreateGrant(ctx, grant, grantPermissions); err != nil {
 		t.Fatal(err)
+	}
+	activeGrant, err := db.OAuth.ActiveGrantByUserClient(ctx, user.ID, client.ID)
+	if err != nil || !reflect.DeepEqual(activeGrant, &grant) {
+		t.Fatalf("active grant without OIDC scopes=%#v err=%v want=%#v", activeGrant, err, &grant)
+	}
+	activeScopes, active, err := db.OAuth.ActiveGrantOIDCScopes(ctx, grant.ID, user.ID, client.ID)
+	if err != nil || !active || len(activeScopes) != 0 || activeScopes == nil {
+		t.Fatalf("active empty OIDC scopes=%#v active=%v err=%v", activeScopes, active, err)
 	}
 	grants, err := db.OAuth.ListGrantsByUser(ctx, user.ID, 10)
 	if err != nil {

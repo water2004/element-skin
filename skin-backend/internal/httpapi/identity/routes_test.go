@@ -1,6 +1,9 @@
 package identity_test
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -8,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"element-skin/backend/internal/database"
 	permissiondb "element-skin/backend/internal/database/permission"
@@ -17,6 +21,9 @@ import (
 	"element-skin/backend/internal/permission"
 	identitysvc "element-skin/backend/internal/service/identity"
 	"element-skin/backend/internal/testutil"
+	"element-skin/backend/internal/util"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestProviderRoutesUseExactV2ContractsAndNeverExposeClientSecret(t *testing.T) {
@@ -66,6 +73,51 @@ func TestProviderRoutesUseExactV2ContractsAndNeverExposeClientSecret(t *testing.
 	wantPublic := `{"items":[{"adapter":"generic_oidc","icon_url":"https://accounts.example/icon.png","id":"` + providerID + `","link_enabled":true,"login_enabled":true,"name":"Example Accounts","registration_enabled":true}]}` + "\n"
 	if rec.Code != http.StatusOK || rec.Body.String() != wantPublic {
 		t.Fatalf("public provider response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+
+	req = identityRouteRequest(http.MethodGet, "/v2/admin/identity-providers", "", adminActor)
+	rec = httptest.NewRecorder()
+	h.ListProviders(rec, req)
+	var listed struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || len(listed.Items) != 1 || listed.Items[0]["id"] != providerID ||
+		listed.Items[0]["has_client_secret"] != true || len(listed.Items[0]) != 19 {
+		t.Fatalf("admin provider list mismatch: status=%d response=%#v", rec.Code, listed)
+	}
+
+	req = identityRouteRequest(http.MethodGet, "/v2/admin/identity-providers/"+providerID, "", adminActor)
+	req.SetPathValue("provider_id", providerID)
+	rec = httptest.NewRecorder()
+	h.GetProvider(rec, req)
+	var detail map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &detail); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || detail["id"] != providerID || detail["name"] != "Example Accounts" ||
+		detail["has_client_secret"] != true || len(detail) != 19 {
+		t.Fatalf("provider detail mismatch: status=%d response=%#v", rec.Code, detail)
+	}
+
+	updateBody := fmt.Sprintf(`{"name":"Updated Accounts","issuer_url":%q,"client_id":"client-id","scopes":["openid","groups"],"adapter":"generic_oidc","icon_url":"https://accounts.example/updated.png","enabled":true,"login_enabled":true,"link_enabled":false,"registration_enabled":false,"display_order":8}`, discoveryServer.URL)
+	req = identityRouteRequest(http.MethodPut, "/v2/admin/identity-providers/"+providerID, updateBody, adminActor)
+	req.SetPathValue("provider_id", providerID)
+	rec = httptest.NewRecorder()
+	h.UpdateProvider(rec, req)
+	var updated map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
+	}
+	if rec.Code != http.StatusOK || updated["id"] != providerID || updated["name"] != "Updated Accounts" ||
+		updated["link_enabled"] != false || updated["registration_enabled"] != false ||
+		updated["display_order"] != float64(8) || updated["has_client_secret"] != true || len(updated) != 19 {
+		t.Fatalf("provider update mismatch: status=%d response=%#v", rec.Code, updated)
+	}
+	if scopes, ok := updated["scopes"].([]any); !ok || len(scopes) != 2 || scopes[0] != "groups" || scopes[1] != "openid" {
+		t.Fatalf("updated scopes mismatch: %#v", updated["scopes"])
 	}
 
 	req = identityRouteRequest(http.MethodDelete, "/v2/admin/identity-providers/"+providerID, "", adminActor)
@@ -169,6 +221,40 @@ func TestIdentityRoutesRejectInvalidJSONAndMissingPermissionsExactly(t *testing.
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
 		t.Fatalf("identity permission response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
+
+	tests := []struct {
+		name string
+		call func(http.ResponseWriter, *http.Request)
+		req  *http.Request
+	}{
+		{name: "start authorization invalid json", call: h.StartAuthorization, req: identityRouteRequest(http.MethodPost, "/v2/identity-authorizations", `{`, permission.GuestActor())},
+		{name: "update provider invalid json", call: h.UpdateProvider, req: identityRouteRequest(http.MethodPut, "/v2/admin/identity-providers/missing", `{`, permission.Actor{})},
+		{name: "update identity invalid json", call: h.UpdateIdentity, req: identityRouteRequest(http.MethodPatch, "/v2/users/me/identities/missing", `{`, permission.Actor{})},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			tc.call(recorder, tc.req)
+			if recorder.Code != http.StatusBadRequest || recorder.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+				t.Fatalf("invalid JSON response mismatch: status=%d body=%q", recorder.Code, recorder.Body.String())
+			}
+		})
+	}
+
+	for name, call := range map[string]func(http.ResponseWriter, *http.Request){
+		"list providers": h.ListProviders,
+		"get provider":   h.GetProvider,
+	} {
+		t.Run(name+" permission", func(t *testing.T) {
+			request := identityRouteRequest(http.MethodGet, "/v2/admin/identity-providers/missing", "", permission.Actor{})
+			request.SetPathValue("provider_id", "missing")
+			recorder := httptest.NewRecorder()
+			call(recorder, request)
+			if recorder.Code != http.StatusForbidden || recorder.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+				t.Fatalf("permission response mismatch: status=%d body=%q", recorder.Code, recorder.Body.String())
+			}
+		})
+	}
 }
 
 func TestIdentityAuthorizationCancellationReturnsToIdentityManagementExactly(t *testing.T) {
@@ -215,6 +301,164 @@ func TestIdentityAuthorizationCancellationReturnsToIdentityManagementExactly(t *
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != wantLocation || rec.Body.String() != wantBody {
 		t.Fatalf("cancel callback mismatch: status=%d location=%q body=%q", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}
+}
+
+func TestIdentityAuthorizationCallbackIssuesSessionAndRegistrationRedirectsExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := t.Context()
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const keyID = "identity-route-callback-key"
+	var signedIDToken string
+	var tokenCalls, jwksCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		switch req.URL.Path {
+		case "/token":
+			tokenCalls++
+			clientID, clientSecret, ok := req.BasicAuth()
+			if !ok || clientID != "callback-client" || clientSecret != "callback-secret" {
+				t.Fatalf("callback token auth id=%q secret=%q ok=%v", clientID, clientSecret, ok)
+			}
+			if err := req.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			if req.Form.Get("grant_type") != "authorization_code" || req.Form.Get("code") == "" ||
+				req.Form.Get("redirect_uri") != "http://localhost:8000/v2/auth/oidc/callback" ||
+				req.Form.Get("code_verifier") == "" {
+				t.Fatalf("callback token form=%#v", req.Form)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"access_token":"callback-access","refresh_token":"callback-refresh","token_type":"Bearer","expires_in":3600,"scope":"openid email","id_token":%q}`, signedIDToken)
+		case "/jwks":
+			jwksCalls++
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = fmt.Fprintf(w, `{"keys":[{"kty":"RSA","kid":%q,"use":"sig","alg":"RS256","n":%q,"e":"AQAB"}]}`,
+				keyID, base64.RawURLEncoding.EncodeToString(privateKey.PublicKey.N.Bytes()))
+		default:
+			http.NotFound(w, req)
+		}
+	}))
+	defer server.Close()
+
+	cfg := testutil.TestConfig()
+	cache := testutil.NewMemoryRedis()
+	h := identityapi.New(cfg, db, cache, nil)
+	box, err := util.NewSecretBox(cfg.IdentityEncryptionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encryptedSecret, err := box.Encrypt("callback-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := model.IdentityProvider{
+		ID: "identity-route-real-callback", Name: "Real Callback Provider", IssuerURL: server.URL,
+		AuthorizationEndpoint: server.URL + "/authorize", TokenEndpoint: server.URL + "/token",
+		JWKSURI: server.URL + "/jwks", ClientID: "callback-client", ClientSecretCiphertext: encryptedSecret,
+		Scopes: []string{"openid", "email"}, Adapter: identitysvc.AdapterGenericOIDC,
+		Enabled: true, LoginEnabled: true, LinkEnabled: true, RegistrationEnabled: true, CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := db.Identities.CreateProvider(ctx, provider); err != nil {
+		t.Fatal(err)
+	}
+	user := testutil.CreateUser(t, db, "identity-route-login@example.com", "Password123", "IdentityRouteLogin", false)
+	external := model.ExternalIdentity{
+		ID: "identity-route-login-external", UserID: user.ID, ProviderID: provider.ID,
+		Subject: "existing-route-subject", Email: "old@remote.example", CreatedAt: 2, UpdatedAt: 2,
+	}
+	if err := db.Identities.CreateIdentity(ctx, external, model.ExternalIdentityCredential{IdentityID: external.ID, UpdatedAt: 2}); err != nil {
+		t.Fatal(err)
+	}
+
+	startLogin := identityRouteRequest(http.MethodPost, "/v2/identity-authorizations",
+		`{"provider_id":"identity-route-real-callback","intent":"login"}`, permission.GuestActor())
+	loginStartRecorder := httptest.NewRecorder()
+	h.StartAuthorization(loginStartRecorder, startLogin)
+	loginAuthorizationURL := authorizationURLFromResponse(t, loginStartRecorder)
+	signedIDToken = signRouteIdentityToken(t, privateKey, keyID, server.URL, "callback-client",
+		loginAuthorizationURL.Query().Get("nonce"), external.Subject, "Existing Route User")
+	loginState := loginAuthorizationURL.Query().Get("state")
+	loginCallback := identityRouteRequest(http.MethodGet,
+		"/v2/auth/oidc/callback?code=login-code&state="+url.QueryEscape(loginState), "", permission.GuestActor())
+	loginRecorder := httptest.NewRecorder()
+	h.AuthorizationCallback(loginRecorder, loginCallback)
+	if loginRecorder.Code != http.StatusSeeOther || loginRecorder.Header().Get("Location") != "http://test/dashboard" ||
+		loginRecorder.Body.String() != "<a href=\"http://test/dashboard\">See Other</a>.\n\n" {
+		t.Fatalf("login callback status=%d location=%q body=%q", loginRecorder.Code, loginRecorder.Header().Get("Location"), loginRecorder.Body.String())
+	}
+	cookies := map[string]*http.Cookie{}
+	for _, cookie := range loginRecorder.Result().Cookies() {
+		cookies[cookie.Name] = cookie
+	}
+	if cookies["access_token"] == nil || cookies["access_token"].Value == "" || cookies["access_token"].HttpOnly != true ||
+		cookies["refresh_token"] == nil || cookies["refresh_token"].Value == "" || cookies["refresh_token"].HttpOnly != true {
+		t.Fatalf("login callback cookies=%#v", cookies)
+	}
+	updated, err := db.Identities.GetIdentity(ctx, external.ID)
+	if err != nil || updated == nil || updated.DisplayName != "Existing Route User" || updated.LastLoginAt == nil {
+		t.Fatalf("login callback identity=%#v err=%v", updated, err)
+	}
+
+	startRegistration := identityRouteRequest(http.MethodPost, "/v2/identity-authorizations",
+		`{"provider_id":"identity-route-real-callback","intent":"login"}`, permission.GuestActor())
+	registrationStartRecorder := httptest.NewRecorder()
+	h.StartAuthorization(registrationStartRecorder, startRegistration)
+	registrationAuthorizationURL := authorizationURLFromResponse(t, registrationStartRecorder)
+	signedIDToken = signRouteIdentityToken(t, privateKey, keyID, server.URL, "callback-client",
+		registrationAuthorizationURL.Query().Get("nonce"), "new-route-subject", "New Route User")
+	registrationCallback := identityRouteRequest(http.MethodGet,
+		"/v2/auth/oidc/callback?code=registration-code&state="+url.QueryEscape(registrationAuthorizationURL.Query().Get("state")),
+		"", permission.GuestActor())
+	registrationRecorder := httptest.NewRecorder()
+	h.AuthorizationCallback(registrationRecorder, registrationCallback)
+	location, err := url.Parse(registrationRecorder.Header().Get("Location"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if registrationRecorder.Code != http.StatusSeeOther || location.Scheme != "http" || location.Host != "test" ||
+		location.Path != "/register" || location.Query().Get("provider_id") != provider.ID ||
+		location.Query().Get("identity_ticket") == "" || len(registrationRecorder.Result().Cookies()) != 0 {
+		t.Fatalf("registration callback status=%d location=%q cookies=%#v", registrationRecorder.Code,
+			registrationRecorder.Header().Get("Location"), registrationRecorder.Result().Cookies())
+	}
+	if tokenCalls != 2 || jwksCalls != 2 {
+		t.Fatalf("OIDC callback calls token=%d jwks=%d want 2/2", tokenCalls, jwksCalls)
+	}
+}
+
+func authorizationURLFromResponse(t *testing.T, recorder *httptest.ResponseRecorder) *url.URL {
+	t.Helper()
+	var started struct {
+		AuthorizationURL string `json:"authorization_url"`
+		ExpiresIn        int    `json:"expires_in"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &started); err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := url.Parse(started.AuthorizationURL)
+	if err != nil || recorder.Code != http.StatusCreated || started.ExpiresIn != 600 ||
+		parsed.Query().Get("state") == "" || parsed.Query().Get("nonce") == "" {
+		t.Fatalf("authorization start status=%d result=%#v URL=%#v err=%v", recorder.Code, started, parsed, err)
+	}
+	return parsed
+}
+
+func signRouteIdentityToken(t *testing.T, privateKey *rsa.PrivateKey, keyID, issuer, audience, nonce, subject, name string) string {
+	t.Helper()
+	now := time.Now()
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"iss": issuer, "sub": subject, "aud": audience, "nonce": nonce,
+		"iat": now.Add(-time.Minute).Unix(), "exp": now.Add(time.Hour).Unix(),
+		"email": subject + "@remote.example", "email_verified": true, "name": name,
+	})
+	token.Header["kid"] = keyID
+	signed, err := token.SignedString(privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return signed
 }
 
 func identityRouteRequest(method, target, body string, actor permission.Actor) *http.Request {

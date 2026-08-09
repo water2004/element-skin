@@ -347,6 +347,301 @@ func TestOIDCAuthorizationRejectsUnauthorizedLinkAndConsumesDeniedStateExactly(t
 	}
 }
 
+func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oidc-state-user@test.com", "pw", "OIDCStateUser", false)
+	other := testutil.CreateUser(t, db, "oidc-state-other@test.com", "pw", "OIDCStateOther", false)
+	provider := oidcTestProvider(t, db, "oidc-state-provider")
+	box, err := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.ClientSecretCiphertext, err = box.Encrypt("state-client-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateOIDCTestProvider(t, db, provider)
+	cache := redisstore.NewMemoryStore()
+	client := &fakeOIDCClient{
+		claims: identity.OIDCClaims{Subject: "state-subject", Email: "state@remote.example"},
+		tokens: identity.OIDCTokens{AccessToken: "state-access", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour)},
+	}
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: cache, OIDCClient: client}
+	actor := actorWithPermissions(user.ID, "external_identity.create.owned")
+
+	if _, err := service.StartAuthorization(ctx, actor, "missing-provider", "link", ""); err == nil {
+		t.Fatal("missing provider authorization should fail")
+	} else {
+		assertHTTPError(t, err, 404, "identity provider not found")
+	}
+	if _, err := service.StartAuthorization(ctx, actor, provider.ID, "unknown", ""); err == nil {
+		t.Fatal("unknown authorization intent should fail")
+	} else {
+		assertHTTPError(t, err, 400, "intent must be login or link")
+	}
+	if _, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "unexpected"); err == nil {
+		t.Fatal("login identity_id should fail")
+	} else {
+		assertHTTPError(t, err, 400, "identity_id is only allowed for link authorization")
+	}
+
+	provider.LoginEnabled = false
+	updateOIDCTestProvider(t, db, provider)
+	if _, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", ""); err == nil {
+		t.Fatal("disabled login should fail")
+	} else {
+		assertHTTPError(t, err, 403, "login is disabled for this identity provider")
+	}
+	provider.LoginEnabled = true
+	provider.LinkEnabled = false
+	updateOIDCTestProvider(t, db, provider)
+	if _, err := service.StartAuthorization(ctx, actor, provider.ID, "link", ""); err == nil {
+		t.Fatal("disabled linking should fail")
+	} else {
+		assertHTTPError(t, err, 403, "linking is disabled for this identity provider")
+	}
+	provider.LinkEnabled = true
+	updateOIDCTestProvider(t, db, provider)
+
+	foreign := model.ExternalIdentity{
+		ID: "oidc-state-foreign", UserID: other.ID, ProviderID: provider.ID, Subject: "foreign-subject",
+		Email: "foreign@remote.example", CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := db.Identities.CreateIdentity(ctx, foreign, model.ExternalIdentityCredential{IdentityID: foreign.ID, UpdatedAt: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.StartAuthorization(ctx, actor, provider.ID, "link", foreign.ID); err == nil {
+		t.Fatal("foreign target identity should fail")
+	} else {
+		assertHTTPError(t, err, 404, "external identity not found")
+	}
+	withoutCache := service
+	withoutCache.Redis = nil
+	if _, err := withoutCache.StartAuthorization(ctx, actor, provider.ID, "link", ""); err == nil || err.Error() != "identity state store is not configured" {
+		t.Fatalf("missing state store start error=%v", err)
+	}
+
+	if _, err := service.CompleteAuthorization(ctx, "code", " ", ""); err == nil {
+		t.Fatal("empty callback state should fail")
+	} else {
+		assertHTTPError(t, err, 400, "state is required")
+	}
+	if _, err := withoutCache.CompleteAuthorization(ctx, "code", "state", ""); err == nil || err.Error() != "identity state store is not configured" {
+		t.Fatalf("missing state store completion error=%v", err)
+	}
+	if _, err := service.CompleteAuthorization(ctx, "code", "missing-state", ""); err == nil {
+		t.Fatal("missing callback state should fail")
+	} else {
+		assertHTTPError(t, err, 400, "invalid or expired OIDC state")
+	}
+	if err := cache.SetState(ctx, "wrong-kind", map[string]any{"kind": "registration"}, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompleteAuthorization(ctx, "code", "wrong-kind", ""); err == nil {
+		t.Fatal("wrong callback state kind should fail")
+	} else {
+		assertHTTPError(t, err, 400, "invalid or expired OIDC state")
+	}
+
+	started, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompleteAuthorization(ctx, " ", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
+		t.Fatal("missing authorization code should fail")
+	} else {
+		assertHTTPError(t, err, 400, "authorization code is required")
+	}
+
+	client.err = errors.New("identity provider exchange failed")
+	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
+		t.Fatal("OIDC exchange failure should fail")
+	} else {
+		assertHTTPError(t, err, 400, "identity provider exchange failed")
+	}
+	client.err = nil
+
+	for state, values := range map[string]map[string]any{
+		"invalid-intent": {
+			"kind": "oidc_authorization", "provider_id": provider.ID, "intent": "invalid",
+			"nonce": "nonce", "pkce_verifier": "verifier",
+		},
+		"missing-link-user": {
+			"kind": "oidc_authorization", "provider_id": provider.ID, "intent": "link",
+			"nonce": "nonce", "pkce_verifier": "verifier",
+		},
+	} {
+		if err := cache.SetState(ctx, state, values, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := service.CompleteAuthorization(ctx, "code", "invalid-intent", ""); err == nil {
+		t.Fatal("invalid stored intent should fail")
+	} else {
+		assertHTTPError(t, err, 400, "invalid OIDC authorization intent")
+	}
+	client.claims.Subject = "missing-link-user-subject"
+	if _, err := service.CompleteAuthorization(ctx, "code", "missing-link-user", ""); err == nil {
+		t.Fatal("link state without user should fail")
+	} else {
+		assertHTTPError(t, err, 403, "permission denied")
+	}
+
+	client.claims.Subject = "new-registration-subject"
+	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.RegistrationEnabled = false
+	updateOIDCTestProvider(t, db, provider)
+	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
+		t.Fatal("disabled registration should fail")
+	} else {
+		assertHTTPError(t, err, 403, "registration is disabled for this identity provider")
+	}
+
+	disappearing := provider
+	disappearing.ID = "oidc-disappearing-provider"
+	disappearing.IssuerURL = "https://disappearing.example"
+	disappearing.AuthorizationEndpoint = disappearing.IssuerURL + "/authorize"
+	disappearing.TokenEndpoint = disappearing.IssuerURL + "/token"
+	disappearing.JWKSURI = disappearing.IssuerURL + "/jwks"
+	disappearing.ClientID = "disappearing-client"
+	disappearing.RegistrationEnabled = true
+	if err := db.Identities.CreateProvider(ctx, disappearing); err != nil {
+		t.Fatal(err)
+	}
+	started, err = service.StartAuthorization(ctx, permission.GuestActor(), disappearing.ID, "login", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted, err := db.Identities.DeleteProvider(ctx, disappearing.ID); err != nil || !deleted {
+		t.Fatalf("delete disappearing provider deleted=%v err=%v", deleted, err)
+	}
+	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
+		t.Fatal("removed provider callback should fail")
+	} else {
+		assertHTTPError(t, err, 400, "identity provider is no longer available")
+	}
+}
+
+func TestOIDCAuthorizationReusesOwnedIdentityAndRollsBackDependencyFailuresExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oidc-reuse-user@test.com", "pw", "OIDCReuseUser", false)
+	other := testutil.CreateUser(t, db, "oidc-reuse-other@test.com", "pw", "OIDCReuseOther", false)
+	provider := oidcTestProvider(t, db, "oidc-reuse-provider")
+	box, err := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider.ClientSecretCiphertext, err = box.Encrypt("reuse-secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateOIDCTestProvider(t, db, provider)
+	for _, item := range []model.ExternalIdentity{
+		{ID: "oidc-reuse-owned", UserID: user.ID, ProviderID: provider.ID, Subject: "owned-subject", CreatedAt: 1, UpdatedAt: 1},
+		{ID: "oidc-reuse-foreign", UserID: other.ID, ProviderID: provider.ID, Subject: "foreign-subject", CreatedAt: 2, UpdatedAt: 2},
+	} {
+		if err := db.Identities.CreateIdentity(ctx, item, model.ExternalIdentityCredential{IdentityID: item.ID, UpdatedAt: item.UpdatedAt}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cache := redisstore.NewMemoryStore()
+	client := &fakeOIDCClient{
+		claims: identity.OIDCClaims{Subject: "owned-subject", Email: "updated@remote.example"},
+		tokens: identity.OIDCTokens{TokenType: "Bearer"},
+	}
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: cache, OIDCClient: client}
+	actor := actorWithPermissions(user.ID, "external_identity.create.owned")
+
+	started, err := service.StartAuthorization(ctx, actor, provider.ID, "link", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.CompleteAuthorization(ctx, "owned-code", mustAuthorizationState(t, started.AuthorizationURL), "")
+	if err != nil || result.Intent != "link" || result.UserID != user.ID || result.IdentityID != "oidc-reuse-owned" ||
+		result.ProviderID != provider.ID {
+		t.Fatalf("owned identity reuse result=%#v err=%v", result, err)
+	}
+	updated, err := db.Identities.GetIdentity(ctx, "oidc-reuse-owned")
+	if err != nil || updated == nil || updated.Email != "updated@remote.example" || updated.LastLoginAt == nil {
+		t.Fatalf("owned identity reuse state=%#v err=%v", updated, err)
+	}
+
+	client.claims = identity.OIDCClaims{Subject: "foreign-subject"}
+	started, err = service.StartAuthorization(ctx, actor, provider.ID, "link", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompleteAuthorization(ctx, "foreign-code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
+		t.Fatal("foreign linked identity should fail")
+	} else {
+		assertHTTPError(t, err, 409, "this external identity is already linked to another account")
+	}
+
+	cache.Err = errors.New("identity state unavailable")
+	if _, err := service.StartAuthorization(ctx, actor, provider.ID, "link", ""); err == nil || err.Error() != "identity state unavailable" {
+		t.Fatalf("state write error=%v", err)
+	}
+	cache.Err = nil
+	started, err = service.StartAuthorization(ctx, actor, provider.ID, "link", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cache.Err = errors.New("identity state read unavailable")
+	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil || err.Error() != "identity state read unavailable" {
+		t.Fatalf("state read error=%v", err)
+	}
+	cache.Err = nil
+
+	provider.AuthorizationEndpoint = "://invalid-authorization-endpoint"
+	updateOIDCTestProvider(t, db, provider)
+	beforeStates := cache.Len()
+	if _, err := service.StartAuthorization(ctx, actor, provider.ID, "link", ""); err == nil {
+		t.Fatal("malformed authorization endpoint should fail")
+	}
+	if cache.Len() != beforeStates {
+		t.Fatalf("malformed authorization endpoint leaked state: before=%d after=%d", beforeStates, cache.Len())
+	}
+	provider.AuthorizationEndpoint = "https://issuer.example/authorize"
+	updateOIDCTestProvider(t, db, provider)
+
+	started, err = service.StartAuthorization(ctx, actor, provider.ID, "link", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalidConfigService := service
+	invalidConfigService.Config.IdentityEncryptionKey = "invalid-key"
+	if _, err := invalidConfigService.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil || !strings.Contains(err.Error(), "decode identity encryption key") {
+		t.Fatalf("invalid encryption configuration error=%v", err)
+	}
+
+	provider.ClientSecretCiphertext = "malformed-ciphertext"
+	updateOIDCTestProvider(t, db, provider)
+	started, err = service.StartAuthorization(ctx, actor, provider.ID, "link", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil || err.Error() != "unsupported encrypted secret version" {
+		t.Fatalf("malformed encrypted client secret error=%v", err)
+	}
+}
+
+func updateOIDCTestProvider(t *testing.T, db *database.DB, provider model.IdentityProvider) {
+	t.Helper()
+	updated, err := db.Identities.UpdateProvider(t.Context(), provider)
+	if err != nil || !updated {
+		t.Fatalf("update OIDC test provider updated=%v err=%v", updated, err)
+	}
+}
+
 func oidcTestProvider(t *testing.T, db *database.DB, id string) model.IdentityProvider {
 	t.Helper()
 	provider := model.IdentityProvider{

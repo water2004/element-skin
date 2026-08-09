@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strconv"
+	"strings"
 	"testing"
 
 	"element-skin/backend/internal/database"
@@ -175,6 +177,216 @@ func TestIdentityAndProviderDeletionRejectDependenciesWithExactConflicts(t *test
 	}
 	if identityCount != 1 || credentialCount != 1 || bindingCount != 1 {
 		t.Fatalf("failed deletions must not mutate state: identities=%d credentials=%d bindings=%d", identityCount, credentialCount, bindingCount)
+	}
+}
+
+func TestProviderManagementQueriesUpdatesAndRejectsInvalidStateExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	admin := testutil.CreateUser(t, db, "identity-management-admin@test.com", "pw", "IdentityManagementAdmin", true)
+	adminActor := actorForUser(t, db, admin.ID)
+	discovery := &fixedDiscovery{metadata: validProviderMetadata("https://management.example")}
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Discovery: discovery}
+	secret := "management-secret"
+	input := identity.ProviderInput{
+		Name: "Management Provider", IssuerURL: "https://management.example", ClientID: "management-client",
+		ClientSecret: &secret, Scopes: []string{"profile", "email"}, Adapter: identity.AdapterGenericOIDC,
+		IconURL: "https://management.example/icon.png", Enabled: true, LoginEnabled: true, LinkEnabled: true,
+		RegistrationEnabled: true, DisplayOrder: 4,
+	}
+	created, err := service.CreateProvider(ctx, adminActor, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	providerID := created["id"].(string)
+
+	got, err := service.GetProvider(ctx, adminActor, "  "+providerID+"  ")
+	if err != nil || got["id"] != providerID || got["name"] != input.Name || got["has_client_secret"] != true {
+		t.Fatalf("provider detail=%#v err=%v", got, err)
+	}
+	listed, err := service.ListProviders(ctx, adminActor)
+	if err != nil || len(listed) != 1 || listed[0]["id"] != providerID {
+		t.Fatalf("admin provider list=%#v err=%v", listed, err)
+	}
+	public, err := service.ListPublicProviders(ctx, permission.GuestActor())
+	if err != nil || len(public) != 1 || len(public[0]) != 7 || public[0]["id"] != providerID {
+		t.Fatalf("public provider list=%#v err=%v", public, err)
+	}
+
+	input.Name = "Updated Management Provider"
+	input.ClientSecret = nil
+	input.Scopes = []string{"openid", "groups"}
+	input.DisplayOrder = 9
+	updated, err := service.UpdateProvider(ctx, adminActor, providerID, input)
+	if err != nil || updated["name"] != input.Name || updated["display_order"] != 9 ||
+		!reflect.DeepEqual(updated["scopes"], []string{"groups", "openid"}) || updated["has_client_secret"] != true {
+		t.Fatalf("updated provider=%#v err=%v", updated, err)
+	}
+	stored, err := db.Identities.GetProvider(ctx, providerID)
+	if err != nil || stored == nil || stored.ClientSecretCiphertext == "" {
+		t.Fatalf("updated provider lost encrypted secret: provider=%#v err=%v", stored, err)
+	}
+
+	duplicateSecret := "duplicate-secret"
+	duplicateInput := input
+	duplicateInput.Name = "Duplicate"
+	duplicateInput.ClientSecret = &duplicateSecret
+	_, err = service.CreateProvider(ctx, adminActor, duplicateInput)
+	assertHTTPError(t, err, 409, "an identity provider with this issuer and client_id already exists")
+	if _, err := service.GetProvider(ctx, adminActor, "missing-provider"); err == nil {
+		t.Fatal("missing provider detail should fail")
+	} else {
+		assertHTTPError(t, err, 404, "identity provider not found")
+	}
+	if _, err := service.UpdateProvider(ctx, adminActor, "missing-provider", input); err == nil {
+		t.Fatal("missing provider update should fail")
+	} else {
+		assertHTTPError(t, err, 404, "identity provider not found")
+	}
+	assertHTTPError(t, service.DeleteProvider(ctx, adminActor, "missing-provider"), 404, "identity provider not found")
+
+	for name, call := range map[string]func() error{
+		"list": func() error { _, err := service.ListProviders(ctx, permission.Actor{}); return err },
+		"get":  func() error { _, err := service.GetProvider(ctx, permission.Actor{}, providerID); return err },
+		"create": func() error {
+			_, err := service.CreateProvider(ctx, permission.Actor{}, input)
+			return err
+		},
+		"update": func() error {
+			_, err := service.UpdateProvider(ctx, permission.Actor{}, providerID, input)
+			return err
+		},
+		"delete": func() error { return service.DeleteProvider(ctx, permission.Actor{}, providerID) },
+	} {
+		t.Run("permission_"+name, func(t *testing.T) {
+			assertHTTPError(t, call(), 403, "permission denied")
+		})
+	}
+
+	assertHTTPError(t, service.UpdateIdentityLabel(ctx, adminActor, "missing", strings.Repeat("界", 81)), 400,
+		"identity label must not exceed 80 characters")
+	assertHTTPError(t, service.UpdateIdentityLabel(ctx, adminActor, "missing", "valid"), 404,
+		"external identity not found")
+	assertHTTPError(t, service.DeleteIdentity(ctx, adminActor, "missing"), 404, "external identity not found")
+}
+
+func TestProviderValidationRejectsEveryMalformedContractWithoutPersistence(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	admin := testutil.CreateUser(t, db, "identity-validation-admin@test.com", "pw", "IdentityValidationAdmin", true)
+	actor := actorForUser(t, db, admin.ID)
+	secret := "validation-secret"
+	baseInput := func() identity.ProviderInput {
+		return identity.ProviderInput{
+			Name: "Validation Provider", IssuerURL: "https://validation.example", ClientID: "validation-client",
+			ClientSecret: &secret, Scopes: []string{"openid"}, Adapter: identity.AdapterGenericOIDC,
+			Enabled: true, LoginEnabled: true, LinkEnabled: true,
+		}
+	}
+	tests := []struct {
+		name       string
+		mutate     func(*identity.ProviderInput)
+		metadata   identity.ProviderMetadata
+		discovery  error
+		wantDetail string
+	}{
+		{name: "missing name", mutate: func(in *identity.ProviderInput) { in.Name = " " }, wantDetail: "provider name is required and must not exceed 80 characters"},
+		{name: "long name", mutate: func(in *identity.ProviderInput) { in.Name = strings.Repeat("界", 81) }, wantDetail: "provider name is required and must not exceed 80 characters"},
+		{name: "missing client", mutate: func(in *identity.ProviderInput) { in.ClientID = " " }, wantDetail: "client_id is required and must not exceed 512 characters"},
+		{name: "invalid adapter", mutate: func(in *identity.ProviderInput) { in.Adapter = "saml" }, wantDetail: "invalid provider adapter"},
+		{name: "insecure issuer", mutate: func(in *identity.ProviderInput) { in.IssuerURL = "http://identity.example" }, wantDetail: "invalid issuer_url"},
+		{name: "invalid icon", mutate: func(in *identity.ProviderInput) { in.IconURL = "https://identity.example/icon#fragment" }, wantDetail: "invalid icon_url"},
+		{name: "invalid scope", mutate: func(in *identity.ProviderInput) { in.Scopes = []string{`bad"scope`} }, wantDetail: "invalid OIDC scope"},
+		{name: "too many scopes", mutate: func(in *identity.ProviderInput) {
+			in.Scopes = make([]string, 33)
+			for index := range in.Scopes {
+				in.Scopes[index] = "scope" + strconv.Itoa(index)
+			}
+		}, wantDetail: "too many OIDC scopes"},
+		{name: "discovery failure", discovery: errors.New("discovery unavailable"), wantDetail: "discovery unavailable"},
+		{name: "issuer mismatch", metadata: validProviderMetadata("https://other.example"), wantDetail: "OIDC discovery issuer does not exactly match issuer_url"},
+		{name: "invalid required endpoint", metadata: func() identity.ProviderMetadata {
+			metadata := validProviderMetadata("https://validation.example")
+			metadata.TokenEndpoint = "http://identity.example/token"
+			return metadata
+		}(), wantDetail: "OIDC discovery document contains an invalid required endpoint"},
+		{name: "invalid userinfo endpoint", metadata: func() identity.ProviderMetadata {
+			metadata := validProviderMetadata("https://validation.example")
+			metadata.UserInfoEndpoint = "https://identity.example/userinfo?tenant=1"
+			return metadata
+		}(), wantDetail: "OIDC discovery document contains an invalid userinfo endpoint"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			input := baseInput()
+			if tc.mutate != nil {
+				tc.mutate(&input)
+			}
+			metadata := tc.metadata
+			if metadata.Issuer == "" {
+				metadata = validProviderMetadata(input.IssuerURL)
+			}
+			service := identity.Service{DB: db, Config: testutil.TestConfig(), Discovery: &fixedDiscovery{metadata: metadata, err: tc.discovery}}
+			created, err := service.CreateProvider(ctx, actor, input)
+			if created != nil {
+				t.Fatalf("invalid provider response=%#v", created)
+			}
+			assertHTTPError(t, err, 400, tc.wantDetail)
+		})
+	}
+	var count int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM identity_providers`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("invalid providers persisted count=%d err=%v", count, err)
+	}
+}
+
+func TestIdentityServicePropagatesClosedDatabaseErrorsFromEveryLifecycleEntryExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	admin := testutil.CreateUser(t, db, "identity-closed-admin@test.com", "pw", "IdentityClosedAdmin", true)
+	user := testutil.CreateUser(t, db, "identity-closed-user@test.com", "pw", "IdentityClosedUser", false)
+	adminActor := actorForUser(t, db, admin.ID)
+	userActor := actorForUser(t, db, user.ID)
+	discovery := &fixedDiscovery{metadata: validProviderMetadata("https://closed.example")}
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Discovery: discovery}
+	secret := "closed-secret"
+	input := identity.ProviderInput{
+		Name: "Closed Provider", IssuerURL: "https://closed.example", ClientID: "closed-client",
+		ClientSecret: &secret, Scopes: []string{"openid"}, Adapter: identity.AdapterGenericOIDC, Enabled: true,
+	}
+	db.Close()
+	tests := []struct {
+		name string
+		call func() error
+	}{
+		{name: "list public providers", call: func() error { _, err := service.ListPublicProviders(ctx, permission.GuestActor()); return err }},
+		{name: "list providers", call: func() error { _, err := service.ListProviders(ctx, adminActor); return err }},
+		{name: "get provider", call: func() error { _, err := service.GetProvider(ctx, adminActor, "provider"); return err }},
+		{name: "create provider", call: func() error { _, err := service.CreateProvider(ctx, adminActor, input); return err }},
+		{name: "update provider", call: func() error { _, err := service.UpdateProvider(ctx, adminActor, "provider", input); return err }},
+		{name: "delete provider", call: func() error { return service.DeleteProvider(ctx, adminActor, "provider") }},
+		{name: "list identities", call: func() error { _, err := service.ListIdentities(ctx, userActor); return err }},
+		{name: "update identity", call: func() error { return service.UpdateIdentityLabel(ctx, userActor, "identity", "label") }},
+		{name: "delete identity", call: func() error { return service.DeleteIdentity(ctx, userActor, "identity") }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.call()
+			if err == nil || !strings.Contains(strings.ToLower(err.Error()), "closed pool") {
+				t.Fatalf("closed database error=%v", err)
+			}
+			var httpErr util.HTTPError
+			if errors.As(err, &httpErr) {
+				t.Fatalf("closed database error was converted to HTTP error: %#v", httpErr)
+			}
+		})
+	}
+}
+
+func validProviderMetadata(issuer string) identity.ProviderMetadata {
+	return identity.ProviderMetadata{
+		Issuer: issuer, AuthorizationEndpoint: issuer + "/authorize", TokenEndpoint: issuer + "/token",
+		UserInfoEndpoint: issuer + "/userinfo", JWKSURI: issuer + "/jwks",
 	}
 }
 

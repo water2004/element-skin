@@ -242,6 +242,167 @@ func TestOfficialBindingStopsAfterOneUnauthorizedRetry(t *testing.T) {
 	}
 }
 
+func TestOfficialBindingLifecycleRejectsInvalidOwnershipAndRemoteProfilesExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user, external, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	resolver := &fakeMicrosoftResolver{}
+	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+	createActor := officialActor(user.ID, "official_profile.create.owned")
+
+	if items, err := service.List(ctx, officialActor(user.ID)); items != nil {
+		t.Fatalf("unauthorized binding list=%#v err=%v", items, err)
+	} else {
+		assertOfficialHTTPError(t, err, 403, "permission denied")
+	}
+	items, err := service.List(ctx, officialActor(user.ID, "official_profile.read.owned"))
+	if err != nil || len(items) != 0 {
+		t.Fatalf("initial binding list=%#v err=%v", items, err)
+	}
+	if created, err := service.Create(ctx, createActor, " ", profile.ID); created != nil {
+		t.Fatalf("missing identity binding=%#v err=%v", created, err)
+	} else {
+		assertOfficialHTTPError(t, err, 400, "identity_id and profile_id are required")
+	}
+	if created, err := service.Create(ctx, createActor, external.ID, "missing-profile"); created != nil {
+		t.Fatalf("missing profile binding=%#v err=%v", created, err)
+	} else {
+		assertOfficialHTTPError(t, err, 404, "profile not found")
+	}
+	other := testutil.CreateUser(t, db, "official-other@test.com", "Password123", "OfficialOther", false)
+	foreignProfile := testutil.CreateProfile(t, db, other.ID, "official-foreign-profile", "OfficialForeign")
+	if created, err := service.Create(ctx, createActor, external.ID, foreignProfile.ID); created != nil {
+		t.Fatalf("foreign profile binding=%#v err=%v", created, err)
+	} else {
+		assertOfficialHTTPError(t, err, 404, "profile not found")
+	}
+	if created, err := service.Create(ctx, createActor, "missing-identity", profile.ID); created != nil {
+		t.Fatalf("missing identity binding=%#v err=%v", created, err)
+	} else {
+		assertOfficialHTTPError(t, err, 404, "external identity not found")
+	}
+
+	resolver.result = microsoftsvc.ProfileResult{HasGame: false}
+	if created, err := service.Create(ctx, createActor, external.ID, profile.ID); created != nil {
+		t.Fatalf("no-game binding=%#v err=%v", created, err)
+	} else {
+		assertOfficialHTTPError(t, err, 409, "Microsoft identity does not own Minecraft: Java Edition")
+	}
+	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: &microsoftsvc.MinecraftProfile{ID: "invalid", Name: "RemoteSteve"}}
+	if created, err := service.Create(ctx, createActor, external.ID, profile.ID); created != nil {
+		t.Fatalf("invalid remote UUID binding=%#v err=%v", created, err)
+	} else {
+		assertOfficialHTTPError(t, err, 502, "Microsoft profile response is invalid")
+	}
+	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: &microsoftsvc.MinecraftProfile{ID: "0123456789abcdef0123456789abcdef", Name: "invalid name!"}}
+	if created, err := service.Create(ctx, createActor, external.ID, profile.ID); created != nil {
+		t.Fatalf("invalid remote name binding=%#v err=%v", created, err)
+	} else {
+		assertOfficialHTTPError(t, err, 502, "Microsoft profile response is invalid")
+	}
+
+	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}
+	created, err := service.Create(ctx, createActor, external.ID, profile.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingID := created["id"].(string)
+	items, err = service.List(ctx, officialActor(user.ID, "official_profile.read.owned"))
+	if err != nil || len(items) != 1 || items[0]["id"] != bindingID || items[0]["profile_id"] != profile.ID ||
+		items[0]["identity_id"] != external.ID {
+		t.Fatalf("created binding list=%#v err=%v", items, err)
+	}
+	assertOfficialHTTPError(t, service.Delete(ctx, officialActor(user.ID), bindingID), 403, "permission denied")
+	assertOfficialHTTPError(t, service.Delete(ctx, officialActor(other.ID, "official_profile.delete.owned"), bindingID), 404,
+		"official profile binding not found")
+	if err := service.Delete(ctx, officialActor(user.ID, "official_profile.delete.owned"), bindingID); err != nil {
+		t.Fatal(err)
+	}
+	assertOfficialHTTPError(t, service.Delete(ctx, officialActor(user.ID, "official_profile.delete.owned"), bindingID), 404,
+		"official profile binding not found")
+	items, err = service.List(ctx, officialActor(user.ID, "official_profile.read.owned"))
+	if err != nil || len(items) != 0 {
+		t.Fatalf("deleted binding list=%#v err=%v", items, err)
+	}
+}
+
+func TestOfficialBindingSyncRejectsPermissionMismatchDownloadAndNameConflictsExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user, external, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
+	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID, profile.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindingID := created["id"].(string)
+
+	if result, err := service.Sync(ctx, officialActor(user.ID), bindingID); result != nil {
+		t.Fatalf("unauthorized sync result=%#v err=%v", result, err)
+	} else {
+		assertOfficialHTTPError(t, err, 403, "permission denied")
+	}
+	if result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), "missing-binding"); result != nil {
+		t.Fatalf("missing sync result=%#v err=%v", result, err)
+	} else {
+		assertOfficialHTTPError(t, err, 404, "official profile binding not found")
+	}
+
+	mismatch := remoteProfile()
+	mismatch.ID = "fedcba9876543210fedcba9876543210"
+	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: mismatch}
+	if result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), bindingID); result != nil {
+		t.Fatalf("remote mismatch sync result=%#v err=%v", result, err)
+	} else {
+		assertOfficialHTTPError(t, err, 409, "Microsoft profile no longer matches this binding")
+	}
+
+	withoutTextures := remoteProfile()
+	withoutTextures.Name = "RemoteNoTextures"
+	withoutTextures.Skins = nil
+	withoutTextures.Capes = nil
+	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: withoutTextures}
+	result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), bindingID)
+	if err != nil || result["remote_name"] != "RemoteNoTextures" || result["remote_skin_url"] != "" ||
+		result["remote_cape_url"] != "" || result["remote_skin_model"] != "default" {
+		t.Fatalf("texture-free sync result=%#v err=%v", result, err)
+	}
+	storedProfile, err := db.Profiles.GetByID(ctx, profile.ID)
+	if err != nil || storedProfile == nil || storedProfile.SkinHash != nil || storedProfile.CapeHash != nil ||
+		storedProfile.Name != "RemoteNoTextures" {
+		t.Fatalf("texture-free synced profile=%#v err=%v", storedProfile, err)
+	}
+
+	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}
+	service.Download = func(context.Context, string) ([]byte, error) { return nil, errors.New("texture CDN unavailable") }
+	if result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), bindingID); result != nil {
+		t.Fatalf("download failure sync result=%#v err=%v", result, err)
+	} else {
+		assertOfficialHTTPError(t, err, 502, "failed to download Microsoft profile texture")
+	}
+
+	conflicting := testutil.CreateProfile(t, db, user.ID, "official-conflicting-name", "RemoteConflict")
+	if conflicting.ID == "" {
+		t.Fatal("conflicting profile has no id")
+	}
+	nameConflict := remoteProfile()
+	nameConflict.Name = conflicting.Name
+	nameConflict.Skins = nil
+	nameConflict.Capes = nil
+	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: nameConflict}
+	service.Download = nil
+	if result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), bindingID); result != nil {
+		t.Fatalf("name conflict sync result=%#v err=%v", result, err)
+	} else {
+		assertOfficialHTTPError(t, err, 409, "profile name already exists")
+	}
+	storedProfile, err = db.Profiles.GetByID(ctx, profile.ID)
+	if err != nil || storedProfile == nil || storedProfile.Name != "RemoteNoTextures" {
+		t.Fatalf("failed name conflict mutated profile=%#v err=%v", storedProfile, err)
+	}
+}
+
 func officialFixture(t *testing.T, db *database.DB, adapter string) (model.User, model.ExternalIdentity, model.Profile, identitysvc.Service, redisstore.Store) {
 	t.Helper()
 	ctx := context.Background()

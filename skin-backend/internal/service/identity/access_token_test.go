@@ -212,6 +212,86 @@ func TestExternalIdentityConcurrentAccessCoalescesRefreshTokenRotation(t *testin
 	}
 }
 
+func TestExternalIdentityAccessTokenRejectsInvalidDependenciesWithoutCorruptingCredentials(t *testing.T) {
+	t.Run("invalid identifiers and disabled provider", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user, provider, external := createRefreshIdentity(t, db)
+		service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(), TokenRefresher: &fakeTokenRefresher{}}
+		_, err := service.AccessTokenForOwnedIdentity(ctx, " ", external.ID)
+		assertHTTPError(t, err, 400, "identity_id is required")
+		_, err = service.AccessTokenForOwnedIdentity(ctx, user.ID, " ")
+		assertHTTPError(t, err, 400, "identity_id is required")
+		provider.Enabled = false
+		updateOIDCTestProvider(t, db, provider)
+		_, err = service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
+		assertHTTPError(t, err, 409, "external identity provider is unavailable")
+	})
+
+	t.Run("missing credential", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user, _, external := createRefreshIdentity(t, db)
+		if _, err := db.Pool.Exec(ctx, `DELETE FROM external_identity_credentials WHERE identity_id=$1`, external.ID); err != nil {
+			t.Fatal(err)
+		}
+		service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(), TokenRefresher: &fakeTokenRefresher{}}
+		_, err := service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
+		if err == nil || err.Error() != "external identity credential is missing" {
+			t.Fatalf("missing credential error=%v", err)
+		}
+	})
+
+	t.Run("missing refresh token marks reauthorization", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user, _, external := createRefreshIdentity(t, db)
+		if _, err := db.Pool.Exec(ctx, `UPDATE external_identity_credentials SET refresh_token_ciphertext='' WHERE identity_id=$1`, external.ID); err != nil {
+			t.Fatal(err)
+		}
+		service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(), TokenRefresher: &fakeTokenRefresher{}}
+		_, err := service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
+		assertHTTPError(t, err, 409, "external identity must be reauthorized")
+		credential, getErr := db.Identities.GetCredential(ctx, external.ID)
+		if getErr != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationReauthorizationRequired ||
+			credential.LastRefreshErrorAt == nil {
+			t.Fatalf("missing refresh credential=%#v err=%v", credential, getErr)
+		}
+	})
+
+	t.Run("transient refresh failure remains retryable", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user, _, external := createRefreshIdentity(t, db)
+		refresher := &fakeTokenRefresher{err: errors.New("temporary upstream failure")}
+		service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(), TokenRefresher: refresher}
+		_, err := service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
+		assertHTTPError(t, err, 502, "external identity token refresh failed")
+		credential, getErr := db.Identities.GetCredential(ctx, external.ID)
+		if getErr != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationActive ||
+			credential.LastRefreshErrorAt == nil || refresher.calls != 1 {
+			t.Fatalf("transient failure credential=%#v calls=%d err=%v", credential, refresher.calls, getErr)
+		}
+	})
+
+	t.Run("cache failure prevents refresh", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user, _, external := createRefreshIdentity(t, db)
+		cacheErr := errors.New("identity cache unavailable")
+		cache := redisstore.NewMemoryStore()
+		cache.Err = cacheErr
+		refresher := &fakeTokenRefresher{}
+		service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: cache, TokenRefresher: refresher}
+		if _, err := service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID); !errors.Is(err, cacheErr) || refresher.calls != 0 {
+			t.Fatalf("cache read failure err=%v refresh_calls=%d", err, refresher.calls)
+		}
+		if _, err := service.ForceRefreshAccessTokenForOwnedIdentity(ctx, user.ID, external.ID); !errors.Is(err, cacheErr) || refresher.calls != 0 {
+			t.Fatalf("cache delete failure err=%v refresh_calls=%d", err, refresher.calls)
+		}
+	})
+}
+
 func createRefreshIdentity(t *testing.T, databaseDB *database.DB) (model.User, model.IdentityProvider, model.ExternalIdentity) {
 	t.Helper()
 	ctx := context.Background()

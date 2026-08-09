@@ -19,6 +19,7 @@ import (
 	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
+	corewebhook "element-skin/backend/internal/webhook"
 )
 
 func TestWorkerDispatchesAndSignsTargetedGrantEventExactly(t *testing.T) {
@@ -529,13 +530,31 @@ func TestWorkerConstructionCancellationAndSafetyHelpersExactly(t *testing.T) {
 	if worker.ActiveWorkInterval() != 3*time.Second {
 		t.Fatalf("default active work interval=%s want=3s", worker.ActiveWorkInterval())
 	}
+	if interval := (Worker{}).ActiveWorkInterval(); interval != defaultActiveInterval {
+		t.Fatalf("zero-value active work interval=%s want=%s", interval, defaultActiveInterval)
+	}
 	worker.ActiveInterval = 75 * time.Millisecond
 	if worker.ActiveWorkInterval() != 75*time.Millisecond {
 		t.Fatalf("custom active work interval=%s want=75ms", worker.ActiveWorkInterval())
 	}
+	if worker.pollInterval() != 500*time.Millisecond {
+		t.Fatalf("default poll interval=%s want=500ms", worker.pollInterval())
+	}
+	worker.PollInterval = 90 * time.Millisecond
+	if worker.pollInterval() != 90*time.Millisecond {
+		t.Fatalf("custom poll interval=%s want=90ms", worker.pollInterval())
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	worker.Run(ctx)
+	if worker.waitAfterWork(ctx, make(chan time.Time)) {
+		t.Fatal("canceled worker wait should stop")
+	}
+	timerWorker := worker
+	timerWorker.ActiveInterval = time.Millisecond
+	if !timerWorker.waitAfterWork(t.Context(), make(chan time.Time)) {
+		t.Fatal("active worker wait should resume after timer")
+	}
 
 	if _, err := worker.HTTPClient.Get("http://127.0.0.1:1/private"); err == nil || !strings.Contains(err.Error(), "public address") {
 		t.Fatalf("safe client private address error=%v", err)
@@ -553,8 +572,106 @@ func TestWorkerConstructionCancellationAndSafetyHelpersExactly(t *testing.T) {
 	if maxDelay < 6*time.Hour || maxDelay > 6*time.Hour+72*time.Minute {
 		t.Fatalf("capped retry delay=%s", maxDelay)
 	}
+	if got, want := retryDelay("delivery-zero", 0), retryDelay("delivery-zero", 1); got != want {
+		t.Fatalf("zero-attempt retry delay=%s want first-attempt %s", got, want)
+	}
 	longDetail := strings.Repeat("x", 600)
 	if got := truncateDetail(longDetail); len(got) != 500 || got != longDetail[:500] {
 		t.Fatalf("truncated detail length=%d", len(got))
 	}
+
+	now := time.UnixMilli(20 * int64(24*time.Hour/time.Millisecond))
+	oldExpandedAt := now.Add(-8 * 24 * time.Hour).UnixMilli()
+	recentExpandedAt := now.Add(-6 * 24 * time.Hour).UnixMilli()
+	if _, err := db.Pool.Exec(t.Context(), `
+		INSERT INTO webhook_events (id,event_type,data,created_at,expanded_at)
+		VALUES
+			('evt_cleanup_old','profile.unknown','{}'::jsonb,$1,$1),
+			('evt_cleanup_recent','profile.unknown','{}'::jsonb,$2,$2)
+	`, oldExpandedAt, recentExpandedAt); err != nil {
+		t.Fatal(err)
+	}
+	cleanupWorker := Worker{DB: db, Config: cfg, Now: func() time.Time { return now }}
+	cleanupWorker.ActiveInterval = time.Millisecond
+	cleanup := make(chan time.Time, 1)
+	cleanup <- now
+	if !cleanupWorker.waitAfterWork(t.Context(), cleanup) {
+		t.Fatal("cleanup wait should resume after active interval")
+	}
+	var remaining []string
+	rows, err := db.Pool.Query(t.Context(), `SELECT id FROM webhook_events ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		remaining = append(remaining, id)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(remaining, []string{"evt_cleanup_recent"}) {
+		t.Fatalf("cleanup remaining events=%v", remaining)
+	}
+	safeClient := newSafeHTTPClient()
+	transport, ok := safeClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("safe transport type=%T", safeClient.Transport)
+	}
+	if _, err := transport.DialContext(t.Context(), "tcp", "missing-port"); err == nil ||
+		!strings.Contains(err.Error(), "missing port") {
+		t.Fatalf("safe transport malformed address error=%v", err)
+	}
+	if err := safeClient.CheckRedirect(httptest.NewRequest(http.MethodGet, "https://example.com", nil), nil); err == nil || err.Error() != "webhook redirects are not followed" {
+		t.Fatalf("safe redirect error=%v", err)
+	}
+
+	targeted, ok := corewebhook.DefinitionByType("oauth_grant.revoked")
+	if !ok {
+		t.Fatal("oauth_grant.revoked definition is missing")
+	}
+	allowed, err := worker.endpointAuthorized(t.Context(), model.WebhookEvent{TargetClientID: "target-client"}, model.WebhookEndpoint{ClientID: "other-client"}, targeted)
+	if err != nil || allowed {
+		t.Fatalf("mismatched targeted client authorization allowed=%v err=%v", allowed, err)
+	}
+	allowed, err = worker.endpointAuthorized(t.Context(), model.WebhookEvent{}, model.WebhookEndpoint{}, corewebhook.Definition{})
+	if err != nil || allowed {
+		t.Fatalf("event without permission authorization allowed=%v err=%v", allowed, err)
+	}
+
+	cancelCache := newBatchAuthorizationCache()
+	cancelKey := authorizationCacheKey{EventType: "profile.updated", SubjectUserID: "cancel-user", EndpointClientID: "cancel-client"}
+	loadStarted := make(chan struct{})
+	releaseLoad := make(chan struct{})
+	firstResult := make(chan error, 1)
+	go func() {
+		_, resolveErr := cancelCache.resolve(context.Background(), cancelKey, func() (bool, error) {
+			close(loadStarted)
+			<-releaseLoad
+			return true, nil
+		})
+		firstResult <- resolveErr
+	}()
+	<-loadStarted
+	canceledContext, cancelResolve := context.WithCancel(context.Background())
+	cancelResolve()
+	secondLoadCalls := 0
+	allowed, err = cancelCache.resolve(canceledContext, cancelKey, func() (bool, error) {
+		secondLoadCalls++
+		return false, nil
+	})
+	if !errors.Is(err, context.Canceled) || allowed || secondLoadCalls != 0 {
+		t.Fatalf("canceled cached authorization allowed=%v err=%v second_loads=%d", allowed, err, secondLoadCalls)
+	}
+	close(releaseLoad)
+	if err := <-firstResult; err != nil {
+		t.Fatalf("first cached authorization load error=%v", err)
+	}
+
+	db.Close()
+	cleanupWorker.cleanup(t.Context())
 }
