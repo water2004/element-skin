@@ -10,7 +10,8 @@ Element Skin 的 OAuth 和 `/v2` API。
 3. [权限模型](权限模型.md)
 4. [API 客户端](API客户端.md)
 5. [错误与 Token](错误与Token.md)
-6. [测试规范](测试规范.md)
+6. [Webhook 接收与验签](Webhook接收.md)
+7. [测试规范](测试规范.md)
 
 ## 包结构
 
@@ -20,6 +21,7 @@ element_skin_sdk
 ├── ElementSkinAPI          `/v2` API 客户端
 ├── permissions             权限常量和校验器
 ├── oauth                   PKCE 与 token 存储
+├── webhook                 事件验签、解析与可插拔重放防护
 ├── models                  token、权限等数据模型
 └── exceptions              SDK 异常层级
 ```
@@ -51,3 +53,7 @@ element_skin_sdk
 - `POST /v2/minecraft/session/has-joined`
 
 后续增加更多 `/v2` wrapper 不需要改变 OAuth 行为。
+
+## Webhook 接收
+
+`WebhookVerifier` 验证原始请求体的 HMAC、时间戳、必需请求头和事件结构；`ReplayGuard` 为生产方提供原子 durable inbox 接口，`MemoryReplayGuard` 仅用于测试和单进程示例。详见 [Webhook 接收与验签](Webhook接收.md)。

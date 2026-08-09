@@ -164,6 +164,8 @@ v1=hex(HMAC-SHA256(signing_secret, timestamp + "." + raw_body))
 4. 在验证成功后按 `Webhook-Id` 幂等处理。
 5. 尽快返回 `2xx`，耗时业务应进入接收方自己的异步队列。
 
+Python 接收方可使用 `python-sdk` 的 `WebhookVerifier` 完成原始 body 验签、时间戳和事件结构校验。`ReplayGuard` 允许生产应用把已认证事件原子写入 durable inbox；`MemoryReplayGuard` 只用于测试和单进程示例。具体 API、FastAPI 与 Flask 示例见 `python-sdk/doc/Webhook接收.md`。
+
 ## 9. 重试、性能与保留
 
 站点采用至少一次投递。网络错误、超时或非 `2xx` 响应使用指数退避重试：首次约 30 秒，单次间隔最多 6 小时，最多尝试 12 次且总投递年龄不超过 72 小时。接收方可能在“已处理请求但成功响应丢失”时收到重复事件。

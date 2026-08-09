@@ -35,7 +35,7 @@
 - **首页与仪表盘**：支持普通背景图、Minecraft 全景背景、首页媒体管理、服务状态监测、公告侧栏和节日彩蛋。
 - **现代化前端**：Vue 3、Element Plus、Tailwind CSS，支持响应式布局、深色模式、按权限显示导航和移动端访问。
 - **浏览器缓存**：统一封装 localStorage 与 IndexedDB，支持材质文件、角色卡片和材质卡片渲染结果的 LRU 缓存与大小限制。
-- **Python SDK**：提供 OAuth 流程、权限模型、token 管理和 `/v2` API 调用封装，并附带开发示例与中文文档。
+- **Python SDK**：提供 OAuth 流程、权限模型、token 管理、`/v2` API 调用和 Webhook 验签/解析封装，并附带开发示例与中文文档。
 - **安全与部署**：提供 API 限流、CORS、出站请求校验、结构化错误处理和单一 Docker Compose 部署方式。
 
 ---
