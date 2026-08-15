@@ -92,8 +92,23 @@ type oauthClientAccessDeleteFailStore struct {
 	err error
 }
 
+type oauthClientAccessDeleteNthFailStore struct {
+	redisstore.Store
+	err        error
+	calls      int
+	failOnCall int
+}
+
 func (s *oauthClientAccessDeleteFailStore) DeleteOAuthAccessTokensByClient(_ context.Context, _ string) error {
 	return s.err
+}
+
+func (s *oauthClientAccessDeleteNthFailStore) DeleteOAuthAccessTokensByClient(ctx context.Context, clientID string) error {
+	s.calls++
+	if s.calls == s.failOnCall {
+		return s.err
+	}
+	return s.Store.DeleteOAuthAccessTokensByClient(ctx, clientID)
 }
 
 func (s *oauthAccessDeleteFailStore) DeleteOAuthAccessToken(_ context.Context, tokenHash string) error {

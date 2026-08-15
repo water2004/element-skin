@@ -32,6 +32,18 @@ func TestCredentialAuthorizationLifecyclePersistsExactStructuredState(t *testing
 	}); err != nil {
 		t.Fatal(err)
 	}
+	views, err := db.Identities.ListIdentityViewsByUser(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(views) != 1 || views[0].Identity.ID != external.ID ||
+		views[0].Provider.ID != provider.ID || views[0].Provider.Name != provider.Name ||
+		views[0].Credential.IdentityID != external.ID ||
+		views[0].Credential.RefreshTokenCiphertext != "ciphertext" ||
+		!reflect.DeepEqual(views[0].Credential.GrantedScopes, []string{"openid"}) ||
+		views[0].Credential.AuthorizationStatus != model.ExternalIdentityAuthorizationActive {
+		t.Fatalf("identity view mismatch: %#v", views)
+	}
 
 	credential, err := db.Identities.GetCredential(ctx, external.ID)
 	if err != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationActive || credential.LastRefreshAt != nil || credential.LastRefreshErrorAt != nil {

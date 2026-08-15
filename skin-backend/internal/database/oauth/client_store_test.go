@@ -215,10 +215,12 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	if deleted, err := db.OAuth.DeleteClient(ctx, client.ID, user.ID); err != nil || !deleted {
 		t.Fatalf("DeleteClient with owner should be true: deleted=%v err=%v", deleted, err)
 	}
+	assertPermissionSubjectAbsent(t, db, permissiondb.SubjectIDForClient(client.ID))
 	if got, err = db.OAuth.GetClient(ctx, client.ID); err != nil || got != nil {
 		t.Fatalf("deleted client should be nil: client=%#v err=%v", got, err)
 	}
 	if deleted, err := db.OAuth.DeleteClient(ctx, otherClient.ID, ""); err != nil || !deleted {
 		t.Fatalf("admin DeleteClient should delete by empty owner: deleted=%v err=%v", deleted, err)
 	}
+	assertPermissionSubjectAbsent(t, db, permissiondb.SubjectIDForClient(otherClient.ID))
 }

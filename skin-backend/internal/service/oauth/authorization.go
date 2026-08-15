@@ -52,14 +52,15 @@ func (s Service) RevokeGrant(ctx context.Context, actor permission.Actor, grantI
 		return forbidden()
 	}
 	revokedAt := database.NowMS()
-	ok, err := s.DB.OAuth.RevokeGrant(ctx, grantID, actor.UserID, revokedAt)
+	ok, err := s.DB.OAuth.RevokeGrantAndCredentials(ctx, grantID, actor.UserID, revokedAt)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return notFound("oauth grant not found")
 	}
-	return s.invalidateGrantCredentials(ctx, grantID, revokedAt)
+	reportPostCommitError("remove revoked grant access tokens", s.Redis.DeleteOAuthAccessTokensByGrant(ctx, grantID))
+	return nil
 }
 
 func (s Service) CleanupGrants(ctx context.Context, actor permission.Actor, now int64) (GrantCleanupResult, error) {

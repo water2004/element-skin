@@ -305,9 +305,9 @@ func TestAccountRoutesReturnExactErrorWhenAuthCacheInvalidationFails(t *testing.
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 		t.Fatalf("delete invalidate failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	deleted, err := db.Users.GetByID(t.Context(), user.ID)
-	if err != nil || deleted != nil {
-		t.Fatalf("delete should remove user before invalidate failure: user=%#v err=%v", deleted, err)
+	preserved, err := db.Users.GetByID(t.Context(), user.ID)
+	if err != nil || preserved == nil || preserved.DisplayName != "InvalidateChanged" || !util.VerifyPassword("NewPassword123", preserved.Password) {
+		t.Fatalf("delete invalidate failure must preserve exact user: user=%#v err=%v", preserved, err)
 	}
 }
 

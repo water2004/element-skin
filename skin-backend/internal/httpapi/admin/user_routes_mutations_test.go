@@ -256,7 +256,7 @@ func TestUserRoutesDeleteUserAndInvalidateAuthCacheExactly(t *testing.T) {
 	}
 }
 
-func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t *testing.T) {
+func TestUserMutationRoutesHandleAuthInvalidationFailuresExactly(t *testing.T) {
 	t.Run("grant role", func(t *testing.T) {
 		db, _ := testutil.NewTestApp(t)
 		cfg := testutil.TestConfig()
@@ -380,8 +380,8 @@ func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t 
 		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
 			t.Fatalf("delete user cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
-		if user, err := db.Users.GetByID(t.Context(), target.ID); err != nil || user != nil {
-			t.Fatalf("delete should remove user before cache failure: user=%#v err=%v", user, err)
+		if user, err := db.Users.GetByID(t.Context(), target.ID); err != nil || user == nil || user.Email != target.Email || user.DisplayName != target.DisplayName {
+			t.Fatalf("delete cache failure must preserve exact user: user=%#v err=%v", user, err)
 		}
 		if len(cache.userIDs) != 1 || cache.userIDs[0] != target.ID {
 			t.Fatalf("delete user cache invalidation targets mismatch: %#v", cache.userIDs)

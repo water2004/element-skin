@@ -8,7 +8,6 @@ import (
 
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/permission"
-	oauthsvc "element-skin/backend/internal/service/oauth"
 	"element-skin/backend/internal/util"
 )
 
@@ -26,10 +25,15 @@ func (s AccountService) DeleteUser(ctx context.Context, actor permission.Actor, 
 	if err := s.Redis.DeleteYggTokensByUser(ctx, target.ID); err != nil {
 		return err
 	}
-	if err := s.deleteExternalIdentityAccessTokens(ctx, target.ID); err != nil {
+	externalIdentityIDs, err := s.deleteExternalIdentityAccessTokens(ctx, target.ID)
+	if err != nil {
 		return err
 	}
-	if err := s.deleteUserOAuthData(ctx, target.ID); err != nil {
+	oauthClientIDs, err := s.prepareUserOAuthAccessTokens(ctx, target.ID)
+	if err != nil {
+		return err
+	}
+	if err := s.Redis.InvalidateAuthUser(ctx, target.ID); err != nil {
 		return err
 	}
 	ok, err := s.DB.Users.Delete(ctx, target.ID)
@@ -39,7 +43,16 @@ func (s AccountService) DeleteUser(ctx context.Context, actor permission.Actor, 
 	if !ok {
 		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
 	}
-	return s.Redis.InvalidateAuthUser(ctx, target.ID)
+	reportPostCommitError("remove deleted user sessions", s.Redis.DeleteYggTokensByUser(ctx, target.ID))
+	for _, identityID := range externalIdentityIDs {
+		reportPostCommitError("remove deleted external identity token races", s.Redis.DeleteExternalAccessToken(ctx, identityID))
+	}
+	for _, clientID := range oauthClientIDs {
+		reportPostCommitError("remove deleted owner client access-token races", s.Redis.DeleteOAuthAccessTokensByClient(ctx, clientID))
+	}
+	reportPostCommitError("remove deleted user access-token races", s.Redis.DeleteOAuthAccessTokensByUser(ctx, target.ID))
+	reportPostCommitError("invalidate deleted user cache races", s.Redis.InvalidateAuthUser(ctx, target.ID))
+	return nil
 }
 
 func (s AccountService) ResetPassword(ctx context.Context, actor permission.Actor, input ResetPasswordInput) error {
@@ -119,22 +132,35 @@ func (s AccountService) UnbanUser(ctx context.Context, actor permission.Actor, t
 	return s.Redis.InvalidateAuthUser(ctx, target.ID)
 }
 
-func (s AccountService) deleteUserOAuthData(ctx context.Context, userID string) error {
-	_, err := (oauthsvc.Service{DB: s.DB, Redis: s.Redis}).DeleteUserOAuthData(ctx, userID)
-	return err
-}
-
-func (s AccountService) deleteExternalIdentityAccessTokens(ctx context.Context, userID string) error {
-	items, err := s.DB.Identities.ListIdentitiesByUser(ctx, userID)
+func (s AccountService) prepareUserOAuthAccessTokens(ctx context.Context, userID string) ([]string, error) {
+	clientIDs, err := s.DB.OAuth.ClientIDsByOwner(ctx, userID)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for _, item := range items {
-		if err := s.Redis.DeleteExternalAccessToken(ctx, item.ID); err != nil {
-			return err
+	if err := s.Redis.DeleteOAuthAccessTokensByUser(ctx, userID); err != nil {
+		return nil, err
+	}
+	for _, clientID := range clientIDs {
+		if err := s.Redis.DeleteOAuthAccessTokensByClient(ctx, clientID); err != nil {
+			return nil, err
 		}
 	}
-	return nil
+	return clientIDs, nil
+}
+
+func (s AccountService) deleteExternalIdentityAccessTokens(ctx context.Context, userID string) ([]string, error) {
+	items, err := s.DB.Identities.ListIdentitiesByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	identityIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		identityIDs = append(identityIDs, item.ID)
+		if err := s.Redis.DeleteExternalAccessToken(ctx, item.ID); err != nil {
+			return nil, err
+		}
+	}
+	return identityIDs, nil
 }
 
 func normalizedBanReason(raw string) (string, error) {

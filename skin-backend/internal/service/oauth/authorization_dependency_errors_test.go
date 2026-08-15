@@ -118,12 +118,16 @@ func TestServiceOAuthPermissionCodeDependencyErrorsExactly(t *testing.T) {
 			})
 			return err
 		}, assertErr: func(t *testing.T, err error) {
-			assertHTTPError(t, err, 400, "invalid client_id")
+			assertPgCode(t, err, "42P01")
 		}},
 	}
 	for _, tc := range checks {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.assertErr(t, tc.call())
 		})
+	}
+	client, err := db.OAuth.GetClient(ctx, clientID)
+	if err != nil || client == nil || client.Status != oauth.StatusActive {
+		t.Fatalf("failed dependency operations changed client status: client=%#v err=%v", client, err)
 	}
 }

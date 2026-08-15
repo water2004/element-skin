@@ -176,9 +176,10 @@ func (s Service) DeleteProvider(ctx context.Context, actor permission.Actor, id 
 		return notFound("identity provider not found")
 	}
 	for _, identityID := range deletedIdentityIDs {
-		if err := s.Redis.DeleteExternalAccessToken(ctx, identityID); err != nil {
-			return err
-		}
+		// The database deletion is already committed. Cached tokens cannot be used
+		// without the deleted identity record and will expire naturally if this
+		// best-effort race cleanup fails.
+		reportPostCommitError("remove deleted provider identity token race", s.Redis.DeleteExternalAccessToken(ctx, identityID))
 	}
 	return nil
 }
@@ -187,27 +188,13 @@ func (s Service) ListIdentities(ctx context.Context, actor permission.Actor) ([]
 	if err := actor.Require(permission.MustDefinitionByCode("external_identity.read.owned")); err != nil {
 		return nil, forbidden()
 	}
-	items, err := s.DB.Identities.ListIdentitiesByUser(ctx, actor.UserID)
+	items, err := s.DB.Identities.ListIdentityViewsByUser(ctx, actor.UserID)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]map[string]any, 0, len(items))
 	for _, item := range items {
-		provider, err := s.DB.Identities.GetProvider(ctx, item.ProviderID)
-		if err != nil {
-			return nil, err
-		}
-		if provider == nil {
-			return nil, errors.New("external identity references a missing provider")
-		}
-		credential, err := s.DB.Identities.GetCredential(ctx, item.ID)
-		if err != nil {
-			return nil, err
-		}
-		if credential == nil {
-			return nil, errors.New("external identity references a missing credential")
-		}
-		out = append(out, identityResponse(item, *provider, *credential))
+		out = append(out, identityResponse(item.Identity, item.Provider, item.Credential))
 	}
 	return out, nil
 }
@@ -234,7 +221,20 @@ func (s Service) DeleteIdentity(ctx context.Context, actor permission.Actor, id 
 	if err := actor.Require(permission.MustDefinitionByCode("external_identity.delete.owned")); err != nil {
 		return forbidden()
 	}
-	deleted, err := s.DB.Identities.DeleteIdentity(ctx, strings.TrimSpace(id), actor.UserID)
+	id = strings.TrimSpace(id)
+	item, err := s.DB.Identities.GetIdentity(ctx, id)
+	if err != nil {
+		return err
+	}
+	if item == nil || item.UserID != actor.UserID {
+		return notFound("external identity not found")
+	}
+	if s.Redis != nil {
+		if err := s.Redis.DeleteExternalAccessToken(ctx, id); err != nil {
+			return err
+		}
+	}
+	deleted, err := s.DB.Identities.DeleteIdentity(ctx, id, actor.UserID)
 	if err != nil {
 		if isForeignKeyViolation(err) {
 			return conflict("external identity is still used by an official profile binding")
@@ -243,6 +243,9 @@ func (s Service) DeleteIdentity(ctx context.Context, actor permission.Actor, id 
 	}
 	if !deleted {
 		return notFound("external identity not found")
+	}
+	if s.Redis != nil {
+		reportPostCommitError("remove deleted identity token race", s.Redis.DeleteExternalAccessToken(ctx, id))
 	}
 	return nil
 }

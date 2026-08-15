@@ -33,6 +33,20 @@ func (s externalTokenDeleteFailStore) DeleteExternalAccessToken(context.Context,
 	return errors.New("external access token deletion failed")
 }
 
+type externalTokenDeleteNthFailStore struct {
+	redisstore.Store
+	deleteCalls int
+	failOnCall  int
+}
+
+func (s *externalTokenDeleteNthFailStore) DeleteExternalAccessToken(ctx context.Context, identityID string) error {
+	s.deleteCalls++
+	if s.deleteCalls == s.failOnCall {
+		return errors.New("external access token deletion failed")
+	}
+	return s.Store.DeleteExternalAccessToken(ctx, identityID)
+}
+
 func (d *fixedDiscovery) Discover(_ context.Context, issuer string) (identity.ProviderMetadata, error) {
 	d.issuer = issuer
 	return d.metadata, d.err
@@ -199,8 +213,18 @@ func TestIdentityDeletionRejectsBindingAndProviderDeletionCascadesExactly(t *tes
 		t.Fatalf("cache cleanup failure mutated database: providers=%d identities=%d credentials=%d bindings=%d",
 			preservedProviderCount, preservedIdentityCount, preservedCredentialCount, preservedBindingCount)
 	}
-	if err := service.DeleteProvider(ctx, adminActor, provider.ID); err != nil {
+	if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{
+		IdentityID: external.ID, AccessToken: "provider-delete-access", ExpiresAt: time.Now().Add(time.Hour).UnixMilli(),
+	}, time.Hour); err != nil {
 		t.Fatal(err)
+	}
+	postCommitCache := &externalTokenDeleteNthFailStore{Store: cache, failOnCall: 2}
+	postCommitService := identity.Service{DB: db, Redis: postCommitCache}
+	if err := postCommitService.DeleteProvider(ctx, adminActor, provider.ID); err != nil {
+		t.Fatal(err)
+	}
+	if postCommitCache.deleteCalls != 2 {
+		t.Fatalf("provider cache cleanup calls=%d want=2", postCommitCache.deleteCalls)
 	}
 	var providerCount, identityCount, credentialCount, bindingCount int
 	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM identity_providers WHERE id=$1`, provider.ID).Scan(&providerCount); err != nil {
@@ -223,6 +247,73 @@ func TestIdentityDeletionRejectsBindingAndProviderDeletionCascadesExactly(t *tes
 	}
 	if _, err := cache.GetExternalAccessToken(ctx, external.ID); !errors.Is(err, redisstore.ErrCacheMiss) {
 		t.Fatalf("provider deletion must remove cached external access token: %v", err)
+	}
+}
+
+func TestDeleteIdentityCacheFailureSemanticsExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "identity-cache-user@test.com", "pw", "IdentityCacheUser", false)
+	actor := actorForUser(t, db, user.ID)
+	provider := model.IdentityProvider{
+		ID: "provider-identity-cache", Name: "Identity Cache", IssuerURL: "https://identity-cache.example",
+		AuthorizationEndpoint: "https://identity-cache.example/authorize", TokenEndpoint: "https://identity-cache.example/token",
+		JWKSURI: "https://identity-cache.example/keys", ClientID: "client", Scopes: []string{"openid"},
+		Adapter: identity.AdapterGenericOIDC, Enabled: true, LoginEnabled: true, LinkEnabled: true,
+		CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := db.Identities.CreateProvider(ctx, provider); err != nil {
+		t.Fatal(err)
+	}
+	createIdentity := func(id, subject string) {
+		t.Helper()
+		item := model.ExternalIdentity{
+			ID: id, UserID: user.ID, ProviderID: provider.ID, Subject: subject, CreatedAt: 2, UpdatedAt: 2,
+		}
+		credential := model.ExternalIdentityCredential{IdentityID: id, UpdatedAt: 2}
+		if err := db.Identities.CreateIdentity(ctx, item, credential); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cache := redisstore.NewMemoryStore()
+	setToken := func(identityID, accessToken string) {
+		t.Helper()
+		if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{
+			IdentityID: identityID, AccessToken: accessToken, ExpiresAt: time.Now().Add(time.Hour).UnixMilli(),
+		}, time.Hour); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	createIdentity("identity-cache-precommit", "subject-precommit")
+	setToken("identity-cache-precommit", "precommit-access")
+	preCommitService := identity.Service{DB: db, Redis: externalTokenDeleteFailStore{Store: cache}}
+	err := preCommitService.DeleteIdentity(ctx, actor, "identity-cache-precommit")
+	if err == nil || err.Error() != "external access token deletion failed" {
+		t.Fatalf("pre-commit cache failure=%v", err)
+	}
+	if stored, getErr := db.Identities.GetIdentity(ctx, "identity-cache-precommit"); getErr != nil || stored == nil {
+		t.Fatalf("pre-commit cache failure removed identity: identity=%#v err=%v", stored, getErr)
+	}
+	if token, getErr := cache.GetExternalAccessToken(ctx, "identity-cache-precommit"); getErr != nil || token.AccessToken != "precommit-access" {
+		t.Fatalf("pre-commit cache failure changed token: token=%#v err=%v", token, getErr)
+	}
+
+	createIdentity("identity-cache-postcommit", "subject-postcommit")
+	setToken("identity-cache-postcommit", "postcommit-access")
+	postCommitCache := &externalTokenDeleteNthFailStore{Store: cache, failOnCall: 2}
+	postCommitService := identity.Service{DB: db, Redis: postCommitCache}
+	if err := postCommitService.DeleteIdentity(ctx, actor, "identity-cache-postcommit"); err != nil {
+		t.Fatal(err)
+	}
+	if postCommitCache.deleteCalls != 2 {
+		t.Fatalf("identity cache cleanup calls=%d want=2", postCommitCache.deleteCalls)
+	}
+	if stored, getErr := db.Identities.GetIdentity(ctx, "identity-cache-postcommit"); getErr != nil || stored != nil {
+		t.Fatalf("post-commit cache failure identity=%#v err=%v", stored, getErr)
+	}
+	if _, getErr := cache.GetExternalAccessToken(ctx, "identity-cache-postcommit"); !errors.Is(getErr, redisstore.ErrCacheMiss) {
+		t.Fatalf("post-commit cache failure left token: %v", getErr)
 	}
 }
 

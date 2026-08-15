@@ -135,7 +135,11 @@ func (s Store) RevokeRefreshToken(ctx context.Context, tokenHash string, revoked
 }
 
 func (s Store) RevokeRefreshTokensByClient(ctx context.Context, clientID string, revokedAt int64) (int64, error) {
-	tag, err := s.Pool.Exec(ctx, `
+	return revokeRefreshTokensByClient(ctx, s.Pool, clientID, revokedAt)
+}
+
+func revokeRefreshTokensByClient(ctx context.Context, q queryer, clientID string, revokedAt int64) (int64, error) {
+	tag, err := q.Exec(ctx, `
 		UPDATE oauth_refresh_tokens
 		SET revoked_at=$2
 		WHERE client_id=$1 AND revoked_at IS NULL
@@ -147,7 +151,11 @@ func (s Store) RevokeRefreshTokensByClient(ctx context.Context, clientID string,
 }
 
 func (s Store) RevokeRefreshTokensByGrant(ctx context.Context, grantID string, revokedAt int64) (int64, error) {
-	tag, err := s.Pool.Exec(ctx, `
+	return revokeRefreshTokensByGrant(ctx, s.Pool, grantID, revokedAt)
+}
+
+func revokeRefreshTokensByGrant(ctx context.Context, q queryer, grantID string, revokedAt int64) (int64, error) {
+	tag, err := q.Exec(ctx, `
 		UPDATE oauth_refresh_tokens
 		SET revoked_at=$2
 		WHERE grant_id=$1 AND revoked_at IS NULL
@@ -159,7 +167,11 @@ func (s Store) RevokeRefreshTokensByGrant(ctx context.Context, grantID string, r
 }
 
 func (s Store) DeleteAuthorizationCodesByClient(ctx context.Context, clientID string) (int64, error) {
-	tag, err := s.Pool.Exec(ctx, `DELETE FROM oauth_authorization_codes WHERE client_id=$1`, clientID)
+	return deleteAuthorizationCodesByClient(ctx, s.Pool, clientID)
+}
+
+func deleteAuthorizationCodesByClient(ctx context.Context, q queryer, clientID string) (int64, error) {
+	tag, err := q.Exec(ctx, `DELETE FROM oauth_authorization_codes WHERE client_id=$1`, clientID)
 	if err != nil {
 		return 0, err
 	}
@@ -167,7 +179,11 @@ func (s Store) DeleteAuthorizationCodesByClient(ctx context.Context, clientID st
 }
 
 func (s Store) DeleteAuthorizationCodesByGrant(ctx context.Context, grantID string) (int64, error) {
-	tag, err := s.Pool.Exec(ctx, `DELETE FROM oauth_authorization_codes WHERE grant_id=$1`, grantID)
+	return deleteAuthorizationCodesByGrant(ctx, s.Pool, grantID)
+}
+
+func deleteAuthorizationCodesByGrant(ctx context.Context, q queryer, grantID string) (int64, error) {
+	tag, err := q.Exec(ctx, `DELETE FROM oauth_authorization_codes WHERE grant_id=$1`, grantID)
 	if err != nil {
 		return 0, err
 	}

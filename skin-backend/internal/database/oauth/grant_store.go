@@ -45,7 +45,11 @@ func (s Store) UpsertActiveGrant(ctx context.Context, grant model.OAuthGrant, pe
 }
 
 func (s Store) RevokeGrant(ctx context.Context, grantID, userID string, revokedAt int64) (bool, error) {
-	tag, err := s.Pool.Exec(ctx, `
+	return revokeGrant(ctx, s.Pool, grantID, userID, revokedAt)
+}
+
+func revokeGrant(ctx context.Context, q queryer, grantID, userID string, revokedAt int64) (bool, error) {
+	tag, err := q.Exec(ctx, `
 		UPDATE delegated_permission_grants
 		SET status='revoked', revoked_at=$3
 		WHERE id=$1 AND ($2='' OR user_id=$2) AND status='active'
@@ -57,7 +61,11 @@ func (s Store) RevokeGrant(ctx context.Context, grantID, userID string, revokedA
 }
 
 func (s Store) RevokeGrantsByClient(ctx context.Context, clientID string, revokedAt int64) ([]string, error) {
-	rows, err := s.Pool.Query(ctx, `
+	return revokeGrantsByClient(ctx, s.Pool, clientID, revokedAt)
+}
+
+func revokeGrantsByClient(ctx context.Context, q transactionQueryer, clientID string, revokedAt int64) ([]string, error) {
+	rows, err := q.Query(ctx, `
 		UPDATE delegated_permission_grants
 		SET status='revoked', revoked_at=$2
 		WHERE client_id=$1 AND status='active'

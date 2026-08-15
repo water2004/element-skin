@@ -163,6 +163,6 @@ func (s Service) markReauthorizationRequired(ctx context.Context, identityID str
 	if !updated {
 		return errors.New("external identity credential is missing")
 	}
-	_ = s.Redis.DeleteExternalAccessToken(ctx, identityID)
+	reportPostCommitError("remove rejected external access token", s.Redis.DeleteExternalAccessToken(ctx, identityID))
 	return conflict("external identity must be reauthorized")
 }

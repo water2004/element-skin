@@ -175,10 +175,15 @@ func (s AccountService) DeleteSelf(ctx context.Context, actor permission.Actor) 
 	if err := s.Redis.DeleteYggTokensByUser(ctx, actor.UserID); err != nil {
 		return err
 	}
-	if err := s.deleteExternalIdentityAccessTokens(ctx, actor.UserID); err != nil {
+	externalIdentityIDs, err := s.deleteExternalIdentityAccessTokens(ctx, actor.UserID)
+	if err != nil {
 		return err
 	}
-	if err := s.deleteUserOAuthData(ctx, actor.UserID); err != nil {
+	oauthClientIDs, err := s.prepareUserOAuthAccessTokens(ctx, actor.UserID)
+	if err != nil {
+		return err
+	}
+	if err := s.Redis.InvalidateAuthUser(ctx, actor.UserID); err != nil {
 		return err
 	}
 	ok, err := s.DB.Users.Delete(ctx, actor.UserID)
@@ -188,7 +193,16 @@ func (s AccountService) DeleteSelf(ctx context.Context, actor permission.Actor) 
 	if !ok {
 		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
 	}
-	return s.Redis.InvalidateAuthUser(ctx, actor.UserID)
+	reportPostCommitError("remove self-deleted user sessions", s.Redis.DeleteYggTokensByUser(ctx, actor.UserID))
+	for _, identityID := range externalIdentityIDs {
+		reportPostCommitError("remove self-deleted external identity token races", s.Redis.DeleteExternalAccessToken(ctx, identityID))
+	}
+	for _, clientID := range oauthClientIDs {
+		reportPostCommitError("remove self-deleted owner client access-token races", s.Redis.DeleteOAuthAccessTokensByClient(ctx, clientID))
+	}
+	reportPostCommitError("remove self-deleted user access-token races", s.Redis.DeleteOAuthAccessTokensByUser(ctx, actor.UserID))
+	reportPostCommitError("invalidate self-deleted user cache races", s.Redis.InvalidateAuthUser(ctx, actor.UserID))
+	return nil
 }
 
 func (s AccountService) normalizedSelfUpdateFields(ctx context.Context, userID string, body map[string]any) (map[string]any, error) {

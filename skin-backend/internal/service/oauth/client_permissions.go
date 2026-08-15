@@ -50,6 +50,9 @@ func (s Service) ClientPermissions(ctx context.Context, actor permission.Actor, 
 }
 
 func (s Service) SetClientPermissionOverride(ctx context.Context, actor permission.Actor, clientID, code, effect string) error {
+	if effect != "allow" && effect != "deny" {
+		return badRequest("invalid permission override effect")
+	}
 	if effect == "allow" {
 		if err := actor.Require(permission.MustDefinitionByCode("permission.grant.any")); err != nil {
 			return forbidden()
@@ -70,10 +73,19 @@ func (s Service) SetClientPermissionOverride(ctx context.Context, actor permissi
 	if !ok || def.Scope.ID == permission.ScopeSystem {
 		return badRequest("invalid permission")
 	}
-	if err := s.DB.Permissions.SetPermissionOverrideForSubject(ctx, permissiondb.SubjectIDForClient(client.ID), def, effect, actor.SubjectID); err != nil {
+	subjectID := permissiondb.SubjectIDForClient(client.ID)
+	if err := s.DB.Permissions.InvalidateSubjectCache(ctx, subjectID); err != nil {
 		return err
 	}
-	return s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID)
+	if err := s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID); err != nil {
+		return err
+	}
+	if err := s.DB.Permissions.SetPermissionOverrideForSubject(ctx, subjectID, def, effect, actor.SubjectID); err != nil {
+		return err
+	}
+	reportPostCommitError("invalidate client permission override cache race", s.DB.Permissions.InvalidateSubjectCache(ctx, subjectID))
+	reportPostCommitError("remove client permission override access tokens", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
+	return nil
 }
 
 func (s Service) ClearClientPermissionOverride(ctx context.Context, actor permission.Actor, clientID, code string) error {
@@ -91,31 +103,38 @@ func (s Service) ClearClientPermissionOverride(ctx context.Context, actor permis
 	if !ok {
 		return badRequest("invalid permission")
 	}
-	ok, err = s.DB.Permissions.ClearPermissionOverrideForSubject(ctx, permissiondb.SubjectIDForClient(client.ID), def)
+	subjectID := permissiondb.SubjectIDForClient(client.ID)
+	if err := s.DB.Permissions.InvalidateSubjectCache(ctx, subjectID); err != nil {
+		return err
+	}
+	if err := s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID); err != nil {
+		return err
+	}
+	ok, err = s.DB.Permissions.ClearPermissionOverrideForSubject(ctx, subjectID, def)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return notFound("permission override not found")
 	}
-	return s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID)
+	reportPostCommitError("invalidate cleared client permission cache race", s.DB.Permissions.InvalidateSubjectCache(ctx, subjectID))
+	reportPostCommitError("remove cleared client permission access tokens", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
+	return nil
 }
 
-func (s Service) grantReviewedClientPermissions(ctx context.Context, actor permission.Actor, clientID string, codes []string) error {
-	subjectID := permissiondb.SubjectIDForClient(clientID)
+func reviewedClientPermissionIDs(codes []string) ([]int64, error) {
+	ids := make([]int64, 0, len(codes))
 	for _, code := range codes {
 		def, ok := permission.DefinitionByCode(code)
 		if !ok || def.Scope.ID == permission.ScopeSystem {
-			return badRequest("invalid permission")
+			return nil, badRequest("invalid permission")
 		}
 		if !isAppOnlyPermission(def) {
 			continue
 		}
-		if err := s.DB.Permissions.SetPermissionOverrideForSubject(ctx, subjectID, def, "allow", actor.SubjectID); err != nil {
-			return err
-		}
+		ids = append(ids, int64(def.ID))
 	}
-	return nil
+	return ids, nil
 }
 
 func isAppOnlyPermission(def permission.Definition) bool {
