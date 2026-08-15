@@ -175,6 +175,9 @@ func (s AccountService) DeleteSelf(ctx context.Context, actor permission.Actor) 
 	if err := s.Redis.DeleteYggTokensByUser(ctx, actor.UserID); err != nil {
 		return err
 	}
+	if err := s.deleteExternalIdentityAccessTokens(ctx, actor.UserID); err != nil {
+		return err
+	}
 	if err := s.deleteUserOAuthData(ctx, actor.UserID); err != nil {
 		return err
 	}

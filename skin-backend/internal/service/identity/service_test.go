@@ -7,11 +7,13 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"element-skin/backend/internal/database"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/permission"
+	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/identity"
 	"element-skin/backend/internal/testutil"
 	"element-skin/backend/internal/util"
@@ -21,6 +23,14 @@ type fixedDiscovery struct {
 	metadata identity.ProviderMetadata
 	err      error
 	issuer   string
+}
+
+type externalTokenDeleteFailStore struct {
+	redisstore.Store
+}
+
+func (s externalTokenDeleteFailStore) DeleteExternalAccessToken(context.Context, string) error {
+	return errors.New("external access token deletion failed")
 }
 
 func (d *fixedDiscovery) Discover(_ context.Context, issuer string) (identity.ProviderMetadata, error) {
@@ -131,7 +141,7 @@ func TestMicrosoftProviderRequiresMinecraftAndRefreshScopesExactly(t *testing.T)
 	}
 }
 
-func TestIdentityAndProviderDeletionRejectDependenciesWithExactConflicts(t *testing.T) {
+func TestIdentityDeletionRejectsBindingAndProviderDeletionCascadesExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	admin := testutil.CreateUser(t, db, "identity-dependency-admin@test.com", "pw", "IdentityDependencyAdmin", true)
@@ -159,12 +169,43 @@ func TestIdentityAndProviderDeletionRejectDependenciesWithExactConflicts(t *test
 	`, external.ID, profile.ID); err != nil {
 		t.Fatal(err)
 	}
-	service := identity.Service{DB: db}
+	cache := redisstore.NewMemoryStore()
+	if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{
+		IdentityID: external.ID, AccessToken: "provider-delete-access", ExpiresAt: time.Now().Add(time.Hour).UnixMilli(),
+	}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	service := identity.Service{DB: db, Redis: cache}
 	assertHTTPError(t, service.DeleteIdentity(ctx, userActor, external.ID), 409,
 		"external identity is still used by an official profile binding")
-	assertHTTPError(t, service.DeleteProvider(ctx, adminActor, provider.ID), 409,
-		"identity provider is still referenced by external identities")
-	var identityCount, credentialCount, bindingCount int
+	failingService := identity.Service{DB: db, Redis: externalTokenDeleteFailStore{Store: cache}}
+	if err := failingService.DeleteProvider(ctx, adminActor, provider.ID); err == nil || err.Error() != "external access token deletion failed" {
+		t.Fatalf("provider cache cleanup failure mismatch: %#v", err)
+	}
+	var preservedProviderCount, preservedIdentityCount, preservedCredentialCount, preservedBindingCount int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM identity_providers WHERE id=$1`, provider.ID).Scan(&preservedProviderCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM external_identities WHERE id=$1`, external.ID).Scan(&preservedIdentityCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM external_identity_credentials WHERE identity_id=$1`, external.ID).Scan(&preservedCredentialCount); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM official_profile_bindings WHERE id='binding-dependency'`).Scan(&preservedBindingCount); err != nil {
+		t.Fatal(err)
+	}
+	if preservedProviderCount != 1 || preservedIdentityCount != 1 || preservedCredentialCount != 1 || preservedBindingCount != 1 {
+		t.Fatalf("cache cleanup failure mutated database: providers=%d identities=%d credentials=%d bindings=%d",
+			preservedProviderCount, preservedIdentityCount, preservedCredentialCount, preservedBindingCount)
+	}
+	if err := service.DeleteProvider(ctx, adminActor, provider.ID); err != nil {
+		t.Fatal(err)
+	}
+	var providerCount, identityCount, credentialCount, bindingCount int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM identity_providers WHERE id=$1`, provider.ID).Scan(&providerCount); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM external_identities WHERE id=$1`, external.ID).Scan(&identityCount); err != nil {
 		t.Fatal(err)
 	}
@@ -174,8 +215,14 @@ func TestIdentityAndProviderDeletionRejectDependenciesWithExactConflicts(t *test
 	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM official_profile_bindings WHERE id='binding-dependency'`).Scan(&bindingCount); err != nil {
 		t.Fatal(err)
 	}
-	if identityCount != 1 || credentialCount != 1 || bindingCount != 1 {
-		t.Fatalf("failed deletions must not mutate state: identities=%d credentials=%d bindings=%d", identityCount, credentialCount, bindingCount)
+	if providerCount != 0 || identityCount != 0 || credentialCount != 0 || bindingCount != 0 {
+		t.Fatalf("provider deletion residues: providers=%d identities=%d credentials=%d bindings=%d", providerCount, identityCount, credentialCount, bindingCount)
+	}
+	if storedProfile, err := db.Profiles.GetByID(ctx, profile.ID); err != nil || storedProfile == nil || storedProfile.UserID != user.ID {
+		t.Fatalf("provider deletion must preserve the local profile: profile=%#v err=%v", storedProfile, err)
+	}
+	if _, err := cache.GetExternalAccessToken(ctx, external.ID); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("provider deletion must remove cached external access token: %v", err)
 	}
 }
 

@@ -47,23 +47,26 @@
 
       <template v-if="loginProviders.length">
         <el-divider>或使用外部身份登录</el-divider>
-        <div class="grid gap-3">
+        <div class="external-login-buttons grid gap-3">
           <el-button
             v-for="provider in loginProviders"
             :key="provider.id"
+            class="external-login-button"
             size="large"
             :loading="authorizingProviderId === provider.id"
             :disabled="!!authorizingProviderId"
             @click="loginWithProvider(provider.id)"
           >
-            <img
-              v-if="provider.icon_url"
-              :src="provider.icon_url"
-              alt=""
-              class="w-5 h-5 rounded-sm object-contain"
-            />
-            <el-icon v-else><Connection /></el-icon>
-            使用 {{ provider.name }} 登录
+            <span class="external-login-content">
+              <img
+                v-if="provider.icon_url"
+                :src="provider.icon_url"
+                alt=""
+                class="h-5 w-5 shrink-0 rounded-sm object-contain"
+              />
+              <el-icon v-else class="shrink-0"><Connection /></el-icon>
+              <span>使用 {{ provider.name }} 登录</span>
+            </span>
           </el-button>
         </div>
       </template>
@@ -171,5 +174,21 @@ async function loginWithProvider(providerId: string) {
 
 :deep(.el-input__wrapper) {
   height: 48px;
+}
+
+.external-login-buttons :deep(.el-button) {
+  width: 100%;
+  margin-left: 0 !important;
+}
+
+.external-login-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.external-login-content :deep(.el-icon + span) {
+  margin-left: 0;
 }
 </style>

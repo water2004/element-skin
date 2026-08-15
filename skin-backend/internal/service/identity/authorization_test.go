@@ -92,7 +92,7 @@ func TestOIDCAuthorizationLinkUsesStateNoncePKCEAndStoresCredentialsExactly(t *t
 		query.Get("redirect_uri") != "http://localhost:8000/v2/auth/oidc/callback" ||
 		query.Get("scope") != "openid profile" || state == "" || query.Get("nonce") == "" ||
 		query.Get("code_challenge") == "" || query.Get("code_challenge_method") != "S256" ||
-		query.Get("prompt") != "select_account" {
+		query.Has("prompt") {
 		t.Fatalf("authorization URL mismatch: %s", started.AuthorizationURL)
 	}
 	storedState, err := redis.GetState(ctx, state)
@@ -139,6 +139,54 @@ func TestOIDCAuthorizationLinkUsesStateNoncePKCEAndStoresCredentialsExactly(t *t
 	}
 	_, err = service.CompleteAuthorization(ctx, "authorization-code", state, "")
 	assertHTTPError(t, err, 400, "invalid or expired OIDC state")
+}
+
+func TestOIDCLinkRequestsAccountSelectionOnlyFromMicrosoft(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "oidc-prompt@test.com", "pw", "OIDCPrompt", false)
+	provider := oidcTestProvider(t, db, "oidc-prompt-provider")
+	provider.Adapter = identity.AdapterMicrosoft
+	updateOIDCTestProvider(t, db, provider)
+	service := identity.Service{
+		DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(),
+	}
+
+	linked, err := service.StartAuthorization(
+		ctx,
+		actorWithPermissions(user.ID, "external_identity.create.owned"),
+		provider.ID,
+		identity.AuthorizationIntentLink,
+		"",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	linkedURL, err := url.Parse(linked.AuthorizationURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := linkedURL.Query().Get("prompt"); got != "select_account" {
+		t.Fatalf("Microsoft link prompt=%q want=%q URL=%s", got, "select_account", linked.AuthorizationURL)
+	}
+
+	loggedIn, err := service.StartAuthorization(
+		ctx,
+		permission.GuestActor(),
+		provider.ID,
+		identity.AuthorizationIntentLogin,
+		"",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loginURL, err := url.Parse(loggedIn.AuthorizationURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loginURL.Query().Has("prompt") {
+		t.Fatalf("Microsoft login must not force a prompt: %s", loggedIn.AuthorizationURL)
+	}
 }
 
 func TestOIDCLoginReturnsExistingUserOrRegistrationTicketWithoutCreatingAccount(t *testing.T) {
@@ -520,8 +568,8 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if err != nil {
 		t.Fatal(err)
 	}
-	if deleted, err := db.Identities.DeleteProvider(ctx, disappearing.ID); err != nil || !deleted {
-		t.Fatalf("delete disappearing provider deleted=%v err=%v", deleted, err)
+	if identityIDs, deleted, err := db.Identities.DeleteProvider(ctx, disappearing.ID); err != nil || !deleted || len(identityIDs) != 0 {
+		t.Fatalf("delete disappearing provider identityIDs=%v deleted=%v err=%v", identityIDs, deleted, err)
 	}
 	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
 		t.Fatal("removed provider callback should fail")

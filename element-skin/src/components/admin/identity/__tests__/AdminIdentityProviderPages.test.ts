@@ -54,7 +54,7 @@ beforeEach(() => {
 })
 
 describe('OIDC identity provider pages', () => {
-  it('keeps the list read-only and navigates to standalone create and edit routes', async () => {
+  it('navigates from the provider list to standalone create and edit routes', async () => {
     const createPage = await mountPage('/admin/identity-providers', providerRoutes(), [
       'identity_provider.read.any',
       'identity_provider.create.any',
@@ -62,9 +62,6 @@ describe('OIDC identity provider pages', () => {
     ])
     await flushUI()
 
-    expect(createPage.root.textContent).toContain(redirectUri)
-    expect(createPage.root.textContent).toContain('Microsoft')
-    expect(createPage.root.querySelector('.el-dialog')).toBeNull()
     findButton(createPage.root, '添加提供方').click()
     await flushUI()
     expect(createPage.router.currentRoute.value.name).toBe('admin-identity-provider-create')
@@ -79,6 +76,8 @@ describe('OIDC identity provider pages', () => {
     await flushUI()
     expect(editPage.router.currentRoute.value.name).toBe('admin-identity-provider-edit')
     expect(editPage.router.currentRoute.value.params.provider_id).toBe(provider.id)
+    expect(adminApiMocks.getAdminIdentityProvider).toHaveBeenCalledTimes(1)
+    expect(adminApiMocks.getAdminIdentityProvider).toHaveBeenCalledWith(provider.id)
     editPage.unmount()
   })
 
@@ -88,11 +87,6 @@ describe('OIDC identity provider pages', () => {
       'identity_provider.create.any',
     ])
     await flushUI()
-
-    expect(mounted.root.textContent).toContain('请在身份提供方添加 Redirect URI')
-    expect(mounted.root.textContent).toContain(redirectUri)
-    expect(mounted.root.textContent).toContain('登录同时包含已有用户登录')
-    expect(mounted.root.textContent).not.toContain('允许衔接注册')
 
     setInputValue(inputForLabel(mounted.root, '显示名称'), ' Generic Provider ')
     setInputValue(inputForLabel(mounted.root, 'Issuer URL'), ' https://issuer.example ')

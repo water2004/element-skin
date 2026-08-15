@@ -380,7 +380,7 @@ func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, 
 	query.Set("nonce", nonce)
 	query.Set("code_challenge", base64.RawURLEncoding.EncodeToString(challengeSum[:]))
 	query.Set("code_challenge_method", "S256")
-	if intent == AuthorizationIntentLink {
+	if intent == AuthorizationIntentLink && provider.Adapter == AdapterMicrosoft {
 		query.Set("prompt", "select_account")
 	}
 	if strings.TrimSpace(loginHint) != "" {

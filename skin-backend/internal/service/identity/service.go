@@ -148,15 +148,37 @@ func (s Service) DeleteProvider(ctx context.Context, actor permission.Actor, id 
 	if err := actor.Require(permission.MustDefinitionByCode("identity_provider.delete.any")); err != nil {
 		return forbidden()
 	}
-	deleted, err := s.DB.Identities.DeleteProvider(ctx, strings.TrimSpace(id))
+	id = strings.TrimSpace(id)
+	provider, err := s.DB.Identities.GetProvider(ctx, id)
 	if err != nil {
-		if isForeignKeyViolation(err) {
-			return conflict("identity provider is still referenced by external identities")
+		return err
+	}
+	if provider == nil {
+		return notFound("identity provider not found")
+	}
+	if s.Redis == nil {
+		return errors.New("identity cache store is not configured")
+	}
+	identityIDs, err := s.DB.Identities.ListIdentityIDsByProvider(ctx, id)
+	if err != nil {
+		return err
+	}
+	for _, identityID := range identityIDs {
+		if err := s.Redis.DeleteExternalAccessToken(ctx, identityID); err != nil {
+			return err
 		}
+	}
+	deletedIdentityIDs, deleted, err := s.DB.Identities.DeleteProvider(ctx, id)
+	if err != nil {
 		return err
 	}
 	if !deleted {
 		return notFound("identity provider not found")
+	}
+	for _, identityID := range deletedIdentityIDs {
+		if err := s.Redis.DeleteExternalAccessToken(ctx, identityID); err != nil {
+			return err
+		}
 	}
 	return nil
 }

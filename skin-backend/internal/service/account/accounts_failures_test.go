@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"element-skin/backend/internal/database"
+	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/redisstore"
 	accountsvc "element-skin/backend/internal/service/account"
@@ -113,6 +114,35 @@ func TestAccountServiceDeleteResetBanUnbanDependencyFailuresKeepExactState(t *te
 	}
 	if unchanged, err := db.Users.GetByID(ctx, target.ID); err != nil || unchanged == nil || !util.VerifyPassword("Password123", unchanged.Password) {
 		t.Fatalf("reset ygg failure must preserve password: user=%#v err=%v", unchanged, err)
+	}
+
+	provider := model.IdentityProvider{
+		ID: "account-delete-failure-provider", Name: "Account Delete Failure", IssuerURL: "https://account-delete-failure.example",
+		AuthorizationEndpoint: "https://account-delete-failure.example/authorize", TokenEndpoint: "https://account-delete-failure.example/token",
+		JWKSURI: "https://account-delete-failure.example/jwks", ClientID: "account-delete-failure-client",
+		Scopes: []string{"openid"}, Adapter: "generic_oidc", Enabled: true, LoginEnabled: true, LinkEnabled: true,
+		CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := db.Identities.CreateProvider(ctx, provider); err != nil {
+		t.Fatal(err)
+	}
+	externalIdentity := model.ExternalIdentity{
+		ID: "account-delete-failure-identity", UserID: target.ID, ProviderID: provider.ID,
+		Subject: "account-delete-failure-subject", CreatedAt: 2, UpdatedAt: 2,
+	}
+	if err := db.Identities.CreateIdentity(ctx, externalIdentity, model.ExternalIdentityCredential{IdentityID: externalIdentity.ID, UpdatedAt: 2}); err != nil {
+		t.Fatal(err)
+	}
+	externalFail := &accountFailStore{Store: redisstore.NewMemoryStore(), failExternalDelete: true}
+	svc = accountsvc.AccountService{DB: db, Redis: externalFail}
+	if err := svc.DeleteUser(ctx, actor, target.ID); err == nil || err.Error() != "external access token deletion failed" {
+		t.Fatalf("delete external token failure mismatch: %#v", err)
+	}
+	if user, err := db.Users.GetByID(ctx, target.ID); err != nil || user == nil {
+		t.Fatalf("delete external token failure must keep target user: user=%#v err=%v", user, err)
+	}
+	if identity, err := db.Identities.GetIdentity(ctx, externalIdentity.ID); err != nil || identity == nil || identity.UserID != target.ID {
+		t.Fatalf("delete external token failure must keep identity: identity=%#v err=%v", identity, err)
 	}
 
 	cacheFail := &accountFailStore{Store: redisstore.NewMemoryStore(), failInvalidate: true}

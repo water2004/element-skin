@@ -168,12 +168,92 @@ func (s Store) ListProviders(ctx context.Context, publicOnly bool) ([]model.Iden
 	return items, rows.Err()
 }
 
-func (s Store) DeleteProvider(ctx context.Context, id string) (bool, error) {
-	tag, err := s.Pool.Exec(ctx, `DELETE FROM identity_providers WHERE id=$1`, id)
+func (s Store) ListIdentityIDsByProvider(ctx context.Context, providerID string) ([]string, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id
+		FROM external_identities
+		WHERE provider_id=$1
+		ORDER BY id
+	`, providerID)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
-	return tag.RowsAffected() == 1, nil
+	defer rows.Close()
+	identityIDs := make([]string, 0)
+	for rows.Next() {
+		var identityID string
+		if err := rows.Scan(&identityID); err != nil {
+			return nil, err
+		}
+		identityIDs = append(identityIDs, identityID)
+	}
+	return identityIDs, rows.Err()
+}
+
+func (s Store) DeleteProvider(ctx context.Context, id string) ([]string, bool, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback(ctx)
+
+	var lockedID string
+	err = tx.QueryRow(ctx, `
+		SELECT id FROM identity_providers WHERE id=$1 FOR UPDATE
+	`, id).Scan(&lockedID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return []string{}, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+
+	rows, err := tx.Query(ctx, `
+		SELECT id
+		FROM external_identities
+		WHERE provider_id=$1
+		ORDER BY id
+		FOR UPDATE
+	`, id)
+	if err != nil {
+		return nil, false, err
+	}
+	identityIDs := make([]string, 0)
+	for rows.Next() {
+		var identityID string
+		if err := rows.Scan(&identityID); err != nil {
+			rows.Close()
+			return nil, false, err
+		}
+		identityIDs = append(identityIDs, identityID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, false, err
+	}
+	rows.Close()
+
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM official_profile_bindings binding
+		USING external_identities identity
+		WHERE binding.identity_id=identity.id AND identity.provider_id=$1
+	`, id); err != nil {
+		return nil, false, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM external_identities WHERE provider_id=$1`, id); err != nil {
+		return nil, false, err
+	}
+	tag, err := tx.Exec(ctx, `DELETE FROM identity_providers WHERE id=$1`, id)
+	if err != nil {
+		return nil, false, err
+	}
+	if tag.RowsAffected() != 1 {
+		return nil, false, nil
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, false, err
+	}
+	return identityIDs, true, nil
 }
 
 func (s Store) CreateIdentity(ctx context.Context, item model.ExternalIdentity, credential model.ExternalIdentityCredential) error {

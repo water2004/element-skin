@@ -26,6 +26,9 @@ func (s AccountService) DeleteUser(ctx context.Context, actor permission.Actor, 
 	if err := s.Redis.DeleteYggTokensByUser(ctx, target.ID); err != nil {
 		return err
 	}
+	if err := s.deleteExternalIdentityAccessTokens(ctx, target.ID); err != nil {
+		return err
+	}
 	if err := s.deleteUserOAuthData(ctx, target.ID); err != nil {
 		return err
 	}
@@ -119,6 +122,19 @@ func (s AccountService) UnbanUser(ctx context.Context, actor permission.Actor, t
 func (s AccountService) deleteUserOAuthData(ctx context.Context, userID string) error {
 	_, err := (oauthsvc.Service{DB: s.DB, Redis: s.Redis}).DeleteUserOAuthData(ctx, userID)
 	return err
+}
+
+func (s AccountService) deleteExternalIdentityAccessTokens(ctx context.Context, userID string) error {
+	items, err := s.DB.Identities.ListIdentitiesByUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if err := s.Redis.DeleteExternalAccessToken(ctx, item.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func normalizedBanReason(raw string) (string, error) {

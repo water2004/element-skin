@@ -130,7 +130,7 @@ async function copyRedirectUri() {
 async function removeProvider(provider: AdminIdentityProvider) {
   try {
     await ElMessageBox.confirm(
-      '只有未被任何外部身份引用的提供方才能删除。也可以先停用它。',
+      '删除后将同时移除该提供方下的所有外部身份、授权凭据和正版绑定关系；本站角色不会被删除。此操作无法恢复。',
       `删除 ${provider.name}`,
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
     )

@@ -96,8 +96,9 @@ func accountNoticeByTitle(t testing.TB, notices []model.NoticeView, title string
 
 type accountFailStore struct {
 	redisstore.Store
-	failInvalidate bool
-	failYggDelete  bool
+	failInvalidate     bool
+	failYggDelete      bool
+	failExternalDelete bool
 }
 
 func (s *accountFailStore) InvalidateAuthUser(ctx context.Context, userID string) error {
@@ -112,6 +113,13 @@ func (s *accountFailStore) DeleteYggTokensByUser(ctx context.Context, userID str
 		return errors.New("ygg token deletion failed")
 	}
 	return s.Store.DeleteYggTokensByUser(ctx, userID)
+}
+
+func (s *accountFailStore) DeleteExternalAccessToken(ctx context.Context, identityID string) error {
+	if s.failExternalDelete {
+		return errors.New("external access token deletion failed")
+	}
+	return s.Store.DeleteExternalAccessToken(ctx, identityID)
 }
 
 func assertAccountPgCode(t *testing.T, err error, code string) {

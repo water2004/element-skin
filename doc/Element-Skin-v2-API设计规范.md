@@ -170,9 +170,10 @@ Content-Type: application/json
 }
 ```
 
-服务端生成一次性的 state、nonce 和 PKCE S256 verifier。`link` 额外发送标准
-`prompt=select_account`。添加身份时允许选择另一个账号；重新连接时即使用户在上游选错账号，也不会
-改变目标身份或意外新增身份。
+服务端生成一次性的 state、nonce 和 PKCE S256 verifier。通用 OIDC 授权只发送完成协议所需的
+标准最小参数，不假定上游支持可选的 `prompt` 值；Microsoft adapter 的 `link` 授权额外发送
+`prompt=select_account`，允许用户明确选择另一个 Microsoft 账号。重新连接时即使用户在上游选错
+账号，也不会改变目标身份或意外新增身份。
 
 连接授权被取消，或重新连接时选择了不匹配的外部账号，callback 均以稳定错误码重定向回身份管理页。
 前端说明原有身份未改变，不向用户展示普通 API JSON 错误页。
@@ -226,6 +227,10 @@ display name 或 email_verified 不补全也不覆盖这些字段。失败时 ti
 - 暂时网络错误或上游 `5xx` 只记录失败时间并返回 `502`，不得误标记为需要重新授权。
 - 能力 adapter 发现一个尚未到本地过期时间的 access token 被上游以 `401` 拒绝时，必须调用
   身份服务的强制刷新入口并且只重试一次；adapter 不直接读取、保存或刷新凭据。
+- 管理员删除 provider 时，在同一数据库事务中删除该 provider 的所有外部身份、长期凭据和正版
+  绑定关系；对应的本站角色保留，并清除这些身份的 Redis access token。
+- 用户注销账号或被管理员删除时，删除其所有外部身份、长期凭据和正版绑定，并清除对应的 Redis
+  access token。普通退出登录不删除外部身份，否则该身份将无法继续用于登录。
 
 ## 4. 正版角色绑定
 
