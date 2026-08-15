@@ -168,7 +168,6 @@ export interface IdentityProvider {
   icon_url: string
   login_enabled: boolean
   link_enabled: boolean
-  registration_enabled: boolean
 }
 
 export interface AdminIdentityProvider extends IdentityProvider {

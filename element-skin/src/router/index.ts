@@ -32,6 +32,7 @@ import AdminRolesList from '@/components/admin/roles/AdminRolesList.vue'
 import AdminNotices from '@/components/admin/notices/AdminNotices.vue'
 import AdminOAuthApps from '@/components/admin/oauth/AdminOAuthApps.vue'
 import AdminIdentityProviders from '@/components/admin/identity/AdminIdentityProviders.vue'
+import AdminIdentityProviderForm from '@/components/admin/identity/AdminIdentityProviderForm.vue'
 import { getMe } from '@/api/me'
 import { installEasterEggRouterHooks } from '@/easter-eggs'
 import { canAccessAdminPath, firstAccessibleAdminPath } from '@/permissions/adminPages'
@@ -127,6 +128,16 @@ const router = createRouter({
           path: 'identity-providers',
           name: 'admin-identity-providers',
           component: AdminIdentityProviders,
+        },
+        {
+          path: 'identity-providers/new',
+          name: 'admin-identity-provider-create',
+          component: AdminIdentityProviderForm,
+        },
+        {
+          path: 'identity-providers/:provider_id/edit',
+          name: 'admin-identity-provider-edit',
+          component: AdminIdentityProviderForm,
         },
       ],
     },

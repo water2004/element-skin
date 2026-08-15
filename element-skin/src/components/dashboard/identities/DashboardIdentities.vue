@@ -1,18 +1,23 @@
 <template>
-  <div class="mx-auto max-w-[1000px] py-5 animate-fade-in">
-    <PageHeader title="身份管理" subtitle="连接并管理用于第三方登录和外部能力的账号">
-      <template #icon><Connection /></template>
-      <template v-if="canCreateIdentity" #actions>
-        <el-button
-          type="primary"
-          :disabled="!linkProviders.length"
-          @click="showAddIdentityDialog = true"
-        >
-          <el-icon><Plus /></el-icon>
-          添加身份
-        </el-button>
-      </template>
-    </PageHeader>
+  <div class="identity-section animate-fade-in">
+    <div class="page-header">
+      <div class="page-header-content">
+        <div>
+          <h1>身份管理</h1>
+          <p>连接并管理用于第三方登录和外部能力的账号</p>
+        </div>
+      </div>
+      <UiButton
+        v-if="canCreateIdentity"
+        size="large"
+        variant="gradient-primary"
+        :disabled="!linkProviders.length"
+        @click="showAddIdentityDialog = true"
+      >
+        <el-icon><Plus /></el-icon>
+        <span class="ml-2">添加身份</span>
+      </UiButton>
+    </div>
 
     <div v-loading="loading" class="min-h-[280px]">
       <div v-if="identityGroups.length" class="grid gap-5">
@@ -69,8 +74,8 @@
 import { computed, inject, onMounted, ref, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Plus } from '@element-plus/icons-vue'
-import PageHeader from '@/components/common/PageHeader.vue'
+import { Plus } from '@element-plus/icons-vue'
+import UiButton from '@/components/ui/UiButton.vue'
 import AddIdentityDialog from './AddIdentityDialog.vue'
 import IdentityProviderSection from './IdentityProviderSection.vue'
 import {

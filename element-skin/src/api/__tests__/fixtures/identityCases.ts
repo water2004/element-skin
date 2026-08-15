@@ -23,7 +23,7 @@ import type { ApiCase } from './types'
 
 const providerInput: IdentityProviderInput = {
   name: 'Microsoft',
-  issuer_url: 'https://login.microsoftonline.com/consumers/v2.0',
+  issuer_url: 'https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0',
   client_id: 'client-id',
   client_secret: 'client-secret',
   scopes: ['openid', 'profile', 'XboxLive.signin', 'offline_access'],
@@ -32,7 +32,6 @@ const providerInput: IdentityProviderInput = {
   enabled: true,
   login_enabled: true,
   link_enabled: true,
-  registration_enabled: true,
   display_order: 10,
 }
 
@@ -89,14 +88,10 @@ export function identityApiCases(): ApiCase[] {
       args: ['/v2/users/me/official-profile-bindings'],
     },
     {
-      name: 'createOfficialProfileBinding posts identity and local profile ids',
+      name: 'createOfficialProfileBinding posts the selected Microsoft identity',
       method: 'post',
-      call: () =>
-        createOfficialProfileBinding({ identity_id: 'identity-1', profile_id: 'profile-1' }),
-      args: [
-        '/v2/users/me/official-profile-bindings',
-        { identity_id: 'identity-1', profile_id: 'profile-1' },
-      ],
+      call: () => createOfficialProfileBinding({ identity_id: 'identity-1' }),
+      args: ['/v2/users/me/official-profile-bindings', { identity_id: 'identity-1' }],
     },
     {
       name: 'syncOfficialProfileBinding posts explicit sync action',

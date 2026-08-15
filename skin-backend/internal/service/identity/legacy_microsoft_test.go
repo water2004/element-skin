@@ -40,7 +40,7 @@ func TestLegacyMicrosoftConfigurationMigratesExactlyOnceAndPreservesProfiles(t *
 	provider := providers[0]
 	if provider.Name != "Microsoft" || provider.IssuerURL != identity.MicrosoftConsumerIssuer ||
 		provider.ClientID != "legacy-client" || provider.Adapter != identity.AdapterMicrosoft ||
-		!provider.Enabled || provider.LoginEnabled || !provider.LinkEnabled || provider.RegistrationEnabled ||
+		!provider.Enabled || provider.LoginEnabled || !provider.LinkEnabled ||
 		!reflect.DeepEqual(provider.Scopes, []string{"XboxLive.signin", "email", "offline_access", "openid", "profile"}) {
 		t.Fatalf("migrated provider mismatch: %#v", provider)
 	}

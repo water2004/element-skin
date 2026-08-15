@@ -19,13 +19,12 @@ func (h Handler) List(w http.ResponseWriter, req *http.Request) {
 func (h Handler) Create(w http.ResponseWriter, req *http.Request) {
 	var body struct {
 		IdentityID string `json:"identity_id"`
-		ProfileID  string `json:"profile_id"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
 		return
 	}
-	item, err := h.service.Create(req.Context(), shared.CurrentActor(req), body.IdentityID, body.ProfileID)
+	item, err := h.service.Create(req.Context(), shared.CurrentActor(req), body.IdentityID)
 	if err != nil {
 		util.Error(w, err)
 		return

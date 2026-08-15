@@ -35,6 +35,18 @@ type SyncInput struct {
 	SyncedAt        int64
 }
 
+type CreateInput struct {
+	Binding      model.OfficialProfileBinding
+	UserID       string
+	ProfileNames []string
+	ProfileModel string
+}
+
+var (
+	ErrProfileOwnedByAnotherUser = errors.New("profile is owned by another user")
+	ErrProfileNameUnavailable    = errors.New("profile name is unavailable")
+)
+
 const viewColumns = `
 	b.id,b.identity_id,b.profile_id,b.remote_uuid,b.remote_name,b.remote_skin_url,b.remote_cape_url,
 	b.remote_skin_model,b.created_at,b.updated_at,b.last_synced_at,
@@ -62,8 +74,62 @@ func scanView(row rowScanner) (*View, error) {
 	return &item, nil
 }
 
-func (s Store) Create(ctx context.Context, item model.OfficialProfileBinding) error {
-	_, err := s.Pool.Exec(ctx, `
+func (s Store) Create(ctx context.Context, input CreateInput) error {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	item := input.Binding
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, item.RemoteUUID); err != nil {
+		return err
+	}
+
+	var ownerID string
+	err = tx.QueryRow(ctx, `SELECT user_id FROM profiles WHERE id=$1`, item.RemoteUUID).Scan(&ownerID)
+	switch {
+	case err == nil && ownerID != input.UserID:
+		return ErrProfileOwnedByAnotherUser
+	case err == nil:
+		item.ProfileID = item.RemoteUUID
+	case !errors.Is(err, pgx.ErrNoRows):
+		return err
+	default:
+		created := false
+		for _, name := range input.ProfileNames {
+			var profileID string
+			err = tx.QueryRow(ctx, `
+				INSERT INTO profiles (id,user_id,name,texture_model)
+				VALUES ($1,$2,$3,$4)
+				ON CONFLICT DO NOTHING
+				RETURNING id
+			`, item.RemoteUUID, input.UserID, name, input.ProfileModel).Scan(&profileID)
+			if err == nil {
+				created = true
+				item.ProfileID = profileID
+				break
+			}
+			if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+			if err := tx.QueryRow(ctx, `SELECT user_id FROM profiles WHERE id=$1`, item.RemoteUUID).Scan(&ownerID); err == nil {
+				if ownerID != input.UserID {
+					return ErrProfileOwnedByAnotherUser
+				}
+				item.ProfileID = item.RemoteUUID
+				created = true
+				break
+			} else if !errors.Is(err, pgx.ErrNoRows) {
+				return err
+			}
+		}
+		if !created {
+			return ErrProfileNameUnavailable
+		}
+	}
+
+	_, err = tx.Exec(ctx, `
 		INSERT INTO official_profile_bindings
 			(id,identity_id,profile_id,remote_uuid,remote_name,remote_skin_url,remote_cape_url,
 			 remote_skin_model,created_at,updated_at,last_synced_at)
@@ -71,7 +137,10 @@ func (s Store) Create(ctx context.Context, item model.OfficialProfileBinding) er
 	`, item.ID, item.IdentityID, item.ProfileID, item.RemoteUUID, item.RemoteName,
 		item.RemoteSkinURL, item.RemoteCapeURL, item.RemoteSkinModel, item.CreatedAt,
 		item.UpdatedAt, item.LastSyncedAt)
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
 }
 
 func (s Store) GetByIDAndUser(ctx context.Context, id, userID string) (*View, error) {

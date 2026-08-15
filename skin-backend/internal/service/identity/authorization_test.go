@@ -497,12 +497,12 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider.RegistrationEnabled = false
+	provider.LoginEnabled = false
 	updateOIDCTestProvider(t, db, provider)
 	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
-		t.Fatal("disabled registration should fail")
+		t.Fatal("disabling login should also stop unmatched identities from continuing registration")
 	} else {
-		assertHTTPError(t, err, 403, "registration is disabled for this identity provider")
+		assertHTTPError(t, err, 403, "login is disabled for this identity provider")
 	}
 
 	disappearing := provider
@@ -512,7 +512,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	disappearing.TokenEndpoint = disappearing.IssuerURL + "/token"
 	disappearing.JWKSURI = disappearing.IssuerURL + "/jwks"
 	disappearing.ClientID = "disappearing-client"
-	disappearing.RegistrationEnabled = true
+	disappearing.LoginEnabled = true
 	if err := db.Identities.CreateProvider(ctx, disappearing); err != nil {
 		t.Fatal(err)
 	}
@@ -649,7 +649,7 @@ func oidcTestProvider(t *testing.T, db *database.DB, id string) model.IdentityPr
 		AuthorizationEndpoint: "https://issuer.example/authorize", TokenEndpoint: "https://issuer.example/token",
 		JWKSURI: "https://issuer.example/jwks", ClientID: "client-id", Scopes: []string{"openid", "profile"},
 		Adapter: identity.AdapterGenericOIDC, Enabled: true, LoginEnabled: true, LinkEnabled: true,
-		RegistrationEnabled: true, CreatedAt: 1, UpdatedAt: 1,
+		CreatedAt: 1, UpdatedAt: 1,
 	}
 	if err := db.Identities.CreateProvider(context.Background(), provider); err != nil {
 		t.Fatal(err)

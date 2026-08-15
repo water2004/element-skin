@@ -1,6 +1,8 @@
 export interface AdminPageAccess {
   path: string
   permissions: string[]
+  requiredPermissions?: string[]
+  exact?: boolean
 }
 
 export const adminPageAccess: AdminPageAccess[] = [
@@ -62,12 +64,18 @@ export const adminPageAccess: AdminPageAccess[] = [
   },
   {
     path: '/admin/identity-providers',
-    permissions: [
-      'identity_provider.read.any',
-      'identity_provider.create.any',
-      'identity_provider.update.any',
-      'identity_provider.delete.any',
-    ],
+    permissions: ['identity_provider.read.any'],
+  },
+  {
+    path: '/admin/identity-providers/new',
+    permissions: ['identity_provider.create.any'],
+    exact: true,
+  },
+  {
+    path: '/admin/identity-providers/:provider_id/edit',
+    permissions: ['identity_provider.update.any'],
+    requiredPermissions: ['identity_provider.read.any'],
+    exact: true,
   },
   {
     path: '/admin/mojang',
@@ -112,17 +120,44 @@ export function hasAnyAdminPagePermission(userPermissions: readonly string[]) {
 export function adminPageForPath(path: string) {
   const normalized = path.replace(/\/+$/, '') || '/'
   return (
-    adminPageAccess.find(
-      (page) => normalized === page.path || normalized.startsWith(`${page.path}/`),
-    ) ?? null
+    adminPageAccess
+      .filter((page) => matchesAdminPagePath(normalized, page))
+      .sort((left, right) => pathSegmentCount(right.path) - pathSegmentCount(left.path))[0] ?? null
   )
 }
 
 export function canAccessAdminPath(path: string, userPermissions: readonly string[]) {
   const page = adminPageForPath(path)
-  return !!page && hasAnyPermission(userPermissions, page.permissions)
+  return (
+    !!page &&
+    hasAnyPermission(userPermissions, page.permissions) &&
+    (page.requiredPermissions ?? []).every((permission) => userPermissions.includes(permission))
+  )
 }
 
 export function firstAccessibleAdminPath(userPermissions: readonly string[]) {
-  return adminPageAccess.find((page) => hasAnyPermission(userPermissions, page.permissions))?.path
+  return adminPageAccess.find(
+    (page) =>
+      !page.path.includes(':') &&
+      hasAnyPermission(userPermissions, page.permissions) &&
+      (page.requiredPermissions ?? []).every((permission) => userPermissions.includes(permission)),
+  )?.path
+}
+
+function matchesAdminPagePath(path: string, page: AdminPageAccess) {
+  const pathSegments = splitPath(path)
+  const pageSegments = splitPath(page.path)
+  if (pathSegments.length < pageSegments.length) return false
+  if (page.exact && pathSegments.length !== pageSegments.length) return false
+  return pageSegments.every(
+    (segment, index) => segment.startsWith(':') || segment === pathSegments[index],
+  )
+}
+
+function pathSegmentCount(path: string) {
+  return splitPath(path).length
+}
+
+function splitPath(path: string) {
+  return path.split('/').filter(Boolean)
 }

@@ -43,7 +43,7 @@ func TestAuthorizationStateDecodersHandlePersistedRepresentationsExactly(t *test
 
 func TestAuthorizationHelpersPreserveFallbackAndErrorContractsExactly(t *testing.T) {
 	service := Service{Config: config.Config{SiteURL: "https://site.example/"}}
-	if got := service.redirectURI(); got != "https://site.example/v2/auth/oidc/callback" {
+	if got := service.RedirectURI(); got != "https://site.example/v2/auth/oidc/callback" {
 		t.Fatalf("site fallback redirect URI=%q", got)
 	}
 

@@ -94,34 +94,32 @@ func (h Handler) redirectToSite(w http.ResponseWriter, req *http.Request, path s
 }
 
 type providerRequest struct {
-	Name                string   `json:"name"`
-	IssuerURL           string   `json:"issuer_url"`
-	ClientID            string   `json:"client_id"`
-	ClientSecret        *string  `json:"client_secret"`
-	Scopes              []string `json:"scopes"`
-	Adapter             string   `json:"adapter"`
-	IconURL             string   `json:"icon_url"`
-	Enabled             bool     `json:"enabled"`
-	LoginEnabled        bool     `json:"login_enabled"`
-	LinkEnabled         bool     `json:"link_enabled"`
-	RegistrationEnabled bool     `json:"registration_enabled"`
-	DisplayOrder        int      `json:"display_order"`
+	Name         string   `json:"name"`
+	IssuerURL    string   `json:"issuer_url"`
+	ClientID     string   `json:"client_id"`
+	ClientSecret *string  `json:"client_secret"`
+	Scopes       []string `json:"scopes"`
+	Adapter      string   `json:"adapter"`
+	IconURL      string   `json:"icon_url"`
+	Enabled      bool     `json:"enabled"`
+	LoginEnabled bool     `json:"login_enabled"`
+	LinkEnabled  bool     `json:"link_enabled"`
+	DisplayOrder int      `json:"display_order"`
 }
 
 func (r providerRequest) input() identitysvc.ProviderInput {
 	return identitysvc.ProviderInput{
-		Name:                r.Name,
-		IssuerURL:           r.IssuerURL,
-		ClientID:            r.ClientID,
-		ClientSecret:        r.ClientSecret,
-		Scopes:              r.Scopes,
-		Adapter:             r.Adapter,
-		IconURL:             r.IconURL,
-		Enabled:             r.Enabled,
-		LoginEnabled:        r.LoginEnabled,
-		LinkEnabled:         r.LinkEnabled,
-		RegistrationEnabled: r.RegistrationEnabled,
-		DisplayOrder:        r.DisplayOrder,
+		Name:         r.Name,
+		IssuerURL:    r.IssuerURL,
+		ClientID:     r.ClientID,
+		ClientSecret: r.ClientSecret,
+		Scopes:       r.Scopes,
+		Adapter:      r.Adapter,
+		IconURL:      r.IconURL,
+		Enabled:      r.Enabled,
+		LoginEnabled: r.LoginEnabled,
+		LinkEnabled:  r.LinkEnabled,
+		DisplayOrder: r.DisplayOrder,
 	}
 }
 
@@ -131,7 +129,10 @@ func (h Handler) PublicProviders(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, http.StatusOK, map[string]any{"items": items})
+	util.JSON(w, http.StatusOK, map[string]any{
+		"items":        items,
+		"redirect_uri": h.service.RedirectURI(),
+	})
 }
 
 func (h Handler) ListProviders(w http.ResponseWriter, req *http.Request) {
@@ -140,7 +141,10 @@ func (h Handler) ListProviders(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, http.StatusOK, map[string]any{"items": items})
+	util.JSON(w, http.StatusOK, map[string]any{
+		"items":        items,
+		"redirect_uri": h.service.RedirectURI(),
+	})
 }
 
 func (h Handler) GetProvider(w http.ResponseWriter, req *http.Request) {

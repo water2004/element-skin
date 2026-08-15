@@ -153,13 +153,13 @@ func createLegacyMicrosoftProvider(ctx context.Context, tx pgx.Tx, provider mode
 		INSERT INTO identity_providers (
 			id, name, issuer_url, authorization_endpoint, token_endpoint, userinfo_endpoint,
 			jwks_uri, client_id, client_secret_ciphertext, scopes, adapter, icon_url,
-			enabled, login_enabled, link_enabled, registration_enabled, display_order, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+			enabled, login_enabled, link_enabled, display_order, created_at, updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 	`, provider.ID, provider.Name, provider.IssuerURL, provider.AuthorizationEndpoint,
 		provider.TokenEndpoint, provider.UserInfoEndpoint, provider.JWKSURI, provider.ClientID,
 		provider.ClientSecretCiphertext, provider.Scopes, provider.Adapter, provider.IconURL,
-		provider.Enabled, provider.LoginEnabled, provider.LinkEnabled, provider.RegistrationEnabled,
-		provider.DisplayOrder, provider.CreatedAt, provider.UpdatedAt)
+		provider.Enabled, provider.LoginEnabled, provider.LinkEnabled, provider.DisplayOrder,
+		provider.CreatedAt, provider.UpdatedAt)
 	if err != nil {
 		return false, err
 	}

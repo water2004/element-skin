@@ -5,24 +5,24 @@
     :close-on-click-modal="false"
     :destroy-on-close="true"
   >
-    <div v-if="profile" class="grid gap-5 py-2">
+    <div class="grid gap-5 py-2">
       <el-alert
         type="info"
         :closable="false"
         show-icon
-        title="绑定与同步是两个独立操作"
-        :description="`这里仅把本站角色 ${profile.name} 关联到 Microsoft 身份。绑定后请在角色卡片上点击“同步”，才会更新名称、皮肤和披风。`"
+        title="系统将按正版 UUID 绑定角色"
+        description="如果该 UUID 已属于您，将直接建立绑定；如果不存在，将自动创建角色；如果已属于其他用户，则会拒绝绑定。"
       />
 
-      <el-form v-if="usableMicrosoftIdentities.length" label-position="top">
-        <el-form-item label="选择已绑定的 Microsoft 身份" required>
+      <el-form v-if="availableMicrosoftIdentities.length" label-position="top">
+        <el-form-item label="选择 Microsoft 账户" required>
           <el-select
             v-model="selectedIdentityId"
             class="w-full"
-            placeholder="请选择 Microsoft 身份"
+            placeholder="请选择 Microsoft 账户"
           >
             <el-option
-              v-for="identity in usableMicrosoftIdentities"
+              v-for="identity in availableMicrosoftIdentities"
               :key="identity.id"
               :value="identity.id"
               :label="identityLabel(identity)"
@@ -37,7 +37,7 @@
       </el-form>
 
       <div
-        v-if="usableMicrosoftIdentities.length && attentionMicrosoftIdentities.length"
+        v-if="availableMicrosoftIdentities.length && attentionMicrosoftIdentities.length"
         class="flex flex-col gap-2 rounded-xl border border-[var(--el-color-warning-light-5)] bg-[var(--el-color-warning-light-9)] p-3 sm:flex-row sm:items-center sm:justify-between"
       >
         <div class="text-sm text-[var(--el-color-warning-dark-2)]">
@@ -48,11 +48,13 @@
       </div>
 
       <el-empty
-        v-if="!usableMicrosoftIdentities.length"
+        v-if="!availableMicrosoftIdentities.length"
         :description="
-          microsoftIdentities.length
-            ? '当前没有可用于正版绑定的 Microsoft 身份'
-            : '请先在身份管理页绑定 Microsoft 账号'
+          !microsoftIdentities.length
+            ? '请先在身份管理页绑定 Microsoft 账号'
+            : usableMicrosoftIdentities.length
+              ? '所有可用的 Microsoft 账户都已绑定正版角色'
+              : '当前没有可用于正版绑定的 Microsoft 账户'
         "
         :image-size="72"
       >
@@ -66,7 +68,7 @@
         <el-button
           type="primary"
           :loading="loading"
-          :disabled="!profile || !selectedIdentityId"
+          :disabled="!selectedIdentityId"
           @click="confirm"
         >
           建立绑定
@@ -79,16 +81,16 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
-import type { ExternalIdentity, Profile } from '@/api/types'
+import type { ExternalIdentity, OfficialProfileBinding } from '@/api/types'
 
 const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{
-  profile: Profile | null
   identities: ExternalIdentity[]
+  bindings: OfficialProfileBinding[]
   loading: boolean
 }>()
 const emit = defineEmits<{
-  confirm: [payload: { identity_id: string; profile_id: string }]
+  confirm: [payload: { identity_id: string }]
   'manage-identities': []
 }>()
 
@@ -101,6 +103,12 @@ const usableMicrosoftIdentities = computed(() =>
     (identity) => identity.authorization_status === 'active' && identity.provider_enabled,
   ),
 )
+const boundIdentityIds = computed(
+  () => new Set(props.bindings.map((binding) => binding.identity_id)),
+)
+const availableMicrosoftIdentities = computed(() =>
+  usableMicrosoftIdentities.value.filter((identity) => !boundIdentityIds.value.has(identity.id)),
+)
 const attentionMicrosoftIdentities = computed(() =>
   microsoftIdentities.value.filter(
     (identity) => identity.authorization_status !== 'active' || !identity.provider_enabled,
@@ -112,11 +120,15 @@ function identityLabel(identity: ExternalIdentity) {
 }
 
 function confirm() {
-  if (!props.profile || !selectedIdentityId.value) return
-  emit('confirm', { identity_id: selectedIdentityId.value, profile_id: props.profile.id })
+  if (!selectedIdentityId.value) return
+  emit('confirm', { identity_id: selectedIdentityId.value })
 }
 
-watch(visible, (opened) => {
-  if (opened) selectedIdentityId.value = usableMicrosoftIdentities.value[0]?.id || ''
-})
+watch(
+  visible,
+  (opened) => {
+    if (opened) selectedIdentityId.value = availableMicrosoftIdentities.value[0]?.id || ''
+  },
+  { immediate: true },
+)
 </script>

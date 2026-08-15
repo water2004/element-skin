@@ -12,12 +12,11 @@ export interface IdentityProviderInput {
   enabled: boolean
   login_enabled: boolean
   link_enabled: boolean
-  registration_enabled: boolean
   display_order: number
 }
 
 export function getAdminIdentityProviders(): Promise<{
-  data: ItemListResponse<AdminIdentityProvider>
+  data: ItemListResponse<AdminIdentityProvider> & { redirect_uri: string }
 }> {
   return client.get('/v2/admin/identity-providers')
 }

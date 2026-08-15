@@ -7,7 +7,17 @@
           <p>创建并管理您的 Minecraft 角色身份</p>
         </div>
       </div>
-      <ActionBar full>
+      <ActionBar>
+        <UiButton
+          v-if="canCreateOfficialBinding"
+          size="large"
+          variant="gradient-success"
+          class="role-header-button"
+          @click="openOfficialBindingDialog"
+        >
+          <el-icon><Link /></el-icon>
+          <span class="ml-2">绑定正版</span>
+        </UiButton>
         <UiButton
           size="large"
           @click="showYggImportDialog = true"
@@ -42,16 +52,10 @@
           :is-dark="isDark"
           :textures-url="texturesUrl"
           :official-binding="officialBindingFor(profile.id)"
-          :can-create-official-binding="canCreateOfficialBinding"
-          :can-sync-official-binding="canSyncOfficialBinding"
-          :can-delete-official-binding="canDeleteOfficialBinding"
           @preview="openPreviewDialog"
           @delete="deleteRole"
           @clear-skin="clearRoleSkin"
           @clear-cape="clearRoleCape"
-          @bind-official="openOfficialBindingDialog"
-          @sync-official="syncOfficialBinding"
-          @unbind-official="unbindOfficialBinding"
         />
       </div>
 
@@ -73,10 +77,15 @@
       v-model:visible="showPreviewDialog"
       :profile="selectedProfile"
       :textures-url="texturesUrl"
+      :official-binding="selectedProfile ? officialBindingFor(selectedProfile.id) : null"
+      :can-sync-official-binding="canSyncOfficialBinding"
+      :can-delete-official-binding="canDeleteOfficialBinding"
       @rename="updateRoleName"
       @set-avatar="setAsAvatar"
       @clear-skin="clearRoleSkin"
       @clear-cape="clearRoleCape"
+      @sync-official="syncOfficialBinding"
+      @unbind-official="unbindOfficialBinding"
       @delete="deleteRole"
     />
 
@@ -88,8 +97,8 @@
 
     <OfficialBindingDialog
       v-model:visible="showOfficialBindingDialog"
-      :profile="bindingProfile"
       :identities="externalIdentities"
+      :bindings="officialBindings"
       :loading="bindingLoading"
       @confirm="bindOfficialProfile"
       @manage-identities="goToIdentities"
@@ -116,7 +125,7 @@ import { computed, ref, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Ref } from 'vue'
-import { Plus, Download } from '@element-plus/icons-vue'
+import { Plus, Download, Link } from '@element-plus/icons-vue'
 import ActionBar from '@/components/common/ActionBar.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -171,7 +180,6 @@ const selectedProfile = ref<Profile | null>(null)
 const externalIdentities = ref<ExternalIdentity[]>([])
 const officialBindings = ref<OfficialProfileBinding[]>([])
 const showOfficialBindingDialog = ref(false)
-const bindingProfile = ref<Profile | null>(null)
 const bindingLoading = ref(false)
 
 const permissionSet = computed(() => new Set(user.value?.permissions || []))
@@ -215,8 +223,7 @@ function officialBindingFor(profileId: string) {
   return officialBindings.value.find((binding) => binding.profile_id === profileId) || null
 }
 
-function openOfficialBindingDialog(profile: Profile) {
-  bindingProfile.value = profile
+function openOfficialBindingDialog() {
   showOfficialBindingDialog.value = true
 }
 
@@ -242,14 +249,14 @@ async function fetchOfficialResources() {
   }
 }
 
-async function bindOfficialProfile(payload: { identity_id: string; profile_id: string }) {
+async function bindOfficialProfile(payload: { identity_id: string }) {
   try {
     bindingLoading.value = true
     await createOfficialProfileBinding(payload)
     showOfficialBindingDialog.value = false
-    bindingProfile.value = null
-    ElMessage.success('正版角色已绑定；需要时请点击“同步”更新角色数据')
-    await fetchOfficialResources()
+    ElMessage.success('正版角色已绑定；可在角色详情中同步正版数据')
+    await Promise.all([refreshFirstPage(), fetchOfficialResources()])
+    if (fetchMe) await fetchMe()
   } catch (e: unknown) {
     if (isExternalIdentityReauthorizationRequired(e)) {
       ElMessage.error('该 Microsoft 身份授权已失效，请前往身份管理页重新登录')
@@ -269,7 +276,10 @@ async function syncOfficialBinding(binding: OfficialProfileBinding) {
       '同步正版角色',
       { type: 'warning', confirmButtonText: '开始同步', cancelButtonText: '取消' },
     )
-    await syncOfficialProfileBinding(binding.id)
+    const response = await syncOfficialProfileBinding(binding.id)
+    if (selectedProfile.value?.id === response.data.profile.id) {
+      selectedProfile.value = response.data.profile
+    }
     ElMessage.success('正版角色同步完成')
     await Promise.all([fetchProfiles(), fetchOfficialResources()])
     if (fetchMe) await fetchMe()

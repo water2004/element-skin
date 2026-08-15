@@ -6,7 +6,7 @@
   >
     <div class="card-clip">
       <div
-        class="role-preview"
+        class="role-preview relative"
         :style="{
           background: isDark
             ? 'var(--color-background-hero-dark)'
@@ -23,14 +23,18 @@
           is-static
         />
         <el-empty v-else description="未设置皮肤" :image-size="120" />
+        <div
+          v-if="officialBinding"
+          class="absolute right-2 top-2 z-10 rounded-md bg-gradient-to-br from-[#67c23a] to-[#3aa675] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_2px_6px_rgba(58,166,117,0.28)] backdrop-blur"
+          :title="`正版角色：${officialBinding.remote_name}`"
+        >
+          正版
+        </div>
       </div>
 
       <div class="role-info">
         <div class="role-name">{{ profile.name }}</div>
         <div class="role-model">模型: {{ profile.model || 'default' }}</div>
-        <el-tag v-if="officialBinding" class="mt-2" size="small" type="success">
-          正版：{{ officialBinding.remote_name }}
-        </el-tag>
       </div>
 
       <CardActions>
@@ -71,33 +75,6 @@
             <el-icon><Close /></el-icon>
           </template>
         </UiButton>
-
-        <UiButton
-          v-if="!officialBinding && canCreateOfficialBinding"
-          variant="outline"
-          size="default"
-          @click.stop="$emit('bind-official', profile)"
-        >
-          绑定正版
-        </UiButton>
-
-        <UiButton
-          v-if="officialBinding && canSyncOfficialBinding"
-          variant="outline"
-          size="default"
-          @click.stop="$emit('sync-official', officialBinding)"
-        >
-          同步
-        </UiButton>
-
-        <UiButton
-          v-if="officialBinding && canDeleteOfficialBinding"
-          variant="soft-warning"
-          size="default"
-          @click.stop="$emit('unbind-official', officialBinding)"
-        >
-          解绑
-        </UiButton>
       </CardActions>
     </div>
   </div>
@@ -116,9 +93,6 @@ defineProps<{
   isDark: boolean
   texturesUrl: (hash: string | null | undefined) => string
   officialBinding?: OfficialProfileBinding | null
-  canCreateOfficialBinding: boolean
-  canSyncOfficialBinding: boolean
-  canDeleteOfficialBinding: boolean
 }>()
 
 defineEmits<{
@@ -126,9 +100,6 @@ defineEmits<{
   delete: [profileId: string]
   'clear-skin': [profileId: string]
   'clear-cape': [profileId: string]
-  'bind-official': [profile: Profile]
-  'sync-official': [binding: OfficialProfileBinding]
-  'unbind-official': [binding: OfficialProfileBinding]
 }>()
 </script>
 

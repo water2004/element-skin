@@ -46,17 +46,16 @@ func TestProviderAndMultipleIdentityLifecycleUsesOneModelExactly(t *testing.T) {
 	service := identity.Service{DB: db, Config: cfg, Discovery: discovery}
 	secret := "provider-secret"
 	created, err := service.CreateProvider(ctx, adminActor, identity.ProviderInput{
-		Name:                "Example ID",
-		IssuerURL:           "https://issuer.example",
-		ClientID:            "client-1",
-		ClientSecret:        &secret,
-		Scopes:              []string{"email profile", "profile"},
-		Adapter:             identity.AdapterGenericOIDC,
-		Enabled:             true,
-		LoginEnabled:        true,
-		LinkEnabled:         true,
-		RegistrationEnabled: true,
-		DisplayOrder:        3,
+		Name:         "Example ID",
+		IssuerURL:    "https://issuer.example",
+		ClientID:     "client-1",
+		ClientSecret: &secret,
+		Scopes:       []string{"email profile", "profile"},
+		Adapter:      identity.AdapterGenericOIDC,
+		Enabled:      true,
+		LoginEnabled: true,
+		LinkEnabled:  true,
+		DisplayOrder: 3,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -143,7 +142,7 @@ func TestIdentityAndProviderDeletionRejectDependenciesWithExactConflicts(t *test
 		ID: "provider-dependency", Name: "Microsoft", IssuerURL: "https://login.microsoftonline.com/consumers/v2.0",
 		AuthorizationEndpoint: "https://login.microsoftonline.com/authorize", TokenEndpoint: "https://login.microsoftonline.com/token",
 		JWKSURI: "https://login.microsoftonline.com/keys", ClientID: "client", Scopes: []string{"openid"}, Adapter: identity.AdapterMicrosoft,
-		Enabled: true, LoginEnabled: true, LinkEnabled: true, RegistrationEnabled: true, CreatedAt: 1, UpdatedAt: 1,
+		Enabled: true, LoginEnabled: true, LinkEnabled: true, CreatedAt: 1, UpdatedAt: 1,
 	}
 	if err := db.Identities.CreateProvider(ctx, provider); err != nil {
 		t.Fatal(err)
@@ -192,7 +191,7 @@ func TestProviderManagementQueriesUpdatesAndRejectsInvalidStateExactly(t *testin
 		Name: "Management Provider", IssuerURL: "https://management.example", ClientID: "management-client",
 		ClientSecret: &secret, Scopes: []string{"profile", "email"}, Adapter: identity.AdapterGenericOIDC,
 		IconURL: "https://management.example/icon.png", Enabled: true, LoginEnabled: true, LinkEnabled: true,
-		RegistrationEnabled: true, DisplayOrder: 4,
+		DisplayOrder: 4,
 	}
 	created, err := service.CreateProvider(ctx, adminActor, input)
 	if err != nil {
@@ -209,7 +208,7 @@ func TestProviderManagementQueriesUpdatesAndRejectsInvalidStateExactly(t *testin
 		t.Fatalf("admin provider list=%#v err=%v", listed, err)
 	}
 	public, err := service.ListPublicProviders(ctx, permission.GuestActor())
-	if err != nil || len(public) != 1 || len(public[0]) != 7 || public[0]["id"] != providerID {
+	if err != nil || len(public) != 1 || len(public[0]) != 6 || public[0]["id"] != providerID {
 		t.Fatalf("public provider list=%#v err=%v", public, err)
 	}
 

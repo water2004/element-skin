@@ -26,6 +26,8 @@ func TestInitSQLContainsExpectedTablesConstraintsIndexesAndSeeds(t *testing.T) {
 		"idx_profiles_user_id",
 		"idx_site_refresh_expires",
 		"idx_delegated_permission_grants_active_user_client",
+		"ALTER TABLE identity_providers DROP COLUMN IF EXISTS registration_enabled",
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_official_profile_bindings_remote_uuid",
 		"('site_name', '皮肤站')",
 		"ON CONFLICT (key) DO NOTHING",
 	}
@@ -178,6 +180,7 @@ func TestInitSQLExecutesSuccessfullyAgainstRealDatabase(t *testing.T) {
 		"permission_scopes", "permissions", "roles", "role_permissions",
 		"subject_roles", "subject_permission_overrides",
 		"session_permission_policies",
+		"identity_providers", "external_identities", "external_identity_credentials", "official_profile_bindings",
 		"oauth_device_codes", "oauth_device_code_permissions",
 		"webhook_endpoints", "webhook_endpoint_events", "webhook_events", "webhook_deliveries",
 	}
@@ -194,6 +197,81 @@ func TestInitSQLExecutesSuccessfullyAgainstRealDatabase(t *testing.T) {
 		if !exists {
 			t.Fatalf("InitSQL should create table %q", table)
 		}
+	}
+}
+
+func TestInitRemovesRegistrationSwitchAndConsolidatesOfficialUUIDBindingsExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "schema-official-binding@test.com", "Password123", "SchemaOfficial", false)
+	provider := model.IdentityProvider{
+		ID: "schema-identity-provider", Name: "Microsoft", IssuerURL: "https://login.example",
+		AuthorizationEndpoint: "https://login.example/authorize", TokenEndpoint: "https://login.example/token",
+		JWKSURI: "https://login.example/jwks", ClientID: "client", Adapter: "microsoft",
+		Enabled: true, LoginEnabled: true, LinkEnabled: true, CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := db.Identities.CreateProvider(ctx, provider); err != nil {
+		t.Fatal(err)
+	}
+	identity := model.ExternalIdentity{
+		ID: "schema-external-identity", UserID: user.ID, ProviderID: provider.ID,
+		Subject: "schema-subject", CreatedAt: 2, UpdatedAt: 2,
+	}
+	if err := db.Identities.CreateIdentity(ctx, identity, model.ExternalIdentityCredential{IdentityID: identity.ID, UpdatedAt: 2}); err != nil {
+		t.Fatal(err)
+	}
+	remoteUUID := "0123456789abcdef0123456789abcdef"
+	canonical := testutil.CreateProfile(t, db, user.ID, remoteUUID, "CanonicalOfficial")
+	legacy := testutil.CreateProfile(t, db, user.ID, "schema-legacy-official", "LegacyOfficial")
+	if _, err := db.Pool.Exec(ctx, `DROP INDEX idx_official_profile_bindings_remote_uuid`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		ALTER TABLE identity_providers ADD COLUMN registration_enabled BOOLEAN NOT NULL DEFAULT TRUE
+	`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO official_profile_bindings
+			(id,identity_id,profile_id,remote_uuid,remote_name,created_at,updated_at)
+		VALUES
+			('schema-legacy-binding',$1,$2,$3,'LegacyOfficial',10,10),
+			('schema-canonical-binding',$1,$3,$3,'CanonicalOfficial',20,20)
+	`, identity.ID, legacy.ID, canonical.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := db.Init(ctx); err != nil {
+		t.Fatal(err)
+	}
+	var registrationColumnExists bool
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema='public' AND table_name='identity_providers'
+				AND column_name='registration_enabled'
+		)
+	`).Scan(&registrationColumnExists); err != nil {
+		t.Fatal(err)
+	}
+	var bindingID, profileID string
+	var bindingCount int
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT MIN(id),MIN(profile_id),COUNT(*)
+		FROM official_profile_bindings
+		WHERE remote_uuid=$1
+	`, remoteUUID).Scan(&bindingID, &profileID, &bindingCount); err != nil {
+		t.Fatal(err)
+	}
+	if registrationColumnExists || bindingCount != 1 || bindingID != "schema-canonical-binding" || profileID != canonical.ID {
+		t.Fatalf("identity migration mismatch: registration_column=%v count=%d binding=%q profile=%q", registrationColumnExists, bindingCount, bindingID, profileID)
+	}
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO official_profile_bindings
+			(id,identity_id,profile_id,remote_uuid,remote_name,created_at,updated_at)
+		VALUES ('schema-duplicate-binding',$1,$2,$3,'Duplicate',30,30)
+	`, identity.ID, legacy.ID, remoteUUID); err == nil {
+		t.Fatal("restored remote UUID unique index should reject another binding")
 	}
 }
 

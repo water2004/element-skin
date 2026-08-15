@@ -41,7 +41,7 @@ func (s Service) ConsumeRegistration(ctx context.Context, ticket string) (Pendin
 	if err != nil {
 		return PendingRegistration{}, err
 	}
-	if provider == nil || !provider.Enabled || !provider.RegistrationEnabled {
+	if provider == nil || !provider.Enabled || !provider.LoginEnabled {
 		return PendingRegistration{}, forbiddenDetail("registration is no longer available for this identity provider")
 	}
 	claims := OIDCClaims{

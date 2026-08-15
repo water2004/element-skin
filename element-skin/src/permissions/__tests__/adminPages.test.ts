@@ -46,6 +46,20 @@ describe('admin page permission access', () => {
     expect(
       canAccessAdminPath('/admin/identity-providers/new', ['identity_provider.create.any']),
     ).toBe(true)
+    expect(
+      canAccessAdminPath('/admin/identity-providers/provider-1/edit', [
+        'identity_provider.read.any',
+        'identity_provider.update.any',
+      ]),
+    ).toBe(true)
+    expect(
+      canAccessAdminPath('/admin/identity-providers/provider-1/edit', [
+        'identity_provider.update.any',
+      ]),
+    ).toBe(false)
+    expect(firstAccessibleAdminPath(['identity_provider.create.any'])).toBe(
+      '/admin/identity-providers/new',
+    )
     expect(canAccessAdminPath('/admin/identity-providers', ['oauth_app.read.any'])).toBe(false)
   })
 })

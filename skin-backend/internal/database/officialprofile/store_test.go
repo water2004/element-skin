@@ -27,14 +27,16 @@ func TestOfficialProfileStoreLifecycleAndSyncPersistExactStructuredState(t *test
 	if err := db.Identities.CreateIdentity(ctx, identity, model.ExternalIdentityCredential{IdentityID: identity.ID, UpdatedAt: 2}); err != nil {
 		t.Fatal(err)
 	}
-	profile := testutil.CreateProfile(t, db, user.ID, "official-store-profile", "LocalRole")
+	profile := testutil.CreateProfile(t, db, user.ID, "0123456789abcdef0123456789abcdef", "LocalRole")
 	binding := model.OfficialProfileBinding{
 		ID: "official-store-binding", IdentityID: identity.ID, ProfileID: profile.ID,
 		RemoteUUID: "0123456789abcdef0123456789abcdef", RemoteName: "RemoteOld",
 		RemoteSkinURL: "https://textures.example/old.png", RemoteSkinModel: "default",
 		CreatedAt: 10, UpdatedAt: 10,
 	}
-	if err := db.OfficialProfiles.Create(ctx, binding); err != nil {
+	if err := db.OfficialProfiles.Create(ctx, officialstore.CreateInput{
+		Binding: binding, UserID: user.ID, ProfileNames: []string{"RemoteOld"}, ProfileModel: "default",
+	}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -91,10 +93,12 @@ func TestOfficialProfileStoreSyncConflictRollsBackAllDatabaseWrites(t *testing.T
 	if err := db.Identities.CreateIdentity(ctx, identity, model.ExternalIdentityCredential{IdentityID: identity.ID, UpdatedAt: 1}); err != nil {
 		t.Fatal(err)
 	}
-	profile := testutil.CreateProfile(t, db, user.ID, "rollback-profile", "BeforeSync")
+	profile := testutil.CreateProfile(t, db, user.ID, "0123456789abcdef0123456789abcdef", "BeforeSync")
 	_ = testutil.CreateProfile(t, db, user.ID, "rollback-conflict", "TakenName")
 	binding := model.OfficialProfileBinding{ID: "rollback-binding", IdentityID: identity.ID, ProfileID: profile.ID, RemoteUUID: "0123456789abcdef0123456789abcdef", RemoteName: "BeforeSync", RemoteSkinModel: "default", CreatedAt: 1, UpdatedAt: 1}
-	if err := db.OfficialProfiles.Create(ctx, binding); err != nil {
+	if err := db.OfficialProfiles.Create(ctx, officialstore.CreateInput{
+		Binding: binding, UserID: user.ID, ProfileNames: []string{"BeforeSync"}, ProfileModel: "default",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	hash := "must_not_persist"

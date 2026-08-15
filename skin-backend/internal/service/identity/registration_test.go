@@ -51,7 +51,7 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 		assertHTTPError(t, err, 403, "registration is no longer available for this identity provider")
 	}
 	provider.Enabled = true
-	provider.RegistrationEnabled = false
+	provider.LoginEnabled = false
 	updateOIDCTestProvider(t, db, provider)
 	setRegistrationState(t, cache, "registration-disabled", registrationState(provider.ID, "disabled-registration-subject"))
 	if _, err := service.ConsumeRegistration(ctx, "registration-disabled"); err == nil {
@@ -59,7 +59,7 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 	} else {
 		assertHTTPError(t, err, 403, "registration is no longer available for this identity provider")
 	}
-	provider.RegistrationEnabled = true
+	provider.LoginEnabled = true
 	updateOIDCTestProvider(t, db, provider)
 
 	setRegistrationState(t, cache, "missing-subject", registrationState(provider.ID, ""))

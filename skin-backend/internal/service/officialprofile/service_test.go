@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/png"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -66,7 +67,7 @@ func TestOfficialBindingCreationRecordsRelationshipWithoutMutatingProfile(t *tes
 	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
 	actor := officialActor(user.ID, "official_profile.create.owned")
 
-	created, err := service.Create(ctx, actor, identity.ID, profile.ID)
+	created, err := service.Create(ctx, actor, identity.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,8 +86,152 @@ func TestOfficialBindingCreationRecordsRelationshipWithoutMutatingProfile(t *tes
 		t.Fatalf("binding creation should retain cached identity token: %v", err)
 	}
 
-	_, err = service.Create(ctx, actor, identity.ID, profile.ID)
-	assertOfficialHTTPError(t, err, 409, "profile already has an official binding")
+	_, err = service.Create(ctx, actor, identity.ID)
+	assertOfficialHTTPError(t, err, 409, "official profile is already bound")
+}
+
+func TestOfficialBindingClaimsTheRemoteUUIDWithExactOwnershipRules(t *testing.T) {
+	t.Run("creates the missing UUID with a collision-safe name", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user, identity, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+		if deleted, err := db.Profiles.DeleteCascade(ctx, profile.ID); err != nil || !deleted {
+			t.Fatalf("remove fixture profile: deleted=%v err=%v", deleted, err)
+		}
+		nameOwner := testutil.CreateUser(t, db, "official-name-owner@test.com", "Password123", "NameOwner", false)
+		testutil.CreateProfile(t, db, nameOwner.ID, "official-name-owner-profile", "RemoteSteve")
+		resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
+		service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+
+		created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if created["profile_id"] != profile.ID || created["remote_uuid"] != profile.ID {
+			t.Fatalf("created binding UUID mismatch: %#v", created)
+		}
+		stored, err := db.Profiles.GetByID(ctx, profile.ID)
+		if err != nil || stored == nil || stored.UserID != user.ID || stored.Name != "RemoteSteve_1" || stored.TextureModel != "slim" || stored.SkinHash != nil || stored.CapeHash != nil {
+			t.Fatalf("created official profile=%#v err=%v", stored, err)
+		}
+	})
+
+	t.Run("rejects a UUID already owned by another user", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user, identity, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+		if deleted, err := db.Profiles.DeleteCascade(ctx, profile.ID); err != nil || !deleted {
+			t.Fatalf("remove fixture profile: deleted=%v err=%v", deleted, err)
+		}
+		other := testutil.CreateUser(t, db, "official-uuid-owner@test.com", "Password123", "UUIDOwner", false)
+		foreign := testutil.CreateProfile(t, db, other.ID, profile.ID, "ForeignOfficial")
+		resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
+		service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+
+		created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
+		if created != nil {
+			t.Fatalf("foreign UUID binding=%#v err=%v", created, err)
+		}
+		assertOfficialHTTPError(t, err, 409, "official profile UUID belongs to another user")
+		stored, getErr := db.Profiles.GetByID(ctx, profile.ID)
+		if getErr != nil || stored == nil || *stored != foreign {
+			t.Fatalf("foreign UUID conflict mutated profile=%#v err=%v", stored, getErr)
+		}
+		bindings, listErr := db.OfficialProfiles.ListByUser(ctx, user.ID)
+		if listErr != nil || len(bindings) != 0 {
+			t.Fatalf("foreign UUID conflict created bindings=%#v err=%v", bindings, listErr)
+		}
+	})
+}
+
+func TestOfficialBindingConcurrentClaimsLeaveOneExactOwnerAndBinding(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	firstUser, firstIdentity, profile, identities, cache := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	if deleted, err := db.Profiles.DeleteCascade(ctx, profile.ID); err != nil || !deleted {
+		t.Fatalf("remove fixture profile: deleted=%v err=%v", deleted, err)
+	}
+	secondUser := testutil.CreateUser(t, db, "official-concurrent@test.com", "Password123", "ConcurrentOwner", false)
+	box, err := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshToken, err := box.Encrypt("concurrent-refresh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondIdentity := model.ExternalIdentity{
+		ID: "official-concurrent-identity", UserID: secondUser.ID,
+		ProviderID: firstIdentity.ProviderID, Subject: "concurrent-subject",
+		Label: "Concurrent Microsoft", CreatedAt: 3, UpdatedAt: 3,
+	}
+	if err := db.Identities.CreateIdentity(ctx, secondIdentity, model.ExternalIdentityCredential{
+		IdentityID: secondIdentity.ID, RefreshTokenCiphertext: refreshToken,
+		GrantedScopes: []string{"openid", "offline_access"}, UpdatedAt: 3,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{
+		IdentityID: secondIdentity.ID, AccessToken: "concurrent-access", TokenType: "Bearer",
+		ExpiresAt: time.Now().Add(time.Hour).UnixMilli(),
+	}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+
+	type result struct {
+		userID  string
+		created map[string]any
+		err     error
+	}
+	start := make(chan struct{})
+	results := make(chan result, 2)
+	var workers sync.WaitGroup
+	for _, candidate := range []struct {
+		userID     string
+		identityID string
+	}{
+		{firstUser.ID, firstIdentity.ID},
+		{secondUser.ID, secondIdentity.ID},
+	} {
+		candidate := candidate
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			<-start
+			resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
+			service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver}
+			created, createErr := service.Create(ctx, officialActor(candidate.userID, "official_profile.create.owned"), candidate.identityID)
+			results <- result{userID: candidate.userID, created: created, err: createErr}
+		}()
+	}
+	close(start)
+	workers.Wait()
+	close(results)
+
+	successes := make([]result, 0, 1)
+	failures := make([]result, 0, 1)
+	for item := range results {
+		if item.err == nil {
+			successes = append(successes, item)
+		} else {
+			failures = append(failures, item)
+		}
+	}
+	if len(successes) != 1 || len(failures) != 1 || successes[0].created["profile_id"] != profile.ID {
+		t.Fatalf("concurrent claim results: successes=%#v failures=%#v", successes, failures)
+	}
+	assertOfficialHTTPError(t, failures[0].err, 409, "official profile UUID belongs to another user")
+	stored, err := db.Profiles.GetByID(ctx, profile.ID)
+	if err != nil || stored == nil || stored.UserID != successes[0].userID || stored.Name != "RemoteSteve" {
+		t.Fatalf("concurrent profile owner mismatch: profile=%#v winner=%#v err=%v", stored, successes[0], err)
+	}
+	var bindingCount int
+	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM official_profile_bindings WHERE remote_uuid=$1`, profile.ID).Scan(&bindingCount); err != nil {
+		t.Fatal(err)
+	}
+	if bindingCount != 1 {
+		t.Fatalf("concurrent remote UUID binding count=%d want=1", bindingCount)
+	}
 }
 
 func TestOfficialBindingSyncUpdatesRoleAndTexturesOnlyWhenExplicitlyRequested(t *testing.T) {
@@ -109,7 +254,7 @@ func TestOfficialBindingSyncUpdatesRoleAndTexturesOnlyWhenExplicitlyRequested(t 
 			}
 		},
 	}
-	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID, profile.ID)
+	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +299,7 @@ func TestOfficialBindingSyncFailureCleansFilesAndLeavesBindingAndProfileUntouche
 			return []byte("not a PNG"), nil
 		},
 	}
-	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID, profile.ID)
+	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,13 +322,13 @@ func TestOfficialBindingSyncFailureCleansFilesAndLeavesBindingAndProfileUntouche
 func TestOfficialBindingRejectsWrongAdapterAndPermissionsBeforeRemoteCalls(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
-	user, identity, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterGenericOIDC)
+	user, identity, _, identities, _ := officialFixture(t, db, identitysvc.AdapterGenericOIDC)
 	resolver := &fakeMicrosoftResolver{err: errors.New("must not call")}
 	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
 
-	_, err := service.Create(ctx, officialActor(user.ID), identity.ID, profile.ID)
+	_, err := service.Create(ctx, officialActor(user.ID), identity.ID)
 	assertOfficialHTTPError(t, err, 403, "permission denied")
-	_, err = service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID, profile.ID)
+	_, err = service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
 	assertOfficialHTTPError(t, err, 409, "external identity is not a Microsoft identity")
 	if resolver.calls != 0 {
 		t.Fatalf("rejected binding called Microsoft resolver %d times", resolver.calls)
@@ -193,7 +338,7 @@ func TestOfficialBindingRejectsWrongAdapterAndPermissionsBeforeRemoteCalls(t *te
 func TestOfficialBindingRetriesOneUnauthorizedResponseWithForcedIdentityRefresh(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
-	user, external, profile, identities, cache := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	user, external, _, identities, cache := officialFixture(t, db, identitysvc.AdapterMicrosoft)
 	refresher := &fakeOfficialTokenRefresher{tokens: identitysvc.OIDCTokens{
 		AccessToken: "refreshed-microsoft-access", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour),
 	}}
@@ -204,7 +349,7 @@ func TestOfficialBindingRetriesOneUnauthorizedResponseWithForcedIdentityRefresh(
 	}}
 	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
 
-	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID, profile.ID)
+	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID)
 	if err != nil || created["identity_id"] != external.ID {
 		t.Fatalf("binding after access refresh=%#v err=%v", created, err)
 	}
@@ -220,7 +365,7 @@ func TestOfficialBindingRetriesOneUnauthorizedResponseWithForcedIdentityRefresh(
 func TestOfficialBindingStopsAfterOneUnauthorizedRetry(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
-	user, external, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	user, external, _, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
 	refresher := &fakeOfficialTokenRefresher{tokens: identitysvc.OIDCTokens{
 		AccessToken: "still-rejected-access", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour),
 	}}
@@ -231,7 +376,7 @@ func TestOfficialBindingStopsAfterOneUnauthorizedRetry(t *testing.T) {
 	}}
 	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
 
-	_, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID, profile.ID)
+	_, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID)
 	assertOfficialHTTPError(t, err, 502, "Microsoft profile request failed")
 	if resolver.calls != 2 || refresher.calls != 1 {
 		t.Fatalf("unauthorized retry count resolver=%d refresh=%d; want 2/1", resolver.calls, refresher.calls)
@@ -259,50 +404,39 @@ func TestOfficialBindingLifecycleRejectsInvalidOwnershipAndRemoteProfilesExactly
 	if err != nil || len(items) != 0 {
 		t.Fatalf("initial binding list=%#v err=%v", items, err)
 	}
-	if created, err := service.Create(ctx, createActor, " ", profile.ID); created != nil {
+	if created, err := service.Create(ctx, createActor, " "); created != nil {
 		t.Fatalf("missing identity binding=%#v err=%v", created, err)
 	} else {
-		assertOfficialHTTPError(t, err, 400, "identity_id and profile_id are required")
-	}
-	if created, err := service.Create(ctx, createActor, external.ID, "missing-profile"); created != nil {
-		t.Fatalf("missing profile binding=%#v err=%v", created, err)
-	} else {
-		assertOfficialHTTPError(t, err, 404, "profile not found")
+		assertOfficialHTTPError(t, err, 400, "identity_id is required")
 	}
 	other := testutil.CreateUser(t, db, "official-other@test.com", "Password123", "OfficialOther", false)
-	foreignProfile := testutil.CreateProfile(t, db, other.ID, "official-foreign-profile", "OfficialForeign")
-	if created, err := service.Create(ctx, createActor, external.ID, foreignProfile.ID); created != nil {
-		t.Fatalf("foreign profile binding=%#v err=%v", created, err)
-	} else {
-		assertOfficialHTTPError(t, err, 404, "profile not found")
-	}
-	if created, err := service.Create(ctx, createActor, "missing-identity", profile.ID); created != nil {
+	if created, err := service.Create(ctx, createActor, "missing-identity"); created != nil {
 		t.Fatalf("missing identity binding=%#v err=%v", created, err)
 	} else {
 		assertOfficialHTTPError(t, err, 404, "external identity not found")
 	}
 
 	resolver.result = microsoftsvc.ProfileResult{HasGame: false}
-	if created, err := service.Create(ctx, createActor, external.ID, profile.ID); created != nil {
+	if created, err := service.Create(ctx, createActor, external.ID); created != nil {
 		t.Fatalf("no-game binding=%#v err=%v", created, err)
 	} else {
 		assertOfficialHTTPError(t, err, 409, "Microsoft identity does not own Minecraft: Java Edition")
 	}
 	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: &microsoftsvc.MinecraftProfile{ID: "invalid", Name: "RemoteSteve"}}
-	if created, err := service.Create(ctx, createActor, external.ID, profile.ID); created != nil {
+	if created, err := service.Create(ctx, createActor, external.ID); created != nil {
 		t.Fatalf("invalid remote UUID binding=%#v err=%v", created, err)
 	} else {
 		assertOfficialHTTPError(t, err, 502, "Microsoft profile response is invalid")
 	}
 	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: &microsoftsvc.MinecraftProfile{ID: "0123456789abcdef0123456789abcdef", Name: "invalid name!"}}
-	if created, err := service.Create(ctx, createActor, external.ID, profile.ID); created != nil {
+	if created, err := service.Create(ctx, createActor, external.ID); created != nil {
 		t.Fatalf("invalid remote name binding=%#v err=%v", created, err)
 	} else {
 		assertOfficialHTTPError(t, err, 502, "Microsoft profile response is invalid")
 	}
 
 	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}
-	created, err := service.Create(ctx, createActor, external.ID, profile.ID)
+	created, err := service.Create(ctx, createActor, external.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +466,7 @@ func TestOfficialBindingSyncRejectsPermissionMismatchDownloadAndNameConflictsExa
 	user, external, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
 	resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
 	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
-	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID, profile.ID)
+	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -435,7 +569,7 @@ func officialFixture(t *testing.T, db *database.DB, adapter string) (model.User,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	profile := testutil.CreateProfile(t, db, user.ID, "official-profile-"+adapter, "LocalRole")
+	profile := testutil.CreateProfile(t, db, user.ID, "0123456789abcdef0123456789abcdef", "LocalRole")
 	cache := redisstore.NewMemoryStore()
 	if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{IdentityID: identity.ID, AccessToken: "microsoft-access", TokenType: "Bearer", ExpiresAt: time.Now().Add(time.Hour).UnixMilli()}, time.Hour); err != nil {
 		t.Fatal(err)

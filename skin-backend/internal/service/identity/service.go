@@ -33,18 +33,17 @@ type Service struct {
 }
 
 type ProviderInput struct {
-	Name                string
-	IssuerURL           string
-	ClientID            string
-	ClientSecret        *string
-	Scopes              []string
-	Adapter             string
-	IconURL             string
-	Enabled             bool
-	LoginEnabled        bool
-	LinkEnabled         bool
-	RegistrationEnabled bool
-	DisplayOrder        int
+	Name         string
+	IssuerURL    string
+	ClientID     string
+	ClientSecret *string
+	Scopes       []string
+	Adapter      string
+	IconURL      string
+	Enabled      bool
+	LoginEnabled bool
+	LinkEnabled  bool
+	DisplayOrder int
 }
 
 func (s Service) ListPublicProviders(ctx context.Context, actor permission.Actor) ([]map[string]any, error) {
@@ -309,7 +308,6 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 		Enabled:                input.Enabled,
 		LoginEnabled:           input.LoginEnabled,
 		LinkEnabled:            input.LinkEnabled,
-		RegistrationEnabled:    input.RegistrationEnabled,
 		DisplayOrder:           input.DisplayOrder,
 	}, nil
 }
@@ -364,13 +362,12 @@ func validateEndpointURL(raw string) error {
 
 func publicProviderResponse(item model.IdentityProvider) map[string]any {
 	return map[string]any{
-		"id":                   item.ID,
-		"name":                 item.Name,
-		"adapter":              item.Adapter,
-		"icon_url":             item.IconURL,
-		"login_enabled":        item.LoginEnabled,
-		"link_enabled":         item.LinkEnabled,
-		"registration_enabled": item.RegistrationEnabled,
+		"id":            item.ID,
+		"name":          item.Name,
+		"adapter":       item.Adapter,
+		"icon_url":      item.IconURL,
+		"login_enabled": item.LoginEnabled,
+		"link_enabled":  item.LinkEnabled,
 	}
 }
 

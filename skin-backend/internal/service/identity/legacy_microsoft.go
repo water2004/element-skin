@@ -67,17 +67,16 @@ func (s Service) MigrateLegacyMicrosoftProvider(
 	}
 
 	item, err := s.providerFromInput(ctx, ProviderInput{
-		Name:                "Microsoft",
-		IssuerURL:           MicrosoftConsumerIssuer,
-		ClientID:            clientID,
-		ClientSecret:        &clientSecret,
-		Scopes:              legacyMicrosoftScopes,
-		Adapter:             AdapterMicrosoft,
-		Enabled:             true,
-		LoginEnabled:        false,
-		LinkEnabled:         true,
-		RegistrationEnabled: false,
-		DisplayOrder:        0,
+		Name:         "Microsoft",
+		IssuerURL:    MicrosoftConsumerIssuer,
+		ClientID:     clientID,
+		ClientSecret: &clientSecret,
+		Scopes:       legacyMicrosoftScopes,
+		Adapter:      AdapterMicrosoft,
+		Enabled:      true,
+		LoginEnabled: false,
+		LinkEnabled:  true,
+		DisplayOrder: 0,
 	}, nil)
 	if err != nil {
 		return dbmigration.LegacyMicrosoftMigrationResult{}, fmt.Errorf(

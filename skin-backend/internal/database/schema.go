@@ -205,7 +205,6 @@ CREATE TABLE IF NOT EXISTS identity_providers (
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     login_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     link_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    registration_enabled BOOLEAN NOT NULL DEFAULT TRUE,
     display_order INTEGER NOT NULL DEFAULT 0,
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
@@ -254,7 +253,6 @@ CREATE TABLE IF NOT EXISTS official_profile_bindings (
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
     last_synced_at BIGINT,
-    UNIQUE(identity_id, remote_uuid),
     FOREIGN KEY(identity_id) REFERENCES external_identities(id) ON DELETE RESTRICT,
     FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
 );
@@ -566,6 +564,23 @@ ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_
 ALTER TABLE webhook_events ADD COLUMN IF NOT EXISTS expansion_lease_until BIGINT;
 ALTER TABLE webhook_events ADD COLUMN IF NOT EXISTS expansion_lease_token TEXT;
 ALTER TABLE webhook_deliveries ADD COLUMN IF NOT EXISTS lease_token TEXT;
+ALTER TABLE identity_providers DROP COLUMN IF EXISTS registration_enabled;
+
+-- A real Minecraft profile UUID identifies one site role and one official binding.
+-- Retain the binding already using the real UUID when repairing legacy duplicates.
+WITH ranked_official_bindings AS (
+    SELECT id,
+           ROW_NUMBER() OVER (
+               PARTITION BY remote_uuid
+               ORDER BY (profile_id = remote_uuid) DESC, created_at ASC, id ASC
+           ) AS position
+    FROM official_profile_bindings
+)
+DELETE FROM official_profile_bindings AS binding
+USING ranked_official_bindings AS ranked
+WHERE binding.id = ranked.id AND ranked.position > 1;
+ALTER TABLE official_profile_bindings
+    DROP CONSTRAINT IF EXISTS official_profile_bindings_identity_id_remote_uuid_key;
 
 DO $$
 BEGIN
@@ -671,6 +686,7 @@ CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_due ON webhook_deliveries (nex
 CREATE INDEX IF NOT EXISTS idx_identity_providers_public ON identity_providers (display_order, created_at, id) WHERE enabled=TRUE;
 CREATE INDEX IF NOT EXISTS idx_external_identities_user ON external_identities (user_id, created_at, id);
 CREATE INDEX IF NOT EXISTS idx_official_profile_bindings_identity ON official_profile_bindings (identity_id, created_at, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_official_profile_bindings_remote_uuid ON official_profile_bindings (remote_uuid);
 
 -- Breaking migration: the v2 identity model replaces the one-shot Microsoft import contract.
 -- Legacy Microsoft settings are retained here and migrated transactionally by the identity

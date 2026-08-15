@@ -226,7 +226,6 @@ type IdentityProvider struct {
 	Enabled                bool     `json:"enabled"`
 	LoginEnabled           bool     `json:"login_enabled"`
 	LinkEnabled            bool     `json:"link_enabled"`
-	RegistrationEnabled    bool     `json:"registration_enabled"`
 	DisplayOrder           int      `json:"display_order"`
 	CreatedAt              int64    `json:"created_at"`
 	UpdatedAt              int64    `json:"updated_at"`

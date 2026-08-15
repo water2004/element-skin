@@ -45,7 +45,6 @@ func scanProvider(row rowScanner) (*model.IdentityProvider, error) {
 		&item.Enabled,
 		&item.LoginEnabled,
 		&item.LinkEnabled,
-		&item.RegistrationEnabled,
 		&item.DisplayOrder,
 		&item.CreatedAt,
 		&item.UpdatedAt,
@@ -81,7 +80,7 @@ func scanIdentity(row rowScanner) (*model.ExternalIdentity, error) {
 const providerColumns = `
 	id, name, issuer_url, authorization_endpoint, token_endpoint, userinfo_endpoint,
 	jwks_uri, client_id, client_secret_ciphertext, scopes, adapter, icon_url,
-	enabled, login_enabled, link_enabled, registration_enabled, display_order, created_at, updated_at
+	enabled, login_enabled, link_enabled, display_order, created_at, updated_at
 `
 
 const identityColumns = `
@@ -97,12 +96,12 @@ func (s Store) CreateProvider(ctx context.Context, item model.IdentityProvider) 
 		INSERT INTO identity_providers (
 			id, name, issuer_url, authorization_endpoint, token_endpoint, userinfo_endpoint,
 			jwks_uri, client_id, client_secret_ciphertext, scopes, adapter, icon_url,
-			enabled, login_enabled, link_enabled, registration_enabled, display_order, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+			enabled, login_enabled, link_enabled, display_order, created_at, updated_at
+		) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
 	`, item.ID, item.Name, item.IssuerURL, item.AuthorizationEndpoint, item.TokenEndpoint,
 		item.UserInfoEndpoint, item.JWKSURI, item.ClientID, item.ClientSecretCiphertext,
 		item.Scopes, item.Adapter, item.IconURL, item.Enabled, item.LoginEnabled,
-		item.LinkEnabled, item.RegistrationEnabled, item.DisplayOrder, item.CreatedAt, item.UpdatedAt)
+		item.LinkEnabled, item.DisplayOrder, item.CreatedAt, item.UpdatedAt)
 	return err
 }
 
@@ -115,12 +114,12 @@ func (s Store) UpdateProvider(ctx context.Context, item model.IdentityProvider) 
 		SET name=$2, issuer_url=$3, authorization_endpoint=$4, token_endpoint=$5,
 			userinfo_endpoint=$6, jwks_uri=$7, client_id=$8, client_secret_ciphertext=$9,
 			scopes=$10, adapter=$11, icon_url=$12, enabled=$13, login_enabled=$14,
-			link_enabled=$15, registration_enabled=$16, display_order=$17, updated_at=$18
+			link_enabled=$15, display_order=$16, updated_at=$17
 		WHERE id=$1
 	`, item.ID, item.Name, item.IssuerURL, item.AuthorizationEndpoint, item.TokenEndpoint,
 		item.UserInfoEndpoint, item.JWKSURI, item.ClientID, item.ClientSecretCiphertext,
 		item.Scopes, item.Adapter, item.IconURL, item.Enabled, item.LoginEnabled,
-		item.LinkEnabled, item.RegistrationEnabled, item.DisplayOrder, item.UpdatedAt)
+		item.LinkEnabled, item.DisplayOrder, item.UpdatedAt)
 	if err != nil {
 		return false, err
 	}

@@ -106,16 +106,38 @@ OIDC claim 只保存为外部身份资料，不替代本站账户字段，也不
 - `name`、`issuer_url`、`client_id`、加密后的 `client_secret`；
 - Discovery 得到的 `authorization_endpoint`、`token_endpoint`、`userinfo_endpoint`、`jwks_uri`；
 - `scopes`、`adapter`、`icon_url`、`display_order`；
-- `enabled`、`login_enabled`、`link_enabled`、`registration_enabled`。
+- `enabled`、`login_enabled`、`link_enabled`。
 
 保存时必须读取并校验 `/.well-known/openid-configuration`，要求 discovery issuer 与配置值完全
 一致，并拒绝不安全的非 HTTPS 外部端点。更新时不提交 `client_secret` 表示保留原密钥。
+
+`login_enabled` 同时控制已有外部身份登录，以及尚未匹配身份继续完成本站注册；不再提供第二个
+“允许接续注册”开关。`link_enabled` 只控制已登录用户添加或重新连接身份。
+
+OIDC callback 不由管理员配置。服务端按 `SERVER_API_URL`（或对应配置文件中的 `server.api_url`）
+派生并在公开、管理员 provider 列表响应的 `redirect_uri` 字段中返回：
+
+```text
+{SERVER_API_URL}/v2/auth/oidc/callback
+```
+
+管理员页面必须把该地址显示为“请在身份提供方添加 Redirect URI”，不能继续保存旧版
+`microsoft_redirect_uri` 或要求管理员手工拼接路径。
 
 Microsoft adapter 必须请求：
 
 ```text
 openid profile email XboxLive.signin offline_access
 ```
+
+面向 Xbox/Minecraft 个人账户时，Microsoft provider 使用 consumer tenant 的规范 Issuer：
+
+```text
+https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0
+```
+
+Entra 应用必须允许个人 Microsoft 账户；推荐的 `signInAudience` 为
+`AzureADandPersonalMicrosoftAccount`。
 
 ### 3.3 授权入口
 
@@ -166,7 +188,7 @@ callback 会校验 state、nonce、PKCE、issuer、签名、audience 和 subject
 ### 3.4 登录后没有本站账户
 
 若 `(provider_id, subject)` 已绑定，callback 签发本站 cookie 并跳转仪表盘。若未绑定且 provider
-允许注册，callback 只签发短期、一次性的 `identity_ticket`，然后跳转：
+允许登录，callback 只签发短期、一次性的 `identity_ticket`，然后跳转：
 
 ```text
 /register?identity_ticket=...&provider_id=...
@@ -208,16 +230,34 @@ display name 或 email_verified 不补全也不覆盖这些字段。失败时 ti
 ## 4. 正版角色绑定
 
 正版绑定是本站资源，不是 OIDC scope，也不是 Microsoft 登录结果。它依赖一个
-`adapter=microsoft` 的现有外部身份，同时关联一个现有本站角色。
+`adapter=microsoft` 的现有外部身份。客户端只选择外部身份，不选择本站角色：服务端读取远端
+Minecraft profile 后，以规范化的正版 UUID 作为本站角色 UUID。
 
 边界固定如下：
 
-- 外部身份 API 不创建、修改或删除角色；
+- 外部身份 API 不创建、修改或删除角色；创建正版绑定是独立的显式操作；
 - 角色 API 不隐式创建或删除外部身份；
-- 创建绑定只读取远端角色元数据并建立关联，不修改本站角色；
+- 若正版 UUID 对应的本站角色已经属于当前用户，创建绑定复用该角色；
+- 若正版 UUID 尚不存在，创建绑定为当前用户创建同 UUID 角色，名称冲突时使用稳定候选名；
+- 若正版 UUID 已属于其他用户，返回 `409 official profile UUID belongs to another user`，不得修改
+  角色、身份或绑定；
+- 同一远端 UUID 在全站只能存在一个有效正版绑定，并由数据库唯一约束保证并发一致性；
 - 只有显式 `sync` 会更新本站角色的名称、皮肤和披风；
 - 删除绑定保留本站角色和已同步材质；
 - 角色仍可独立改名、清除材质或删除；删除角色时数据库级联删除绑定。
+
+创建请求固定为：
+
+```http
+POST /v2/users/me/official-profile-bindings
+Content-Type: application/json
+
+{
+  "identity_id": "microsoft-external-identity-id"
+}
+```
+
+请求不接受 `profile_id`。角色卡片只显示正版状态；同步和解除绑定操作放在角色详情中。
 
 绑定响应包含 `identity_id`、`profile_id`、远端 UUID/名称/材质元数据、同步时间，以及只读的
 `identity` 和 `profile` 摘要。摘要便于界面显示，不改变两个资源各自的写入边界。
@@ -286,7 +326,7 @@ scope 获批时出现。grant 撤销后关联 access token、refresh token 和 u
 
 | 方法 | 路径 | 响应 |
 | --- | --- | --- |
-| GET | `/v2/auth/identity-providers` | 公开 provider 的 `items` |
+| GET | `/v2/auth/identity-providers` | 公开 provider 的 `items` 和统一 `redirect_uri` |
 | POST | `/v2/identity-authorizations` | `201`，授权 URL |
 | GET | `/v2/auth/oidc/callback` | `303` 到本站前端 |
 | GET | `/v2/users/me/identities` | 身份 `items` |
@@ -433,7 +473,7 @@ Microsoft adapter 不增加隐式权限。用户能否管理外部身份、创�
 - `identity_providers`：管理员配置与 discovery 快照；
 - `external_identities`：本站用户与 provider subject 的长期关联；
 - `external_identity_credentials`：加密 refresh token 和已授予 scope；
-- `official_profile_bindings`：外部身份与本站角色的正版关联；
+- `official_profile_bindings`：外部身份与本站角色的正版关联，`remote_uuid` 全局唯一；
 - `email_suffix_policy`、`email_suffix_rules`：邮箱后缀模式以及分离保存的白名单、黑名单；
 - OAuth client、grant、authorization code、refresh token、pairwise subject 表：本站 provider 状态。
 - Webhook endpoint、事件 outbox 和投递表：第三方事件订阅与异步投递状态。
@@ -459,7 +499,8 @@ provider 冲突均终止启动并保留旧设置。旧版没有持久化用户 r
 - refresh 被拒绝后的结构化状态、重新授权恢复，以及上游 `401` 强制刷新单次重试；
 - 指定 `identity_id` 的重新连接必须拒绝错误 subject，并验证失败后身份、凭据和缓存均不变；
 - 连接授权取消和目标 subject 不匹配时，callback 必须以精确错误码返回身份管理页；
-- 正版绑定与角色 API 解耦、显式同步、图片失败清理和数据库事务；
+- 正版绑定按远端 UUID 创建或复用本站角色、跨用户冲突、并发唯一性、显式同步、图片失败清理和
+  数据库事务；
 - OIDC-only client 的零站点权限、pairwise subject、userinfo、refresh 和 grant 撤销；
 - `/v2` 精确 method/path/body/status/response，旧 `/v1` 与旧未版本化站点路径返回 `404`；
 - 前端权限入口、API wrapper 精确请求、TypeScript 构建和关键交互。

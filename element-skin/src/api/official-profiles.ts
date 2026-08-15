@@ -9,7 +9,6 @@ export function getOfficialProfileBindings(): Promise<{
 
 export function createOfficialProfileBinding(data: {
   identity_id: string
-  profile_id: string
 }): Promise<{ data: OfficialProfileBinding }> {
   return client.post('/v2/users/me/official-profile-bindings', data)
 }

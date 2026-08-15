@@ -114,7 +114,7 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 	if err := s.Redis.SetState(ctx, state, storedState, authorizationStateTTL); err != nil {
 		return AuthorizationStart{}, err
 	}
-	authorizationURL, err := buildAuthorizationURL(*provider, s.redirectURI(), state, nonce, pkceVerifier, intent, loginHint)
+	authorizationURL, err := buildAuthorizationURL(*provider, s.RedirectURI(), state, nonce, pkceVerifier, intent, loginHint)
 	if err != nil {
 		_ = s.Redis.DeleteState(ctx, state)
 		return AuthorizationStart{}, err
@@ -173,7 +173,7 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		*provider,
 		clientSecret,
 		code,
-		s.redirectURI(),
+		s.RedirectURI(),
 		stateString(stored, "pkce_verifier"),
 		stateString(stored, "nonce"),
 	)
@@ -223,8 +223,8 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 			}
 			return AuthorizationResult{Intent: intent, UserID: existing.UserID, IdentityID: existing.ID, ProviderID: provider.ID}, nil
 		}
-		if !provider.RegistrationEnabled {
-			return AuthorizationResult{}, forbiddenDetail("registration is disabled for this identity provider")
+		if !provider.LoginEnabled {
+			return AuthorizationResult{}, forbiddenDetail("login is disabled for this identity provider")
 		}
 		ticket, err := s.createRegistrationTicket(ctx, *provider, claims, tokens)
 		if err != nil {
@@ -390,7 +390,7 @@ func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, 
 	return u.String(), nil
 }
 
-func (s Service) redirectURI() string {
+func (s Service) RedirectURI() string {
 	base := strings.TrimRight(strings.TrimSpace(s.Config.APIURL), "/")
 	if base == "" {
 		base = strings.TrimRight(strings.TrimSpace(s.Config.SiteURL), "/")

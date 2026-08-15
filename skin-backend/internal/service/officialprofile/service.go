@@ -54,21 +54,13 @@ func (s Service) List(ctx context.Context, actor permission.Actor) ([]map[string
 	return out, nil
 }
 
-func (s Service) Create(ctx context.Context, actor permission.Actor, identityID, profileID string) (map[string]any, error) {
+func (s Service) Create(ctx context.Context, actor permission.Actor, identityID string) (map[string]any, error) {
 	if err := actor.Require(officialCreatePermission); err != nil {
 		return nil, forbidden()
 	}
 	identityID = strings.TrimSpace(identityID)
-	profileID = strings.TrimSpace(profileID)
-	if identityID == "" || profileID == "" {
-		return nil, badRequest("identity_id and profile_id are required")
-	}
-	profile, err := s.DB.Profiles.GetByID(ctx, profileID)
-	if err != nil {
-		return nil, err
-	}
-	if profile == nil || profile.UserID != actor.UserID {
-		return nil, notFound("profile not found")
+	if identityID == "" {
+		return nil, badRequest("identity_id is required")
 	}
 	access, remote, err := s.resolve(ctx, actor.UserID, identityID)
 	if err != nil {
@@ -85,15 +77,26 @@ func (s Service) Create(ctx context.Context, actor permission.Actor, identityID,
 	}
 	now := database.NowMS()
 	binding := model.OfficialProfileBinding{
-		ID: id, IdentityID: access.Identity.ID, ProfileID: profile.ID,
+		ID: id, IdentityID: access.Identity.ID, ProfileID: remoteUUID,
 		RemoteUUID: remoteUUID, RemoteName: remote.Name, RemoteSkinURL: skinURL,
 		RemoteCapeURL: capeURL, RemoteSkinModel: skinModel, CreatedAt: now, UpdatedAt: now,
 	}
-	if err := s.DB.OfficialProfiles.Create(ctx, binding); err != nil {
-		if constraint := uniqueConstraint(err); constraint == "official_profile_bindings_profile_id_key" {
-			return nil, conflict("profile already has an official binding")
-		} else if constraint == "official_profile_bindings_identity_id_remote_uuid_key" {
-			return nil, conflict("Microsoft identity is already bound to this official profile")
+	profileNames := make([]string, 100)
+	for attempt := range profileNames {
+		profileNames[attempt] = util.ProfileNameCandidate(remote.Name, attempt)
+	}
+	if err := s.DB.OfficialProfiles.Create(ctx, officialstore.CreateInput{
+		Binding: binding, UserID: actor.UserID, ProfileNames: profileNames, ProfileModel: skinModel,
+	}); err != nil {
+		if errors.Is(err, officialstore.ErrProfileOwnedByAnotherUser) {
+			return nil, conflict("official profile UUID belongs to another user")
+		}
+		if errors.Is(err, officialstore.ErrProfileNameUnavailable) {
+			return nil, conflict("unable to allocate profile name")
+		}
+		if constraint := uniqueConstraint(err); constraint == "official_profile_bindings_profile_id_key" ||
+			constraint == "idx_official_profile_bindings_remote_uuid" {
+			return nil, conflict("official profile is already bound")
 		}
 		return nil, err
 	}

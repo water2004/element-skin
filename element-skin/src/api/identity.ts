@@ -1,7 +1,9 @@
 import client from './client'
 import type { ExternalIdentity, IdentityProvider, ItemListResponse } from './types'
 
-export function getIdentityProviders(): Promise<{ data: ItemListResponse<IdentityProvider> }> {
+export function getIdentityProviders(): Promise<{
+  data: ItemListResponse<IdentityProvider> & { redirect_uri: string }
+}> {
   return client.get('/v2/auth/identity-providers')
 }
 

@@ -48,7 +48,6 @@ func TestOIDCRegistrationRequiresAndConsumesTheCompleteLocalRegistrationForm(t *
 		Adapter:               identitysvc.AdapterGenericOIDC,
 		Enabled:               true,
 		LoginEnabled:          true,
-		RegistrationEnabled:   true,
 		CreatedAt:             1,
 		UpdatedAt:             1,
 	}

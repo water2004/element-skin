@@ -45,7 +45,7 @@ func TestProviderRoutesUseExactV2ContractsAndNeverExposeClientSecret(t *testing.
 	admin := testutil.CreateUser(t, db, "identity-route-admin@example.com", "Password123", "IdentityRouteAdmin", true)
 	adminActor := identityRouteActor(t, db, admin.ID)
 
-	requestBody := fmt.Sprintf(`{"name":"Example Accounts","issuer_url":%q,"client_id":"client-id","client_secret":"super-secret","scopes":["profile email"],"adapter":"generic_oidc","icon_url":"https://accounts.example/icon.png","enabled":true,"login_enabled":true,"link_enabled":true,"registration_enabled":true,"display_order":7}`, discoveryServer.URL)
+	requestBody := fmt.Sprintf(`{"name":"Example Accounts","issuer_url":%q,"client_id":"client-id","client_secret":"super-secret","scopes":["profile email"],"adapter":"generic_oidc","icon_url":"https://accounts.example/icon.png","enabled":true,"login_enabled":true,"link_enabled":true,"display_order":7}`, discoveryServer.URL)
 	req := identityRouteRequest(http.MethodPost, "/v2/admin/identity-providers", requestBody, adminActor)
 	rec := httptest.NewRecorder()
 	h.CreateProvider(rec, req)
@@ -57,7 +57,7 @@ func TestProviderRoutesUseExactV2ContractsAndNeverExposeClientSecret(t *testing.
 		t.Fatal(err)
 	}
 	providerID, _ := created["id"].(string)
-	if providerID == "" || len(created) != 19 || created["name"] != "Example Accounts" ||
+	if providerID == "" || len(created) != 18 || created["name"] != "Example Accounts" ||
 		created["issuer_url"] != discoveryServer.URL || created["client_id"] != "client-id" ||
 		created["has_client_secret"] != true || created["enabled"] != true || created["display_order"] != float64(7) ||
 		strings.Contains(rec.Body.String(), "super-secret") || strings.Contains(rec.Body.String(), "client_secret_ciphertext") {
@@ -70,7 +70,7 @@ func TestProviderRoutesUseExactV2ContractsAndNeverExposeClientSecret(t *testing.
 	req = identityRouteRequest(http.MethodGet, "/v2/auth/identity-providers", "", permission.GuestActor())
 	rec = httptest.NewRecorder()
 	h.PublicProviders(rec, req)
-	wantPublic := `{"items":[{"adapter":"generic_oidc","icon_url":"https://accounts.example/icon.png","id":"` + providerID + `","link_enabled":true,"login_enabled":true,"name":"Example Accounts","registration_enabled":true}]}` + "\n"
+	wantPublic := `{"items":[{"adapter":"generic_oidc","icon_url":"https://accounts.example/icon.png","id":"` + providerID + `","link_enabled":true,"login_enabled":true,"name":"Example Accounts"}],"redirect_uri":"http://localhost:8000/v2/auth/oidc/callback"}` + "\n"
 	if rec.Code != http.StatusOK || rec.Body.String() != wantPublic {
 		t.Fatalf("public provider response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -79,13 +79,15 @@ func TestProviderRoutesUseExactV2ContractsAndNeverExposeClientSecret(t *testing.
 	rec = httptest.NewRecorder()
 	h.ListProviders(rec, req)
 	var listed struct {
-		Items []map[string]any `json:"items"`
+		Items       []map[string]any `json:"items"`
+		RedirectURI string           `json:"redirect_uri"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &listed); err != nil {
 		t.Fatal(err)
 	}
 	if rec.Code != http.StatusOK || len(listed.Items) != 1 || listed.Items[0]["id"] != providerID ||
-		listed.Items[0]["has_client_secret"] != true || len(listed.Items[0]) != 19 {
+		listed.Items[0]["has_client_secret"] != true || len(listed.Items[0]) != 18 ||
+		listed.RedirectURI != "http://localhost:8000/v2/auth/oidc/callback" {
 		t.Fatalf("admin provider list mismatch: status=%d response=%#v", rec.Code, listed)
 	}
 
@@ -98,11 +100,11 @@ func TestProviderRoutesUseExactV2ContractsAndNeverExposeClientSecret(t *testing.
 		t.Fatal(err)
 	}
 	if rec.Code != http.StatusOK || detail["id"] != providerID || detail["name"] != "Example Accounts" ||
-		detail["has_client_secret"] != true || len(detail) != 19 {
+		detail["has_client_secret"] != true || len(detail) != 18 {
 		t.Fatalf("provider detail mismatch: status=%d response=%#v", rec.Code, detail)
 	}
 
-	updateBody := fmt.Sprintf(`{"name":"Updated Accounts","issuer_url":%q,"client_id":"client-id","scopes":["openid","groups"],"adapter":"generic_oidc","icon_url":"https://accounts.example/updated.png","enabled":true,"login_enabled":true,"link_enabled":false,"registration_enabled":false,"display_order":8}`, discoveryServer.URL)
+	updateBody := fmt.Sprintf(`{"name":"Updated Accounts","issuer_url":%q,"client_id":"client-id","scopes":["openid","groups"],"adapter":"generic_oidc","icon_url":"https://accounts.example/updated.png","enabled":true,"login_enabled":true,"link_enabled":false,"display_order":8}`, discoveryServer.URL)
 	req = identityRouteRequest(http.MethodPut, "/v2/admin/identity-providers/"+providerID, updateBody, adminActor)
 	req.SetPathValue("provider_id", providerID)
 	rec = httptest.NewRecorder()
@@ -112,8 +114,8 @@ func TestProviderRoutesUseExactV2ContractsAndNeverExposeClientSecret(t *testing.
 		t.Fatal(err)
 	}
 	if rec.Code != http.StatusOK || updated["id"] != providerID || updated["name"] != "Updated Accounts" ||
-		updated["link_enabled"] != false || updated["registration_enabled"] != false ||
-		updated["display_order"] != float64(8) || updated["has_client_secret"] != true || len(updated) != 19 {
+		updated["link_enabled"] != false || updated["display_order"] != float64(8) ||
+		updated["has_client_secret"] != true || len(updated) != 18 {
 		t.Fatalf("provider update mismatch: status=%d response=%#v", rec.Code, updated)
 	}
 	if scopes, ok := updated["scopes"].([]any); !ok || len(scopes) != 2 || scopes[0] != "groups" || scopes[1] != "openid" {
@@ -142,7 +144,7 @@ func TestIdentityRoutesListUpdateDeleteOnlyOwnedRecordsWithExactErrors(t *testin
 		AuthorizationEndpoint: "https://route.example/authorize", TokenEndpoint: "https://route.example/token",
 		JWKSURI: "https://route.example/jwks", ClientID: "client", Scopes: []string{"openid"},
 		Adapter: identitysvc.AdapterGenericOIDC, Enabled: true, LoginEnabled: true, LinkEnabled: true,
-		RegistrationEnabled: true, CreatedAt: 1, UpdatedAt: 1,
+		CreatedAt: 1, UpdatedAt: 1,
 	}
 	if err := db.Identities.CreateProvider(t.Context(), provider); err != nil {
 		t.Fatal(err)
@@ -267,7 +269,7 @@ func TestIdentityAuthorizationCancellationReturnsToIdentityManagementExactly(t *
 		AuthorizationEndpoint: "https://callback.example/authorize", TokenEndpoint: "https://callback.example/token",
 		JWKSURI: "https://callback.example/jwks", ClientID: "client", Scopes: []string{"openid"},
 		Adapter: identitysvc.AdapterGenericOIDC, Enabled: true, LoginEnabled: true, LinkEnabled: true,
-		RegistrationEnabled: true, CreatedAt: 1, UpdatedAt: 1,
+		CreatedAt: 1, UpdatedAt: 1,
 	}
 	if err := db.Identities.CreateProvider(t.Context(), provider); err != nil {
 		t.Fatal(err)
@@ -358,7 +360,7 @@ func TestIdentityAuthorizationCallbackIssuesSessionAndRegistrationRedirectsExact
 		AuthorizationEndpoint: server.URL + "/authorize", TokenEndpoint: server.URL + "/token",
 		JWKSURI: server.URL + "/jwks", ClientID: "callback-client", ClientSecretCiphertext: encryptedSecret,
 		Scopes: []string{"openid", "email"}, Adapter: identitysvc.AdapterGenericOIDC,
-		Enabled: true, LoginEnabled: true, LinkEnabled: true, RegistrationEnabled: true, CreatedAt: 1, UpdatedAt: 1,
+		Enabled: true, LoginEnabled: true, LinkEnabled: true, CreatedAt: 1, UpdatedAt: 1,
 	}
 	if err := db.Identities.CreateProvider(ctx, provider); err != nil {
 		t.Fatal(err)

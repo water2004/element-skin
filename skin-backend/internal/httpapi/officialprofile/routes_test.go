@@ -40,7 +40,7 @@ func TestOfficialProfileRoutesUseExactSeparateV2ResourceContracts(t *testing.T) 
 	if err := db.Identities.CreateIdentity(ctx, external, model.ExternalIdentityCredential{IdentityID: external.ID, UpdatedAt: 2}); err != nil {
 		t.Fatal(err)
 	}
-	profile := testutil.CreateProfile(t, db, user.ID, "official-route-profile", "RouteLocal")
+	const remoteUUID = "0123456789abcdef0123456789abcdef"
 	cache := redisstore.NewMemoryStore()
 	if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{IdentityID: external.ID, AccessToken: "route-access", TokenType: "Bearer", ExpiresAt: time.Now().Add(time.Hour).UnixMilli()}, time.Hour); err != nil {
 		t.Fatal(err)
@@ -66,7 +66,7 @@ func TestOfficialProfileRoutesUseExactSeparateV2ResourceContracts(t *testing.T) 
 		t.Fatalf("invalid create mismatch: status=%d body=%q", badRec.Code, badRec.Body.String())
 	}
 
-	createReq := httptest.NewRequest(http.MethodPost, "/v2/users/me/official-profile-bindings", strings.NewReader(`{"identity_id":"`+external.ID+`","profile_id":"`+profile.ID+`"}`))
+	createReq := httptest.NewRequest(http.MethodPost, "/v2/users/me/official-profile-bindings", strings.NewReader(`{"identity_id":"`+external.ID+`"}`))
 	createReq = createReq.WithContext(shared.WithActor(createReq.Context(), actor))
 	createRec := httptest.NewRecorder()
 	h.Create(createRec, createReq)
@@ -78,7 +78,7 @@ func TestOfficialProfileRoutesUseExactSeparateV2ResourceContracts(t *testing.T) 
 		t.Fatal(err)
 	}
 	bindingID, _ := created["id"].(string)
-	if len(created) != 13 || bindingID == "" || created["identity_id"] != external.ID || created["profile_id"] != profile.ID || created["remote_name"] != "HttpRemote" || created["last_synced_at"] != nil {
+	if len(created) != 13 || bindingID == "" || created["identity_id"] != external.ID || created["profile_id"] != remoteUUID || created["remote_name"] != "HttpRemote" || created["last_synced_at"] != nil {
 		t.Fatalf("created resource mismatch: %#v", created)
 	}
 
@@ -117,7 +117,7 @@ func TestOfficialProfileRoutesUseExactSeparateV2ResourceContracts(t *testing.T) 
 	if deleteRec.Code != http.StatusNoContent || deleteRec.Body.Len() != 0 {
 		t.Fatalf("delete mismatch: status=%d body=%q", deleteRec.Code, deleteRec.Body.String())
 	}
-	if stored, err := db.Profiles.GetByID(ctx, profile.ID); err != nil || stored == nil || stored.Name != "HttpRemote" {
+	if stored, err := db.Profiles.GetByID(ctx, remoteUUID); err != nil || stored == nil || stored.Name != "HttpRemote" || stored.UserID != user.ID {
 		t.Fatalf("binding delete coupled profile deletion: profile=%#v err=%v", stored, err)
 	}
 }
