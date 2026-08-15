@@ -46,13 +46,12 @@
         :closable="false"
         title="Client Secret 只显示一次"
       >
-        <div class="mt-2 flex flex-col gap-2 sm:flex-row">
-          <el-input :model-value="clientSecret" readonly />
-          <el-button @click="copyText(clientSecret, 'Client Secret')">
-            <el-icon><CopyDocument /></el-icon>
-            复制
-          </el-button>
-        </div>
+        <el-text
+          copyable
+          class="mt-2 !flex rounded-lg bg-[var(--color-background-soft)] px-3 py-2 font-mono text-xs"
+        >
+          <span class="min-w-0 break-all">{{ clientSecret }}</span>
+        </el-text>
       </el-alert>
 
       <el-alert
@@ -63,13 +62,12 @@
         title="Webhook 签名密钥只显示一次"
       >
         <div class="mt-1 text-xs text-[var(--color-text-light)]">{{ item.url }}</div>
-        <div class="mt-2 flex flex-col gap-2 sm:flex-row">
-          <el-input :model-value="item.secret" readonly />
-          <el-button @click="copyText(item.secret, 'Webhook 签名密钥')">
-            <el-icon><CopyDocument /></el-icon>
-            复制
-          </el-button>
-        </div>
+        <el-text
+          copyable
+          class="mt-2 !flex rounded-lg bg-[var(--color-background-soft)] px-3 py-2 font-mono text-xs"
+        >
+          <span class="min-w-0 break-all">{{ item.secret }}</span>
+        </el-text>
       </el-alert>
 
       <el-alert
@@ -140,97 +138,18 @@
         </div>
       </UiCard>
 
-      <UiCard class="p-6">
-        <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div>
-            <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">Webhook endpoints</h2>
-            <p class="mt-1 mb-0 text-sm text-[var(--color-text-light)]">
-              完全可选。站点只异步发送基础标识，接收方再使用 API 获取所需信息。
-            </p>
-          </div>
-          <el-button
-            :disabled="!canEditFields || form.webhook_endpoints.length >= 5"
-            @click="addEndpoint"
-          >
-            <el-icon><Plus /></el-icon>
-            添加 endpoint
-          </el-button>
-        </div>
-
-        <el-empty
-          v-if="form.webhook_endpoints.length === 0"
-          description="未配置 Webhook，应用不会产生任何投递任务"
-        />
-
-        <div v-else class="space-y-4">
-          <div
-            v-for="(endpoint, index) in form.webhook_endpoints"
-            :key="endpoint.key"
-            class="rounded-xl border border-[var(--color-border)] bg-[var(--color-background-soft)] p-4"
-          >
-            <div class="mb-4 flex items-center justify-between gap-3">
-              <div class="font-semibold text-[var(--color-heading)]">Endpoint {{ index + 1 }}</div>
-              <div class="flex items-center gap-3">
-                <el-switch
-                  v-model="endpoint.enabled"
-                  :disabled="!canEditFields"
-                  active-text="启用"
-                  inactive-text="停用"
-                />
-                <el-button
-                  type="danger"
-                  link
-                  :disabled="!canEditFields"
-                  @click="removeEndpoint(index)"
-                >
-                  <el-icon><Delete /></el-icon>
-                  移除
-                </el-button>
-              </div>
-            </div>
-            <el-form label-position="top" :disabled="!canEditFields">
-              <el-form-item label="接收地址" required>
-                <el-input v-model="endpoint.url" placeholder="https://hooks.example/events" />
-                <div class="form-tip">仅允许公网 HTTPS 地址，不跟随重定向。</div>
-              </el-form-item>
-              <el-form-item label="监听事件" required>
-                <el-checkbox-group
-                  v-if="availableWebhookEvents.length"
-                  v-model="endpoint.events"
-                  class="grid w-full gap-2 md:grid-cols-2"
-                >
-                  <el-checkbox
-                    v-for="event in availableWebhookEvents"
-                    :key="event.type"
-                    :value="event.type"
-                    class="!m-0 !h-auto items-start rounded-lg border border-[var(--color-border)] bg-[var(--color-card-background)] p-3"
-                  >
-                    <span class="min-w-0">
-                      <span class="block font-mono text-xs text-[var(--color-heading)]">
-                        {{ event.type }}
-                      </span>
-                      <span class="mt-1 block text-xs text-[var(--color-text-light)]">
-                        {{ event.description }}
-                      </span>
-                    </span>
-                  </el-checkbox>
-                </el-checkbox-group>
-                <el-alert
-                  v-else
-                  class="w-full"
-                  type="info"
-                  :closable="false"
-                  title="请先申请支持 Webhook 事件的读取权限"
-                />
-              </el-form-item>
-            </el-form>
-          </div>
-        </div>
-      </UiCard>
+      <OAuthWebhookEndpointEditor
+        :endpoints="form.webhook_endpoints"
+        :events="availableWebhookEvents"
+        :disabled="!canEditFields"
+        @add="addEndpoint"
+        @remove="removeEndpoint"
+        @update-endpoint="updateEndpoint"
+      />
 
       <UiCard class="p-5">
         <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex flex-wrap gap-2">
+          <ActionBar align="start">
             <el-button
               v-if="app?.client_type === 'confidential' && canUpdateApps"
               :loading="rotating"
@@ -249,8 +168,8 @@
               <el-icon><Delete /></el-icon>
               删除应用
             </el-button>
-          </div>
-          <div class="flex flex-wrap justify-end gap-2">
+          </ActionBar>
+          <ActionBar>
             <el-button @click="router.push({ name: 'dashboard-oauth' })">取消</el-button>
             <el-button
               v-if="app && canUpdateApps && app.status !== 'pending'"
@@ -268,7 +187,7 @@
               <el-icon><Upload v-if="app" /><Plus v-else /></el-icon>
               {{ primaryLabel }}
             </el-button>
-          </div>
+          </ActionBar>
         </div>
       </UiCard>
     </template>
@@ -278,7 +197,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, reactive, ref, watch, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, CopyDocument, Delete, Key, Plus, Upload } from '@element-plus/icons-vue'
+import { ArrowLeft, Delete, Key, Plus, Upload } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   createOAuthApp,
@@ -296,6 +215,7 @@ import {
   type OAuthWebhookEventDefinition,
 } from '@/api/oauth'
 import type { PermissionDefinition, User } from '@/api/types'
+import ActionBar from '@/components/common/ActionBar.vue'
 import PermissionTagPicker from '@/components/permissions/PermissionTagPicker.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { getErrorMessage } from '@/utils/error'
@@ -309,6 +229,7 @@ import {
   type OAuthAppFormState,
   type WebhookEndpointForm,
 } from './oauthAppFormState'
+import OAuthWebhookEndpointEditor from './OAuthWebhookEndpointEditor.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -431,6 +352,11 @@ function removeEndpoint(index: number) {
   form.webhook_endpoints.splice(index, 1)
 }
 
+function updateEndpoint(index: number, patch: Partial<WebhookEndpointForm>) {
+  const endpoint = form.webhook_endpoints[index]
+  if (endpoint) Object.assign(endpoint, patch)
+}
+
 function payload(): OAuthClientInput {
   return oauthClientPayload(form)
 }
@@ -518,11 +444,6 @@ async function deleteApp() {
   } finally {
     deleting.value = false
   }
-}
-
-async function copyText(value: string, label: string) {
-  await navigator.clipboard.writeText(value)
-  ElMessage.success(`${label} 已复制`)
 }
 
 function statusLabel(status: OAuthClientStatus) {

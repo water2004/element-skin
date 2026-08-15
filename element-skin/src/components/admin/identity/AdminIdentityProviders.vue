@@ -3,9 +3,11 @@
     <PageHeader title="OIDC 身份提供方" subtitle="配置允许用户登录和绑定的外部 OIDC 端点">
       <template #icon><Connection /></template>
       <template #actions>
-        <el-button v-if="canCreate" type="primary" :icon="Plus" @click="openCreate">
-          添加提供方
-        </el-button>
+        <ActionBar>
+          <el-button v-if="canCreate" type="primary" :icon="Plus" @click="openCreate">
+            添加提供方
+          </el-button>
+        </ActionBar>
       </template>
     </PageHeader>
 
@@ -18,22 +20,7 @@
       description="选择 Microsoft 适配器只会开放本站的正版角色能力；身份登录、绑定、重新授权和令牌存储仍走同一套 OIDC 路径。"
     />
 
-    <div
-      v-if="redirectUri"
-      class="mb-6 mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-background-soft)] p-4"
-    >
-      <div class="text-sm font-semibold text-[var(--color-heading)]">
-        请在身份提供方添加 Redirect URI
-      </div>
-      <div class="mt-2 flex items-center gap-2">
-        <code
-          class="min-w-0 flex-1 overflow-x-auto rounded-lg bg-[var(--color-card-background)] px-3 py-2 text-xs text-[var(--color-text)]"
-        >
-          {{ redirectUri }}
-        </code>
-        <el-button :icon="DocumentCopy" @click="copyRedirectUri">复制</el-button>
-      </div>
-    </div>
+    <OidcRedirectUriNotice :uri="redirectUri" class="mb-6 mt-4" />
 
     <div v-loading="loading" class="min-h-[220px]">
       <div v-if="providers.length" class="grid gap-4">
@@ -64,12 +51,12 @@
                 </el-tag>
               </div>
             </div>
-            <div class="flex gap-2">
+            <ActionBar>
               <el-button v-if="canUpdate" @click="openEdit(provider)">编辑</el-button>
               <el-button v-if="canDelete" type="danger" plain @click="removeProvider(provider)">
                 删除
               </el-button>
-            </div>
+            </ActionBar>
           </div>
         </UiCard>
       </div>
@@ -81,13 +68,15 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, DocumentCopy, Plus } from '@element-plus/icons-vue'
+import { Connection, Plus } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import ActionBar from '@/components/common/ActionBar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { deleteIdentityProvider, getAdminIdentityProviders } from '@/api/admin/identity-providers'
 import type { AdminIdentityProvider, User } from '@/api/types'
 import { getErrorMessage } from '@/utils/error'
+import OidcRedirectUriNotice from './OidcRedirectUriNotice.vue'
 
 const router = useRouter()
 const user = inject<Ref<User | null>>('user', ref(null))
@@ -120,11 +109,6 @@ async function loadProviders() {
   } finally {
     loading.value = false
   }
-}
-
-async function copyRedirectUri() {
-  await navigator.clipboard.writeText(redirectUri.value)
-  ElMessage.success('Redirect URI 已复制')
 }
 
 async function removeProvider(provider: AdminIdentityProvider) {

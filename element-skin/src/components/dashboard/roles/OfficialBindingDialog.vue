@@ -63,7 +63,7 @@
     </div>
 
     <template #footer>
-      <div class="dialog-footer">
+      <ActionBar>
         <el-button :disabled="loading" @click="visible = false">取消</el-button>
         <el-button
           type="primary"
@@ -73,7 +73,7 @@
         >
           建立绑定
         </el-button>
-      </div>
+      </ActionBar>
     </template>
   </UiDialog>
 </template>
@@ -81,6 +81,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import ActionBar from '@/components/common/ActionBar.vue'
 import type { ExternalIdentity, OfficialProfileBinding } from '@/api/types'
 
 const visible = defineModel<boolean>('visible', { required: true })

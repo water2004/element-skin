@@ -121,7 +121,7 @@ import type { PermissionDefinition } from '@/api/types'
 import type { OAuthClient, OAuthClientStatus } from '@/api/oauth'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
-import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
+import PermissionToneTag from '@/components/permissions/PermissionToneTag.vue'
 
 const visible = defineModel<boolean>('visible', { required: true })
 

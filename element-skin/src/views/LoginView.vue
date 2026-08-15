@@ -46,7 +46,7 @@
       </div>
 
       <template v-if="loginProviders.length">
-        <el-divider>或使用外部身份登录</el-divider>
+        <el-divider class="external-login-divider">或使用外部身份登录</el-divider>
         <div class="external-login-buttons grid gap-3">
           <el-button
             v-for="provider in loginProviders"
@@ -179,6 +179,10 @@ async function loginWithProvider(providerId: string) {
 .external-login-buttons :deep(.el-button) {
   width: 100%;
   margin-left: 0 !important;
+}
+
+.external-login-divider :deep(.el-divider__text) {
+  background: var(--color-card-background);
 }
 
 .external-login-content {

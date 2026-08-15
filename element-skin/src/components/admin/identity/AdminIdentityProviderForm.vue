@@ -6,23 +6,13 @@
     >
       <template #icon><Connection /></template>
       <template #actions>
-        <el-button :icon="ArrowLeft" @click="backToList">返回列表</el-button>
+        <ActionBar>
+          <el-button :icon="ArrowLeft" @click="backToList">返回列表</el-button>
+        </ActionBar>
       </template>
     </PageHeader>
 
-    <UiCard v-if="redirectUri" class="p-5">
-      <div class="text-sm font-semibold text-[var(--color-heading)]">
-        请在身份提供方添加 Redirect URI
-      </div>
-      <div class="mt-2 flex items-center gap-2">
-        <code
-          class="min-w-0 flex-1 overflow-x-auto rounded-lg bg-[var(--color-background-soft)] px-3 py-2 text-xs text-[var(--color-text)]"
-        >
-          {{ redirectUri }}
-        </code>
-        <el-button :icon="DocumentCopy" @click="copyRedirectUri">复制</el-button>
-      </div>
-    </UiCard>
+    <OidcRedirectUriNotice :uri="redirectUri" />
 
     <div v-loading="loading" class="min-h-[360px] space-y-6">
       <template v-if="!loading">
@@ -109,43 +99,49 @@
             </p>
           </div>
           <div class="grid gap-4 md:grid-cols-3">
-            <label class="rounded-xl border border-[var(--color-border)] p-4">
-              <div class="flex items-center justify-between gap-3">
-                <span class="font-medium text-[var(--color-heading)]">提供方状态</span>
-                <el-switch v-model="form.enabled" />
+            <UiOptionCard as="label">
+              <div class="w-full">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="font-medium text-[var(--color-heading)]">提供方状态</span>
+                  <el-switch v-model="form.enabled" />
+                </div>
+                <div class="mt-2 text-xs text-[var(--color-text-light)]">
+                  关闭后不再展示或接受授权。
+                </div>
               </div>
-              <div class="mt-2 text-xs text-[var(--color-text-light)]">
-                关闭后不再展示或接受授权。
+            </UiOptionCard>
+            <UiOptionCard as="label">
+              <div class="w-full">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="font-medium text-[var(--color-heading)]">允许登录</span>
+                  <el-switch v-model="form.login_enabled" />
+                </div>
+                <div class="mt-2 text-xs text-[var(--color-text-light)]">
+                  同时允许新用户接续注册。
+                </div>
               </div>
-            </label>
-            <label class="rounded-xl border border-[var(--color-border)] p-4">
-              <div class="flex items-center justify-between gap-3">
-                <span class="font-medium text-[var(--color-heading)]">允许登录</span>
-                <el-switch v-model="form.login_enabled" />
+            </UiOptionCard>
+            <UiOptionCard as="label">
+              <div class="w-full">
+                <div class="flex items-center justify-between gap-3">
+                  <span class="font-medium text-[var(--color-heading)]">允许绑定</span>
+                  <el-switch v-model="form.link_enabled" />
+                </div>
+                <div class="mt-2 text-xs text-[var(--color-text-light)]">
+                  允许已有用户连接或重连身份。
+                </div>
               </div>
-              <div class="mt-2 text-xs text-[var(--color-text-light)]">
-                同时允许新用户接续注册。
-              </div>
-            </label>
-            <label class="rounded-xl border border-[var(--color-border)] p-4">
-              <div class="flex items-center justify-between gap-3">
-                <span class="font-medium text-[var(--color-heading)]">允许绑定</span>
-                <el-switch v-model="form.link_enabled" />
-              </div>
-              <div class="mt-2 text-xs text-[var(--color-text-light)]">
-                允许已有用户连接或重连身份。
-              </div>
-            </label>
+            </UiOptionCard>
           </div>
         </UiCard>
 
         <UiCard class="p-5">
-          <div class="flex justify-end gap-2">
+          <ActionBar>
             <el-button :disabled="saving" @click="backToList">取消</el-button>
             <el-button type="primary" :loading="saving" @click="saveProvider">
               {{ providerId ? '保存修改' : '添加提供方' }}
             </el-button>
-          </div>
+          </ActionBar>
         </UiCard>
       </template>
     </div>
@@ -155,7 +151,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Connection, DocumentCopy } from '@element-plus/icons-vue'
+import { ArrowLeft, Connection } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   createIdentityProvider,
@@ -163,8 +159,10 @@ import {
   updateIdentityProvider,
 } from '@/api/admin/identity-providers'
 import { getIdentityProviders } from '@/api/identity'
+import ActionBar from '@/components/common/ActionBar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import UiOptionCard from '@/components/ui/UiOptionCard.vue'
 import { getErrorMessage } from '@/utils/error'
 import {
   applyIdentityProviderAdapterDefaults,
@@ -173,6 +171,7 @@ import {
   identityProviderValidationError,
   type IdentityProviderFormState,
 } from './identityProviderFormState'
+import OidcRedirectUriNotice from './OidcRedirectUriNotice.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -249,10 +248,5 @@ async function saveProvider() {
 
 function backToList() {
   void router.push({ name: 'admin-identity-providers' })
-}
-
-async function copyRedirectUri() {
-  await navigator.clipboard.writeText(redirectUri.value)
-  ElMessage.success('Redirect URI 已复制')
 }
 </script>

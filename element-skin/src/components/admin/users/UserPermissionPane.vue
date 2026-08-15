@@ -201,7 +201,7 @@
 
 <script setup lang="ts">
 import { Plus, Switch } from '@element-plus/icons-vue'
-import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
+import PermissionToneTag from '@/components/permissions/PermissionToneTag.vue'
 import { useUserPermissionEditor } from '@/components/admin/users/useUserPermissionEditor'
 import type { PermissionOverrideEffect, User, UserPermissionsResponse } from '@/api/types'
 

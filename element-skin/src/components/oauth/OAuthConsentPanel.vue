@@ -18,10 +18,7 @@
               </p>
             </div>
           </div>
-          <p
-            v-if="client.description"
-            class="mt-4 mb-0 text-sm leading-6 text-[var(--color-text)]"
-          >
+          <p v-if="client.description" class="mt-4 mb-0 text-sm leading-6 text-[var(--color-text)]">
             {{ client.description }}
           </p>
         </div>
@@ -61,11 +58,7 @@
           class="rounded-lg border border-[var(--color-border)] p-4"
         >
           <div class="flex flex-wrap items-center gap-2">
-            <PermissionToneTag
-              :label="scope.resource_description"
-              tone="sky"
-              variant="category"
-            />
+            <PermissionToneTag :label="scope.resource_description" tone="sky" variant="category" />
             <PermissionToneTag :label="scope.code" tone="slate" :title="scope.description" />
           </div>
           <p class="mt-3 mb-0 text-sm text-[var(--color-text)]">
@@ -90,7 +83,7 @@
 <script setup lang="ts">
 import { Connection, Link } from '@element-plus/icons-vue'
 import type { OAuthClient, OAuthPermissionScope } from '@/api/oauth'
-import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
+import PermissionToneTag from '@/components/permissions/PermissionToneTag.vue'
 
 interface OAuthConsentDetail {
   label: string

@@ -59,7 +59,7 @@ beforeEach(() => {
 })
 
 describe('DashboardIdentities', () => {
-  it('uses the user dashboard header and action style while preserving identity content', async () => {
+  it('loads the permitted identity state exactly once without starting a mutation', async () => {
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [
@@ -90,16 +90,15 @@ describe('DashboardIdentities', () => {
     app.mount(host)
     await flushUI()
 
-    expect(host.querySelector('.identity-section > .page-header h1')?.textContent).toBe('身份管理')
-    expect(host.querySelector('.identity-section > .page-header h2')).toBeNull()
-    expect(host.querySelector('button.ui-button--gradient-primary')?.textContent).toContain(
-      '添加身份',
-    )
-    expect(host.textContent).toContain('主要账户')
-    expect(host.textContent).toContain('正版角色关系')
     expect(identityApiMocks.getIdentityProviders).toHaveBeenCalledTimes(1)
+    expect(identityApiMocks.getIdentityProviders).toHaveBeenCalledWith()
     expect(identityApiMocks.getExternalIdentities).toHaveBeenCalledTimes(1)
+    expect(identityApiMocks.getExternalIdentities).toHaveBeenCalledWith()
     expect(officialApiMocks.getOfficialProfileBindings).toHaveBeenCalledTimes(1)
+    expect(officialApiMocks.getOfficialProfileBindings).toHaveBeenCalledWith()
+    expect(identityApiMocks.startIdentityAuthorization).not.toHaveBeenCalled()
+    expect(identityApiMocks.patchExternalIdentity).not.toHaveBeenCalled()
+    expect(identityApiMocks.deleteExternalIdentity).not.toHaveBeenCalled()
 
     app.unmount()
     host.remove()

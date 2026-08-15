@@ -15,7 +15,7 @@
             提交应用审核，通过后才能开始 OAuth 授权流程。
           </p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <ActionBar>
           <el-button v-if="canReadApps" :loading="loading" @click="loadApps">
             <el-icon><Refresh /></el-icon>
             刷新
@@ -28,7 +28,7 @@
             <el-icon><Plus /></el-icon>
             申请新应用
           </el-button>
-        </div>
+        </ActionBar>
       </div>
 
       <el-alert
@@ -186,8 +186,9 @@ import {
   type OAuthGrant,
 } from '@/api/oauth'
 import type { PermissionDefinition, User } from '@/api/types'
+import ActionBar from '@/components/common/ActionBar.vue'
 import UiCard from '@/components/ui/UiCard.vue'
-import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
+import PermissionToneTag from '@/components/permissions/PermissionToneTag.vue'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()

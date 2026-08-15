@@ -32,15 +32,17 @@
           </div>
         </div>
 
-        <el-button
-          v-if="canAdd && group.enabled && group.link_enabled"
-          :loading="authorizingProviderId === group.id"
-          :disabled="!!authorizingProviderId || !!reconnectingIdentityId"
-          @click="$emit('add', group.id)"
-        >
-          <el-icon><Plus /></el-icon>
-          添加另一个
-        </el-button>
+        <ActionBar>
+          <el-button
+            v-if="canAdd && group.enabled && group.link_enabled"
+            :loading="authorizingProviderId === group.id"
+            :disabled="!!authorizingProviderId || !!reconnectingIdentityId"
+            @click="$emit('add', group.id)"
+          >
+            <el-icon><Plus /></el-icon>
+            添加另一个
+          </el-button>
+        </ActionBar>
       </div>
     </template>
 
@@ -127,7 +129,7 @@
             </div>
           </div>
 
-          <div class="flex shrink-0 flex-wrap gap-2 lg:justify-end">
+          <ActionBar class="shrink-0">
             <el-button
               v-if="
                 canAdd &&
@@ -146,7 +148,7 @@
             <el-button v-if="canDelete" type="danger" plain @click="$emit('remove', identity)">
               删除
             </el-button>
-          </div>
+          </ActionBar>
         </div>
       </article>
     </div>
@@ -154,7 +156,9 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Connection, Plus } from '@element-plus/icons-vue'
+import ActionBar from '@/components/common/ActionBar.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import type { ExternalIdentity, OfficialProfileBinding } from '@/api/types'
 import type { IdentityProviderGroup } from './viewTypes'
@@ -177,8 +181,18 @@ defineEmits<{
   'manage-roles': []
 }>()
 
+const bindingsByIdentity = computed(() => {
+  const grouped = new Map<string, OfficialProfileBinding[]>()
+  for (const binding of props.bindings) {
+    const items = grouped.get(binding.identity_id)
+    if (items) items.push(binding)
+    else grouped.set(binding.identity_id, [binding])
+  }
+  return grouped
+})
+
 function bindingsFor(identityId: string) {
-  return props.bindings.filter((binding) => binding.identity_id === identityId)
+  return bindingsByIdentity.value.get(identityId) ?? []
 }
 
 function identityName(identity: ExternalIdentity) {

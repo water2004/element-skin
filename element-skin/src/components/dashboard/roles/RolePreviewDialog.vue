@@ -83,7 +83,7 @@
             >
               UUID: {{ formatUUID(officialBinding.remote_uuid) }}
             </div>
-            <div class="mt-3 flex gap-2">
+            <ActionBar full>
               <el-button
                 v-if="canSyncOfficialBinding"
                 type="success"
@@ -102,7 +102,7 @@
               >
                 解除绑定
               </el-button>
-            </div>
+            </ActionBar>
           </div>
         </section>
 
@@ -115,7 +115,7 @@
           >
             快捷操作
           </div>
-          <div class="apply-row flex gap-2">
+          <ActionBar full>
             <el-button
               v-if="profile.skin_hash"
               type="primary"
@@ -143,7 +143,7 @@
             >
               清除披风
             </el-button>
-          </div>
+          </ActionBar>
         </section>
 
         <section class="mt-auto py-3.5">
@@ -167,6 +167,7 @@ import type { InputInstance } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
 import type { OfficialProfileBinding, Profile } from '@/api/types'
 import SkinViewer from '@/components/SkinViewer.vue'
+import ActionBar from '@/components/common/ActionBar.vue'
 import { formatUUID } from '@/utils/format'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiViewerLayout from '@/components/ui/UiViewerLayout.vue'
@@ -207,10 +208,6 @@ function focusNameInput() {
 </script>
 
 <style scoped>
-.apply-row .el-button {
-  margin-left: 0 !important;
-}
-
 .title-action-button {
   width: 32px !important;
   height: 32px !important;

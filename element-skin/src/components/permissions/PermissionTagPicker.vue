@@ -59,7 +59,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { PermissionDefinition } from '@/api/types'
-import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
+import PermissionToneTag from '@/components/permissions/PermissionToneTag.vue'
 import {
   createPermissionDisplayItem,
   groupPermissionItems,
