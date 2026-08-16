@@ -3,14 +3,12 @@
     <template #header>
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex min-w-0 items-center gap-3">
-          <div
-            class="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[var(--color-background-soft)]"
-          >
+          <div class="flex h-10 w-10 shrink-0 items-center justify-center">
             <img
               v-if="group.icon_url"
               :src="group.icon_url"
               alt=""
-              class="h-6 w-6 object-contain"
+              class="h-8 w-8 object-contain"
             />
             <el-icon v-else :size="20" class="text-[var(--el-color-primary)]">
               <Connection />
@@ -102,28 +100,35 @@
 
               <div
                 v-if="group.adapter === 'microsoft'"
-                class="mt-4 flex flex-col gap-2 rounded-xl bg-[var(--color-background-soft)] p-3 sm:flex-row sm:items-center sm:justify-between"
+                class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm"
               >
-                <div class="min-w-0">
-                  <div class="text-xs font-medium text-[var(--color-text-light)]">正版角色关系</div>
-                  <div v-if="bindingsFor(identity.id).length" class="mt-2 flex flex-wrap gap-2">
-                    <el-tag
-                      v-for="binding in bindingsFor(identity.id)"
-                      :key="binding.id"
-                      effect="plain"
-                    >
-                      {{ binding.profile.name }}
-                      <span class="ml-1 text-[var(--color-text-light)]">
-                        → {{ binding.remote_name }}
+                <span
+                  class="inline-flex items-center gap-1.5 font-medium text-[var(--color-heading)]"
+                >
+                  <el-icon class="text-[var(--el-color-success)]"><LinkIcon /></el-icon>
+                  正版角色
+                </span>
+                <div v-if="bindingsFor(identity.id).length" class="flex min-w-0 flex-wrap gap-2">
+                  <span
+                    v-for="binding in bindingsFor(identity.id)"
+                    :key="binding.id"
+                    class="inline-flex min-w-0 items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-card-background)] px-2.5 py-1 text-xs text-[var(--color-heading)]"
+                  >
+                    <span class="max-w-36 truncate">{{ binding.profile.name }}</span>
+                    <template v-if="binding.profile.name !== binding.remote_name">
+                      <el-icon class="shrink-0 text-[var(--color-text-light)]"
+                        ><ArrowRight
+                      /></el-icon>
+                      <span class="max-w-36 truncate text-[var(--color-text-light)]">
+                        {{ binding.remote_name }}
                       </span>
-                    </el-tag>
-                  </div>
-                  <div v-else class="mt-1 text-sm text-[var(--color-text-light)]">
-                    尚未关联本站角色
-                  </div>
+                    </template>
+                  </span>
                 </div>
-                <el-button link type="primary" @click="$emit('manage-roles')">
-                  前往角色管理
+                <span v-else class="text-[var(--color-text-light)]">尚未绑定</span>
+                <el-button link type="primary" size="small" @click="$emit('manage-roles')">
+                  {{ bindingsFor(identity.id).length ? '管理角色' : '绑定角色' }}
+                  <el-icon class="ml-1"><ArrowRight /></el-icon>
                 </el-button>
               </div>
             </div>
@@ -157,7 +162,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Connection, Plus } from '@element-plus/icons-vue'
+import { ArrowRight, Connection, Link as LinkIcon, Plus } from '@element-plus/icons-vue'
 import ActionBar from '@/components/common/ActionBar.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import type { ExternalIdentity, OfficialProfileBinding } from '@/api/types'

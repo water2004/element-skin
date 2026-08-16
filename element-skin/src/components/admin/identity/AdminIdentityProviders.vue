@@ -26,9 +26,17 @@
       <div v-if="providers.length" class="grid gap-4">
         <UiCard v-for="provider in providers" :key="provider.id" hoverable>
           <div class="flex flex-col md:flex-row md:items-start gap-4">
-            <el-avatar :size="48" :src="provider.icon_url || undefined">
-              {{ provider.name.charAt(0).toUpperCase() }}
-            </el-avatar>
+            <div class="flex h-12 w-12 shrink-0 items-center justify-center">
+              <img
+                v-if="provider.icon_url"
+                :src="provider.icon_url"
+                alt=""
+                class="h-12 w-12 object-contain"
+              />
+              <el-icon v-else :size="28" class="text-[var(--el-color-primary)]">
+                <Connection />
+              </el-icon>
+            </div>
             <div class="min-w-0 flex-1">
               <div class="flex flex-wrap items-center gap-2">
                 <span class="font-semibold text-lg text-[var(--color-heading)]">
