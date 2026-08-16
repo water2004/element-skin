@@ -155,7 +155,7 @@ func TestMicrosoftProviderRequiresMinecraftAndRefreshScopesExactly(t *testing.T)
 	}
 }
 
-func TestIdentityDeletionRejectsBindingAndProviderDeletionCascadesExactly(t *testing.T) {
+func TestIdentityAndProviderDeletionDetachBindingsAndPreserveProfilesExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	admin := testutil.CreateUser(t, db, "identity-dependency-admin@test.com", "pw", "IdentityDependencyAdmin", true)
@@ -190,8 +190,46 @@ func TestIdentityDeletionRejectsBindingAndProviderDeletionCascadesExactly(t *tes
 		t.Fatal(err)
 	}
 	service := identity.Service{DB: db, Redis: cache}
-	assertHTTPError(t, service.DeleteIdentity(ctx, userActor, external.ID), 409,
-		"external identity is still used by an official profile binding")
+	detachedIdentity := model.ExternalIdentity{
+		ID: "identity-user-delete", UserID: user.ID, ProviderID: provider.ID,
+		Subject: "user-delete-subject", CreatedAt: 4, UpdatedAt: 4,
+	}
+	if err := db.Identities.CreateIdentity(ctx, detachedIdentity, model.ExternalIdentityCredential{IdentityID: detachedIdentity.ID, UpdatedAt: 4}); err != nil {
+		t.Fatal(err)
+	}
+	detachedProfile := testutil.CreateProfile(t, db, user.ID, "profile_user_identity_delete", "UserIdentityDeleteProfile")
+	if _, err := db.Pool.Exec(ctx, `
+		INSERT INTO official_profile_bindings
+			(id,identity_id,profile_id,remote_uuid,remote_name,created_at,updated_at)
+		VALUES ('binding-user-identity-delete',$1,$2,'remote-user-delete','RemoteDelete',5,5)
+	`, detachedIdentity.ID, detachedProfile.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{
+		IdentityID: detachedIdentity.ID, AccessToken: "identity-delete-access", ExpiresAt: time.Now().Add(time.Hour).UnixMilli(),
+	}, time.Hour); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.DeleteIdentity(ctx, userActor, detachedIdentity.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, state := range []struct {
+		query string
+		want  int
+	}{
+		{`SELECT COUNT(*) FROM external_identities WHERE id='identity-user-delete'`, 0},
+		{`SELECT COUNT(*) FROM external_identity_credentials WHERE identity_id='identity-user-delete'`, 0},
+		{`SELECT COUNT(*) FROM official_profile_bindings WHERE id='binding-user-identity-delete'`, 0},
+		{`SELECT COUNT(*) FROM profiles WHERE id='profile_user_identity_delete'`, 1},
+	} {
+		var count int
+		if err := db.Pool.QueryRow(ctx, state.query).Scan(&count); err != nil || count != state.want {
+			t.Fatalf("identity deletion state count=%d want=%d err=%v query=%q", count, state.want, err, state.query)
+		}
+	}
+	if _, err := cache.GetExternalAccessToken(ctx, detachedIdentity.ID); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("identity deletion must remove cached external access token: %v", err)
+	}
 	failingService := identity.Service{DB: db, Redis: externalTokenDeleteFailStore{Store: cache}}
 	if err := failingService.DeleteProvider(ctx, adminActor, provider.ID); err == nil || err.Error() != "external access token deletion failed" {
 		t.Fatalf("provider cache cleanup failure mismatch: %#v", err)

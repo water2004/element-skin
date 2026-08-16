@@ -578,7 +578,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	}
 }
 
-func TestOIDCAuthorizationReusesOwnedIdentityAndRollsBackDependencyFailuresExactly(t *testing.T) {
+func TestOIDCAuthorizationRejectsDuplicateIdentityLinksAndPropagatesDependencyFailuresExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user := testutil.CreateUser(t, db, "oidc-reuse-user@test.com", "pw", "OIDCReuseUser", false)
@@ -614,13 +614,22 @@ func TestOIDCAuthorizationReusesOwnedIdentityAndRollsBackDependencyFailuresExact
 		t.Fatal(err)
 	}
 	result, err := service.CompleteAuthorization(ctx, "owned-code", mustAuthorizationState(t, started.AuthorizationURL), "")
-	if err != nil || result.Intent != "link" || result.UserID != user.ID || result.IdentityID != "oidc-reuse-owned" ||
-		result.ProviderID != provider.ID {
-		t.Fatalf("owned identity reuse result=%#v err=%v", result, err)
+	if result != (identity.AuthorizationResult{}) {
+		t.Fatalf("duplicate owned identity result=%#v", result)
+	}
+	assertHTTPError(t, err, 409, identity.AuthorizationAlreadyLinkedDetail)
+	if code, ok := identity.AuthorizationLinkErrorCode(err); !ok || code != "already_linked" {
+		t.Fatalf("duplicate owned identity error code=%q ok=%v", code, ok)
 	}
 	updated, err := db.Identities.GetIdentity(ctx, "oidc-reuse-owned")
-	if err != nil || updated == nil || updated.Email != "updated@remote.example" || updated.LastLoginAt == nil {
-		t.Fatalf("owned identity reuse state=%#v err=%v", updated, err)
+	if err != nil || updated == nil || updated.Email != "" || updated.LastLoginAt != nil || updated.UpdatedAt != 1 {
+		t.Fatalf("duplicate owned identity mutated state=%#v err=%v", updated, err)
+	}
+	if credential, err := db.Identities.GetCredential(ctx, updated.ID); err != nil || credential == nil || credential.UpdatedAt != 1 || credential.RefreshTokenCiphertext != "" {
+		t.Fatalf("duplicate owned identity mutated credential=%#v err=%v", credential, err)
+	}
+	if _, err := cache.GetExternalAccessToken(ctx, updated.ID); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("duplicate owned identity cached a token: %v", err)
 	}
 
 	client.claims = identity.OIDCClaims{Subject: "foreign-subject"}
@@ -631,7 +640,14 @@ func TestOIDCAuthorizationReusesOwnedIdentityAndRollsBackDependencyFailuresExact
 	if _, err := service.CompleteAuthorization(ctx, "foreign-code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
 		t.Fatal("foreign linked identity should fail")
 	} else {
-		assertHTTPError(t, err, 409, "this external identity is already linked to another account")
+		assertHTTPError(t, err, 409, identity.AuthorizationLinkedElsewhereDetail)
+		if code, ok := identity.AuthorizationLinkErrorCode(err); !ok || code != "already_linked" {
+			t.Fatalf("foreign linked identity error code=%q ok=%v", code, ok)
+		}
+	}
+	foreign, err := db.Identities.GetIdentity(ctx, "oidc-reuse-foreign")
+	if err != nil || foreign == nil || foreign.UserID != other.ID || foreign.UpdatedAt != 2 || foreign.LastLoginAt != nil {
+		t.Fatalf("foreign duplicate link mutated identity=%#v err=%v", foreign, err)
 	}
 
 	cache.Err = errors.New("identity state unavailable")

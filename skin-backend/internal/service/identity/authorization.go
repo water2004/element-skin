@@ -24,6 +24,8 @@ const (
 
 	AuthorizationAccountMismatchDetail = "authorized account does not match the external identity being reconnected"
 	AuthorizationLinkIncompleteDetail  = "external identity authorization was not completed"
+	AuthorizationAlreadyLinkedDetail   = "this external identity is already linked to this account"
+	AuthorizationLinkedElsewhereDetail = "this external identity is already linked to another account"
 
 	authorizationStateKind = "oidc_authorization"
 	registrationStateKind  = "oidc_registration"
@@ -204,12 +206,9 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		}
 		if existing != nil {
 			if existing.UserID == userID {
-				if err := s.updateIdentityAuthorization(ctx, *existing, claims, tokens); err != nil {
-					return AuthorizationResult{}, err
-				}
-				return AuthorizationResult{Intent: intent, UserID: userID, IdentityID: existing.ID, ProviderID: provider.ID}, nil
+				return AuthorizationResult{}, conflict(AuthorizationAlreadyLinkedDetail)
 			}
-			return AuthorizationResult{}, conflict("this external identity is already linked to another account")
+			return AuthorizationResult{}, conflict(AuthorizationLinkedElsewhereDetail)
 		}
 		identityID, err := s.createIdentity(ctx, userID, *provider, claims, tokens)
 		if err != nil {
@@ -246,6 +245,8 @@ func AuthorizationLinkErrorCode(err error) (string, bool) {
 		return "account_mismatch", true
 	case AuthorizationLinkIncompleteDetail:
 		return "authorization_incomplete", true
+	case AuthorizationAlreadyLinkedDetail, AuthorizationLinkedElsewhereDetail:
+		return "already_linked", true
 	default:
 		return "", false
 	}

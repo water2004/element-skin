@@ -328,20 +328,6 @@ func (s Store) ListIdentitiesByUser(ctx context.Context, userID string) ([]model
 	return items, rows.Err()
 }
 
-func (s Store) UpdateIdentityClaims(ctx context.Context, item model.ExternalIdentity) (bool, error) {
-	tag, err := s.Pool.Exec(ctx, `
-		UPDATE external_identities
-		SET email=$3, email_verified=$4, display_name=$5, avatar_url=$6,
-			updated_at=$7, last_login_at=$8
-		WHERE id=$1 AND user_id=$2
-	`, item.ID, item.UserID, item.Email, item.EmailVerified, item.DisplayName,
-		item.AvatarURL, item.UpdatedAt, item.LastLoginAt)
-	if err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() == 1, nil
-}
-
 func (s Store) UpdateIdentityAuthorization(ctx context.Context, item model.ExternalIdentity, credential model.ExternalIdentityCredential) (bool, error) {
 	normalizeCredential(&credential)
 	tx, err := s.Pool.Begin(ctx)
@@ -384,8 +370,23 @@ func (s Store) UpdateIdentityLabel(ctx context.Context, id, userID, label string
 }
 
 func (s Store) DeleteIdentity(ctx context.Context, id, userID string) (bool, error) {
-	tag, err := s.Pool.Exec(ctx, `DELETE FROM external_identities WHERE id=$1 AND user_id=$2`, id, userID)
+	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM official_profile_bindings binding
+		USING external_identities identity
+		WHERE binding.identity_id=identity.id AND identity.id=$1 AND identity.user_id=$2
+	`, id, userID); err != nil {
+		return false, err
+	}
+	tag, err := tx.Exec(ctx, `DELETE FROM external_identities WHERE id=$1 AND user_id=$2`, id, userID)
+	if err != nil {
+		return false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return false, err
 	}
 	return tag.RowsAffected() == 1, nil

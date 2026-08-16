@@ -1,5 +1,5 @@
 import { createApp, h, nextTick, ref } from 'vue'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExternalIdentity, IdentityProvider, User } from '@/api/types'
@@ -102,6 +102,60 @@ describe('DashboardIdentities', () => {
 
     app.unmount()
     host.remove()
+  })
+
+  it('deletes an identity after confirming that bindings detach and roles remain', async () => {
+    const confirm = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
+    identityApiMocks.deleteExternalIdentity.mockResolvedValue({ data: null })
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/dashboard/identities', component: DashboardIdentities },
+        { path: '/dashboard/roles', component: { render: () => h('div') } },
+      ],
+    })
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const app = createApp({ render: () => h(DashboardIdentities) })
+    app.use(router)
+    app.use(ElementPlus)
+    app.provide(
+      'user',
+      ref({
+        id: 'user-1',
+        permissions: [
+          'external_identity.read.owned',
+          'external_identity.delete.owned',
+          'official_profile.read.owned',
+        ],
+      } as User),
+    )
+    await router.push('/dashboard/identities')
+    await router.isReady()
+    app.mount(host)
+    await flushUI()
+
+    const deleteButton = [...host.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === '删除',
+    )
+    expect(deleteButton).toBeDefined()
+    deleteButton?.click()
+    await flushUI()
+    await flushUI()
+
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(confirm).toHaveBeenCalledWith(
+      '删除身份会同时解除它关联的正版角色关系，但不会删除任何本站角色。此操作不可撤销。',
+      '删除外部身份',
+      { type: 'warning', confirmButtonText: '删除身份', cancelButtonText: '取消' },
+    )
+    expect(identityApiMocks.deleteExternalIdentity).toHaveBeenCalledTimes(1)
+    expect(identityApiMocks.deleteExternalIdentity).toHaveBeenCalledWith(identity.id)
+    expect(identityApiMocks.getExternalIdentities).toHaveBeenCalledTimes(2)
+
+    app.unmount()
+    host.remove()
+    confirm.mockRestore()
   })
 })
 

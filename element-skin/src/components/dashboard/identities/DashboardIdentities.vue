@@ -206,7 +206,7 @@ async function renameIdentity(identity: ExternalIdentity) {
 async function removeIdentity(identity: ExternalIdentity) {
   try {
     await ElMessageBox.confirm(
-      '删除身份不会删除本站账号或角色；如果它仍关联正版角色，需要先在角色管理中解除关系。',
+      '删除身份会同时解除它关联的正版角色关系，但不会删除任何本站角色。此操作不可撤销。',
       '删除外部身份',
       { type: 'warning', confirmButtonText: '删除身份', cancelButtonText: '取消' },
     )
@@ -228,6 +228,8 @@ onMounted(async () => {
   const identityError = route.query.identity_error
   if (identityError === 'account_mismatch') {
     ElMessage.error('重新连接失败：请选择这个身份原来对应的外部账号')
+  } else if (identityError === 'already_linked') {
+    ElMessage.error('该外部身份已经绑定，不能重复绑定')
   } else if (identityError === 'authorization_incomplete') {
     ElMessage.info('身份连接未完成，原有身份没有改变')
   } else if (typeof route.query.linked_identity_id === 'string') {

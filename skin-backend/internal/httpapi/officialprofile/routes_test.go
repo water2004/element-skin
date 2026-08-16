@@ -78,7 +78,7 @@ func TestOfficialProfileRoutesUseExactSeparateV2ResourceContracts(t *testing.T) 
 		t.Fatal(err)
 	}
 	bindingID, _ := created["id"].(string)
-	if len(created) != 13 || bindingID == "" || created["identity_id"] != external.ID || created["profile_id"] != remoteUUID || created["remote_name"] != "HttpRemote" || created["last_synced_at"] != nil {
+	if len(created) != 13 || bindingID == "" || created["identity_id"] != external.ID || created["profile_id"] != remoteUUID || created["remote_name"] != "HttpRemote" || created["last_synced_at"] == nil || created["last_synced_at"] != created["updated_at"] {
 		t.Fatalf("created resource mismatch: %#v", created)
 	}
 

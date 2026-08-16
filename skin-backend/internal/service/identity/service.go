@@ -236,9 +236,6 @@ func (s Service) DeleteIdentity(ctx context.Context, actor permission.Actor, id 
 	}
 	deleted, err := s.DB.Identities.DeleteIdentity(ctx, id, actor.UserID)
 	if err != nil {
-		if isForeignKeyViolation(err) {
-			return conflict("external identity is still used by an official profile binding")
-		}
 		return err
 	}
 	if !deleted {
@@ -440,11 +437,6 @@ func identityResponse(item model.ExternalIdentity, provider model.IdentityProvid
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
-}
-
-func isForeignKeyViolation(err error) bool {
-	var pgErr *pgconn.PgError
-	return errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23001")
 }
 
 func badRequest(detail string) util.HTTPError { return util.HTTPError{Status: 400, Detail: detail} }

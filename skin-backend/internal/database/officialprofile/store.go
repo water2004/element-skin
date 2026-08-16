@@ -7,6 +7,7 @@ import (
 	"element-skin/backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -40,6 +41,8 @@ type CreateInput struct {
 	UserID       string
 	ProfileNames []string
 	ProfileModel string
+	SkinHash     *string
+	CapeHash     *string
 }
 
 var (
@@ -127,6 +130,19 @@ func (s Store) Create(ctx context.Context, input CreateInput) error {
 		if !created {
 			return ErrProfileNameUnavailable
 		}
+	}
+	if err := addTexture(ctx, tx, input.UserID, input.SkinHash, "skin", input.ProfileModel, item.CreatedAt); err != nil {
+		return err
+	}
+	if err := addTexture(ctx, tx, input.UserID, input.CapeHash, "cape", "default", item.CreatedAt); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE profiles
+		SET texture_model=$1,skin_hash=$2,cape_hash=$3
+		WHERE id=$4
+	`, input.ProfileModel, input.SkinHash, input.CapeHash, item.ProfileID); err != nil {
+		return err
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -217,6 +233,9 @@ func (s Store) Sync(ctx context.Context, input SyncInput) (bool, error) {
 		return false, err
 	}
 
+	if err := syncProfileName(ctx, tx, profileID, input.RemoteName); err != nil {
+		return false, err
+	}
 	if err := addTexture(ctx, tx, input.UserID, input.SkinHash, "skin", input.RemoteSkinModel, input.SyncedAt); err != nil {
 		return false, err
 	}
@@ -225,9 +244,9 @@ func (s Store) Sync(ctx context.Context, input SyncInput) (bool, error) {
 	}
 	if _, err := tx.Exec(ctx, `
 		UPDATE profiles
-		SET name=$1,texture_model=$2,skin_hash=$3,cape_hash=$4
-		WHERE id=$5
-	`, input.RemoteName, input.RemoteSkinModel, input.SkinHash, input.CapeHash, profileID); err != nil {
+		SET texture_model=$1,skin_hash=$2,cape_hash=$3
+		WHERE id=$4
+	`, input.RemoteSkinModel, input.SkinHash, input.CapeHash, profileID); err != nil {
 		return false, err
 	}
 	if _, err := tx.Exec(ctx, `
@@ -240,6 +259,27 @@ func (s Store) Sync(ctx context.Context, input SyncInput) (bool, error) {
 		return false, err
 	}
 	return true, tx.Commit(ctx)
+}
+
+func syncProfileName(ctx context.Context, tx pgx.Tx, profileID, remoteName string) error {
+	if _, err := tx.Exec(ctx, `SAVEPOINT official_profile_name_sync`); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE profiles SET name=$1 WHERE id=$2`, remoteName, profileID); err != nil {
+		if !isProfileNameConflict(err) {
+			return err
+		}
+		if _, rollbackErr := tx.Exec(ctx, `ROLLBACK TO SAVEPOINT official_profile_name_sync`); rollbackErr != nil {
+			return rollbackErr
+		}
+	}
+	_, err := tx.Exec(ctx, `RELEASE SAVEPOINT official_profile_name_sync`)
+	return err
+}
+
+func isProfileNameConflict(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "profiles_name_key"
 }
 
 func addTexture(ctx context.Context, tx pgx.Tx, userID string, hash *string, textureType, textureModel string, createdAt int64) error {

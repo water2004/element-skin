@@ -4,10 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/png"
+	"io"
+	"net/http"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -37,6 +41,12 @@ type resolverResponse struct {
 	err    error
 }
 
+type officialRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (roundTrip officialRoundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return roundTrip(request)
+}
+
 func (f *fakeMicrosoftResolver) Resolve(_ context.Context, accessToken string) (microsoftsvc.ProfileResult, error) {
 	f.calls++
 	f.accessToken = accessToken
@@ -59,12 +69,16 @@ func (f *fakeOfficialTokenRefresher) Refresh(context.Context, model.IdentityProv
 	return f.tokens, f.err
 }
 
-func TestOfficialBindingCreationRecordsRelationshipWithoutMutatingProfile(t *testing.T) {
+func TestOfficialBindingCreationImportsRemoteTexturesIntoExistingOwnedProfile(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user, identity, profile, identities, cache := officialFixture(t, db, identitysvc.AdapterMicrosoft)
 	resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
-	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+	textureDir := t.TempDir()
+	service := officialsvc.Service{
+		DB: db, Identities: identities, Resolver: resolver, TexturesDir: textureDir,
+		Download: officialTextureDownloader(t),
+	}
 	actor := officialActor(user.ID, "official_profile.create.owned")
 
 	created, err := service.Create(ctx, actor, identity.ID)
@@ -72,12 +86,27 @@ func TestOfficialBindingCreationRecordsRelationshipWithoutMutatingProfile(t *tes
 		t.Fatal(err)
 	}
 	bindingID, _ := created["id"].(string)
-	if bindingID == "" || created["identity_id"] != identity.ID || created["profile_id"] != profile.ID || created["remote_uuid"] != "0123456789abcdef0123456789abcdef" || created["remote_name"] != "RemoteSteve" || created["remote_skin_url"] != "https://textures.example/skin.png" || created["remote_cape_url"] != "https://textures.example/cape.png" || created["remote_skin_model"] != "slim" || created["last_synced_at"] != (*int64)(nil) {
+	lastSyncedAt, synced := created["last_synced_at"].(*int64)
+	if bindingID == "" || created["identity_id"] != identity.ID || created["profile_id"] != profile.ID || created["remote_uuid"] != "0123456789abcdef0123456789abcdef" || created["remote_name"] != "RemoteSteve" || created["remote_skin_url"] != "https://textures.example/skin.png" || created["remote_cape_url"] != "https://textures.example/cape.png" || created["remote_skin_model"] != "slim" || !synced || lastSyncedAt == nil || *lastSyncedAt != created["updated_at"] {
 		t.Fatalf("created binding mismatch: %#v", created)
 	}
 	storedProfile, err := db.Profiles.GetByID(ctx, profile.ID)
-	if err != nil || storedProfile == nil || *storedProfile != profile {
-		t.Fatalf("binding creation mutated profile: profile=%#v err=%v", storedProfile, err)
+	if err != nil || storedProfile == nil || storedProfile.Name != profile.Name || storedProfile.TextureModel != "slim" || storedProfile.SkinHash == nil || storedProfile.CapeHash == nil {
+		t.Fatalf("binding creation profile mismatch: profile=%#v err=%v", storedProfile, err)
+	}
+	for _, imported := range []struct {
+		hash, textureType, model string
+	}{
+		{*storedProfile.SkinHash, "skin", "slim"},
+		{*storedProfile.CapeHash, "cape", "default"},
+	} {
+		if _, err := os.Stat(textureDir + string(os.PathSeparator) + imported.hash + ".png"); err != nil {
+			t.Fatalf("imported %s file missing: %v", imported.textureType, err)
+		}
+		info, err := db.Textures.GetInfo(ctx, user.ID, imported.hash, imported.textureType)
+		if err != nil || info == nil || info["model"] != imported.model || info["is_public"] != 0 {
+			t.Fatalf("imported %s library row=%#v err=%v", imported.textureType, info, err)
+		}
 	}
 	if resolver.calls != 1 || resolver.accessToken != "microsoft-access" {
 		t.Fatalf("resolver calls=%d access=%q", resolver.calls, resolver.accessToken)
@@ -88,6 +117,81 @@ func TestOfficialBindingCreationRecordsRelationshipWithoutMutatingProfile(t *tes
 
 	_, err = service.Create(ctx, actor, identity.ID)
 	assertOfficialHTTPError(t, err, 409, "official profile is already bound")
+}
+
+func TestOfficialBindingUsesDefaultDownloaderAndAllowsMissingCapeExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user, identity, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	skin := texturePNG(t, 64, 64, color.RGBA{R: 31, G: 63, B: 127, A: 255})
+	const skinURL = "https://textures.minecraft.net/texture/official-test-skin"
+	requestedURL := ""
+	httpClient := &http.Client{Transport: officialRoundTripFunc(func(request *http.Request) (*http.Response, error) {
+		requestedURL = request.URL.String()
+		return &http.Response{
+			StatusCode: http.StatusOK, Header: make(http.Header), ContentLength: int64(len(skin)),
+			Body: io.NopCloser(bytes.NewReader(skin)), Request: request,
+		}, nil
+	})}
+	remote := remoteProfile()
+	remote.Skins[0].URL = skinURL
+	remote.Capes = nil
+	textureDir := t.TempDir()
+	service := officialsvc.Service{
+		DB: db, Identities: identities,
+		Resolver:    &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remote}},
+		TexturesDir: textureDir, HTTPClient: httpClient,
+	}
+
+	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if requestedURL != skinURL || created["remote_skin_url"] != skinURL || created["remote_cape_url"] != "" {
+		t.Fatalf("created texture metadata=%#v", created)
+	}
+	stored, err := db.Profiles.GetByID(ctx, profile.ID)
+	if err != nil || stored == nil || stored.SkinHash == nil || stored.CapeHash != nil {
+		t.Fatalf("stored profile=%#v err=%v", stored, err)
+	}
+	if _, err := os.Stat(textureDir + string(os.PathSeparator) + *stored.SkinHash + ".png"); err != nil {
+		t.Fatalf("downloaded skin file missing: %v", err)
+	}
+}
+
+func TestOfficialBindingRejectsExhaustedProfileNamesWithoutPartialStateExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user, identity, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM profiles WHERE id=$1`, profile.ID); err != nil {
+		t.Fatal(err)
+	}
+	remote := remoteProfile()
+	remote.Skins = nil
+	remote.Capes = nil
+	for attempt := range 100 {
+		testutil.CreateProfile(
+			t, db, user.ID, fmt.Sprintf("exhausted-profile-%03d", attempt),
+			util.ProfileNameCandidate(remote.Name, attempt),
+		)
+	}
+	service := officialsvc.Service{
+		DB: db, Identities: identities,
+		Resolver: &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remote}},
+	}
+
+	result, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
+	if result != nil {
+		t.Fatalf("exhausted-name create result=%#v err=%v", result, err)
+	}
+	assertOfficialHTTPError(t, err, http.StatusConflict, "unable to allocate profile name")
+	if stored, getErr := db.Profiles.GetByID(ctx, profile.ID); getErr != nil || stored != nil {
+		t.Fatalf("exhausted-name create remote profile=%#v err=%v", stored, getErr)
+	}
+	var bindingCount int
+	if getErr := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM official_profile_bindings WHERE identity_id=$1`, identity.ID).Scan(&bindingCount); getErr != nil || bindingCount != 0 {
+		t.Fatalf("exhausted-name create bindings=%d err=%v", bindingCount, getErr)
+	}
 }
 
 func TestOfficialBindingClaimsTheRemoteUUIDWithExactOwnershipRules(t *testing.T) {
@@ -101,7 +205,10 @@ func TestOfficialBindingClaimsTheRemoteUUIDWithExactOwnershipRules(t *testing.T)
 		nameOwner := testutil.CreateUser(t, db, "official-name-owner@test.com", "Password123", "NameOwner", false)
 		testutil.CreateProfile(t, db, nameOwner.ID, "official-name-owner-profile", "RemoteSteve")
 		resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
-		service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+		service := officialsvc.Service{
+			DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir(),
+			Download: officialTextureDownloader(t),
+		}
 
 		created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
 		if err != nil {
@@ -111,8 +218,14 @@ func TestOfficialBindingClaimsTheRemoteUUIDWithExactOwnershipRules(t *testing.T)
 			t.Fatalf("created binding UUID mismatch: %#v", created)
 		}
 		stored, err := db.Profiles.GetByID(ctx, profile.ID)
-		if err != nil || stored == nil || stored.UserID != user.ID || stored.Name != "RemoteSteve_1" || stored.TextureModel != "slim" || stored.SkinHash != nil || stored.CapeHash != nil {
+		if err != nil || stored == nil || stored.UserID != user.ID || stored.Name != "RemoteSteve_1" || stored.TextureModel != "slim" || stored.SkinHash == nil || stored.CapeHash == nil {
 			t.Fatalf("created official profile=%#v err=%v", stored, err)
+		}
+		if skin, err := db.Textures.GetInfo(ctx, user.ID, *stored.SkinHash, "skin"); err != nil || skin == nil || skin["model"] != "slim" || skin["is_public"] != 0 {
+			t.Fatalf("collision-safe profile skin row=%#v err=%v", skin, err)
+		}
+		if cape, err := db.Textures.GetInfo(ctx, user.ID, *stored.CapeHash, "cape"); err != nil || cape == nil || cape["model"] != "default" || cape["is_public"] != 0 {
+			t.Fatalf("collision-safe profile cape row=%#v err=%v", cape, err)
 		}
 	})
 
@@ -126,7 +239,11 @@ func TestOfficialBindingClaimsTheRemoteUUIDWithExactOwnershipRules(t *testing.T)
 		other := testutil.CreateUser(t, db, "official-uuid-owner@test.com", "Password123", "UUIDOwner", false)
 		foreign := testutil.CreateProfile(t, db, other.ID, profile.ID, "ForeignOfficial")
 		resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
-		service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+		textureDir := t.TempDir()
+		service := officialsvc.Service{
+			DB: db, Identities: identities, Resolver: resolver, TexturesDir: textureDir,
+			Download: officialTextureDownloader(t),
+		}
 
 		created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
 		if created != nil {
@@ -140,6 +257,9 @@ func TestOfficialBindingClaimsTheRemoteUUIDWithExactOwnershipRules(t *testing.T)
 		bindings, listErr := db.OfficialProfiles.ListByUser(ctx, user.ID)
 		if listErr != nil || len(bindings) != 0 {
 			t.Fatalf("foreign UUID conflict created bindings=%#v err=%v", bindings, listErr)
+		}
+		if entries, readErr := os.ReadDir(textureDir); readErr != nil || len(entries) != 0 {
+			t.Fatalf("foreign UUID conflict left texture files=%#v err=%v", entries, readErr)
 		}
 	})
 }
@@ -186,6 +306,9 @@ func TestOfficialBindingConcurrentClaimsLeaveOneExactOwnerAndBinding(t *testing.
 	start := make(chan struct{})
 	results := make(chan result, 2)
 	var workers sync.WaitGroup
+	remote := remoteProfile()
+	remote.Skins = nil
+	remote.Capes = nil
 	for _, candidate := range []struct {
 		userID     string
 		identityID string
@@ -198,7 +321,7 @@ func TestOfficialBindingConcurrentClaimsLeaveOneExactOwnerAndBinding(t *testing.
 		go func() {
 			defer workers.Done()
 			<-start
-			resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
+			resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remote}}
 			service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver}
 			created, createErr := service.Create(ctx, officialActor(candidate.userID, "official_profile.create.owned"), candidate.identityID)
 			results <- result{userID: candidate.userID, created: created, err: createErr}
@@ -234,7 +357,7 @@ func TestOfficialBindingConcurrentClaimsLeaveOneExactOwnerAndBinding(t *testing.
 	}
 }
 
-func TestOfficialBindingSyncUpdatesRoleAndTexturesOnlyWhenExplicitlyRequested(t *testing.T) {
+func TestOfficialBindingCreationAndExplicitSyncPersistRoleTextures(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user, identity, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
@@ -288,7 +411,10 @@ func TestOfficialBindingSyncFailureCleansFilesAndLeavesBindingAndProfileUntouche
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user, identity, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
-	resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
+	withoutTextures := remoteProfile()
+	withoutTextures.Skins = nil
+	withoutTextures.Capes = nil
+	resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: withoutTextures}}
 	textureDir := t.TempDir()
 	service := officialsvc.Service{
 		DB: db, Identities: identities, Resolver: resolver, TexturesDir: textureDir,
@@ -303,6 +429,11 @@ func TestOfficialBindingSyncFailureCleansFilesAndLeavesBindingAndProfileUntouche
 	if err != nil {
 		t.Fatal(err)
 	}
+	before, err := db.OfficialProfiles.GetByIDAndUser(ctx, created["id"].(string), user.ID)
+	if err != nil || before == nil || before.Binding.LastSyncedAt == nil {
+		t.Fatalf("initial binding state=%#v err=%v", before, err)
+	}
+	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}
 	_, err = service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), created["id"].(string))
 	assertOfficialHTTPError(t, err, 502, "Microsoft profile texture is invalid")
 	entries, readErr := os.ReadDir(textureDir)
@@ -313,9 +444,9 @@ func TestOfficialBindingSyncFailureCleansFilesAndLeavesBindingAndProfileUntouche
 	if getErr != nil || stored == nil || *stored != profile {
 		t.Fatalf("failed sync mutated profile=%#v err=%v", stored, getErr)
 	}
-	bindings, listErr := db.OfficialProfiles.ListByUser(ctx, user.ID)
-	if listErr != nil || len(bindings) != 1 || bindings[0].Binding.LastSyncedAt != nil || bindings[0].Binding.RemoteName != "RemoteSteve" {
-		t.Fatalf("failed sync mutated binding=%#v err=%v", bindings, listErr)
+	after, getErr := db.OfficialProfiles.GetByIDAndUser(ctx, created["id"].(string), user.ID)
+	if getErr != nil || after == nil || !reflect.DeepEqual(after.Binding, before.Binding) {
+		t.Fatalf("failed sync mutated binding: before=%#v after=%#v err=%v", before, after, getErr)
 	}
 }
 
@@ -324,7 +455,10 @@ func TestOfficialBindingRejectsWrongAdapterAndPermissionsBeforeRemoteCalls(t *te
 	ctx := context.Background()
 	user, identity, _, identities, _ := officialFixture(t, db, identitysvc.AdapterGenericOIDC)
 	resolver := &fakeMicrosoftResolver{err: errors.New("must not call")}
-	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+	service := officialsvc.Service{
+		DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir(),
+		Download: officialTextureDownloader(t),
+	}
 
 	_, err := service.Create(ctx, officialActor(user.ID), identity.ID)
 	assertOfficialHTTPError(t, err, 403, "permission denied")
@@ -347,7 +481,10 @@ func TestOfficialBindingRetriesOneUnauthorizedResponseWithForcedIdentityRefresh(
 		{err: &microsoftsvc.UpstreamHTTPError{StatusCode: 401, Body: "expired"}},
 		{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}},
 	}}
-	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+	service := officialsvc.Service{
+		DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir(),
+		Download: officialTextureDownloader(t),
+	}
 
 	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID)
 	if err != nil || created["identity_id"] != external.ID {
@@ -374,7 +511,10 @@ func TestOfficialBindingStopsAfterOneUnauthorizedRetry(t *testing.T) {
 		{err: &microsoftsvc.UpstreamHTTPError{StatusCode: 401}},
 		{err: &microsoftsvc.UpstreamHTTPError{StatusCode: 401}},
 	}}
-	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+	service := officialsvc.Service{
+		DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir(),
+		Download: officialTextureDownloader(t),
+	}
 
 	_, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID)
 	assertOfficialHTTPError(t, err, 502, "Microsoft profile request failed")
@@ -392,7 +532,10 @@ func TestOfficialBindingLifecycleRejectsInvalidOwnershipAndRemoteProfilesExactly
 	ctx := context.Background()
 	user, external, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
 	resolver := &fakeMicrosoftResolver{}
-	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+	service := officialsvc.Service{
+		DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir(),
+		Download: officialTextureDownloader(t),
+	}
 	createActor := officialActor(user.ID, "official_profile.create.owned")
 
 	if items, err := service.List(ctx, officialActor(user.ID)); items != nil {
@@ -460,12 +603,16 @@ func TestOfficialBindingLifecycleRejectsInvalidOwnershipAndRemoteProfilesExactly
 	}
 }
 
-func TestOfficialBindingSyncRejectsPermissionMismatchDownloadAndNameConflictsExactly(t *testing.T) {
+func TestOfficialBindingSyncHandlesPermissionMismatchDownloadFailureAndNameConflictExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user, external, profile, identities, _ := officialFixture(t, db, identitysvc.AdapterMicrosoft)
 	resolver := &fakeMicrosoftResolver{result: microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}}
-	service := officialsvc.Service{DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir()}
+	textureDir := t.TempDir()
+	service := officialsvc.Service{
+		DB: db, Identities: identities, Resolver: resolver, TexturesDir: textureDir,
+		Download: officialTextureDownloader(t),
+	}
 	created, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -522,18 +669,31 @@ func TestOfficialBindingSyncRejectsPermissionMismatchDownloadAndNameConflictsExa
 	}
 	nameConflict := remoteProfile()
 	nameConflict.Name = conflicting.Name
-	nameConflict.Skins = nil
-	nameConflict.Capes = nil
 	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: nameConflict}
-	service.Download = nil
-	if result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), bindingID); result != nil {
-		t.Fatalf("name conflict sync result=%#v err=%v", result, err)
-	} else {
-		assertOfficialHTTPError(t, err, 409, "profile name already exists")
+	service.Download = officialTextureDownloader(t)
+	result, err = service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), bindingID)
+	if err != nil {
+		t.Fatalf("name-conflict sync failed: %v", err)
+	}
+	profileResponse, _ := result["profile"].(map[string]any)
+	if result["remote_name"] != "RemoteConflict" || profileResponse["name"] != "RemoteNoTextures" {
+		t.Fatalf("name-conflict sync result=%#v err=%v", result, err)
 	}
 	storedProfile, err = db.Profiles.GetByID(ctx, profile.ID)
-	if err != nil || storedProfile == nil || storedProfile.Name != "RemoteNoTextures" {
-		t.Fatalf("failed name conflict mutated profile=%#v err=%v", storedProfile, err)
+	if err != nil || storedProfile == nil || storedProfile.Name != "RemoteNoTextures" || storedProfile.TextureModel != "slim" || storedProfile.SkinHash == nil || storedProfile.CapeHash == nil {
+		t.Fatalf("name-conflict synced profile=%#v err=%v", storedProfile, err)
+	}
+	for _, imported := range []struct{ hash, textureType, model string }{
+		{*storedProfile.SkinHash, "skin", "slim"},
+		{*storedProfile.CapeHash, "cape", "default"},
+	} {
+		if _, err := os.Stat(textureDir + string(os.PathSeparator) + imported.hash + ".png"); err != nil {
+			t.Fatalf("name-conflict synced %s file missing: %v", imported.textureType, err)
+		}
+		info, err := db.Textures.GetInfo(ctx, user.ID, imported.hash, imported.textureType)
+		if err != nil || info == nil || info["model"] != imported.model || info["is_public"] != 0 {
+			t.Fatalf("name-conflict synced %s row=%#v err=%v", imported.textureType, info, err)
+		}
 	}
 }
 
@@ -607,6 +767,22 @@ func texturePNG(t *testing.T, width, height int, fill color.RGBA) []byte {
 		t.Fatal(err)
 	}
 	return out.Bytes()
+}
+
+func officialTextureDownloader(t *testing.T) func(context.Context, string) ([]byte, error) {
+	t.Helper()
+	skin := texturePNG(t, 64, 64, color.RGBA{R: 10, G: 20, B: 30, A: 255})
+	cape := texturePNG(t, 64, 32, color.RGBA{R: 40, G: 50, B: 60, A: 255})
+	return func(_ context.Context, rawURL string) ([]byte, error) {
+		switch rawURL {
+		case "https://textures.example/skin.png":
+			return skin, nil
+		case "https://textures.example/cape.png":
+			return cape, nil
+		default:
+			return nil, errors.New("unexpected texture URL: " + rawURL)
+		}
+	}
 }
 
 func assertOfficialHTTPError(t *testing.T, err error, status int, detail string) {

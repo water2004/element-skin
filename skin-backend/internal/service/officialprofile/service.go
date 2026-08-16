@@ -85,9 +85,16 @@ func (s Service) Create(ctx context.Context, actor permission.Actor, identityID 
 	for attempt := range profileNames {
 		profileNames[attempt] = util.ProfileNameCandidate(remote.Name, attempt)
 	}
+	prepared, err := s.prepareRemoteTextures(ctx, skinURL, capeURL)
+	if err != nil {
+		return nil, err
+	}
+	binding.LastSyncedAt = &now
 	if err := s.DB.OfficialProfiles.Create(ctx, officialstore.CreateInput{
 		Binding: binding, UserID: actor.UserID, ProfileNames: profileNames, ProfileModel: skinModel,
+		SkinHash: prepared.skin.hash, CapeHash: prepared.cape.hash,
 	}); err != nil {
+		s.cleanupPreparedTextures(ctx, prepared)
 		if errors.Is(err, officialstore.ErrProfileOwnedByAnotherUser) {
 			return nil, conflict("official profile UUID belongs to another user")
 		}

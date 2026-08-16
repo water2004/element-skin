@@ -7,7 +7,6 @@ import (
 
 	"element-skin/backend/internal/database"
 	officialstore "element-skin/backend/internal/database/officialprofile"
-	profilestore "element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/permission"
 	texturesvc "element-skin/backend/internal/service/texture"
 	"element-skin/backend/internal/util"
@@ -16,6 +15,12 @@ import (
 type preparedTexture struct {
 	hash    *string
 	created bool
+}
+
+type preparedRemoteTextures struct {
+	storage *texturesvc.TextureStorage
+	skin    preparedTexture
+	cape    preparedTexture
 }
 
 func (s Service) Sync(ctx context.Context, actor permission.Actor, id string) (map[string]any, error) {
@@ -42,51 +47,23 @@ func (s Service) Sync(ctx context.Context, actor permission.Actor, id string) (m
 		return nil, conflict("Microsoft profile no longer matches this binding")
 	}
 	skinURL, capeURL, skinModel := remoteTextureMetadata(*remote)
-
-	storage, err := texturesvc.NewTextureStorage(s.TexturesDir)
+	prepared, err := s.prepareRemoteTextures(ctx, skinURL, capeURL)
 	if err != nil {
 		return nil, err
 	}
-	prepared := make([]preparedTexture, 0, 2)
-	cleanup := func() {
-		for _, texture := range prepared {
-			if texture.hash == nil || !texture.created {
-				continue
-			}
-			if inUse, checkErr := s.DB.Textures.ExistsHash(ctx, *texture.hash); checkErr == nil && !inUse {
-				_ = storage.DeleteFile(*texture.hash)
-			}
-		}
-	}
-	skin, err := s.prepareTexture(ctx, storage, skinURL, "skin")
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-	prepared = append(prepared, skin)
-	cape, err := s.prepareTexture(ctx, storage, capeURL, "cape")
-	if err != nil {
-		cleanup()
-		return nil, err
-	}
-	prepared = append(prepared, cape)
 
 	now := database.NowMS()
 	updated, err := s.DB.OfficialProfiles.Sync(ctx, officialstore.SyncInput{
 		ID: id, UserID: actor.UserID, RemoteName: remote.Name,
 		RemoteSkinURL: skinURL, RemoteCapeURL: capeURL, RemoteSkinModel: skinModel,
-		SkinHash: skin.hash, CapeHash: cape.hash, SyncedAt: now,
+		SkinHash: prepared.skin.hash, CapeHash: prepared.cape.hash, SyncedAt: now,
 	})
-	if profilestore.IsNameConflict(err) {
-		cleanup()
-		return nil, conflict("profile name already exists")
-	}
 	if err != nil {
-		cleanup()
+		s.cleanupPreparedTextures(ctx, prepared)
 		return nil, err
 	}
 	if !updated {
-		cleanup()
+		s.cleanupPreparedTextures(ctx, prepared)
 		return nil, notFound("official profile binding not found")
 	}
 	item, err := s.DB.OfficialProfiles.GetByIDAndUser(ctx, id, actor.UserID)
@@ -97,6 +74,42 @@ func (s Service) Sync(ctx context.Context, actor permission.Actor, id string) (m
 		return nil, notFound("official profile binding not found")
 	}
 	return bindingResponse(*item), nil
+}
+
+func (s Service) prepareRemoteTextures(ctx context.Context, skinURL, capeURL string) (preparedRemoteTextures, error) {
+	if strings.TrimSpace(skinURL) == "" && strings.TrimSpace(capeURL) == "" {
+		return preparedRemoteTextures{}, nil
+	}
+	storage, err := texturesvc.NewTextureStorage(s.TexturesDir)
+	if err != nil {
+		return preparedRemoteTextures{}, err
+	}
+	prepared := preparedRemoteTextures{storage: storage}
+	prepared.skin, err = s.prepareTexture(ctx, storage, skinURL, "skin")
+	if err != nil {
+		s.cleanupPreparedTextures(ctx, prepared)
+		return preparedRemoteTextures{}, err
+	}
+	prepared.cape, err = s.prepareTexture(ctx, storage, capeURL, "cape")
+	if err != nil {
+		s.cleanupPreparedTextures(ctx, prepared)
+		return preparedRemoteTextures{}, err
+	}
+	return prepared, nil
+}
+
+func (s Service) cleanupPreparedTextures(ctx context.Context, prepared preparedRemoteTextures) {
+	if prepared.storage == nil {
+		return
+	}
+	for _, texture := range []preparedTexture{prepared.skin, prepared.cape} {
+		if texture.hash == nil || !texture.created {
+			continue
+		}
+		if inUse, err := s.DB.Textures.ExistsHash(ctx, *texture.hash); err == nil && !inUse {
+			_ = prepared.storage.DeleteFile(*texture.hash)
+		}
+	}
 }
 
 func (s Service) prepareTexture(ctx context.Context, storage *texturesvc.TextureStorage, rawURL, textureType string) (preparedTexture, error) {
