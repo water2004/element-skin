@@ -209,14 +209,16 @@ func TestLookupRoutesProtocolMissesAndBadBulkBodyExactly(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode bad bulk lookup body: %v body=%q", err, rec.Body.String())
 	}
-	if body["detail"] != "Request body must be an array" {
+	descriptor, ok := body["error"].(map[string]any)
+	if !ok || len(descriptor) != 3 || descriptor["object"] != "request" ||
+		descriptor["operation"] != "decode" || descriptor["reason"] != "invalid" {
 		t.Fatalf("bad bulk lookup body mismatch: %#v", body)
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/api/profiles/minecraft", strings.NewReader(`[`))
 	rec = httptest.NewRecorder()
 	h.LookupNames(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Request body must be an array\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("malformed bulk lookup body mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -372,7 +374,7 @@ func TestLookupRoutesReturnExactDependencyErrors(t *testing.T) {
 			db.Close()
 			rec := httptest.NewRecorder()
 			tc.call(&h, rec)
-			if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+			if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 				t.Fatalf("%s dependency error mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
 		})

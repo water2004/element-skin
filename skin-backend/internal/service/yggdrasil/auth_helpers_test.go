@@ -43,9 +43,9 @@ func sameToken(got, want model.Token) bool {
 }
 
 func yggError(err error, status int, yggCode, detail string) bool {
-	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) &&
-		httpErr.Status == status &&
-		httpErr.YggError == yggCode &&
-		httpErr.Detail == detail
+	var target util.YggError
+	return errors.As(err, &target) &&
+		target.Status == status &&
+		target.Code == yggCode &&
+		target.Message == detail
 }

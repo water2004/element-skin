@@ -16,16 +16,16 @@ func TestNoticeUserActionsRejectMissingPermissionsBeforeDatabaseAccess(t *testin
 	ctx := context.Background()
 	actor := noticeActor("notice-denied-user")
 
-	if result, err := svc.ListForUser(ctx, actor, noticesvc.ListParams{}); result != nil || !httpError(err, http.StatusForbidden, "permission denied") {
+	if result, err := svc.ListForUser(ctx, actor, noticesvc.ListParams{}); result != nil || !httpError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("denied list result=%#v err=%#v", result, err)
 	}
-	if result, err := svc.GetForUser(ctx, "notice-id", actor); result != nil || !httpError(err, http.StatusForbidden, "permission denied") {
+	if result, err := svc.GetForUser(ctx, "notice-id", actor); result != nil || !httpError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("denied detail result=%#v err=%#v", result, err)
 	}
-	if err := svc.MarkRead(ctx, "notice-id", actor); !httpError(err, http.StatusForbidden, "permission denied") {
+	if err := svc.MarkRead(ctx, "notice-id", actor); !httpError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("denied mark read err=%#v", err)
 	}
-	if err := svc.Dismiss(ctx, "notice-id", actor); !httpError(err, http.StatusForbidden, "permission denied") {
+	if err := svc.Dismiss(ctx, "notice-id", actor); !httpError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("denied dismiss err=%#v", err)
 	}
 }
@@ -74,7 +74,7 @@ func TestNoticeServiceUserVisibilityReadDismissAndPatchExactState(t *testing.T) 
 	if readAgain.ReadAt == nil || *readAgain.ReadAt != *got.ReadAt {
 		t.Fatalf("read timestamp should remain idempotent: first=%#v second=%#v", got, readAgain)
 	}
-	if err := svc.Dismiss(ctx, detail.ID, reader); !httpError(err, 403, "notice is not dismissible") {
+	if err := svc.Dismiss(ctx, detail.ID, reader); !httpError(err, 403, "notice.dismiss.denied") {
 		t.Fatalf("non-dismissible notice should reject exactly, got %#v", err)
 	}
 

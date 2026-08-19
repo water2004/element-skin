@@ -22,7 +22,7 @@ func (h Handler) OfficialWhitelist(w http.ResponseWriter, req *http.Request) {
 func (h Handler) AddOfficialWhitelist(w http.ResponseWriter, req *http.Request) {
 	var body map[string]any
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	endpointID, _ := shared.ParsePositiveInt(fmt.Sprint(body["endpoint_id"]))

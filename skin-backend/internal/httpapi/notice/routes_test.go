@@ -121,7 +121,7 @@ func TestNoticeRoutesErrorsAndAuthWrapperExactly(t *testing.T) {
 
 	rec = httptest.NewRecorder()
 	h.List(rec, userRequest(http.MethodGet, "/v2/notifications?type=bogus", user.ID, false))
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid type\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"type\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid list type mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -129,13 +129,13 @@ func TestNoticeRoutesErrorsAndAuthWrapperExactly(t *testing.T) {
 	req.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.Detail(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"notice not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"notice\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing detail mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
 	h.List(rec, httptest.NewRequest(http.MethodGet, "/v2/notifications", nil).WithContext(shared.WithActorPermissions(context.Background(), user.ID)))
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("list without notice.read.owned mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -143,7 +143,7 @@ func TestNoticeRoutesErrorsAndAuthWrapperExactly(t *testing.T) {
 	req.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.Dismiss(rec, req.WithContext(shared.WithActorPermissions(context.Background(), user.ID, permission.MustDefinitionByCode("notice.read.owned"))))
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("dismiss without notice.dismiss.owned mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -151,7 +151,7 @@ func TestNoticeRoutesErrorsAndAuthWrapperExactly(t *testing.T) {
 	req.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.MarkRead(rec, req.WithContext(shared.WithActorPermissions(context.Background(), user.ID)))
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("mark read without notice.read.owned mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -159,7 +159,7 @@ func TestNoticeRoutesErrorsAndAuthWrapperExactly(t *testing.T) {
 	req.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.MarkRead(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"notice not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"notice\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("mark read missing notice mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -167,7 +167,7 @@ func TestNoticeRoutesErrorsAndAuthWrapperExactly(t *testing.T) {
 	req.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.Dismiss(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"notice not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"notice\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("dismiss missing notice mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

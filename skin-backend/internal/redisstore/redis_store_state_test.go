@@ -104,6 +104,39 @@ func TestRedisStoreStateReadDeleteNullAndMalformedPayloadsExactly(t *testing.T) 
 	}
 }
 
+func TestRedisStoreExternalAccessTokenRoundTripDeletionAndExpiry(t *testing.T) {
+	store, server := newTestRedisStore(t)
+	ctx := context.Background()
+	token := ExternalAccessToken{
+		IdentityID:  "identity-1",
+		AccessToken: "access-1",
+		TokenType:   "Bearer",
+		ExpiresAt:   123456,
+	}
+	if err := store.SetExternalAccessToken(ctx, token, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.GetExternalAccessToken(ctx, token.IdentityID)
+	if err != nil || !reflect.DeepEqual(got, token) {
+		t.Fatalf("external access token=%#v err=%v want=%#v", got, err, token)
+	}
+	if err := store.DeleteExternalAccessToken(ctx, token.IdentityID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.GetExternalAccessToken(ctx, token.IdentityID); !errors.Is(err, ErrCacheMiss) || got != (ExternalAccessToken{}) {
+		t.Fatalf("deleted external access token=%#v err=%v, want zero token and ErrCacheMiss", got, err)
+	}
+
+	expiring := ExternalAccessToken{IdentityID: "identity-2", AccessToken: "access-2", TokenType: "Bearer", ExpiresAt: 654321}
+	if err := store.SetExternalAccessToken(ctx, expiring, time.Minute); err != nil {
+		t.Fatal(err)
+	}
+	server.FastForward(time.Minute)
+	if got, err := store.GetExternalAccessToken(ctx, expiring.IdentityID); !errors.Is(err, ErrCacheMiss) || got != (ExternalAccessToken{}) {
+		t.Fatalf("expired external access token=%#v err=%v, want zero token and ErrCacheMiss", got, err)
+	}
+}
+
 func TestMemoryStateDeleteAndStructuredFallbacksExactly(t *testing.T) {
 	ctx := context.Background()
 	store := NewMemoryStore()

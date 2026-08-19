@@ -14,7 +14,7 @@ func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clien
 		return nil, forbidden()
 	}
 	if !validClientStatus(status) || status == StatusPending {
-		return nil, badRequest("invalid status")
+		return nil, badRequest("status", "validate", "invalid")
 	}
 	reason, err := validateReviewReason(status, reason)
 	if err != nil {
@@ -25,7 +25,7 @@ func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clien
 		return nil, err
 	}
 	if client == nil {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	codes, err := s.clientPermissionCodes(ctx, client.ID)
 	if err != nil {
@@ -64,7 +64,7 @@ func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clien
 		return nil, err
 	}
 	if !mutation.Updated {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	if status != StatusActive {
 		reportPostCommitError("remove reviewed client access-token races", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
@@ -84,7 +84,7 @@ func (s Service) RotateClientSecret(ctx context.Context, actor permission.Actor,
 		return nil, err
 	}
 	if client.ClientType != ClientTypeConfidential {
-		return nil, badRequest("public clients do not have secrets")
+		return nil, badRequest("client_secret", "configure", "unsupported")
 	}
 	codes, err := s.clientPermissionCodes(ctx, client.ID)
 	if err != nil {
@@ -107,7 +107,7 @@ func (s Service) RotateClientSecret(ctx context.Context, actor permission.Actor,
 		return nil, err
 	}
 	if !ok {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	client.SecretHash = hash
 	client.UpdatedAt = updatedAt

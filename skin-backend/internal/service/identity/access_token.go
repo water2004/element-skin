@@ -34,21 +34,21 @@ func (s Service) accessTokenForOwnedIdentity(ctx context.Context, userID, identi
 	userID = strings.TrimSpace(userID)
 	identityID = strings.TrimSpace(identityID)
 	if userID == "" || identityID == "" {
-		return AuthorizedIdentity{}, badRequest("identity_id is required")
+		return AuthorizedIdentity{}, badRequest("identity_id", "validate", "required")
 	}
 	item, err := s.DB.Identities.GetIdentity(ctx, identityID)
 	if err != nil {
 		return AuthorizedIdentity{}, err
 	}
 	if item == nil || item.UserID != userID {
-		return AuthorizedIdentity{}, notFound("external identity not found")
+		return AuthorizedIdentity{}, notFound("identity", "resolve", "not_found")
 	}
 	provider, err := s.DB.Identities.GetProvider(ctx, item.ProviderID)
 	if err != nil {
 		return AuthorizedIdentity{}, err
 	}
 	if provider == nil || !provider.Enabled {
-		return AuthorizedIdentity{}, conflict("external identity provider is unavailable")
+		return AuthorizedIdentity{}, conflict("identity_provider", "use", "unavailable")
 	}
 	credential, err := s.DB.Identities.GetCredential(ctx, identityID)
 	if err != nil {
@@ -58,7 +58,7 @@ func (s Service) accessTokenForOwnedIdentity(ctx context.Context, userID, identi
 		return AuthorizedIdentity{}, errors.New("external identity credential is missing")
 	}
 	if credential.AuthorizationStatus == model.ExternalIdentityAuthorizationReauthorizationRequired {
-		return AuthorizedIdentity{}, conflict("external identity must be reauthorized")
+		return AuthorizedIdentity{}, conflict("identity", "authorize", "required")
 	}
 	if forceRefresh {
 		if err := s.Redis.DeleteExternalAccessToken(ctx, identityID); err != nil {
@@ -101,7 +101,7 @@ func (s Service) refreshAccessToken(ctx context.Context, item model.ExternalIden
 		return AuthorizedIdentity{}, s.markReauthorizationRequired(ctx, item.ID, database.NowMS())
 	}
 	if credential.AuthorizationStatus == model.ExternalIdentityAuthorizationReauthorizationRequired {
-		return AuthorizedIdentity{}, conflict("external identity must be reauthorized")
+		return AuthorizedIdentity{}, conflict("identity", "authorize", "required")
 	}
 	box, err := util.NewSecretBox(s.Config.IdentityEncryptionKey)
 	if err != nil {
@@ -132,7 +132,7 @@ func (s Service) refreshAccessToken(ctx context.Context, item model.ExternalIden
 		if !updated {
 			return AuthorizedIdentity{}, errors.New("external identity credential is missing")
 		}
-		return AuthorizedIdentity{}, util.HTTPError{Status: 502, Detail: "external identity token refresh failed"}
+		return AuthorizedIdentity{}, util.HTTPError{Status: 502, Object: "identity_token", Operation: "refresh", Reason: "failed"}
 	}
 	if tokens.RefreshToken == "" {
 		tokens.RefreshToken = refreshToken
@@ -164,5 +164,5 @@ func (s Service) markReauthorizationRequired(ctx context.Context, identityID str
 		return errors.New("external identity credential is missing")
 	}
 	reportPostCommitError("remove rejected external access token", s.Redis.DeleteExternalAccessToken(ctx, identityID))
-	return conflict("external identity must be reauthorized")
+	return conflict("identity", "authorize", "required")
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"element-skin/backend/internal/model"
+	"element-skin/backend/internal/util"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
@@ -67,23 +68,23 @@ func (c StandardOIDCClient) ExchangeAndVerify(
 	}
 	token, err := config.Exchange(ctx, code, oauth2.VerifierOption(pkceVerifier))
 	if err != nil {
-		return OIDCClaims{}, OIDCTokens{}, errors.New("OIDC token exchange failed")
+		return OIDCClaims{}, OIDCTokens{}, util.ClassifiedError{Object: "identity_token", Operation: "exchange", Reason: "failed", Cause: err}
 	}
 	rawIDToken, ok := token.Extra("id_token").(string)
 	if !ok || strings.TrimSpace(rawIDToken) == "" {
-		return OIDCClaims{}, OIDCTokens{}, errors.New("OIDC token response did not include an ID token")
+		return OIDCClaims{}, OIDCTokens{}, util.ClassifiedError{Object: "id_token", Operation: "exchange", Reason: "required"}
 	}
 	verifier := oidc.NewVerifier(provider.IssuerURL, oidc.NewRemoteKeySet(ctx, provider.JWKSURI), &oidc.Config{ClientID: provider.ClientID})
 	idToken, err := verifier.Verify(ctx, rawIDToken)
 	if err != nil {
-		return OIDCClaims{}, OIDCTokens{}, errors.New("OIDC ID token verification failed")
+		return OIDCClaims{}, OIDCTokens{}, util.ClassifiedError{Object: "id_token", Operation: "verify", Reason: "invalid", Cause: err}
 	}
 	if idToken.Nonce != expectedNonce {
-		return OIDCClaims{}, OIDCTokens{}, errors.New("OIDC ID token nonce mismatch")
+		return OIDCClaims{}, OIDCTokens{}, util.ClassifiedError{Object: "oidc_nonce", Operation: "verify", Reason: "mismatch"}
 	}
 	var rawClaims map[string]any
 	if err := idToken.Claims(&rawClaims); err != nil {
-		return OIDCClaims{}, OIDCTokens{}, errors.New("OIDC ID token claims are invalid")
+		return OIDCClaims{}, OIDCTokens{}, util.ClassifiedError{Object: "id_token", Operation: "verify", Reason: "invalid", Cause: err}
 	}
 	claims := OIDCClaims{
 		Subject:       stringClaim(rawClaims, "sub"),
@@ -93,7 +94,7 @@ func (c StandardOIDCClient) ExchangeAndVerify(
 		AvatarURL:     stringClaim(rawClaims, "picture"),
 	}
 	if claims.Subject == "" {
-		return OIDCClaims{}, OIDCTokens{}, errors.New("OIDC ID token subject is missing")
+		return OIDCClaims{}, OIDCTokens{}, util.ClassifiedError{Object: "id_token", Operation: "verify", Reason: "incomplete"}
 	}
 	scopes := append([]string(nil), provider.Scopes...)
 	if granted, ok := token.Extra("scope").(string); ok && strings.TrimSpace(granted) != "" {
@@ -135,10 +136,10 @@ func (c StandardOIDCClient) Refresh(
 		if errors.As(err, &retrieveErr) && (retrieveErr.ErrorCode == "invalid_grant" || retrieveErr.ErrorCode == "invalid_request") {
 			return OIDCTokens{}, ErrRefreshRejected
 		}
-		return OIDCTokens{}, errors.New("OIDC token refresh failed")
+		return OIDCTokens{}, util.ClassifiedError{Object: "identity_token", Operation: "refresh", Reason: "failed", Cause: err}
 	}
 	if strings.TrimSpace(token.AccessToken) == "" {
-		return OIDCTokens{}, errors.New("OIDC token refresh response did not include an access token")
+		return OIDCTokens{}, util.ClassifiedError{Object: "access_token", Operation: "exchange", Reason: "required"}
 	}
 	grantedScopes := append([]string(nil), scopes...)
 	if granted, ok := token.Extra("scope").(string); ok && strings.TrimSpace(granted) != "" {

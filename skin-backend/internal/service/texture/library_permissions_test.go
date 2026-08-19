@@ -35,7 +35,7 @@ func TestTexturePermissionDenials(t *testing.T) {
 				return err
 			},
 			status: http.StatusForbidden,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "ListMyTextures without texture.read.owned",
@@ -45,7 +45,7 @@ func TestTexturePermissionDenials(t *testing.T) {
 				return err
 			},
 			status: http.StatusForbidden,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "DeleteTexture without texture.delete.owned",
@@ -54,7 +54,7 @@ func TestTexturePermissionDenials(t *testing.T) {
 				return svc.DeleteTexture(ctx, a, "perm_texture_skin", "skin")
 			},
 			status: http.StatusForbidden,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "AddTextureToWardrobe without wardrobe_entry.add.owned",
@@ -63,7 +63,7 @@ func TestTexturePermissionDenials(t *testing.T) {
 				return svc.AddTextureToWardrobe(ctx, a, "perm_texture_skin", "skin")
 			},
 			status: http.StatusForbidden,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "ApplyTextureToProfile without texture.apply.owned",
@@ -72,7 +72,7 @@ func TestTexturePermissionDenials(t *testing.T) {
 				return svc.ApplyTextureToProfile(ctx, a, profile.ID, "perm_texture_skin", "skin")
 			},
 			status: http.StatusForbidden,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "UpdateTexture note without texture.update_metadata.owned",
@@ -82,7 +82,7 @@ func TestTexturePermissionDenials(t *testing.T) {
 				return err
 			},
 			status: http.StatusForbidden,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "UpdateTexture is_public without texture.update_visibility.owned",
@@ -92,7 +92,7 @@ func TestTexturePermissionDenials(t *testing.T) {
 				return err
 			},
 			status: http.StatusForbidden,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -139,7 +139,7 @@ func TestApplyTextureBoundMismatch(t *testing.T) {
 	actor := textureActor(owner.ID, "texture.apply.bound_profile")
 	actor.BoundProfileID = profile1.ID
 	err := svc.ApplyTextureToProfile(ctx, actor, profile2.ID, "bound_mismatch_skin", "skin")
-	if !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("bound actor applying to wrong profile should be denied, got %#v", err)
 	}
 }

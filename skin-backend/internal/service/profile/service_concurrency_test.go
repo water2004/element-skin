@@ -34,7 +34,7 @@ func TestConcurrentProfileNameWritesReturnExactBusinessConflict(t *testing.T) {
 		_, err := svc.CreateProfile(context.Background(), testUserActor(user.ID), "ConcurrentCreate", "default")
 		return err
 	})
-	assertOneProfileWriteConflict(t, createErrors, "角色名已被占用，请换一个名称")
+	assertOneProfileWriteConflict(t, createErrors, "profile_name.reserve.conflict")
 	var createCount int
 	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM profiles WHERE name='ConcurrentCreate'`).Scan(&createCount); err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func TestConcurrentProfileNameWritesReturnExactBusinessConflict(t *testing.T) {
 		mu.Unlock()
 		return svc.UpdateProfile(context.Background(), testUserActor(user.ID), profileID, "ConcurrentRename")
 	})
-	assertOneProfileWriteConflict(t, renameErrors, "角色名已被占用")
+	assertOneProfileWriteConflict(t, renameErrors, "profile_name.reserve.conflict")
 	var renamedCount, originalCount int
 	if err := db.Pool.QueryRow(ctx, `
 		SELECT
@@ -107,7 +107,7 @@ func TestUpdateProfileReturnsNotFoundWhenProfileIsDeletedAfterRead(t *testing.T)
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := <-result; !httpError(err, 404, "profile not found") {
+	if err := <-result; !httpError(err, 404, "profile.resolve.not_found") {
 		t.Fatalf("profile deleted after read should return exact not found error, got %#v", err)
 	}
 }
@@ -144,7 +144,7 @@ func TestClearProfileTextureReturnsNotFoundWhenProfileIsDeletedAfterRead(t *test
 	if err := tx.Commit(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := <-result; !httpError(err, 404, "profile not found") {
+	if err := <-result; !httpError(err, 404, "profile.resolve.not_found") {
 		t.Fatalf("profile deleted before texture update should return exact not found error, got %#v", err)
 	}
 }

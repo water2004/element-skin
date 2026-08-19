@@ -37,7 +37,7 @@ func TestAccountRoutesMeAndAdminSelfDeleteExactResponses(t *testing.T) {
 	req = withUserActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteMe(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "protected subjects cannot delete their own account") {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_subject\",\"operation\":\"delete\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("protected subject self delete should be rejected exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if got, err := db.Users.GetByID(req.Context(), adminUser.ID); err != nil || got == nil {
@@ -147,7 +147,7 @@ func TestAccountRoutesRejectConflictsAndWrongOldPasswordExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UpdateMe(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Email must be changed through the verification flow\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"email\",\"operation\":\"update\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("direct email update mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchanged, err := db.Users.GetByID(req.Context(), user.ID)
@@ -159,7 +159,7 @@ func TestAccountRoutesRejectConflictsAndWrongOldPasswordExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ChangePassword(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"detail":"旧密码错误"`) {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"password\",\"operation\":\"verify\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("wrong old password response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchanged, err = db.Users.GetByID(req.Context(), user.ID)
@@ -176,14 +176,14 @@ func TestAccountRoutesRejectMissingPrincipalAndMalformedPayloadsExactly(t *testi
 	req := httptest.NewRequest(http.MethodGet, "/v2/users/me", nil)
 	rec := httptest.NewRecorder()
 	h.Me(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("me without principal mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodDelete, "/v2/users/me", nil)
 	rec = httptest.NewRecorder()
 	h.DeleteMe(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("delete without principal mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -199,7 +199,7 @@ func TestAccountRoutesRejectMissingPrincipalAndMalformedPayloadsExactly(t *testi
 			req = withUserActor(req, "malformed-user")
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+			if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 				t.Fatalf("malformed payload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 			}
 		})
@@ -246,7 +246,7 @@ func TestAccountRoutesRejectMissingPermissionsExactly(t *testing.T) {
 			req := withUserActorWithoutPermission(tc.makeReq(), user.ID, tc.permission)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("%s permission mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
 		})
@@ -278,7 +278,7 @@ func TestAccountRoutesReturnExactErrorWhenAuthCacheInvalidationFails(t *testing.
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UpdateMe(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("update invalidate failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	updated, err := db.Users.GetByID(t.Context(), user.ID)
@@ -290,7 +290,7 @@ func TestAccountRoutesReturnExactErrorWhenAuthCacheInvalidationFails(t *testing.
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ChangePassword(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("password invalidate failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	updated, err = db.Users.GetByID(t.Context(), user.ID)
@@ -302,7 +302,7 @@ func TestAccountRoutesReturnExactErrorWhenAuthCacheInvalidationFails(t *testing.
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteMe(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("delete invalidate failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	preserved, err := db.Users.GetByID(t.Context(), user.ID)
@@ -325,7 +325,7 @@ func TestDeleteMeErrorPaths(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.DeleteMe(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("cancelled context should return 500 exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if got, err := db.Users.GetByID(context.Background(), user.ID); err != nil || got == nil {
@@ -340,7 +340,7 @@ func TestDeleteMeErrorPaths(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteMe(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("pre-deleted user should return 404 exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

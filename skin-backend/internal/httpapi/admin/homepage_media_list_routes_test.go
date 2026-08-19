@@ -28,14 +28,14 @@ func TestListHomepageMedia(t *testing.T) {
 		}
 	})
 
-	t.Run("permission denied", func(t *testing.T) {
+	t.Run("permission.check.denied", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/v2/admin/homepage-media", nil)
 		rec := httptest.NewRecorder()
 		h.ListHomepageMedia(rec, req)
 		if rec.Code != http.StatusForbidden {
 			t.Fatalf("permission denied status=%d body=%q", rec.Code, rec.Body.String())
 		}
-		if rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+		if rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 			t.Fatalf("permission denied body mismatch: %q", rec.Body.String())
 		}
 	})

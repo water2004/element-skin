@@ -108,13 +108,13 @@ func TestAccountServiceGrantAndRevokeRolesExactly(t *testing.T) {
 		t.Fatalf("revoke role notice mismatch: %#v", revokeNotice)
 	}
 
-	if err := svc.GrantUserRole(ctx, permission.Actor{}, target.ID, permission.RoleAdmin); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.GrantUserRole(ctx, permission.Actor{}, target.ID, permission.RoleAdmin); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("grant without permission mismatch: %#v", err)
 	}
-	if err := svc.GrantUserRole(ctx, actor, target.ID, ""); !httpErrorIs(err, http.StatusBadRequest, "role_id required") {
+	if err := svc.GrantUserRole(ctx, actor, target.ID, ""); !httpErrorIs(err, http.StatusBadRequest, "role_id.validate.required") {
 		t.Fatalf("grant empty role mismatch: %#v", err)
 	}
-	if err := svc.RevokeUserRole(ctx, actor, target.ID, permission.RoleAdmin); !httpErrorIs(err, http.StatusNotFound, "role assignment not found") {
+	if err := svc.RevokeUserRole(ctx, actor, target.ID, permission.RoleAdmin); !httpErrorIs(err, http.StatusNotFound, "role_assignment.resolve.not_found") {
 		t.Fatalf("revoke missing role mismatch: %#v", err)
 	}
 }
@@ -257,7 +257,7 @@ func TestAccountServiceProtectsProtectedRoleMutationsExactly(t *testing.T) {
 	plainActor := actorWithPermissions(adminUser.ID, "permission.grant.any", "permission.revoke.any")
 	managerActor := actorWithPermissions(adminUser.ID, "permission.grant.any", "permission.revoke.any", "permission_protected.manage.any")
 
-	if err := svc.GrantUserRole(ctx, plainActor, target.ID, permission.RoleSystemMaintenance); !httpErrorIs(err, http.StatusForbidden, "protected role management required") {
+	if err := svc.GrantUserRole(ctx, plainActor, target.ID, permission.RoleSystemMaintenance); !httpErrorIs(err, http.StatusForbidden, "protected_role.manage.required") {
 		t.Fatalf("protected role generic grant mismatch: %#v", err)
 	}
 	if hasRole, err := db.Permissions.UserHasRole(ctx, target.ID, permission.RoleSystemMaintenance); err != nil || hasRole {
@@ -269,7 +269,7 @@ func TestAccountServiceProtectsProtectedRoleMutationsExactly(t *testing.T) {
 	if hasRole, err := db.Permissions.UserHasRole(ctx, target.ID, permission.RoleSystemMaintenance); err != nil || !hasRole {
 		t.Fatalf("manager protected role grant mismatch: has=%v err=%v", hasRole, err)
 	}
-	if err := svc.RevokeUserRole(ctx, plainActor, target.ID, permission.RoleSystemMaintenance); !httpErrorIs(err, http.StatusForbidden, "protected role management required") {
+	if err := svc.RevokeUserRole(ctx, plainActor, target.ID, permission.RoleSystemMaintenance); !httpErrorIs(err, http.StatusForbidden, "protected_role.manage.required") {
 		t.Fatalf("protected role generic revoke mismatch: %#v", err)
 	}
 	if hasRole, err := db.Permissions.UserHasRole(ctx, target.ID, permission.RoleSystemMaintenance); err != nil || !hasRole {
@@ -304,13 +304,13 @@ func TestAccountServiceTransfersProtectedSubjectExactly(t *testing.T) {
 		}
 	}
 
-	if err := svc.TransferProtectedSubject(ctx, permission.Actor{}, target.ID); !httpErrorIs(err, http.StatusForbidden, "protected subject management required") {
+	if err := svc.TransferProtectedSubject(ctx, permission.Actor{}, target.ID); !httpErrorIs(err, http.StatusForbidden, "protected_subject.manage.required") {
 		t.Fatalf("transfer without protected permission mismatch: %#v", err)
 	}
-	if err := svc.TransferProtectedSubject(ctx, actor, actorUser.ID); !httpErrorIs(err, http.StatusForbidden, "cannot transfer protected subject to yourself") {
+	if err := svc.TransferProtectedSubject(ctx, actor, actorUser.ID); !httpErrorIs(err, http.StatusForbidden, "protected_subject.transfer.denied") {
 		t.Fatalf("self transfer mismatch: %#v", err)
 	}
-	if err := svc.TransferProtectedSubject(ctx, actor, "missing-account-transfer"); !httpErrorIs(err, http.StatusNotFound, "user not found") {
+	if err := svc.TransferProtectedSubject(ctx, actor, "missing-account-transfer"); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("missing transfer target mismatch: %#v", err)
 	}
 	if err := svc.TransferProtectedSubject(ctx, actor, target.ID); err != nil {

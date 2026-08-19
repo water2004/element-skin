@@ -140,7 +140,7 @@ func TestOpenIDAuthorizationCodeFlowIssuesVerifiablePairwiseIdentityExactly(t *t
 	}
 
 	me := doJSON(t, router, http.MethodGet, "/v2/users/me", nil, nil, accessToken)
-	if me.Code != http.StatusUnauthorized || me.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+	if me.Code != http.StatusUnauthorized || me.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("OIDC-only access token must not authorize site API: status=%d body=%q", me.Code, me.Body.String())
 	}
 
@@ -169,7 +169,7 @@ func TestOpenIDAuthorizationCodeFlowIssuesVerifiablePairwiseIdentityExactly(t *t
 	}
 	invalidUserInfo := doJSON(t, router, http.MethodGet, "/oauth/userinfo", nil, nil, refreshed["access_token"].(string))
 	if invalidUserInfo.Code != http.StatusUnauthorized || invalidUserInfo.Header().Get("WWW-Authenticate") != `Bearer error="invalid_token"` ||
-		invalidUserInfo.Body.String() != "{\"error\":\"invalid_token\",\"error_description\":\"invalid access token\"}\n" {
+		invalidUserInfo.Body.String() != "{\"error\":\"invalid_token\"}\n" {
 		t.Fatalf("revoked grant userinfo mismatch: status=%d auth=%q body=%q", invalidUserInfo.Code, invalidUserInfo.Header().Get("WWW-Authenticate"), invalidUserInfo.Body.String())
 	}
 }
@@ -197,7 +197,7 @@ func TestOpenIDAuthorizationRejectsScopesWithoutOpenIDExactly(t *testing.T) {
 	req.AddCookie(webCookie(t, cfg.JWTSecret, user.ID))
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"OIDC scopes require openid\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"oidc_scope\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("OIDC scope validation mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

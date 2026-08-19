@@ -43,34 +43,34 @@ func (s Service) UserInfo(ctx context.Context, bearer string) (map[string]any, e
 	}
 	token, err := s.Redis.GetOAuthAccessToken(ctx, util.HashRefreshToken(strings.TrimSpace(bearer)))
 	if errors.Is(err, redisstore.ErrCacheMiss) {
-		return nil, unauthorized("invalid access token")
+		return nil, unauthorized("access_token", "verify", "invalid")
 	}
 	if err != nil {
 		return nil, err
 	}
 	if token.UserID == "" || token.GrantID == "" || token.ExpiresAt <= database.NowMS() || !hasOIDCScope(token.OIDCScopes, "openid") {
-		return nil, unauthorized("invalid access token")
+		return nil, unauthorized("access_token", "verify", "invalid")
 	}
 	grantScopes, active, err := s.DB.OAuth.ActiveGrantOIDCScopes(ctx, token.GrantID, token.UserID, token.ClientID)
 	if err != nil {
 		return nil, err
 	}
 	if !active || !hasOIDCScope(grantScopes, "openid") {
-		return nil, unauthorized("invalid access token")
+		return nil, unauthorized("access_token", "verify", "invalid")
 	}
 	user, err := s.DB.Users.GetByID(ctx, token.UserID)
 	if err != nil {
 		return nil, err
 	}
 	if user == nil {
-		return nil, unauthorized("invalid access token")
+		return nil, unauthorized("access_token", "verify", "invalid")
 	}
 	subject, err := s.DB.OAuth.GetPairwiseSubject(ctx, token.ClientID, token.UserID)
 	if err != nil {
 		return nil, err
 	}
 	if subject == "" {
-		return nil, unauthorized("invalid access token")
+		return nil, unauthorized("access_token", "verify", "invalid")
 	}
 	return s.userClaims(*user, subject, intersectOIDCScopes(token.OIDCScopes, grantScopes)), nil
 }

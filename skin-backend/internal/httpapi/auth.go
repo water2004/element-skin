@@ -27,14 +27,14 @@ func (r *Router) withActor(next http.HandlerFunc, allowGuest bool, required ...p
 		}
 		if !authenticated {
 			if !allowGuest {
-				util.Error(w, util.HTTPError{Status: 401, Detail: "not authenticated"})
+				util.Error(w, util.HTTPError{Status: 401, Object: "authentication", Operation: "verify", Reason: "required"})
 				return
 			}
 			actor = permission.GuestActor()
 		}
 		for _, def := range required {
 			if err := actor.Require(def); err != nil {
-				util.Error(w, util.HTTPError{Status: 403, Detail: "permission denied"})
+				util.Error(w, util.HTTPError{Status: 403, Object: "permission", Operation: "check", Reason: "denied"})
 				return
 			}
 		}
@@ -49,7 +49,7 @@ func (r *Router) requestActor(req *http.Request) (permission.Actor, bool, error)
 			return permission.Actor{}, false, err
 		}
 		if !authenticated {
-			return permission.Actor{}, false, util.HTTPError{Status: 401, Detail: "not authenticated"}
+			return permission.Actor{}, false, util.HTTPError{Status: 401, Object: "authentication", Operation: "verify", Reason: "required"}
 		}
 		return actor, true, nil
 	}
@@ -62,7 +62,7 @@ func (r *Router) requestActor(req *http.Request) (permission.Actor, bool, error)
 		return permission.Actor{}, false, err
 	}
 	if !authenticated {
-		return permission.Actor{}, false, util.HTTPError{Status: 401, Detail: "not authenticated"}
+		return permission.Actor{}, false, util.HTTPError{Status: 401, Object: "authentication", Operation: "verify", Reason: "required"}
 	}
 	return actor, true, nil
 }

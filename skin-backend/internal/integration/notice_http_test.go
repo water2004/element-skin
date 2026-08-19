@@ -22,11 +22,11 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 	userCookie := &http.Cookie{Name: "access_token", Value: userToken}
 
 	forbiddenAdmin := doJSON(t, h, "GET", "/v2/admin/notifications", nil, userCookie)
-	if forbiddenAdmin.Code != http.StatusForbidden || forbiddenAdmin.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if forbiddenAdmin.Code != http.StatusForbidden || forbiddenAdmin.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("non-admin notice list mismatch: status=%d body=%s", forbiddenAdmin.Code, forbiddenAdmin.Body.String())
 	}
 	unauthenticated := doJSON(t, h, "GET", "/v2/notifications", nil)
-	if unauthenticated.Code != http.StatusUnauthorized || unauthenticated.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+	if unauthenticated.Code != http.StatusUnauthorized || unauthenticated.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("unauthenticated notice list mismatch: status=%d body=%s", unauthenticated.Code, unauthenticated.Body.String())
 	}
 
@@ -83,7 +83,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		"content_markdown": "Body",
 		"display_mode":     "detail",
 	}, adminCookie)
-	if badCreate.Code != http.StatusBadRequest || badCreate.Body.String() != "{\"detail\":\"summary is required for detail notices\"}\n" {
+	if badCreate.Code != http.StatusBadRequest || badCreate.Body.String() != "{\"error\":{\"object\":\"notice_summary\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("bad notice create mismatch: status=%d body=%s", badCreate.Code, badCreate.Body.String())
 	}
 	var brokenCount int
@@ -241,7 +241,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("delete should cascade receipts, got %d", receipts)
 	}
 	deletedDetail := doJSON(t, h, "GET", "/v2/notifications/"+inlineID, nil, userCookie)
-	if deletedDetail.Code != http.StatusNotFound || deletedDetail.Body.String() != "{\"detail\":\"notice not found\"}\n" {
+	if deletedDetail.Code != http.StatusNotFound || deletedDetail.Body.String() != "{\"error\":{\"object\":\"notice\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("deleted detail mismatch: status=%d body=%s", deletedDetail.Code, deletedDetail.Body.String())
 	}
 }
@@ -266,7 +266,7 @@ func TestNoticeHTTPAudienceStatusAndPatchValidationExactly(t *testing.T) {
 	}
 	adminOnlyID := parseJSON(t, adminOnly)["id"].(string)
 	normalDetail := doJSON(t, h, "GET", "/v2/notifications/"+adminOnlyID, nil, userCookie)
-	if normalDetail.Code != http.StatusNotFound || normalDetail.Body.String() != "{\"detail\":\"notice not found\"}\n" {
+	if normalDetail.Code != http.StatusNotFound || normalDetail.Body.String() != "{\"error\":{\"object\":\"notice\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("normal user should not see admin notice: status=%d body=%s", normalDetail.Code, normalDetail.Body.String())
 	}
 	adminDetail := doJSON(t, h, "GET", "/v2/notifications/"+adminOnlyID, nil, adminCookie)
@@ -309,11 +309,11 @@ func TestNoticeHTTPAudienceStatusAndPatchValidationExactly(t *testing.T) {
 	}
 
 	badStatus := doJSON(t, h, "GET", "/v2/admin/notifications?status=bogus", nil, adminCookie)
-	if badStatus.Code != http.StatusBadRequest || badStatus.Body.String() != "{\"detail\":\"invalid status\"}\n" {
+	if badStatus.Code != http.StatusBadRequest || badStatus.Body.String() != "{\"error\":{\"object\":\"status\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad status mismatch: status=%d body=%s", badStatus.Code, badStatus.Body.String())
 	}
 	badPatch := doRawJSON(t, h, "PATCH", "/v2/admin/notifications/"+adminOnlyID, `{"link_url":"javascript:alert(1)","link_text":"Bad"}`, adminCookie)
-	if badPatch.Code != http.StatusBadRequest || badPatch.Body.String() != "{\"detail\":\"invalid link_url\"}\n" {
+	if badPatch.Code != http.StatusBadRequest || badPatch.Body.String() != "{\"error\":{\"object\":\"notice_link\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad patch mismatch: status=%d body=%s", badPatch.Code, badPatch.Body.String())
 	}
 	row, err := db.Notices.Get(context.Background(), adminOnlyID)

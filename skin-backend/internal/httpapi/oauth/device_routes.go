@@ -11,7 +11,7 @@ import (
 
 func (h Handler) DeviceCode(w http.ResponseWriter, req *http.Request) {
 	if err := req.ParseForm(); err != nil {
-		writeProtocolError(w, util.HTTPError{Status: 400, Detail: "invalid form"})
+		writeProtocolError(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	clientID, clientSecret := clientCredentials(req)
@@ -53,7 +53,7 @@ func (h Handler) DeviceInfo(w http.ResponseWriter, req *http.Request) {
 func (h Handler) DeviceDecision(w http.ResponseWriter, req *http.Request) {
 	var body deviceDecisionBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.oauth.DecideDeviceAuthorization(req.Context(), shared.CurrentActor(req), oauthsvc.DeviceDecisionRequest{

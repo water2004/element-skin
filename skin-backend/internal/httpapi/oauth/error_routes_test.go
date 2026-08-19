@@ -48,26 +48,26 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			res := doRaw(t, router, tc.method, tc.path, "{bad", "application/json", tc.cookie, "")
-			if res.Code != http.StatusBadRequest || res.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+			if res.Code != http.StatusBadRequest || res.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 				t.Fatalf("%s invalid json mismatch: status=%d body=%s", tc.name, res.Code, res.Body.String())
 			}
 		})
 	}
 
 	reviewRes := doJSON(t, router, http.MethodPatch, "/v2/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "pending"}, adminSession, "")
-	if reviewRes.Code != http.StatusBadRequest || reviewRes.Body.String() != "{\"detail\":\"invalid status\"}\n" {
+	if reviewRes.Code != http.StatusBadRequest || reviewRes.Body.String() != "{\"error\":{\"object\":\"status\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid review status mismatch: status=%d body=%s", reviewRes.Code, reviewRes.Body.String())
 	}
 	rejectWithoutReason := doJSON(t, router, http.MethodPatch, "/v2/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "rejected"}, adminSession, "")
-	if rejectWithoutReason.Code != http.StatusBadRequest || rejectWithoutReason.Body.String() != "{\"detail\":\"reason is required\"}\n" {
+	if rejectWithoutReason.Code != http.StatusBadRequest || rejectWithoutReason.Body.String() != "{\"error\":{\"object\":\"audit_reason\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("reject without reason mismatch: status=%d body=%s", rejectWithoutReason.Code, rejectWithoutReason.Body.String())
 	}
 	grantRes := doJSON(t, router, http.MethodPut, "/v2/oauth/apps/"+clientID+"/permissions/nope.nope.nope", map[string]any{"effect": "allow"}, adminSession, "")
-	if grantRes.Code != http.StatusBadRequest || grantRes.Body.String() != "{\"detail\":\"invalid permission\"}\n" {
+	if grantRes.Code != http.StatusBadRequest || grantRes.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid client permission mismatch: status=%d body=%s", grantRes.Code, grantRes.Body.String())
 	}
 	clearRes := doJSON(t, router, http.MethodDelete, "/v2/oauth/apps/"+clientID+"/permissions/nope.nope.nope", nil, adminSession, "")
-	if clearRes.Code != http.StatusBadRequest || clearRes.Body.String() != "{\"detail\":\"invalid permission\"}\n" {
+	if clearRes.Code != http.StatusBadRequest || clearRes.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("clear invalid client permission mismatch: status=%d body=%s", clearRes.Code, clearRes.Body.String())
 	}
 
@@ -82,7 +82,7 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			res := doRaw(t, router, http.MethodPost, tc.path, "%zz", "application/x-www-form-urlencoded", adminSession, "")
-			if res.Code != http.StatusBadRequest || res.Body.String() != "{\"error\":\"invalid_request\",\"error_description\":\"invalid form\"}\n" {
+			if res.Code != http.StatusBadRequest || res.Body.String() != "{\"error\":\"invalid_request\"}\n" {
 				t.Fatalf("%s invalid form mismatch: status=%d body=%s", tc.name, res.Code, res.Body.String())
 			}
 		})
@@ -92,7 +92,7 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 	unsupportedGrant.Set("grant_type", "password")
 	unsupportedGrantRes := doForm(t, router, "/oauth/token", unsupportedGrant, "", "")
 	if unsupportedGrantRes.Code != http.StatusBadRequest ||
-		unsupportedGrantRes.Body.String() != "{\"error\":\"unsupported_grant_type\",\"error_description\":\"unsupported grant_type\"}\n" {
+		unsupportedGrantRes.Body.String() != "{\"error\":\"unsupported_grant_type\"}\n" {
 		t.Fatalf("unsupported grant error mismatch: status=%d body=%s", unsupportedGrantRes.Code, unsupportedGrantRes.Body.String())
 	}
 
@@ -102,7 +102,7 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 	invalidClientRes := doForm(t, router, "/oauth/token", invalidClient, "", "")
 	if invalidClientRes.Code != http.StatusUnauthorized ||
 		invalidClientRes.Header().Get("WWW-Authenticate") != `Basic realm="oauth"` ||
-		invalidClientRes.Body.String() != "{\"error\":\"invalid_client\",\"error_description\":\"invalid client_id\"}\n" {
+		invalidClientRes.Body.String() != "{\"error\":\"invalid_client\"}\n" {
 		t.Fatalf("invalid client error mismatch: status=%d header=%q body=%s", invalidClientRes.Code, invalidClientRes.Header().Get("WWW-Authenticate"), invalidClientRes.Body.String())
 	}
 }
@@ -122,27 +122,27 @@ func TestOAuthHandlerForwardsServiceErrorsExactly(t *testing.T) {
 		body   string
 		call   func(http.ResponseWriter, *http.Request)
 	}{
-		{name: "list apps", method: http.MethodGet, path: "/v2/oauth/apps", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListApps},
-		{name: "admin list apps", method: http.MethodGet, path: "/v2/admin/oauth/apps", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListAdminApps},
-		{name: "submit review", method: http.MethodPost, path: "/v2/oauth/apps/missing/review-submission", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+		{name: "list apps", method: http.MethodGet, path: "/v2/oauth/apps", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: handler.ListApps},
+		{name: "admin list apps", method: http.MethodGet, path: "/v2/admin/oauth/apps", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: handler.ListAdminApps},
+		{name: "submit review", method: http.MethodPost, path: "/v2/oauth/apps/missing/review-submission", status: http.StatusNotFound, body: "{\"error\":{\"object\":\"oauth_client\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n", call: func(rec http.ResponseWriter, req *http.Request) {
 			req.SetPathValue("client_id", "missing")
 			handler.SubmitAppReview(rec, req)
 		}},
-		{name: "rotate secret", method: http.MethodPost, path: "/v2/oauth/apps/missing/secret", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+		{name: "rotate secret", method: http.MethodPost, path: "/v2/oauth/apps/missing/secret", status: http.StatusNotFound, body: "{\"error\":{\"object\":\"oauth_client\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n", call: func(rec http.ResponseWriter, req *http.Request) {
 			req.SetPathValue("client_id", "missing")
 			handler.RotateSecret(rec, req)
 		}},
-		{name: "delete app", method: http.MethodDelete, path: "/v2/oauth/apps/missing", status: http.StatusNotFound, body: "{\"detail\":\"oauth client not found\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+		{name: "delete app", method: http.MethodDelete, path: "/v2/oauth/apps/missing", status: http.StatusNotFound, body: "{\"error\":{\"object\":\"oauth_client\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n", call: func(rec http.ResponseWriter, req *http.Request) {
 			req.SetPathValue("client_id", "missing")
 			handler.DeleteApp(rec, req)
 		}},
-		{name: "client permissions", method: http.MethodGet, path: "/v2/oauth/apps/missing/permissions", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+		{name: "client permissions", method: http.MethodGet, path: "/v2/oauth/apps/missing/permissions", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: func(rec http.ResponseWriter, req *http.Request) {
 			req.SetPathValue("client_id", "missing")
 			handler.ClientPermissions(rec, req)
 		}},
-		{name: "list grants", method: http.MethodGet, path: "/v2/oauth/grants", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.ListGrants},
-		{name: "authorize info", method: http.MethodGet, path: "/oauth/authorize", status: http.StatusBadRequest, body: "{\"detail\":\"response_type must be code\"}\n", call: handler.AuthorizeInfo},
-		{name: "device info", method: http.MethodGet, path: "/oauth/device?user_code=missing", status: http.StatusForbidden, body: "{\"detail\":\"permission denied\"}\n", call: handler.DeviceInfo},
+		{name: "list grants", method: http.MethodGet, path: "/v2/oauth/grants", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: handler.ListGrants},
+		{name: "authorize info", method: http.MethodGet, path: "/oauth/authorize", status: http.StatusBadRequest, body: "{\"error\":{\"object\":\"response_type\",\"operation\":\"validate\",\"reason\":\"unsupported\"}}\n", call: handler.AuthorizeInfo},
+		{name: "device info", method: http.MethodGet, path: "/oauth/device?user_code=missing", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: handler.DeviceInfo},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(tc.method, tc.path, nil)

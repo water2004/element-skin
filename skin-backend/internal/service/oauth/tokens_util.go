@@ -32,7 +32,7 @@ func generateUserCode() (string, string, error) {
 	}
 	code := compact.String()
 	if len(code) < 8 {
-		return "", "", badRequest("could not generate user_code")
+		return "", "", badRequest("device_code", "generate", "failed")
 	}
 	formatted := code[:4] + "-" + code[4:]
 	return formatted, util.HashRefreshToken(formatted), nil

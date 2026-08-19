@@ -118,7 +118,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.Invites(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invite list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	for _, cursor := range []string{
@@ -129,7 +129,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 		req = withAdminActor(req, "admin-test-user")
 		rec = httptest.NewRecorder()
 		h.Invites(rec, req)
-		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 			t.Fatalf("invite list malformed cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	}
@@ -138,7 +138,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.CreateInvite(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invite create bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -146,7 +146,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.CreateInvite(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invite code too short\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"invite\",\"operation\":\"validate\",\"reason\":\"out_of_range\"}}\n" {
 		t.Fatalf("invite short code mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if invite, err := db.Invites.Get(req.Context(), "abc"); err != nil || invite != nil {
@@ -166,7 +166,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 		req = withAdminActor(req, "admin-test-user")
 		rec = httptest.NewRecorder()
 		h.CreateInvite(rec, req)
-		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"total_uses must be a positive integer\"}\n" {
+		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"invite_usage_limit\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 			t.Fatalf("invalid total_uses body=%s: status=%d response=%q", body, rec.Code, rec.Body.String())
 		}
 	}
@@ -181,7 +181,7 @@ func TestInviteRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.CreateInvite(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("duplicate invite should use generic internal error envelope: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	existing, err := db.Invites.Get(req.Context(), "existing-invite")
@@ -242,7 +242,7 @@ func TestInviteRoutesRejectMissingPermissionsExactly(t *testing.T) {
 			req.SetPathValue("code", "blocked-invite")
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("%s missing permission response mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
 		})

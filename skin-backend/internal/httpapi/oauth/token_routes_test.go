@@ -3,7 +3,6 @@ package oauth_test
 import (
 	"net/http"
 	"net/url"
-	"strings"
 	"testing"
 
 	permissiondb "element-skin/backend/internal/database/permission"
@@ -108,7 +107,7 @@ func TestOAuthClientCredentialsTokenWorksForMinecraftOnly(t *testing.T) {
 	}
 
 	meRes := doJSON(t, router, http.MethodGet, "/v2/users/me", nil, nil, access)
-	if meRes.Code != http.StatusForbidden || !strings.Contains(meRes.Body.String(), "permission denied") {
+	if meRes.Code != http.StatusForbidden || meRes.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("app-only token should not read user me: status=%d body=%s", meRes.Code, meRes.Body.String())
 	}
 	hasJoinedRes := doJSON(t, router, http.MethodPost, "/v2/minecraft/session/has-joined", map[string]any{

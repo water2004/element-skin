@@ -22,11 +22,6 @@ const (
 	AuthorizationIntentLogin = "login"
 	AuthorizationIntentLink  = "link"
 
-	AuthorizationAccountMismatchDetail = "authorized account does not match the external identity being reconnected"
-	AuthorizationLinkIncompleteDetail  = "external identity authorization was not completed"
-	AuthorizationAlreadyLinkedDetail   = "this external identity is already linked to this account"
-	AuthorizationLinkedElsewhereDetail = "this external identity is already linked to another account"
-
 	authorizationStateKind = "oidc_authorization"
 	registrationStateKind  = "oidc_registration"
 	authorizationStateTTL  = 10 * time.Minute
@@ -52,7 +47,7 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 		return AuthorizationStart{}, err
 	}
 	if provider == nil || !provider.Enabled {
-		return AuthorizationStart{}, notFound("identity provider not found")
+		return AuthorizationStart{}, notFound("identity_provider", "resolve", "not_found")
 	}
 	intent = strings.TrimSpace(intent)
 	identityID = strings.TrimSpace(identityID)
@@ -60,17 +55,17 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 	switch intent {
 	case AuthorizationIntentLogin:
 		if identityID != "" {
-			return AuthorizationStart{}, badRequest("identity_id is only allowed for link authorization")
+			return AuthorizationStart{}, badRequest("identity_id", "validate", "invalid")
 		}
 		if !provider.LoginEnabled {
-			return AuthorizationStart{}, forbiddenDetail("login is disabled for this identity provider")
+			return AuthorizationStart{}, forbiddenCode("identity_provider", "login", "disabled")
 		}
 	case AuthorizationIntentLink:
 		if err := actor.Require(permission.MustDefinitionByCode("external_identity.create.owned")); err != nil || actor.UserID == "" {
 			return AuthorizationStart{}, forbidden()
 		}
 		if !provider.LinkEnabled {
-			return AuthorizationStart{}, forbiddenDetail("linking is disabled for this identity provider")
+			return AuthorizationStart{}, forbiddenCode("identity_provider", "link", "disabled")
 		}
 		if identityID != "" {
 			targetIdentity, err = s.DB.Identities.GetIdentity(ctx, identityID)
@@ -78,11 +73,11 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 				return AuthorizationStart{}, err
 			}
 			if targetIdentity == nil || targetIdentity.UserID != actor.UserID || targetIdentity.ProviderID != provider.ID {
-				return AuthorizationStart{}, notFound("external identity not found")
+				return AuthorizationStart{}, notFound("identity", "resolve", "not_found")
 			}
 		}
 	default:
-		return AuthorizationStart{}, badRequest("intent must be login or link")
+		return AuthorizationStart{}, badRequest("authorization_intent", "validate", "invalid")
 	}
 	state, err := opaqueToken()
 	if err != nil {
@@ -126,29 +121,29 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 
 func (s Service) CompleteAuthorization(ctx context.Context, code, state, providerError string) (AuthorizationResult, error) {
 	if strings.TrimSpace(state) == "" {
-		return AuthorizationResult{}, badRequest("state is required")
+		return AuthorizationResult{}, badRequest("oidc_state", "validate", "required")
 	}
 	if s.Redis == nil {
 		return AuthorizationResult{}, errors.New("identity state store is not configured")
 	}
 	stored, err := s.Redis.PopState(ctx, state)
 	if errors.Is(err, redisstore.ErrCacheMiss) {
-		return AuthorizationResult{}, badRequest("invalid or expired OIDC state")
+		return AuthorizationResult{}, badRequest("oidc_state", "verify", "invalid")
 	}
 	if err != nil {
 		return AuthorizationResult{}, err
 	}
 	if stateString(stored, "kind") != authorizationStateKind {
-		return AuthorizationResult{}, badRequest("invalid or expired OIDC state")
+		return AuthorizationResult{}, badRequest("oidc_state", "verify", "invalid")
 	}
 	if providerError != "" {
 		if stateString(stored, "intent") == AuthorizationIntentLink {
-			return AuthorizationResult{}, badRequest(AuthorizationLinkIncompleteDetail)
+			return AuthorizationResult{}, badRequest("identity", "authorize", "incomplete")
 		}
-		return AuthorizationResult{}, badRequest("OIDC authorization was denied")
+		return AuthorizationResult{}, badRequest("identity", "authorize", "denied")
 	}
 	if strings.TrimSpace(code) == "" {
-		return AuthorizationResult{}, badRequest("authorization code is required")
+		return AuthorizationResult{}, badRequest("authorization_code", "validate", "required")
 	}
 	providerID := stateString(stored, "provider_id")
 	provider, err := s.DB.Identities.GetProvider(ctx, providerID)
@@ -156,7 +151,7 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		return AuthorizationResult{}, err
 	}
 	if provider == nil || !provider.Enabled {
-		return AuthorizationResult{}, badRequest("identity provider is no longer available")
+		return AuthorizationResult{}, badRequest("identity_provider", "use", "unavailable")
 	}
 	box, err := util.NewSecretBox(s.Config.IdentityEncryptionKey)
 	if err != nil {
@@ -180,7 +175,11 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		stateString(stored, "nonce"),
 	)
 	if err != nil {
-		return AuthorizationResult{}, badRequest(err.Error())
+		object, operation, reason, params := util.ErrorClassification(err)
+		if object == util.InternalErrorObject {
+			object, operation, reason = "identity", "authorize", "failed"
+		}
+		return AuthorizationResult{}, badRequest(object, operation, reason, params)
 	}
 	intent := stateString(stored, "intent")
 	existing, err := s.DB.Identities.GetByProviderSubject(ctx, provider.ID, claims.Subject)
@@ -197,7 +196,7 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		if targetIdentityID != "" {
 			if existing == nil || existing.ID != targetIdentityID || existing.UserID != userID ||
 				claims.Subject != stateString(stored, "target_subject") {
-				return AuthorizationResult{}, conflict(AuthorizationAccountMismatchDetail)
+				return AuthorizationResult{}, conflict("identity", "authorize", "mismatch")
 			}
 			if err := s.updateIdentityAuthorization(ctx, *existing, claims, tokens); err != nil {
 				return AuthorizationResult{}, err
@@ -206,9 +205,9 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		}
 		if existing != nil {
 			if existing.UserID == userID {
-				return AuthorizationResult{}, conflict(AuthorizationAlreadyLinkedDetail)
+				return AuthorizationResult{}, conflict("identity", "link", "already_exists")
 			}
-			return AuthorizationResult{}, conflict(AuthorizationLinkedElsewhereDetail)
+			return AuthorizationResult{}, conflict("identity", "link", "conflict")
 		}
 		identityID, err := s.createIdentity(ctx, userID, *provider, claims, tokens)
 		if err != nil {
@@ -223,7 +222,7 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 			return AuthorizationResult{Intent: intent, UserID: existing.UserID, IdentityID: existing.ID, ProviderID: provider.ID}, nil
 		}
 		if !provider.LoginEnabled {
-			return AuthorizationResult{}, forbiddenDetail("login is disabled for this identity provider")
+			return AuthorizationResult{}, forbiddenCode("identity_provider", "login", "disabled")
 		}
 		ticket, err := s.createRegistrationTicket(ctx, *provider, claims, tokens)
 		if err != nil {
@@ -231,24 +230,7 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		}
 		return AuthorizationResult{Intent: "registration", RegistrationTicket: ticket, ProviderID: provider.ID}, nil
 	default:
-		return AuthorizationResult{}, badRequest("invalid OIDC authorization intent")
-	}
-}
-
-func AuthorizationLinkErrorCode(err error) (string, bool) {
-	httpError, ok := err.(util.HTTPError)
-	if !ok {
-		return "", false
-	}
-	switch httpError.Detail {
-	case AuthorizationAccountMismatchDetail:
-		return "account_mismatch", true
-	case AuthorizationLinkIncompleteDetail:
-		return "authorization_incomplete", true
-	case AuthorizationAlreadyLinkedDetail, AuthorizationLinkedElsewhereDetail:
-		return "already_linked", true
-	default:
-		return "", false
+		return AuthorizationResult{}, badRequest("authorization_intent", "validate", "invalid")
 	}
 }
 
@@ -269,7 +251,7 @@ func (s Service) createIdentity(ctx context.Context, userID string, provider mod
 	}
 	if err := s.DB.Identities.CreateIdentity(ctx, identity, credential); err != nil {
 		if isUniqueViolation(err) {
-			return "", conflict("this external identity is already linked")
+			return "", conflict("identity", "link", "already_exists")
 		}
 		return "", err
 	}
@@ -301,7 +283,7 @@ func (s Service) updateIdentityAuthorization(ctx context.Context, item model.Ext
 		if err != nil {
 			return err
 		}
-		return notFound("external identity not found")
+		return notFound("identity", "resolve", "not_found")
 	}
 	return nil
 }
@@ -445,6 +427,6 @@ func stateStrings(state map[string]any, key string) []string {
 	return out
 }
 
-func forbiddenDetail(detail string) util.HTTPError {
-	return util.HTTPError{Status: http.StatusForbidden, Detail: detail}
+func forbiddenCode(object, operation, reason string) util.HTTPError {
+	return util.HTTPError{Status: http.StatusForbidden, Object: object, Operation: operation, Reason: reason}
 }

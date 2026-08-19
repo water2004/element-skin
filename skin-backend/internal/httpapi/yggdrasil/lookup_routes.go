@@ -98,7 +98,7 @@ func (h Handler) LookupName(w http.ResponseWriter, req *http.Request) {
 func (h Handler) LookupNames(w http.ResponseWriter, req *http.Request) {
 	var names []string
 	if err := shared.DecodeJSON(req, &names); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "Request body must be an array"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	profiles, err := h.fallback.LookupNames(req.Context(), names)

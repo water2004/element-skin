@@ -2,7 +2,6 @@ package oauth_test
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"element-skin/backend/internal/httpapi"
@@ -124,7 +123,7 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 		t.Fatalf("delete app mismatch: status=%d body=%s", deleteRes.Code, deleteRes.Body.String())
 	}
 	missingRes := doJSON(t, router, http.MethodGet, "/v2/oauth/apps/"+clientID, nil, ownerSession, "")
-	if missingRes.Code != http.StatusNotFound || !strings.Contains(missingRes.Body.String(), "oauth client not found") {
+	if missingRes.Code != http.StatusNotFound || missingRes.Body.String() != "{\"error\":{\"object\":\"oauth_client\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("deleted get mismatch: status=%d body=%s", missingRes.Code, missingRes.Body.String())
 	}
 }
@@ -140,7 +139,7 @@ func TestOAuthCreateAppRejectsScopeMissingFromActor(t *testing.T) {
 		"client_type":  "confidential",
 		"permissions":  []string{"account.ban.any"},
 	}, webCookie(t, cfg.JWTSecret, user.ID), "")
-	if res.Code != http.StatusForbidden || !strings.Contains(res.Body.String(), "permission denied") {
+	if res.Code != http.StatusForbidden || res.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("scope deny mismatch: status=%d body=%s", res.Code, res.Body.String())
 	}
 }

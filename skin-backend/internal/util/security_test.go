@@ -26,7 +26,7 @@ func TestPasswordHashVerifyAndStrongPasswordMessages(t *testing.T) {
 	}
 
 	errs := ValidateStrongPassword("short")
-	want := []string{"密码长度至少 8 位", "密码需包含大写字母", "密码需包含数字"}
+	want := []string{"min_length", "uppercase", "number"}
 	if len(errs) != len(want) {
 		t.Fatalf("unexpected strong password errors: %#v", errs)
 	}
@@ -34,9 +34,6 @@ func TestPasswordHashVerifyAndStrongPasswordMessages(t *testing.T) {
 		if errs[i] != want[i] {
 			t.Fatalf("error %d got %q want %q; all=%#v", i, errs[i], want[i], errs)
 		}
-	}
-	if joined := JoinPasswordErrors(errs); joined != "密码长度至少 8 位；密码需包含大写字母；密码需包含数字" {
-		t.Fatalf("unexpected joined password errors: %q", joined)
 	}
 	if errs := ValidateStrongPassword("GoodPass123"); len(errs) != 0 {
 		t.Fatalf("strong password should pass, got %#v", errs)
@@ -112,12 +109,12 @@ func TestGenericInternalErrorsDoNotLeakDetails(t *testing.T) {
 	if rr.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d body=%s", rr.Code, rr.Body.String())
 	}
-	var body map[string]string
+	var body ErrorResponse
 	if err := json.Unmarshal(rr.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body["detail"] != InternalServerErrorDetail {
-		t.Fatalf("internal error detail should be generic, got %#v", body)
+	if body.Error.Object != "server" || body.Error.Operation != "handle" || body.Error.Reason != "failed" || body.Error.Params != nil {
+		t.Fatalf("internal error classification should be generic, got %#v", body)
 	}
 	if bytes.Contains(rr.Body.Bytes(), []byte("password")) {
 		t.Fatalf("internal error response leaked original error: %s", rr.Body.String())

@@ -28,10 +28,10 @@ func (s Service) StartDeviceAuthorization(ctx context.Context, req DeviceAuthori
 	for _, code := range codes {
 		def := permission.MustDefinitionByCode(code)
 		if def.Scope.ID == permission.ScopeServer {
-			return DeviceAuthorizationResponse{}, badRequest("invalid scope")
+			return DeviceAuthorizationResponse{}, badRequest("oauth_scope", "validate", "invalid")
 		}
 		if !clientAllowed[int64(def.ID)] {
-			return DeviceAuthorizationResponse{}, badRequest("scope exceeds client permission limit")
+			return DeviceAuthorizationResponse{}, badRequest("oauth_scope", "authorize", "denied")
 		}
 	}
 	deviceCode, deviceHash, err := generateToken()
@@ -73,14 +73,14 @@ func (s Service) DeviceAuthorizationDetails(ctx context.Context, actor permissio
 		return DeviceAuthorizationDetails{}, err
 	}
 	if code == nil || code.ExpiresAt <= database.NowMS() {
-		return DeviceAuthorizationDetails{}, notFound("device code not found")
+		return DeviceAuthorizationDetails{}, notFound("device_code", "resolve", "not_found")
 	}
 	client, err := s.DB.OAuth.GetClient(ctx, code.ClientID)
 	if err != nil {
 		return DeviceAuthorizationDetails{}, err
 	}
 	if client == nil || client.Status != StatusActive {
-		return DeviceAuthorizationDetails{}, notFound("oauth client not found")
+		return DeviceAuthorizationDetails{}, notFound("oauth_client", "resolve", "not_found")
 	}
 	return DeviceAuthorizationDetails{
 		Client:    publicClient(*client),
@@ -100,16 +100,16 @@ func (s Service) DecideDeviceAuthorization(ctx context.Context, actor permission
 		return err
 	}
 	if code == nil || code.ExpiresAt <= database.NowMS() {
-		return notFound("device code not found")
+		return notFound("device_code", "resolve", "not_found")
 	}
 	if code.Status != "pending" {
-		return badRequest("device code is not pending")
+		return badRequest("device_code", "authorize", "conflict")
 	}
 	codes := permissionCodesFromIDs(permissionIDs)
 	for _, scope := range codes {
 		def := permission.MustDefinitionByCode(scope)
 		if def.Scope.ID == permission.ScopeServer {
-			return badRequest("invalid scope")
+			return badRequest("oauth_scope", "validate", "invalid")
 		}
 		if !actor.Has(def) {
 			return forbidden()
@@ -126,7 +126,7 @@ func (s Service) DecideDeviceAuthorization(ctx context.Context, actor permission
 		return err
 	}
 	if !ok {
-		return badRequest("device code is not pending")
+		return badRequest("device_code", "authorize", "conflict")
 	}
 	return nil
 }
@@ -143,24 +143,24 @@ func (s Service) deviceCodeToken(ctx context.Context, req TokenRequest) (TokenRe
 	}
 	now := database.NowMS()
 	if code == nil || code.ClientID != client.ID {
-		return TokenResponse{}, badRequest("invalid device_code")
+		return TokenResponse{}, badRequest("device_code", "verify", "invalid")
 	}
 	if err := s.DB.OAuth.MarkDeviceCodePolled(ctx, deviceHash, now); err != nil {
 		return TokenResponse{}, err
 	}
 	if code.ExpiresAt <= now {
-		return TokenResponse{}, oauthError("expired_token")
+		return TokenResponse{}, oauthError("device_code", "verify", "expired")
 	}
 	switch code.Status {
 	case "pending":
-		return TokenResponse{}, oauthError("authorization_pending")
+		return TokenResponse{}, oauthError("oauth_authorization", "grant", "incomplete")
 	case "denied":
-		return TokenResponse{}, oauthError("access_denied")
+		return TokenResponse{}, oauthError("oauth_authorization", "grant", "denied")
 	case "consumed":
-		return TokenResponse{}, oauthError("invalid_grant")
+		return TokenResponse{}, oauthError("oauth_grant", "exchange", "invalid")
 	case "approved":
 	default:
-		return TokenResponse{}, oauthError("invalid_grant")
+		return TokenResponse{}, oauthError("oauth_grant", "exchange", "invalid")
 	}
 	grantID, err := util.GenerateUUIDNoDash()
 	if err != nil {
@@ -176,7 +176,7 @@ func (s Service) deviceCodeToken(ctx context.Context, req TokenRequest) (TokenRe
 		return TokenResponse{}, err
 	}
 	if consumed == nil || consumed.UserID == nil || consumed.SubjectID == nil || grantID == "" {
-		return TokenResponse{}, oauthError("invalid_grant")
+		return TokenResponse{}, oauthError("oauth_grant", "exchange", "invalid")
 	}
 	codes := permissionCodesFromIDs(consumedPermissionIDs)
 	if len(codes) == 0 {

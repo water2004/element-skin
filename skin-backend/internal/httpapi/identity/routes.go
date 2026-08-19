@@ -1,6 +1,7 @@
 package identity
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -17,7 +18,7 @@ func (h Handler) StartAuthorization(w http.ResponseWriter, req *http.Request) {
 		IdentityID string `json:"identity_id"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	result, err := h.service.StartAuthorization(
@@ -42,10 +43,8 @@ func (h Handler) AuthorizationCallback(w http.ResponseWriter, req *http.Request)
 		req.URL.Query().Get("error"),
 	)
 	if err != nil {
-		if code, ok := identitysvc.AuthorizationLinkErrorCode(err); ok {
-			h.redirectToSite(w, req, "/dashboard/identities", url.Values{
-				"identity_error": []string{code},
-			})
+		if query, ok := authorizationErrorQuery(err); ok {
+			h.redirectToSite(w, req, "/dashboard/identities", query)
 			return
 		}
 		util.Error(w, err)
@@ -76,15 +75,34 @@ func (h Handler) AuthorizationCallback(w http.ResponseWriter, req *http.Request)
 			"provider_id":     []string{result.ProviderID},
 		})
 	default:
-		util.Error(w, util.HTTPError{Status: http.StatusInternalServerError, Detail: "invalid OIDC authorization result"})
+		util.Error(w, util.HTTPError{Status: http.StatusInternalServerError, Object: "identity", Operation: "authorize", Reason: "invalid"})
 	}
+}
+
+func authorizationErrorQuery(err error) (url.Values, bool) {
+	var apiErr util.HTTPError
+	if !errors.As(err, &apiErr) || apiErr.Object != "identity" {
+		return nil, false
+	}
+	redirectable := (apiErr.Operation == "authorize" &&
+		(apiErr.Reason == "mismatch" || apiErr.Reason == "incomplete")) ||
+		(apiErr.Operation == "link" &&
+			(apiErr.Reason == "already_exists" || apiErr.Reason == "conflict"))
+	if !redirectable {
+		return nil, false
+	}
+	return url.Values{
+		"error_object":    []string{apiErr.Object},
+		"error_operation": []string{apiErr.Operation},
+		"error_reason":    []string{apiErr.Reason},
+	}, true
 }
 
 func (h Handler) redirectToSite(w http.ResponseWriter, req *http.Request, path string, query url.Values) {
 	base := strings.TrimRight(strings.TrimSpace(h.cfg.SiteURL), "/")
 	u, err := url.Parse(base + path)
 	if err != nil || u.Scheme == "" || u.Host == "" {
-		util.Error(w, util.HTTPError{Status: http.StatusInternalServerError, Detail: "site URL is not configured"})
+		util.Error(w, util.HTTPError{Status: http.StatusInternalServerError, Object: "server", Operation: "handle", Reason: "failed"})
 		return
 	}
 	if query != nil {
@@ -159,7 +177,7 @@ func (h Handler) GetProvider(w http.ResponseWriter, req *http.Request) {
 func (h Handler) CreateProvider(w http.ResponseWriter, req *http.Request) {
 	var body providerRequest
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	item, err := h.service.CreateProvider(req.Context(), shared.CurrentActor(req), body.input())
@@ -173,7 +191,7 @@ func (h Handler) CreateProvider(w http.ResponseWriter, req *http.Request) {
 func (h Handler) UpdateProvider(w http.ResponseWriter, req *http.Request) {
 	var body providerRequest
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	item, err := h.service.UpdateProvider(req.Context(), shared.CurrentActor(req), req.PathValue("provider_id"), body.input())
@@ -206,7 +224,7 @@ func (h Handler) UpdateIdentity(w http.ResponseWriter, req *http.Request) {
 		Label string `json:"label"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.service.UpdateIdentityLabel(req.Context(), shared.CurrentActor(req), req.PathValue("identity_id"), body.Label); err != nil {

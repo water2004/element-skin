@@ -2,14 +2,12 @@ package identity
 
 import (
 	"context"
-	"errors"
 	"reflect"
 	"testing"
 	"time"
 
 	"element-skin/backend/internal/config"
 	"element-skin/backend/internal/redisstore"
-	"element-skin/backend/internal/util"
 )
 
 func TestAuthorizationStateDecodersHandlePersistedRepresentationsExactly(t *testing.T) {
@@ -45,13 +43,6 @@ func TestAuthorizationHelpersPreserveFallbackAndErrorContractsExactly(t *testing
 	service := Service{Config: config.Config{SiteURL: "https://site.example/"}}
 	if got := service.RedirectURI(); got != "https://site.example/v2/auth/oidc/callback" {
 		t.Fatalf("site fallback redirect URI=%q", got)
-	}
-
-	if code, ok := AuthorizationLinkErrorCode(errors.New("plain error")); ok || code != "" {
-		t.Fatalf("plain link error code=%q ok=%v", code, ok)
-	}
-	if code, ok := AuthorizationLinkErrorCode(util.HTTPError{Status: 400, Detail: "unrelated"}); ok || code != "" {
-		t.Fatalf("unrelated HTTP link error code=%q ok=%v", code, ok)
 	}
 
 	if _, err := (Service{Config: config.Config{IdentityEncryptionKey: "invalid"}}).credential("identity", OIDCTokens{RefreshToken: "refresh"}, 1000); err == nil || err.Error() != "decode identity encryption key: illegal base64 data at input byte 4" {

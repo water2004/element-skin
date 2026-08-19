@@ -20,7 +20,7 @@ func (h Handler) Invites(w http.ResponseWriter, req *http.Request) {
 func (h Handler) CreateInvite(w http.ResponseWriter, req *http.Request) {
 	var body map[string]any
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	code, _ := body["code"].(string)

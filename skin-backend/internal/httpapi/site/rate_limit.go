@@ -38,7 +38,7 @@ func (h Handler) checkAuthRateLimit(w http.ResponseWriter, req *http.Request, sc
 	}
 	if !result.Allowed {
 		w.Header().Set("Retry-After", retryAfterSeconds(result.RetryAfter))
-		util.Error(w, util.HTTPError{Status: http.StatusTooManyRequests, Detail: "Too many requests, please try again later"})
+		util.Error(w, util.HTTPError{Status: http.StatusTooManyRequests, Object: "rate_limit", Operation: "check", Reason: "exceeded"})
 		return false
 	}
 	return true

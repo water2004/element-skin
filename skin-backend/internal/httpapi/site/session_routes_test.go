@@ -68,7 +68,7 @@ func TestSessionRoutesAuthRateLimitIsScopedByForwardedClientIP(t *testing.T) {
 	rec = httptest.NewRecorder()
 	h.Login(rec, second)
 	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "60" ||
-		rec.Body.String() != "{\"detail\":\"Too many requests, please try again later\"}\n" {
+		rec.Body.String() != "{\"error\":{\"object\":\"rate_limit\",\"operation\":\"check\",\"reason\":\"exceeded\"}}\n" {
 		t.Fatalf("second login from same forwarded IP should be rate-limited: status=%d retry=%q body=%q", rec.Code, rec.Header().Get("Retry-After"), rec.Body.String())
 	}
 
@@ -141,7 +141,7 @@ func TestSessionRoutesRefreshRotatesAndLogoutRevokesExactly(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/session/refresh", nil)
 	rec = httptest.NewRecorder()
 	h.RefreshToken(rec, req)
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), `"detail":"not authenticated"`) {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("refresh without cookie mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -171,7 +171,7 @@ func TestSessionRoutesLogoutReportsRevokeFailureWithoutClearingCookies(t *testin
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("logout status = %d, want %d; body = %q", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
-	if got, want := rec.Body.String(), "{\"detail\":\"Internal server error\"}\n"; got != want {
+	if got, want := rec.Body.String(), "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n"; got != want {
 		t.Fatalf("logout body = %q, want %q", got, want)
 	}
 	if cookies := rec.Result().Cookies(); len(cookies) != 0 {
@@ -225,7 +225,7 @@ func TestSessionRoutesVerificationAndResetPasswordExactFlow(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/verification-code", strings.NewReader(`{"email":"reset-flow@test.com","type":"reset"}`))
 	rec := httptest.NewRecorder()
 	h.SendVerificationCode(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"Email verification is disabled"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"email_verification\",\"operation\":\"create\",\"reason\":\"disabled\"}}\n" {
 		t.Fatalf("verification disabled response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -272,7 +272,7 @@ func TestSessionRoutesVerificationAndResetPasswordExactFlow(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/verification-code", strings.NewReader(`{"email":"reset-flow@test.com","type":"bad"}`))
 	rec = httptest.NewRecorder()
 	h.SendVerificationCode(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid verification type"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"verification_type\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid verification type response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -289,12 +289,12 @@ func TestSessionRoutesRejectMalformedAndIncompletePayloadsWithoutMutation(t *tes
 		call   func(http.ResponseWriter, *http.Request)
 		want   string
 	}{
-		{name: "login malformed json", target: "/v2/auth/login", body: `{`, call: h.Login, want: "{\"detail\":\"invalid json\"}\n"},
-		{name: "register malformed json", target: "/v2/auth/register", body: `{`, call: h.Register, want: "{\"detail\":\"invalid json\"}\n"},
-		{name: "verification malformed json", target: "/verification-code", body: `{`, call: h.SendVerificationCode, want: "{\"detail\":\"invalid json\"}\n"},
-		{name: "verification missing email", target: "/verification-code", body: `{"type":"register"}`, call: h.SendVerificationCode, want: "{\"detail\":\"email required\"}\n"},
-		{name: "reset malformed json", target: "/v2/auth/password/reset", body: `{`, call: h.ResetPassword, want: "{\"detail\":\"invalid json\"}\n"},
-		{name: "reset missing code", target: "/v2/auth/password/reset", body: `{"email":"person@test.com","password":"NewPassword123"}`, call: h.ResetPassword, want: "{\"detail\":\"email, password and code required\"}\n"},
+		{name: "login malformed json", target: "/v2/auth/login", body: `{`, call: h.Login, want: "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "register malformed json", target: "/v2/auth/register", body: `{`, call: h.Register, want: "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "verification malformed json", target: "/verification-code", body: `{`, call: h.SendVerificationCode, want: "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "verification missing email", target: "/verification-code", body: `{"type":"register"}`, call: h.SendVerificationCode, want: "{\"error\":{\"object\":\"email\",\"operation\":\"validate\",\"reason\":\"required\"}}\n"},
+		{name: "reset malformed json", target: "/v2/auth/password/reset", body: `{`, call: h.ResetPassword, want: "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "reset missing code", target: "/v2/auth/password/reset", body: `{"email":"person@test.com","password":"NewPassword123"}`, call: h.ResetPassword, want: "{\"error\":{\"object\":\"registration\",\"operation\":\"validate\",\"reason\":\"required\"}}\n"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -341,7 +341,7 @@ func TestSessionRoutesFailClosedOnRateLimitConfigurationAndStoreErrors(t *testin
 	req = httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"rate-limit-store-failure@test.com","password":"Password123"}`))
 	rec = httptest.NewRecorder()
 	h.Login(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("rate-limit store failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 

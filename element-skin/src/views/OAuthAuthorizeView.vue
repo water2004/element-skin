@@ -58,7 +58,7 @@ import {
 } from '@/api/oauth'
 import OAuthConsentPanel from '@/components/oauth/OAuthConsentPanel.vue'
 import UiCard from '@/components/ui/UiCard.vue'
-import { getErrorMessage } from '@/utils/error'
+import { getErrorMessage, isApiError } from '@/utils/error'
 
 interface OAuthConsentDetail {
   label: string
@@ -101,9 +101,10 @@ async function loadDetails() {
     details.value = res.data
   } catch (error) {
     const fallback = '授权请求无效或已过期'
-    const detail = getErrorMessage(error, fallback)
     messageType.value = 'error'
-    message.value = detail === 'permission denied' ? '你无权授权此应用' : detail
+    message.value = isApiError(error, 'permission', 'check', 'denied')
+      ? '你无权授权此应用'
+      : getErrorMessage(error, fallback)
   } finally {
     loading.value = false
   }
@@ -117,9 +118,10 @@ async function approve() {
     const res = await approveOAuthAuthorization(authorizationRequest.value)
     window.location.assign(res.data.redirect_url)
   } catch (error) {
-    const detail = getErrorMessage(error, '提交授权失败')
     messageType.value = 'error'
-    message.value = detail === 'permission denied' ? '你无权授权此应用' : detail
+    message.value = isApiError(error, 'permission', 'check', 'denied')
+      ? '你无权授权此应用'
+      : getErrorMessage(error, '提交授权失败')
   } finally {
     deciding.value = false
   }

@@ -23,16 +23,16 @@ func TestHomepageMediaFormHelpersParseDefaultsAndExactErrors(t *testing.T) {
 		t.Fatalf("default image values mismatch: %#v", values)
 	}
 	_, err = homepagesvc.ParseMediaValues(map[string]string{"overlay_opacity_light": "bad"}, "image")
-	assertHTTPError(t, err, 400, "overlay_opacity_light must be a number")
+	assertHTTPError(t, err, 400, "homepage_light_opacity.validate.invalid")
 
 	_, err = homepagesvc.ParseMediaValues(map[string]string{"overlay_opacity_light": "0.91"}, "image")
-	assertHTTPError(t, err, 400, "overlay_opacity_light out of range")
+	assertHTTPError(t, err, 400, "homepage_setting.validate.out_of_range")
 
 	_, err = homepagesvc.ParseMediaValues(map[string]string{"start_yaw": "abc"}, "panorama")
-	assertHTTPError(t, err, 400, "start_yaw must be a number")
+	assertHTTPError(t, err, 400, "homepage_start_yaw.validate.invalid")
 
 	_, err = homepagesvc.ParseMediaValues(map[string]string{"start_yaw": "361"}, "panorama")
-	assertHTTPError(t, err, 400, "start_yaw out of range")
+	assertHTTPError(t, err, 400, "homepage_start_yaw.validate.out_of_range")
 
 	values, err = homepagesvc.ParseMediaValues(map[string]string{"duration_ms": "not-number"}, "image")
 	if err != nil || values.DurationMS != 0 {
@@ -46,10 +46,10 @@ func TestReadPanoramaZipRejectsExactInvalidShapes(t *testing.T) {
 		data   []byte
 		detail string
 	}{
-		{name: "not zip", data: []byte("not a zip"), detail: "invalid panorama zip"},
-		{name: "nested", data: panoramaZipWithFiles(t, map[string][]byte{"nested/panorama_0.png": pngBytesForAdminHelper(t, 4, 4)}), detail: "panorama files must be at zip root"},
-		{name: "extra", data: panoramaZipWithFiles(t, map[string][]byte{"panorama_0.png": pngBytesForAdminHelper(t, 4, 4), "other.png": pngBytesForAdminHelper(t, 4, 4)}), detail: "panorama zip must contain only panorama_0.png through panorama_5.png"},
-		{name: "invalid face", data: panoramaZipWithFiles(t, panoramaFaces(t, map[string][]byte{"panorama_3.png": []byte("bad png")})), detail: "invalid panorama face image"},
+		{name: "not zip", data: []byte("not a zip"), detail: "panorama_archive.decode.invalid"},
+		{name: "nested", data: panoramaZipWithFiles(t, map[string][]byte{"nested/panorama_0.png": pngBytesForAdminHelper(t, 4, 4)}), detail: "panorama_archive.validate.invalid"},
+		{name: "extra", data: panoramaZipWithFiles(t, map[string][]byte{"panorama_0.png": pngBytesForAdminHelper(t, 4, 4), "other.png": pngBytesForAdminHelper(t, 4, 4)}), detail: "panorama_archive.validate.invalid"},
+		{name: "invalid face", data: panoramaZipWithFiles(t, panoramaFaces(t, map[string][]byte{"panorama_3.png": []byte("bad png")})), detail: "panorama_face.validate.invalid"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -79,14 +79,14 @@ func TestValidateHomepageMediaValuesExactBoundaries(t *testing.T) {
 		t.Fatal(err)
 	}
 	negative := -0.01
-	assertHTTPError(t, homepagesvc.ValidateOpacity("overlay_opacity_light", &negative), 400, "overlay_opacity_light out of range")
+	assertHTTPError(t, homepagesvc.ValidateOpacity("overlay_opacity_light", &negative), 400, "homepage_setting.validate.out_of_range")
 
 	startPitch := -90.0
-	assertHTTPError(t, homepagesvc.ValidatePanoramaValues(nil, &startPitch, nil, nil), 400, "start_pitch out of range")
+	assertHTTPError(t, homepagesvc.ValidatePanoramaValues(nil, &startPitch, nil, nil), 400, "homepage_start_pitch.validate.out_of_range")
 	yawSpeed := -91.0
-	assertHTTPError(t, homepagesvc.ValidatePanoramaValues(nil, nil, &yawSpeed, nil), 400, "yaw_speed_dps out of range")
+	assertHTTPError(t, homepagesvc.ValidatePanoramaValues(nil, nil, &yawSpeed, nil), 400, "homepage_yaw_speed.validate.out_of_range")
 	pitchSpeed := 91.0
-	assertHTTPError(t, homepagesvc.ValidatePanoramaValues(nil, nil, nil, &pitchSpeed), 400, "pitch_speed_dps out of range")
+	assertHTTPError(t, homepagesvc.ValidatePanoramaValues(nil, nil, nil, &pitchSpeed), 400, "homepage_pitch_speed.validate.out_of_range")
 }
 
 func panoramaFaces(t *testing.T, overrides map[string][]byte) map[string][]byte {
@@ -139,7 +139,7 @@ func pngBytesForAdminHelper(t *testing.T, width, height int) []byte {
 func assertHTTPError(t *testing.T, err error, status int, detail string) {
 	t.Helper()
 	var httpErr util.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.Status != status || httpErr.Detail != detail {
+	if !errors.As(err, &httpErr) || httpErr.Status != status || httpErr.Error() != detail {
 		t.Fatalf("HTTP error mismatch: err=%#v want status=%d detail=%q", err, status, detail)
 	}
 }

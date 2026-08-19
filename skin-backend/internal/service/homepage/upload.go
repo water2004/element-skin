@@ -19,23 +19,26 @@ func (s Service) UploadImage(ctx context.Context, actor permission.Actor, upload
 		return model.HomepageMedia{}, err
 	}
 	if upload.Filename == "" {
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "file is required"}
+		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Object: "upload_file", Operation: "validate", Reason: "required"}
 	}
 	if int64(len(upload.Data)) > MaxImageBytes {
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "File too large"}
+		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Object: "upload_file", Operation: "validate", Reason: "too_large"}
 	}
 	ext := strings.ToLower(filepath.Ext(upload.Filename))
 	switch ext {
 	case ".png", ".jpg", ".jpeg", ".webp":
 	default:
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "Unsupported file format"}
+		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Object: "upload_file", Operation: "validate", Reason: "unsupported"}
 	}
 	if err := validateImageData(upload.Data, ext); err != nil {
-		detail := "invalid image"
 		if errors.Is(err, errImageDimensions) {
-			detail = "image dimensions exceed limit"
+			return model.HomepageMedia{}, util.HTTPError{
+				Status: http.StatusBadRequest, Object: "homepage_image", Operation: "validate", Reason: "too_large",
+			}
 		}
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Detail: detail}
+		return model.HomepageMedia{}, util.HTTPError{
+			Status: http.StatusBadRequest, Object: "homepage_image", Operation: "decode", Reason: "invalid",
+		}
 	}
 	values, err := ParseMediaValues(upload.Fields, "image")
 	if err != nil {
@@ -49,13 +52,13 @@ func (s Service) UploadPanorama(ctx context.Context, actor permission.Actor, upl
 		return model.HomepageMedia{}, err
 	}
 	if upload.Filename == "" {
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "file is required"}
+		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Object: "upload_file", Operation: "validate", Reason: "required"}
 	}
 	if int64(len(upload.Data)) > MaxPanoramaBytes {
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "File too large"}
+		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Object: "upload_file", Operation: "validate", Reason: "too_large"}
 	}
 	if strings.ToLower(filepath.Ext(upload.Filename)) != ".zip" {
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "Unsupported file format"}
+		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Object: "upload_file", Operation: "validate", Reason: "unsupported"}
 	}
 	faces, err := ReadPanoramaZip(upload.Data)
 	if err != nil {
@@ -134,7 +137,7 @@ func (s Service) newMedia(ctx context.Context, typ, title, ext string, values Me
 		duration = 9000
 	}
 	if duration < 1000 || duration > 60000 {
-		return model.HomepageMedia{}, "", util.HTTPError{Status: http.StatusBadRequest, Detail: "duration_ms out of range"}
+		return model.HomepageMedia{}, "", util.HTTPError{Status: http.StatusBadRequest, Object: "homepage_duration", Operation: "validate", Reason: "out_of_range"}
 	}
 	now := database.NowMS()
 	storagePath := id + ext

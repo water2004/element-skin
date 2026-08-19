@@ -12,7 +12,6 @@ import (
 	"element-skin/backend/internal/redisstore"
 	"element-skin/backend/internal/service/yggdrasil"
 	"element-skin/backend/internal/testutil"
-	"element-skin/backend/internal/util"
 )
 
 func TestConcurrentYggdrasilRefreshConsumesAccessTokenExactlyOnce(t *testing.T) {
@@ -74,11 +73,7 @@ func TestConcurrentYggdrasilRefreshConsumesAccessTokenExactlyOnce(t *testing.T) 
 				t.Fatalf("successful refresh selected profile=%#v; want exact profile", selected)
 			}
 			newAccess = result.response["accessToken"].(string)
-		case result.response == nil && result.err == (util.HTTPError{
-			Status:   403,
-			Detail:   "Invalid token.",
-			YggError: "ForbiddenOperationException",
-		}):
+		case result.response == nil && yggError(result.err, 403, "ForbiddenOperationException", "Invalid token."):
 			rejected++
 		default:
 			t.Fatalf("unexpected concurrent refresh result: response=%#v err=%#v", result.response, result.err)

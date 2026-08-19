@@ -79,7 +79,7 @@ func TestAdminUserRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T)
 			req := withAdminActorWithoutPermission(tc.makeRequest(), adminUser.ID, tc.permission)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("permission denial mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 			}
 		})
@@ -116,7 +116,7 @@ func TestRoleGrantAndRevokeControlsExactPermissions(t *testing.T) {
 	req = withAdminActor(req, plainAdmin.ID)
 	rec = httptest.NewRecorder()
 	h.GrantUserRole(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"protected role management required\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_role\",\"operation\":\"manage\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("plain admin protected role generic grant mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -153,7 +153,7 @@ func TestRoleGrantAndRevokeControlsExactPermissions(t *testing.T) {
 	req = withAdminActor(req, plainAdmin.ID)
 	rec = httptest.NewRecorder()
 	h.RevokeUserRole(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"cannot modify protected subject\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_subject\",\"operation\":\"update\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("plain admin protected subject role revoke mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -176,7 +176,7 @@ func TestRoleGrantAndRevokeControlsExactPermissions(t *testing.T) {
 	req.SetPathValue("role_id", permission.RoleAdmin)
 	rec = httptest.NewRecorder()
 	h.RevokeUserRole(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"role assignment not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"role_assignment\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing role revoke response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -186,7 +186,7 @@ func TestRoleGrantAndRevokeControlsExactPermissions(t *testing.T) {
 	req.SetPathValue("role_id", permission.RoleSystemMaintenance)
 	rec = httptest.NewRecorder()
 	h.RevokeUserRole(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"protected role management required\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_role\",\"operation\":\"manage\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("plain admin protected role generic revoke mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -330,7 +330,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	req.SetPathValue("user_id", "missing-user")
 	rec := httptest.NewRecorder()
 	h.UserPermissions(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing user permissions mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -340,7 +340,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	req.SetPathValue("permission_code", "nope.nope.nope")
 	rec = httptest.NewRecorder()
 	h.SetUserPermissionOverride(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"permission not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("unknown permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -350,7 +350,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	req.SetPathValue("permission_code", "notice.create.any")
 	rec = httptest.NewRecorder()
 	h.SetUserPermissionOverride(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"effect must be allow or deny\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"permission_override\",\"operation\":\"configure\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid effect mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -360,7 +360,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	req.SetPathValue("permission_code", "permission_protected.manage.any")
 	rec = httptest.NewRecorder()
 	h.SetUserPermissionOverride(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"protected management permission must be transferred\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"protected_permission\",\"operation\":\"transfer\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("plain admin protected management permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -370,7 +370,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	req.SetPathValue("permission_code", "permission_protected.manage.any")
 	rec = httptest.NewRecorder()
 	h.SetUserPermissionOverride(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"protected management permission must be transferred\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"protected_permission\",\"operation\":\"transfer\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("protected actor grant protected management permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -380,7 +380,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	req.SetPathValue("permission_code", "permission_protected.manage.any")
 	rec = httptest.NewRecorder()
 	h.SetUserPermissionOverride(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"protected management permission must be transferred\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"protected_permission\",\"operation\":\"transfer\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("self protected management override mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -390,7 +390,7 @@ func TestUserPermissionRoutesRejectInvalidAndProtectedOperationsExactly(t *testi
 	req.SetPathValue("permission_code", "notice.create.any")
 	rec = httptest.NewRecorder()
 	h.ClearUserPermissionOverride(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"permission override not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"permission_override\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing clear override mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

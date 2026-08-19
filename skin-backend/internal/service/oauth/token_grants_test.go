@@ -59,7 +59,7 @@ func TestServiceOAuthRevokedGrantRejectsAuthorizationCodeAndRefreshExactly(t *te
 		CodeVerifier: blockedVerifier,
 		RedirectURI:  "https://revoked-grant-token.example/callback",
 	})
-	assertHTTPError(t, err, 400, "invalid authorization code")
+	assertHTTPError(t, err, 400, "authorization_code.verify.invalid")
 
 	allowedVerifier := "active-grant-refresh-verifier"
 	allowedApproval, err := svc.ApproveAuthorization(ctx, actor, oauth.AuthorizationRequest{
@@ -98,7 +98,7 @@ func TestServiceOAuthRevokedGrantRejectsAuthorizationCodeAndRefreshExactly(t *te
 		ClientSecret: clientSecret,
 		RefreshToken: token.RefreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 	var activeRefreshCount int
 	if err := db.Pool.QueryRow(ctx, `
 		SELECT COUNT(*)

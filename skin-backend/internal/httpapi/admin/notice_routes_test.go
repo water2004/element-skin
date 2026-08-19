@@ -139,13 +139,13 @@ func TestNoticeAdminRoutesRejectInvalidInputsExactly(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	h.CreateNotice(rec, adminNoticeRequest(http.MethodPost, "/v2/admin/notifications", `{`, adminUser.ID))
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad create json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
 	h.CreateNotice(rec, adminNoticeRequest(http.MethodPost, "/v2/admin/notifications", `{"title":"Broken","summary":"Summary","display_mode":"detail"}`, adminUser.ID))
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"content_markdown is required for detail notices\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"notice_content\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("bad create validation mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -162,7 +162,7 @@ func TestNoticeAdminRoutesRejectInvalidInputsExactly(t *testing.T) {
 	patchReq.SetPathValue("id", id)
 	rec = httptest.NewRecorder()
 	h.PatchNotice(rec, patchReq)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid patch value\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"patch_value\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad patch bool mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -170,7 +170,7 @@ func TestNoticeAdminRoutesRejectInvalidInputsExactly(t *testing.T) {
 	patchReq.SetPathValue("id", id)
 	rec = httptest.NewRecorder()
 	h.PatchNotice(rec, patchReq)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid link_url\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"notice_link\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad patch link mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	row, err := db.Notices.Get(context.Background(), id)
@@ -182,7 +182,7 @@ func TestNoticeAdminRoutesRejectInvalidInputsExactly(t *testing.T) {
 	missingReq.SetPathValue("id", "missing")
 	rec = httptest.NewRecorder()
 	h.PatchNotice(rec, missingReq)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"notice not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"notice\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing patch mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -220,7 +220,7 @@ func TestNoticeAdminRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.
 			req := withAdminActorWithoutPermission(tc.makeRequest(), adminUser.ID, tc.permission)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("permission denial mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 			}
 		})

@@ -138,7 +138,7 @@ func TestOIDCAuthorizationLinkUsesStateNoncePKCEAndStoresCredentialsExactly(t *t
 		t.Fatalf("cached access token mismatch: %#v err=%v", accessToken, err)
 	}
 	_, err = service.CompleteAuthorization(ctx, "authorization-code", state, "")
-	assertHTTPError(t, err, 400, "invalid or expired OIDC state")
+	assertHTTPError(t, err, 400, "oidc_state.verify.invalid")
 }
 
 func TestOIDCLinkRequestsAccountSelectionOnlyFromMicrosoft(t *testing.T) {
@@ -346,18 +346,15 @@ func TestOIDCTargetedReauthorizationRejectsAnotherSelectedAccountWithoutMutation
 	actor := actorWithPermissions(user.ID, "external_identity.create.owned")
 	other := testutil.CreateUser(t, db, "oidc-target-other@test.com", "pw", "OIDCTargetOther", false)
 	_, err := service.StartAuthorization(ctx, actorWithPermissions(other.ID, "external_identity.create.owned"), provider.ID, "link", target.ID)
-	assertHTTPError(t, err, 404, "external identity not found")
+	assertHTTPError(t, err, 404, "identity.resolve.not_found")
 	_, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", target.ID)
-	assertHTTPError(t, err, 400, "identity_id is only allowed for link authorization")
+	assertHTTPError(t, err, 400, "identity_id.validate.invalid")
 	started, err := service.StartAuthorization(ctx, actor, provider.ID, "link", target.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = service.CompleteAuthorization(ctx, "wrong-account-code", mustAuthorizationState(t, started.AuthorizationURL), "")
-	assertHTTPError(t, err, 409, identity.AuthorizationAccountMismatchDetail)
-	if code, ok := identity.AuthorizationLinkErrorCode(err); !ok || code != "account_mismatch" {
-		t.Fatalf("mismatched reauthorization error code=%q ok=%v", code, ok)
-	}
+	assertHTTPError(t, err, 409, "identity.authorize.mismatch")
 	credential, getErr := db.Identities.GetCredential(ctx, target.ID)
 	if getErr != nil || credential == nil || credential.RefreshTokenCiphertext != "original-ciphertext" ||
 		credential.AuthorizationStatus != model.ExternalIdentityAuthorizationReauthorizationRequired ||
@@ -380,16 +377,16 @@ func TestOIDCAuthorizationRejectsUnauthorizedLinkAndConsumesDeniedStateExactly(t
 	redis := redisstore.NewMemoryStore()
 	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redis, OIDCClient: &fakeOIDCClient{}}
 	_, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "link", "")
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 	started, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	state := mustAuthorizationState(t, started.AuthorizationURL)
-	_, err = service.CompleteAuthorization(ctx, "", state, "access_denied")
-	assertHTTPError(t, err, 400, "OIDC authorization was denied")
+	_, err = service.CompleteAuthorization(ctx, "", state, "oauth_authorization.grant.denied")
+	assertHTTPError(t, err, 400, "identity.authorize.denied")
 	_, err = service.CompleteAuthorization(ctx, "code", state, "")
-	assertHTTPError(t, err, 400, "invalid or expired OIDC state")
+	assertHTTPError(t, err, 400, "oidc_state.verify.invalid")
 	if client := service.OIDCClient.(*fakeOIDCClient); client.calls != 0 {
 		t.Fatalf("denied authorization must not exchange a code, calls=%d", client.calls)
 	}
@@ -421,17 +418,17 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.StartAuthorization(ctx, actor, "missing-provider", "link", ""); err == nil {
 		t.Fatal("missing provider authorization should fail")
 	} else {
-		assertHTTPError(t, err, 404, "identity provider not found")
+		assertHTTPError(t, err, 404, "identity_provider.resolve.not_found")
 	}
 	if _, err := service.StartAuthorization(ctx, actor, provider.ID, "unknown", ""); err == nil {
 		t.Fatal("unknown authorization intent should fail")
 	} else {
-		assertHTTPError(t, err, 400, "intent must be login or link")
+		assertHTTPError(t, err, 400, "authorization_intent.validate.invalid")
 	}
 	if _, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "unexpected"); err == nil {
 		t.Fatal("login identity_id should fail")
 	} else {
-		assertHTTPError(t, err, 400, "identity_id is only allowed for link authorization")
+		assertHTTPError(t, err, 400, "identity_id.validate.invalid")
 	}
 
 	provider.LoginEnabled = false
@@ -439,7 +436,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", ""); err == nil {
 		t.Fatal("disabled login should fail")
 	} else {
-		assertHTTPError(t, err, 403, "login is disabled for this identity provider")
+		assertHTTPError(t, err, 403, "identity_provider.login.disabled")
 	}
 	provider.LoginEnabled = true
 	provider.LinkEnabled = false
@@ -447,7 +444,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.StartAuthorization(ctx, actor, provider.ID, "link", ""); err == nil {
 		t.Fatal("disabled linking should fail")
 	} else {
-		assertHTTPError(t, err, 403, "linking is disabled for this identity provider")
+		assertHTTPError(t, err, 403, "identity_provider.link.disabled")
 	}
 	provider.LinkEnabled = true
 	updateOIDCTestProvider(t, db, provider)
@@ -462,7 +459,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.StartAuthorization(ctx, actor, provider.ID, "link", foreign.ID); err == nil {
 		t.Fatal("foreign target identity should fail")
 	} else {
-		assertHTTPError(t, err, 404, "external identity not found")
+		assertHTTPError(t, err, 404, "identity.resolve.not_found")
 	}
 	withoutCache := service
 	withoutCache.Redis = nil
@@ -473,7 +470,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.CompleteAuthorization(ctx, "code", " ", ""); err == nil {
 		t.Fatal("empty callback state should fail")
 	} else {
-		assertHTTPError(t, err, 400, "state is required")
+		assertHTTPError(t, err, 400, "oidc_state.validate.required")
 	}
 	if _, err := withoutCache.CompleteAuthorization(ctx, "code", "state", ""); err == nil || err.Error() != "identity state store is not configured" {
 		t.Fatalf("missing state store completion error=%v", err)
@@ -481,7 +478,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.CompleteAuthorization(ctx, "code", "missing-state", ""); err == nil {
 		t.Fatal("missing callback state should fail")
 	} else {
-		assertHTTPError(t, err, 400, "invalid or expired OIDC state")
+		assertHTTPError(t, err, 400, "oidc_state.verify.invalid")
 	}
 	if err := cache.SetState(ctx, "wrong-kind", map[string]any{"kind": "registration"}, time.Minute); err != nil {
 		t.Fatal(err)
@@ -489,7 +486,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.CompleteAuthorization(ctx, "code", "wrong-kind", ""); err == nil {
 		t.Fatal("wrong callback state kind should fail")
 	} else {
-		assertHTTPError(t, err, 400, "invalid or expired OIDC state")
+		assertHTTPError(t, err, 400, "oidc_state.verify.invalid")
 	}
 
 	started, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "")
@@ -499,7 +496,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.CompleteAuthorization(ctx, " ", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
 		t.Fatal("missing authorization code should fail")
 	} else {
-		assertHTTPError(t, err, 400, "authorization code is required")
+		assertHTTPError(t, err, 400, "authorization_code.validate.required")
 	}
 
 	client.err = errors.New("identity provider exchange failed")
@@ -510,7 +507,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
 		t.Fatal("OIDC exchange failure should fail")
 	} else {
-		assertHTTPError(t, err, 400, "identity provider exchange failed")
+		assertHTTPError(t, err, 400, "identity.authorize.failed")
 	}
 	client.err = nil
 
@@ -531,13 +528,13 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.CompleteAuthorization(ctx, "code", "invalid-intent", ""); err == nil {
 		t.Fatal("invalid stored intent should fail")
 	} else {
-		assertHTTPError(t, err, 400, "invalid OIDC authorization intent")
+		assertHTTPError(t, err, 400, "authorization_intent.validate.invalid")
 	}
 	client.claims.Subject = "missing-link-user-subject"
 	if _, err := service.CompleteAuthorization(ctx, "code", "missing-link-user", ""); err == nil {
 		t.Fatal("link state without user should fail")
 	} else {
-		assertHTTPError(t, err, 403, "permission denied")
+		assertHTTPError(t, err, 403, "permission.check.denied")
 	}
 
 	client.claims.Subject = "new-registration-subject"
@@ -550,7 +547,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
 		t.Fatal("disabling login should also stop unmatched identities from continuing registration")
 	} else {
-		assertHTTPError(t, err, 403, "login is disabled for this identity provider")
+		assertHTTPError(t, err, 403, "identity_provider.login.disabled")
 	}
 
 	disappearing := provider
@@ -574,7 +571,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
 		t.Fatal("removed provider callback should fail")
 	} else {
-		assertHTTPError(t, err, 400, "identity provider is no longer available")
+		assertHTTPError(t, err, 400, "identity_provider.use.unavailable")
 	}
 }
 
@@ -617,10 +614,7 @@ func TestOIDCAuthorizationRejectsDuplicateIdentityLinksAndPropagatesDependencyFa
 	if result != (identity.AuthorizationResult{}) {
 		t.Fatalf("duplicate owned identity result=%#v", result)
 	}
-	assertHTTPError(t, err, 409, identity.AuthorizationAlreadyLinkedDetail)
-	if code, ok := identity.AuthorizationLinkErrorCode(err); !ok || code != "already_linked" {
-		t.Fatalf("duplicate owned identity error code=%q ok=%v", code, ok)
-	}
+	assertHTTPError(t, err, 409, "identity.link.already_exists")
 	updated, err := db.Identities.GetIdentity(ctx, "oidc-reuse-owned")
 	if err != nil || updated == nil || updated.Email != "" || updated.LastLoginAt != nil || updated.UpdatedAt != 1 {
 		t.Fatalf("duplicate owned identity mutated state=%#v err=%v", updated, err)
@@ -640,10 +634,7 @@ func TestOIDCAuthorizationRejectsDuplicateIdentityLinksAndPropagatesDependencyFa
 	if _, err := service.CompleteAuthorization(ctx, "foreign-code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
 		t.Fatal("foreign linked identity should fail")
 	} else {
-		assertHTTPError(t, err, 409, identity.AuthorizationLinkedElsewhereDetail)
-		if code, ok := identity.AuthorizationLinkErrorCode(err); !ok || code != "already_linked" {
-			t.Fatalf("foreign linked identity error code=%q ok=%v", code, ok)
-		}
+		assertHTTPError(t, err, 409, "identity.link.conflict")
 	}
 	foreign, err := db.Identities.GetIdentity(ctx, "oidc-reuse-foreign")
 	if err != nil || foreign == nil || foreign.UserID != other.ID || foreign.UpdatedAt != 2 || foreign.LastLoginAt != nil {

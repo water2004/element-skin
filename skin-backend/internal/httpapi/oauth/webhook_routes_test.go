@@ -72,7 +72,7 @@ func TestOAuthAppRoutesCreateAndReadOptionalPermissionBoundWebhookEndpointsExact
 			"enabled": true,
 		}},
 	}, session, "")
-	if badRes.Code != http.StatusBadRequest || decodeMap(t, badRes.Body.Bytes())["detail"] != "webhook event exceeds client permission limit" {
+	if badRes.Code != http.StatusBadRequest || badRes.Body.String() != "{\"error\":{\"object\":\"webhook_event\",\"operation\":\"subscribe\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("permission-bound webhook rejection status=%d body=%s", badRes.Code, badRes.Body.String())
 	}
 }

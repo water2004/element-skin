@@ -84,10 +84,10 @@ func TestOIDCRegistrationRequiresAndConsumesTheCompleteLocalRegistrationForm(t *
 		code     string
 		detail   string
 	}{
-		{name: "username", email: localEmail, password: "Password123", detail: "Username is required"},
-		{name: "email", password: "Password123", username: "OIDCLocalUser", detail: "Invalid email format"},
-		{name: "password", email: localEmail, username: "OIDCLocalUser", detail: "Password is required"},
-		{name: "verification", email: localEmail, password: "Password123", username: "OIDCLocalUser", detail: "Verification code required"},
+		{name: "username", email: localEmail, password: "Password123", detail: "username.validate.required"},
+		{name: "email", password: "Password123", username: "OIDCLocalUser", detail: "email.validate.invalid"},
+		{name: "password", email: localEmail, username: "OIDCLocalUser", detail: "password.validate.required"},
+		{name: "verification", email: localEmail, password: "Password123", username: "OIDCLocalUser", detail: "verification_code.validate.required"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			id, err := svc.RegisterWithIdentity(ctx, tc.email, tc.password, tc.username, tc.invite, tc.code, ticket)
@@ -103,7 +103,7 @@ func TestOIDCRegistrationRequiresAndConsumesTheCompleteLocalRegistrationForm(t *
 	if err := redis.SetVerificationCode(ctx, localEmail, "register", "OIDC1234", time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if id, err := svc.RegisterWithIdentity(ctx, localEmail, "Password123", "OIDCLocalUser", "", "oidc1234", ticket); id != "" || !httpError(err, 400, "invite code required") {
+	if id, err := svc.RegisterWithIdentity(ctx, localEmail, "Password123", "OIDCLocalUser", "", "oidc1234", ticket); id != "" || !httpError(err, 400, "invite.validate.required") {
 		t.Fatalf("missing invite id=%q err=%#v; want exact rejection", id, err)
 	}
 	if _, err := redis.GetState(ctx, ticket); err != nil {
@@ -160,7 +160,7 @@ func TestOIDCRegistrationRequiresAndConsumesTheCompleteLocalRegistrationForm(t *
 	if err := redis.SetVerificationCode(ctx, "replay@example.com", "register", "REPLAY12", time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	if id, err := svc.RegisterWithIdentity(ctx, "replay@example.com", "Password123", "OIDCReplayUser", "OIDC_REPLAY_INVITE", "REPLAY12", ticket); id != "" || !httpError(err, 400, "invalid or expired identity_ticket") {
+	if id, err := svc.RegisterWithIdentity(ctx, "replay@example.com", "Password123", "OIDCReplayUser", "OIDC_REPLAY_INVITE", "REPLAY12", ticket); id != "" || !httpError(err, 400, "identity_ticket.verify.invalid") {
 		t.Fatalf("identity ticket replay id=%q err=%#v; want exact rejection", id, err)
 	}
 	if user, err := db.Users.GetByEmail(ctx, "replay@example.com"); err != nil || user != nil {

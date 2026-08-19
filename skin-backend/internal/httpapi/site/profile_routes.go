@@ -10,7 +10,7 @@ import (
 func (h Handler) CreateProfile(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.profiles.CreateProfile(req.Context(), shared.CurrentActor(req), body["name"], body["model"])
@@ -24,7 +24,7 @@ func (h Handler) CreateProfile(w http.ResponseWriter, req *http.Request) {
 func (h Handler) UpdateProfile(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.profiles.UpdateProfile(req.Context(), shared.CurrentActor(req), profilePathID(req), body["name"]); err != nil {

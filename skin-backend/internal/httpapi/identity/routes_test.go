@@ -187,7 +187,7 @@ func TestIdentityRoutesListUpdateDeleteOnlyOwnedRecordsWithExactErrors(t *testin
 	req.SetPathValue("identity_id", "identity-a")
 	rec = httptest.NewRecorder()
 	h.DeleteIdentity(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"external identity not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"identity\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("cross-account delete response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if item, err := db.Identities.GetIdentity(t.Context(), "identity-a"); err != nil || item == nil {
@@ -213,14 +213,14 @@ func TestIdentityRoutesRejectInvalidJSONAndMissingPermissionsExactly(t *testing.
 	req := identityRouteRequest(http.MethodPost, "/v2/admin/identity-providers", `{`, permission.Actor{})
 	rec := httptest.NewRecorder()
 	h.CreateProvider(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("provider invalid JSON response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	req = identityRouteRequest(http.MethodGet, "/v2/users/me/identities", "", permission.Actor{})
 	rec = httptest.NewRecorder()
 	h.ListIdentities(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("identity permission response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -237,7 +237,7 @@ func TestIdentityRoutesRejectInvalidJSONAndMissingPermissionsExactly(t *testing.
 		t.Run(tc.name, func(t *testing.T) {
 			recorder := httptest.NewRecorder()
 			tc.call(recorder, tc.req)
-			if recorder.Code != http.StatusBadRequest || recorder.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+			if recorder.Code != http.StatusBadRequest || recorder.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 				t.Fatalf("invalid JSON response mismatch: status=%d body=%q", recorder.Code, recorder.Body.String())
 			}
 		})
@@ -252,7 +252,7 @@ func TestIdentityRoutesRejectInvalidJSONAndMissingPermissionsExactly(t *testing.
 			request.SetPathValue("provider_id", "missing")
 			recorder := httptest.NewRecorder()
 			call(recorder, request)
-			if recorder.Code != http.StatusForbidden || recorder.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if recorder.Code != http.StatusForbidden || recorder.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("permission response mismatch: status=%d body=%q", recorder.Code, recorder.Body.String())
 			}
 		})
@@ -298,8 +298,8 @@ func TestIdentityAuthorizationCancellationReturnsToIdentityManagementExactly(t *
 	req = identityRouteRequest(http.MethodGet, callbackTarget, "", permission.GuestActor())
 	rec = httptest.NewRecorder()
 	h.AuthorizationCallback(rec, req)
-	wantLocation := "http://test/dashboard/identities?identity_error=authorization_incomplete"
-	wantBody := `<a href="http://test/dashboard/identities?identity_error=authorization_incomplete">See Other</a>.` + "\n\n"
+	wantLocation := "http://test/dashboard/identities?error_object=identity&error_operation=authorize&error_reason=incomplete"
+	wantBody := `<a href="http://test/dashboard/identities?error_object=identity&amp;error_operation=authorize&amp;error_reason=incomplete">See Other</a>.` + "\n\n"
 	if rec.Code != http.StatusSeeOther || rec.Header().Get("Location") != wantLocation || rec.Body.String() != wantBody {
 		t.Fatalf("cancel callback mismatch: status=%d location=%q body=%q", rec.Code, rec.Header().Get("Location"), rec.Body.String())
 	}

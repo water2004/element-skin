@@ -37,7 +37,7 @@ func (h Handler) Authenticate(w http.ResponseWriter, req *http.Request) {
 		RequestUser bool   `json:"requestUser"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.ygg.Authenticate(req.Context(), body.Username, body.Password, body.ClientToken, body.RequestUser)
@@ -56,7 +56,7 @@ func (h Handler) Refresh(w http.ResponseWriter, req *http.Request) {
 		SelectedProfile map[string]any `json:"selectedProfile"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	selected := ""
@@ -74,7 +74,7 @@ func (h Handler) Refresh(w http.ResponseWriter, req *http.Request) {
 func (h Handler) Validate(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.ygg.Validate(req.Context(), body["accessToken"], body["clientToken"]); err != nil {
@@ -87,7 +87,7 @@ func (h Handler) Validate(w http.ResponseWriter, req *http.Request) {
 func (h Handler) Invalidate(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.ygg.Invalidate(req.Context(), body["accessToken"]); err != nil {
@@ -100,7 +100,7 @@ func (h Handler) Invalidate(w http.ResponseWriter, req *http.Request) {
 func (h Handler) Signout(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.ygg.Signout(req.Context(), body["username"], body["password"]); err != nil {
@@ -113,7 +113,7 @@ func (h Handler) Signout(w http.ResponseWriter, req *http.Request) {
 func (h Handler) Join(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.ygg.Join(req.Context(), body["accessToken"], body["selectedProfile"], body["serverId"], req.RemoteAddr); err != nil {

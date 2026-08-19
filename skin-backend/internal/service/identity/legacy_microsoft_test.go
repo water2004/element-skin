@@ -113,7 +113,7 @@ func TestLegacyMicrosoftMigrationFailuresPreserveSettingsAndProviderState(t *tes
 
 		result, err := service.MigrateLegacyMicrosoftProvider(context.Background())
 		if result.ProviderCreated || result.LegacySettingsRemoved || err == nil ||
-			err.Error() != "migrate legacy Microsoft configuration: discovery unavailable" {
+			err.Error() != "migrate legacy Microsoft configuration: identity_provider.discover.failed" {
 			t.Fatalf("discovery migration mismatch: result=%#v err=%v", result, err)
 		}
 		assertLegacyMicrosoftSettingsExact(t, db, "legacy-client", "legacy-secret", "https://old.example/callback")

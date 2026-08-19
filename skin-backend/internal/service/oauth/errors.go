@@ -6,22 +6,22 @@ import (
 	"element-skin/backend/internal/util"
 )
 
-func oauthError(detail string) error {
-	return util.HTTPError{Status: http.StatusBadRequest, Detail: detail}
+func oauthError(object, operation, reason string) error {
+	return util.HTTPError{Status: http.StatusBadRequest, Object: object, Operation: operation, Reason: reason}
 }
 
-func badRequest(detail string) error {
-	return util.HTTPError{Status: http.StatusBadRequest, Detail: detail}
+func badRequest(object, operation, reason string) error {
+	return util.HTTPError{Status: http.StatusBadRequest, Object: object, Operation: operation, Reason: reason}
 }
 
 func forbidden() error {
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }
 
-func unauthorized(detail string) error {
-	return util.HTTPError{Status: http.StatusUnauthorized, Detail: detail}
+func unauthorized(object, operation, reason string) error {
+	return util.HTTPError{Status: http.StatusUnauthorized, Object: object, Operation: operation, Reason: reason}
 }
 
-func notFound(detail string) error {
-	return util.HTTPError{Status: http.StatusNotFound, Detail: detail}
+func notFound(object, operation, reason string) error {
+	return util.HTTPError{Status: http.StatusNotFound, Object: object, Operation: operation, Reason: reason}
 }

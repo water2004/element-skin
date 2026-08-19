@@ -106,7 +106,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.Profiles(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("profile list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -115,7 +115,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.Profiles(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("profile list incomplete cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -124,7 +124,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", target.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("profile update bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -133,7 +133,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", target.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid profile name\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile_name\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("profile update invalid name mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -142,7 +142,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", target.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateProfile(rec, req)
-	if rec.Code != http.StatusConflict || rec.Body.String() != "{\"detail\":\"profile name already exists\"}\n" {
+	if rec.Code != http.StatusConflict || rec.Body.String() != "{\"error\":{\"object\":\"profile_name\",\"operation\":\"reserve\",\"reason\":\"conflict\"}}\n" {
 		t.Fatalf("profile update name conflict mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchanged, err := db.Profiles.GetByID(req.Context(), target.ID)
@@ -155,7 +155,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", "missing")
 	rec = httptest.NewRecorder()
 	h.UpdateProfile(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("profile update missing mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -164,7 +164,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", target.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateProfileSkin(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"Texture not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("profile skin missing texture mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchangedTexture, err := db.Profiles.GetByID(req.Context(), target.ID)
@@ -190,7 +190,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", "missing")
 	rec = httptest.NewRecorder()
 	h.UpdateProfileSkin(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("profile skin update missing mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -201,7 +201,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/v2/admin/profiles", nil)
 	rec = httptest.NewRecorder()
 	h.Profiles(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("profile list permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -209,7 +209,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", target.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateProfile(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("profile update permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -217,7 +217,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", target.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteProfile(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("profile delete permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -226,7 +226,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req.SetPathValue("profile_id", target.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateProfileCape(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("profile cape bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

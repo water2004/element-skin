@@ -63,14 +63,14 @@ func TestUploadServiceRejectsPermissionsBeforeSideEffects(t *testing.T) {
 		Actor:       textureActor(user.ID),
 		Data:        data,
 		TextureType: "skin",
-	}); res != nil || !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	}); res != nil || !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("upload without create permission result=%#v err=%#v; want exact 403", res, err)
 	}
 	if res, err := svc.UploadAndApply(ctx, texturesvc.UploadInput{
 		Actor:       textureActor(user.ID, "texture.create.owned"),
 		Data:        data,
 		TextureType: "skin",
-	}, profile.ID); res != nil || !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	}, profile.ID); res != nil || !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("upload apply without apply permission result=%#v err=%#v; want exact 403", res, err)
 	}
 	if count, err := db.Textures.CountForUser(ctx, user.ID); err != nil || count != 0 {
@@ -162,7 +162,7 @@ func TestUploadServiceUploadAndApplyCapeAndForeignProfileFailureExactState(t *te
 		Data:        pngBytes(t, 64, 64, color.RGBA{R: 20, G: 200, B: 120, A: 255}),
 		TextureType: "skin",
 	}, foreignProfile.ID)
-	if foreignResult != nil || !httpErrorIs(err, http.StatusForbidden, "Profile not yours") {
+	if foreignResult != nil || !httpErrorIs(err, http.StatusForbidden, "profile.authorize.denied") {
 		t.Fatalf("foreign profile upload apply = result=%#v err=%#v; want exact 403", foreignResult, err)
 	}
 	foreignAfter, err := db.Profiles.GetByID(ctx, foreignProfile.ID)
@@ -220,21 +220,21 @@ func TestUploadServiceRejectsPublicUploadAndBoundProfileInputsExactly(t *testing
 		Data:        data,
 		TextureType: "skin",
 		IsPublic:    true,
-	}); res != nil || !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	}); res != nil || !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("public upload without visibility permission result=%#v err=%#v; want exact 403", res, err)
 	}
 	if res, err := svc.UploadAndApply(ctx, texturesvc.UploadInput{
 		Actor:       textureActor(user.ID, "texture.create.owned", "texture.apply.owned"),
 		Data:        data,
 		TextureType: "",
-	}, profile.ID); res != nil || !httpErrorIs(err, http.StatusBadRequest, "uuid and texture_type are required") {
+	}, profile.ID); res != nil || !httpErrorIs(err, http.StatusBadRequest, "texture.upload.required") {
 		t.Fatalf("upload apply missing type result=%#v err=%#v; want exact 400", res, err)
 	}
 	if res, err := svc.UploadAndApply(ctx, texturesvc.UploadInput{
 		Actor:       textureActor(user.ID, "texture.create.owned", "texture.apply.owned"),
 		Data:        data,
 		TextureType: "elytra",
-	}, profile.ID); res != nil || !httpErrorIs(err, http.StatusBadRequest, "Invalid texture_type") {
+	}, profile.ID); res != nil || !httpErrorIs(err, http.StatusBadRequest, "texture_type.validate.invalid") {
 		t.Fatalf("upload apply invalid type result=%#v err=%#v; want exact 400", res, err)
 	}
 
@@ -244,7 +244,7 @@ func TestUploadServiceRejectsPublicUploadAndBoundProfileInputsExactly(t *testing
 		Actor:       boundActor,
 		Data:        data,
 		TextureType: "skin",
-	}, otherProfile.ID); res != nil || !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	}, otherProfile.ID); res != nil || !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("bound upload wrong profile result=%#v err=%#v; want exact 403", res, err)
 	}
 	if count, err := db.Textures.CountForUser(ctx, user.ID); err != nil || count != 0 {
@@ -290,5 +290,5 @@ func pngBytes(t *testing.T, width, height int, c color.RGBA) []byte {
 
 func httpErrorIs(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }

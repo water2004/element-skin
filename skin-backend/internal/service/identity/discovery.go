@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"element-skin/backend/internal/util"
 )
 
 type ProviderMetadata struct {
@@ -40,20 +42,20 @@ func (d HTTPDiscovery) Discover(ctx context.Context, issuer string) (ProviderMet
 	req.Header.Set("Accept", "application/json")
 	resp, err := client.Do(req)
 	if err != nil {
-		return ProviderMetadata{}, fmt.Errorf("fetch OIDC discovery document: %w", err)
+		return ProviderMetadata{}, util.ClassifiedError{Object: "identity_provider", Operation: "discover", Reason: "unavailable", Cause: err}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
-		return ProviderMetadata{}, fmt.Errorf("fetch OIDC discovery document: status %d", resp.StatusCode)
+		return ProviderMetadata{}, util.ClassifiedError{Object: "identity_provider", Operation: "discover", Reason: "denied", Cause: fmt.Errorf("status %d", resp.StatusCode)}
 	}
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, 1<<20))
 	var metadata ProviderMetadata
 	if err := decoder.Decode(&metadata); err != nil {
-		return ProviderMetadata{}, fmt.Errorf("decode OIDC discovery document: %w", err)
+		return ProviderMetadata{}, util.ClassifiedError{Object: "identity_provider", Operation: "discover", Reason: "invalid", Cause: err}
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		return ProviderMetadata{}, errors.New("decode OIDC discovery document: multiple JSON values")
+		return ProviderMetadata{}, util.ClassifiedError{Object: "identity_provider", Operation: "discover", Reason: "invalid", Cause: errors.New("multiple JSON values")}
 	}
 	return metadata, nil
 }

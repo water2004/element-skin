@@ -22,7 +22,7 @@ func TestAdminUserRoutesRejectExactMissingUserAndBadPayloadEdges(t *testing.T) {
 	req.SetPathValue("user_id", "missing-user")
 	rec := httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("ban missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -30,7 +30,7 @@ func TestAdminUserRoutesRejectExactMissingUserAndBadPayloadEdges(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("reset missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -40,7 +40,7 @@ func TestAdminUserRoutesRejectExactMissingUserAndBadPayloadEdges(t *testing.T) {
 	req.SetPathValue("permission_code", "account.read.self")
 	rec = httptest.NewRecorder()
 	h.SetUserPermissionOverride(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("set permission bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

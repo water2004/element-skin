@@ -38,7 +38,7 @@ func (s Service) SendPublic(ctx context.Context, email, purpose string) (map[str
 		return nil, err
 	}
 	if !util.ValidEmail(email) {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid email format"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "validate", Reason: "invalid"}
 	}
 	existing, err := s.DB.Users.GetByEmail(ctx, email)
 	if err != nil {
@@ -54,14 +54,14 @@ func (s Service) SendPublic(ctx context.Context, email, purpose string) (map[str
 			return nil, err
 		}
 		if existing != nil {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Email already registered"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "register", Reason: "already_exists"}
 		}
 	case PurposeReset:
 		if existing == nil {
 			return map[string]any{"ttl": 0}, nil
 		}
 	default:
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid verification type"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "verification_type", Operation: "validate", Reason: "invalid"}
 	}
 	return s.issue(ctx, email, purpose)
 }
@@ -129,7 +129,7 @@ func (s Service) ensureEnabled(ctx context.Context) error {
 		return err
 	}
 	if enabled != "true" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "Email verification is disabled"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "email_verification", Operation: "create", Reason: "disabled"}
 	}
 	return nil
 }

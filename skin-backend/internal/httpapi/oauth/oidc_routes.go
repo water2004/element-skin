@@ -45,14 +45,14 @@ func (h Handler) JWKS(w http.ResponseWriter, _ *http.Request) {
 func (h Handler) UserInfo(w http.ResponseWriter, req *http.Request) {
 	bearer, ok := shared.BearerToken(req)
 	if !ok || strings.TrimSpace(bearer) == "" {
-		writeUserInfoError(w, "invalid access token")
+		writeUserInfoError(w)
 		return
 	}
 	claims, err := h.oauth.UserInfo(req.Context(), bearer)
 	if err != nil {
 		var httpErr util.HTTPError
 		if errors.As(err, &httpErr) && httpErr.Status == http.StatusUnauthorized {
-			writeUserInfoError(w, httpErr.Detail)
+			writeUserInfoError(w)
 			return
 		}
 		writeProtocolError(w, err)
@@ -61,10 +61,7 @@ func (h Handler) UserInfo(w http.ResponseWriter, req *http.Request) {
 	util.JSON(w, http.StatusOK, claims)
 }
 
-func writeUserInfoError(w http.ResponseWriter, description string) {
+func writeUserInfoError(w http.ResponseWriter) {
 	w.Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
-	util.JSON(w, http.StatusUnauthorized, protocolErrorBody{
-		Error:            "invalid_token",
-		ErrorDescription: description,
-	})
+	util.JSON(w, http.StatusUnauthorized, protocolErrorBody{Error: "invalid_token"})
 }

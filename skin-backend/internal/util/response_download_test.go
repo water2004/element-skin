@@ -17,20 +17,20 @@ func TestJSONAndErrorResponsesAreExact(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	Error(rec, HTTPError{Status: http.StatusForbidden, Detail: "admin required"})
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"admin required\"}\n" {
+	Error(rec, HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "required"})
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("HTTPError response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
-	Error(rec, HTTPError{Status: http.StatusForbidden, Detail: "Invalid token.", YggError: "ForbiddenOperationException"})
+	Error(rec, YggError{Status: http.StatusForbidden, Code: "ForbiddenOperationException", Message: "Invalid token."})
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":\"ForbiddenOperationException\",\"errorMessage\":\"Invalid token.\"}\n" {
 		t.Fatalf("Ygg HTTPError response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
 	Error(rec, errors.New("database password leaked"))
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("generic error should be converged: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

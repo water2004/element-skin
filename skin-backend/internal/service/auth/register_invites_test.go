@@ -47,7 +47,7 @@ func TestAuthRegisterConsumesVerificationAndInviteExactly(t *testing.T) {
 	if err := svc.Redis.SetVerificationCode(ctx, "second-register@test.com", "register", "SECOND12", 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(ctx, "second-register@test.com", "Password123", "SecondRegister", "INVITE_ONCE", "SECOND12"); !httpError(err, 400, "invite code has no remaining uses") {
+	if _, err := svc.Register(ctx, "second-register@test.com", "Password123", "SecondRegister", "INVITE_ONCE", "SECOND12"); !httpError(err, 400, "invite.consume.exhausted") {
 		t.Fatalf("exhausted invite should reject exactly, got %#v", err)
 	}
 	if user, err := db.Users.GetByEmail(ctx, "second-register@test.com"); err != nil || user != nil {
@@ -86,7 +86,7 @@ func TestAuthRegisterRejectsMissingVerificationAndInviteInputsWithoutSideEffects
 			email:    "register-code-required@test.com",
 			username: "RegisterCodeRequired",
 			invite:   "UNKNOWN",
-			want:     "Verification code required",
+			want:     "verification_code.validate.required",
 		},
 		{
 			name:       "verification code invalid",
@@ -95,15 +95,15 @@ func TestAuthRegisterRejectsMissingVerificationAndInviteInputsWithoutSideEffects
 			invite:     "UNKNOWN",
 			code:       "WRONG",
 			storedCode: "RIGHT123",
-			want:       "Invalid or expired verification code",
+			want:       "verification_code.verify.invalid",
 		},
 		{
-			name:       "invite code required",
+			name:       "invite.validate.required",
 			email:      "register-invite-required@test.com",
 			username:   "RegisterInviteRequired",
 			code:       "VALID123",
 			storedCode: "VALID123",
-			want:       "invite code required",
+			want:       "invite.validate.required",
 		},
 		{
 			name:       "invite code invalid",
@@ -112,7 +112,7 @@ func TestAuthRegisterRejectsMissingVerificationAndInviteInputsWithoutSideEffects
 			invite:     "UNKNOWN",
 			code:       "VALID456",
 			storedCode: "VALID456",
-			want:       "invalid invite code",
+			want:       "invite.consume.invalid",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

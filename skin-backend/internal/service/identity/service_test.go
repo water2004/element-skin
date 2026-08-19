@@ -148,7 +148,7 @@ func TestMicrosoftProviderRequiresMinecraftAndRefreshScopesExactly(t *testing.T)
 		Name: "Microsoft", IssuerURL: "https://login.example", ClientID: "client", ClientSecret: &secret,
 		Scopes: []string{"openid", "profile"}, Adapter: identity.AdapterMicrosoft, Enabled: true,
 	})
-	assertHTTPError(t, err, 400, "Microsoft providers must request XboxLive.signin and offline_access scopes")
+	assertHTTPError(t, err, 400, "identity_provider_scope.configure.required")
 	var count int
 	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM identity_providers`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("invalid Microsoft provider persisted count=%d err=%v", count, err)
@@ -407,18 +407,18 @@ func TestProviderManagementQueriesUpdatesAndRejectsInvalidStateExactly(t *testin
 	duplicateInput.Name = "Duplicate"
 	duplicateInput.ClientSecret = &duplicateSecret
 	_, err = service.CreateProvider(ctx, adminActor, duplicateInput)
-	assertHTTPError(t, err, 409, "an identity provider with this issuer and client_id already exists")
+	assertHTTPError(t, err, 409, "identity_provider.create.conflict")
 	if _, err := service.GetProvider(ctx, adminActor, "missing-provider"); err == nil {
 		t.Fatal("missing provider detail should fail")
 	} else {
-		assertHTTPError(t, err, 404, "identity provider not found")
+		assertHTTPError(t, err, 404, "identity_provider.resolve.not_found")
 	}
 	if _, err := service.UpdateProvider(ctx, adminActor, "missing-provider", input); err == nil {
 		t.Fatal("missing provider update should fail")
 	} else {
-		assertHTTPError(t, err, 404, "identity provider not found")
+		assertHTTPError(t, err, 404, "identity_provider.resolve.not_found")
 	}
-	assertHTTPError(t, service.DeleteProvider(ctx, adminActor, "missing-provider"), 404, "identity provider not found")
+	assertHTTPError(t, service.DeleteProvider(ctx, adminActor, "missing-provider"), 404, "identity_provider.resolve.not_found")
 
 	for name, call := range map[string]func() error{
 		"list": func() error { _, err := service.ListProviders(ctx, permission.Actor{}); return err },
@@ -434,15 +434,15 @@ func TestProviderManagementQueriesUpdatesAndRejectsInvalidStateExactly(t *testin
 		"delete": func() error { return service.DeleteProvider(ctx, permission.Actor{}, providerID) },
 	} {
 		t.Run("permission_"+name, func(t *testing.T) {
-			assertHTTPError(t, call(), 403, "permission denied")
+			assertHTTPError(t, call(), 403, "permission.check.denied")
 		})
 	}
 
 	assertHTTPError(t, service.UpdateIdentityLabel(ctx, adminActor, "missing", strings.Repeat("界", 81)), 400,
-		"identity label must not exceed 80 characters")
+		"identity_label.validate.too_long")
 	assertHTTPError(t, service.UpdateIdentityLabel(ctx, adminActor, "missing", "valid"), 404,
-		"external identity not found")
-	assertHTTPError(t, service.DeleteIdentity(ctx, adminActor, "missing"), 404, "external identity not found")
+		"identity.resolve.not_found")
+	assertHTTPError(t, service.DeleteIdentity(ctx, adminActor, "missing"), 404, "identity.resolve.not_found")
 }
 
 func TestProviderValidationRejectsEveryMalformedContractWithoutPersistence(t *testing.T) {
@@ -459,37 +459,37 @@ func TestProviderValidationRejectsEveryMalformedContractWithoutPersistence(t *te
 		}
 	}
 	tests := []struct {
-		name       string
-		mutate     func(*identity.ProviderInput)
-		metadata   identity.ProviderMetadata
-		discovery  error
-		wantDetail string
+		name               string
+		mutate             func(*identity.ProviderInput)
+		metadata           identity.ProviderMetadata
+		discovery          error
+		wantClassification string
 	}{
-		{name: "missing name", mutate: func(in *identity.ProviderInput) { in.Name = " " }, wantDetail: "provider name is required and must not exceed 80 characters"},
-		{name: "long name", mutate: func(in *identity.ProviderInput) { in.Name = strings.Repeat("界", 81) }, wantDetail: "provider name is required and must not exceed 80 characters"},
-		{name: "missing client", mutate: func(in *identity.ProviderInput) { in.ClientID = " " }, wantDetail: "client_id is required and must not exceed 512 characters"},
-		{name: "invalid adapter", mutate: func(in *identity.ProviderInput) { in.Adapter = "saml" }, wantDetail: "invalid provider adapter"},
-		{name: "insecure issuer", mutate: func(in *identity.ProviderInput) { in.IssuerURL = "http://identity.example" }, wantDetail: "invalid issuer_url"},
-		{name: "invalid icon", mutate: func(in *identity.ProviderInput) { in.IconURL = "https://identity.example/icon#fragment" }, wantDetail: "invalid icon_url"},
-		{name: "invalid scope", mutate: func(in *identity.ProviderInput) { in.Scopes = []string{`bad"scope`} }, wantDetail: "invalid OIDC scope"},
+		{name: "missing name", mutate: func(in *identity.ProviderInput) { in.Name = " " }, wantClassification: "identity_provider_name.validate.invalid"},
+		{name: "long name", mutate: func(in *identity.ProviderInput) { in.Name = strings.Repeat("界", 81) }, wantClassification: "identity_provider_name.validate.invalid"},
+		{name: "missing client", mutate: func(in *identity.ProviderInput) { in.ClientID = " " }, wantClassification: "client_id.validate.invalid"},
+		{name: "invalid adapter", mutate: func(in *identity.ProviderInput) { in.Adapter = "saml" }, wantClassification: "identity_provider_adapter.validate.invalid"},
+		{name: "insecure issuer", mutate: func(in *identity.ProviderInput) { in.IssuerURL = "http://identity.example" }, wantClassification: "issuer_url.validate.invalid"},
+		{name: "invalid icon", mutate: func(in *identity.ProviderInput) { in.IconURL = "https://identity.example/icon#fragment" }, wantClassification: "icon_url.validate.invalid"},
+		{name: "oauth_scope.validate.invalid", mutate: func(in *identity.ProviderInput) { in.Scopes = []string{`bad"scope`} }, wantClassification: "oidc_scope.validate.invalid"},
 		{name: "too many scopes", mutate: func(in *identity.ProviderInput) {
 			in.Scopes = make([]string, 33)
 			for index := range in.Scopes {
 				in.Scopes[index] = "scope" + strconv.Itoa(index)
 			}
-		}, wantDetail: "too many OIDC scopes"},
-		{name: "discovery failure", discovery: errors.New("discovery unavailable"), wantDetail: "discovery unavailable"},
-		{name: "issuer mismatch", metadata: validProviderMetadata("https://other.example"), wantDetail: "OIDC discovery issuer does not exactly match issuer_url"},
+		}, wantClassification: "oidc_scope.validate.exceeded"},
+		{name: "discovery failure", discovery: errors.New("discovery unavailable"), wantClassification: "identity_provider.discover.failed"},
+		{name: "issuer mismatch", metadata: validProviderMetadata("https://other.example"), wantClassification: "identity_provider.discover.mismatch"},
 		{name: "invalid required endpoint", metadata: func() identity.ProviderMetadata {
 			metadata := validProviderMetadata("https://validation.example")
 			metadata.TokenEndpoint = "http://identity.example/token"
 			return metadata
-		}(), wantDetail: "OIDC discovery document contains an invalid required endpoint"},
+		}(), wantClassification: "identity_provider.discover.invalid"},
 		{name: "invalid userinfo endpoint", metadata: func() identity.ProviderMetadata {
 			metadata := validProviderMetadata("https://validation.example")
 			metadata.UserInfoEndpoint = "https://identity.example/userinfo?tenant=1"
 			return metadata
-		}(), wantDetail: "OIDC discovery document contains an invalid userinfo endpoint"},
+		}(), wantClassification: "identity_provider.discover.invalid"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -506,7 +506,7 @@ func TestProviderValidationRejectsEveryMalformedContractWithoutPersistence(t *te
 			if created != nil {
 				t.Fatalf("invalid provider response=%#v", created)
 			}
-			assertHTTPError(t, err, 400, tc.wantDetail)
+			assertHTTPError(t, err, 400, tc.wantClassification)
 		})
 	}
 	var count int
@@ -580,7 +580,7 @@ func actorForUser(t *testing.T, db *database.DB, userID string) permission.Actor
 func assertHTTPError(t *testing.T, err error, status int, detail string) {
 	t.Helper()
 	var httpErr util.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.Status != status || httpErr.Detail != detail {
+	if !errors.As(err, &httpErr) || httpErr.Status != status || httpErr.Error() != detail {
 		t.Fatalf("HTTP error mismatch: got=%#v want status=%d detail=%q", err, status, detail)
 	}
 }

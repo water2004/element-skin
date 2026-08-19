@@ -114,7 +114,7 @@ func TestServiceOAuthAppWebhookConfigurationIsOptionalPermissionBoundAndSecretSa
 			Enabled:    &enabled,
 		}},
 	}, oauth.StatusPending)
-	assertHTTPError(t, err, 400, "webhook event exceeds client permission limit")
+	assertHTTPError(t, err, 400, "webhook_event.subscribe.denied")
 	unchanged, err := svc.GetClient(ctx, actor, created["client_id"].(string))
 	if err != nil || unchanged["name"] != "Webhook configured app updated" || !reflect.DeepEqual(unchanged["permissions"], []string{"profile.read.owned", "texture.read.owned"}) {
 		t.Fatalf("failed webhook update changed client: %#v err=%v", unchanged, err)
@@ -145,13 +145,13 @@ func TestServiceOAuthAppWebhookConfigurationRejectsUnsafeDuplicateAndUnauthorize
 		endpoints []oauth.WebhookEndpointInput
 		detail    string
 	}{
-		{name: "private IP", endpoints: []oauth.WebhookEndpointInput{{URL: "https://127.0.0.1/hook", EventTypes: []string{"profile.updated"}, Enabled: &enabled}}, detail: "invalid webhook url"},
-		{name: "localhost", endpoints: []oauth.WebhookEndpointInput{{URL: "https://api.localhost/hook", EventTypes: []string{"profile.updated"}, Enabled: &enabled}}, detail: "invalid webhook url"},
-		{name: "plain HTTP", endpoints: []oauth.WebhookEndpointInput{{URL: "http://hooks.example/hook", EventTypes: []string{"profile.updated"}, Enabled: &enabled}}, detail: "invalid webhook url"},
-		{name: "missing events", endpoints: []oauth.WebhookEndpointInput{{URL: "https://hooks.example/missing", Enabled: &enabled}}, detail: "webhook events are required"},
-		{name: "unknown event", endpoints: []oauth.WebhookEndpointInput{{URL: "https://hooks.example/unknown", EventTypes: []string{"profile.renamed"}, Enabled: &enabled}}, detail: "invalid webhook event"},
-		{name: "permission mismatch", endpoints: []oauth.WebhookEndpointInput{{URL: "https://hooks.example/mismatch", EventTypes: []string{"texture.updated"}, Enabled: &enabled}}, detail: "webhook event exceeds client permission limit"},
-		{name: "duplicate URL", endpoints: []oauth.WebhookEndpointInput{{URL: "https://hooks.example/duplicate", EventTypes: []string{"profile.created"}, Enabled: &enabled}, {URL: "https://hooks.example/duplicate", EventTypes: []string{"profile.updated"}, Enabled: &enabled}}, detail: "duplicate webhook url"},
+		{name: "private IP", endpoints: []oauth.WebhookEndpointInput{{URL: "https://127.0.0.1/hook", EventTypes: []string{"profile.updated"}, Enabled: &enabled}}, detail: "webhook_url.validate.invalid"},
+		{name: "localhost", endpoints: []oauth.WebhookEndpointInput{{URL: "https://api.localhost/hook", EventTypes: []string{"profile.updated"}, Enabled: &enabled}}, detail: "webhook_url.validate.invalid"},
+		{name: "plain HTTP", endpoints: []oauth.WebhookEndpointInput{{URL: "http://hooks.example/hook", EventTypes: []string{"profile.updated"}, Enabled: &enabled}}, detail: "webhook_url.validate.invalid"},
+		{name: "missing events", endpoints: []oauth.WebhookEndpointInput{{URL: "https://hooks.example/missing", Enabled: &enabled}}, detail: "webhook_event.subscribe.required"},
+		{name: "unknown event", endpoints: []oauth.WebhookEndpointInput{{URL: "https://hooks.example/unknown", EventTypes: []string{"profile.renamed"}, Enabled: &enabled}}, detail: "webhook_event.validate.invalid"},
+		{name: "permission mismatch", endpoints: []oauth.WebhookEndpointInput{{URL: "https://hooks.example/mismatch", EventTypes: []string{"texture.updated"}, Enabled: &enabled}}, detail: "webhook_event.subscribe.denied"},
+		{name: "duplicate URL", endpoints: []oauth.WebhookEndpointInput{{URL: "https://hooks.example/duplicate", EventTypes: []string{"profile.created"}, Enabled: &enabled}, {URL: "https://hooks.example/duplicate", EventTypes: []string{"profile.updated"}, Enabled: &enabled}}, detail: "webhook_endpoint.configure.conflict"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -199,7 +199,7 @@ func TestServiceOAuthAppWebhookConfigurationRestrictsApplicationEventsToConfiden
 	if _, err := svc.CreateClient(ctx, actor, input); err == nil {
 		t.Fatal("public client application-only webhook should be rejected")
 	} else {
-		assertHTTPError(t, err, 400, "webhook event exceeds client permission limit")
+		assertHTTPError(t, err, 400, "webhook_event.subscribe.denied")
 	}
 	input.ClientType = oauth.ClientTypeConfidential
 	created, err := svc.CreateClient(ctx, actor, input)

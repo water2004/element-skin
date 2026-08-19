@@ -38,7 +38,7 @@ func TestUserRoutesListAndProtectCurrentUserExactly(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteUser(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "cannot delete yourself") {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"delete\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("self delete should be forbidden exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -48,7 +48,7 @@ func TestUserRoutesListAndProtectCurrentUserExactly(t *testing.T) {
 	req = withProtectedActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.TransferProtectedSubject(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"cannot transfer protected subject to yourself\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_subject\",\"operation\":\"transfer\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("protected subject self transfer should be rejected exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -179,7 +179,7 @@ func TestUserProfilesPaginatesEncodedCursorWithoutRepeatingRows(t *testing.T) {
 		util.EncodeCursor(map[string]any{"unexpected": "value"}),
 	} {
 		rec := requestPage(malformed)
-		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 			t.Fatalf("malformed user profile cursor status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	}

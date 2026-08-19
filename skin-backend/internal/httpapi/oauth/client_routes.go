@@ -38,7 +38,7 @@ func (h Handler) ListAdminApps(w http.ResponseWriter, req *http.Request) {
 func (h Handler) CreateApp(w http.ResponseWriter, req *http.Request) {
 	var body appBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.oauth.CreateClient(req.Context(), shared.CurrentActor(req), body.input())
@@ -61,7 +61,7 @@ func (h Handler) GetApp(w http.ResponseWriter, req *http.Request) {
 func (h Handler) UpdateApp(w http.ResponseWriter, req *http.Request) {
 	var body appBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.oauth.UpdateClient(req.Context(), shared.CurrentActor(req), req.PathValue("client_id"), body.input(), body.Status)
@@ -84,7 +84,7 @@ func (h Handler) SubmitAppReview(w http.ResponseWriter, req *http.Request) {
 func (h Handler) ReviewApp(w http.ResponseWriter, req *http.Request) {
 	var body appReviewBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.oauth.ReviewClient(req.Context(), shared.CurrentActor(req), req.PathValue("client_id"), body.Status, body.Reason)

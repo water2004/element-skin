@@ -17,15 +17,15 @@ func (s Service) CreateProfile(ctx context.Context, actor permission.Actor, name
 	}
 	userID := actor.UserID
 	if name == "" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "name required"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "validate", Reason: "required"}
 	}
 	if !regexp.MustCompile(`^[A-Za-z0-9_]{1,16}$`).MatchString(name) {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "角色名只能包含字母、数字、下划线，长度1-16字符"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "validate", Reason: "invalid"}
 	}
 	if p, err := s.DB.Profiles.GetByName(ctx, name); err != nil {
 		return nil, err
 	} else if p != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "角色名已被占用，请换一个名称"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "reserve", Reason: "conflict"}
 	}
 	id, err := util.GenerateUUIDNoDash()
 	if err != nil {
@@ -41,15 +41,15 @@ func (s Service) CreateProfile(ctx context.Context, actor permission.Actor, name
 	if p, err := s.DB.Profiles.GetByID(ctx, id); err != nil {
 		return nil, err
 	} else if p != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "角色 UUID 冲突，无法新建角色"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "profile_uuid", Operation: "reserve", Reason: "conflict"}
 	}
 	modelName = profilestore.NormalizeModel(modelName)
 	if err := s.DB.Profiles.Create(ctx, model.Profile{ID: id, UserID: userID, Name: name, TextureModel: modelName}); err != nil {
 		if profilestore.IsNameConflict(err) {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "角色名已被占用，请换一个名称"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "reserve", Reason: "conflict"}
 		}
 		if profilestore.IsIDConflict(err) {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "角色 UUID 冲突，无法新建角色"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "profile_uuid", Operation: "reserve", Reason: "conflict"}
 		}
 		return nil, err
 	}

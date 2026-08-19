@@ -49,7 +49,7 @@ func TestRouterServeHTTPAddsAuthlibHeaderAndAuthRoutes(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: userToken})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden || !bytes.Contains(rec.Body.Bytes(), []byte("permission denied")) {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("non-admin should be forbidden: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -63,7 +63,7 @@ func TestRouterServeHTTPAddsAuthlibHeaderAndAuthRoutes(t *testing.T) {
 
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v2/users/me", nil))
-	if rec.Code != http.StatusUnauthorized || !bytes.Contains(rec.Body.Bytes(), []byte("not authenticated")) {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing cookie should be unauthorized: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -91,14 +91,15 @@ func TestRouterRegistersRepresentativeRouteGroups(t *testing.T) {
 		body       string
 		wantStatus int
 		wantBody   string
+		exactBody  bool
 	}{
 		{name: "metadata", method: http.MethodGet, path: "/", wantStatus: http.StatusOK, wantBody: "implementationName"},
 		{name: "public settings", method: http.MethodGet, path: "/v2/public/settings", wantStatus: http.StatusOK, wantBody: "site_name"},
 		{name: "me route", method: http.MethodGet, path: "/v2/users/me", token: userToken, wantStatus: http.StatusOK, wantBody: user.ID},
 		{name: "admin settings", method: http.MethodGet, path: "/v2/admin/settings/site", token: adminToken, wantStatus: http.StatusOK, wantBody: "site_name"},
 		{name: "admin email suffix policy", method: http.MethodGet, path: "/v2/admin/settings/email-suffix-policy", token: adminToken, wantStatus: http.StatusOK, wantBody: `"mode":"disabled"`},
-		{name: "ygg validate invalid", method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, wantStatus: http.StatusForbidden, wantBody: "Invalid token"},
-		{name: "remote ygg", method: http.MethodPost, path: "/v2/imports/remote-ygg/profiles/preview", token: userToken, body: `{}`, wantStatus: http.StatusBadRequest, wantBody: "api_url, username and password are required"},
+		{name: "ygg validate invalid", method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, wantStatus: http.StatusForbidden, wantBody: "{\"error\":\"ForbiddenOperationException\",\"errorMessage\":\"Invalid token.\"}\n", exactBody: true},
+		{name: "remote ygg", method: http.MethodPost, path: "/v2/imports/remote-ygg/profiles/preview", token: userToken, body: `{}`, wantStatus: http.StatusBadRequest, wantBody: "{\"error\":{\"object\":\"credentials\",\"operation\":\"validate\",\"reason\":\"required\"}}\n", exactBody: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -111,7 +112,11 @@ func TestRouterRegistersRepresentativeRouteGroups(t *testing.T) {
 			}
 			rec := httptest.NewRecorder()
 			router.ServeHTTP(rec, req)
-			if rec.Code != tc.wantStatus || !bytes.Contains(rec.Body.Bytes(), []byte(tc.wantBody)) {
+			bodyMatches := rec.Body.String() == tc.wantBody
+			if !tc.exactBody {
+				bodyMatches = bytes.Contains(rec.Body.Bytes(), []byte(tc.wantBody))
+			}
+			if rec.Code != tc.wantStatus || !bodyMatches {
 				t.Fatalf("%s route mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
 		})

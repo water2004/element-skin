@@ -89,7 +89,7 @@ func TestSetProfileTextureCapeAndMissingProfileExactState(t *testing.T) {
 	if err != nil || updated == nil || updated.CapeHash == nil || *updated.CapeHash != cape || updated.SkinHash != nil {
 		t.Fatalf("SetProfileTexture cape mismatch: profile=%#v err=%v", updated, err)
 	}
-	if err := svc.SetProfileTexture(ctx, actor, "missing-set-cape", "skin", nil); !httpError(err, 404, "profile not found") {
+	if err := svc.SetProfileTexture(ctx, actor, "missing-set-cape", "skin", nil); !httpError(err, 404, "profile.resolve.not_found") {
 		t.Fatalf("SetProfileTexture missing profile mismatch: %#v", err)
 	}
 }

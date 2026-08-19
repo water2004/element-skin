@@ -19,7 +19,7 @@ func (h Handler) Profiles(w http.ResponseWriter, req *http.Request) {
 func (h Handler) UpdateProfile(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.profiles.UpdateAnyProfile(req.Context(), shared.CurrentActor(req), req.PathValue("profile_id"), body["name"]); err != nil {
@@ -49,7 +49,7 @@ func (h Handler) UpdateProfileCape(w http.ResponseWriter, req *http.Request) {
 func (h Handler) setProfileTexture(w http.ResponseWriter, req *http.Request, typ string) {
 	var body map[string]*string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	profileID := req.PathValue("profile_id")

@@ -23,7 +23,7 @@ func TestEmailSuffixPolicyBlocksRegistrationRequestsButNeverPasswordReset(t *tes
 	directBlocked := doJSON(t, h, "POST", "/v2/auth/register", map[string]any{
 		"email": "direct@blocked.test", "password": "Password123!", "username": "DirectPolicyUser",
 	})
-	if directBlocked.Code != http.StatusBadRequest || directBlocked.Body.String() != "{\"detail\":\"Email suffix is not allowed\"}\n" {
+	if directBlocked.Code != http.StatusBadRequest || directBlocked.Body.String() != "{\"error\":{\"object\":\"email\",\"operation\":\"validate\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("direct registration policy response: status=%d body=%q", directBlocked.Code, directBlocked.Body.String())
 	}
 	if user, err := db.Users.GetByEmail(ctx, "direct@blocked.test"); err != nil || user != nil {
@@ -35,7 +35,7 @@ func TestEmailSuffixPolicyBlocksRegistrationRequestsButNeverPasswordReset(t *tes
 	invalidateSettings(t, redis)
 
 	blocked := doJSON(t, h, "POST", "/v2/auth/verification-code", map[string]any{"email": "user@blocked.test", "type": "register"})
-	if blocked.Code != http.StatusBadRequest || blocked.Body.String() != "{\"detail\":\"Email suffix is not allowed\"}\n" {
+	if blocked.Code != http.StatusBadRequest || blocked.Body.String() != "{\"error\":{\"object\":\"email\",\"operation\":\"validate\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("blocked suffix response: status=%d body=%q", blocked.Code, blocked.Body.String())
 	}
 	if _, err := redis.GetVerificationCode(ctx, "user@blocked.test", "register"); err == nil {
@@ -60,7 +60,7 @@ func TestEmailSuffixPolicyBlocksRegistrationRequestsButNeverPasswordReset(t *tes
 	register := doJSON(t, h, "POST", "/v2/auth/register", map[string]any{
 		"email": "user@ALLOWED.TEST", "password": "Password123!", "username": "PolicyUser", "code": code,
 	})
-	if register.Code != http.StatusBadRequest || register.Body.String() != "{\"detail\":\"Email suffix is not allowed\"}\n" {
+	if register.Code != http.StatusBadRequest || register.Body.String() != "{\"error\":{\"object\":\"email\",\"operation\":\"validate\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("policy recheck response: status=%d body=%q", register.Code, register.Body.String())
 	}
 	if user, err := db.Users.GetByEmail(ctx, "user@ALLOWED.TEST"); err != nil || user != nil {
@@ -106,7 +106,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 		t.Fatalf("second registered user should not be protected: protected=%v err=%v", protected, err)
 	}
 	duplicateEmail := doJSON(t, h, "POST", "/v2/auth/register", map[string]any{"email": "second-normal@test.com", "password": "Password123", "username": "DuplicateEmailUser"})
-	if duplicateEmail.Code != 400 || !strings.Contains(duplicateEmail.Body.String(), "Email already registered") {
+	if duplicateEmail.Code != 400 || duplicateEmail.Body.String() != "{\"error\":{\"object\":\"email\",\"operation\":\"register\",\"reason\":\"already_exists\"}}\n" {
 		t.Fatalf("duplicate email should be rejected, got %d body=%s", duplicateEmail.Code, duplicateEmail.Body.String())
 	}
 	if err := db.Settings.Set(ctx, "enable_strong_password_check", true); err != nil {
@@ -129,7 +129,7 @@ func TestRegistrationRestrictionsAndInviteConsumption(t *testing.T) {
 	invalidateSettings(t, redis)
 	for _, badEmail := range []string{"a@b", "a@x.com\r\nBcc: x@y.com", "notanemail"} {
 		bad := doJSON(t, h, "POST", "/v2/auth/register", map[string]any{"email": badEmail, "password": "Password123!", "username": "SomeUser"})
-		if bad.Code != 400 || !strings.Contains(bad.Body.String(), "Invalid email format") {
+		if bad.Code != 400 || bad.Body.String() != "{\"error\":{\"object\":\"email\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 			t.Fatalf("invalid email %q should be rejected, got %d %s", badEmail, bad.Code, bad.Body.String())
 		}
 		if row, err := db.Users.GetByEmail(ctx, badEmail); err != nil || row != nil {

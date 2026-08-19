@@ -80,12 +80,17 @@ Cursor 分页响应固定为：
 
 ```json
 {
-  "detail": "permission denied"
+  "error": {
+    "object": "permission",
+    "operation": "check",
+    "reason": "denied"
+  }
 }
 ```
 
 常用状态码为 `400`、`401`、`403`、`404`、`409`、`429` 和 `500`。数据库、密钥、
-外部 token 等内部错误不得原样返回。OAuth/OIDC 使用 RFC 错误对象，Yggdrasil 使用协议错误对象。
+外部 token 等内部错误不得原样返回。普通错误不携带后端展示文本；前端依据完整三元组本地化。
+字段定义、命名规则和错误目录见《V2 错误协议》。OAuth/OIDC 使用 RFC 错误对象，Yggdrasil 使用协议错误对象。
 
 ## 3. 外部身份与注册
 

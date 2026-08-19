@@ -33,7 +33,7 @@ func (s Service) Sync(ctx context.Context, actor permission.Actor, id string) (m
 		return nil, err
 	}
 	if current == nil {
-		return nil, notFound("official profile binding not found")
+		return nil, notFound("official_profile", "unbind", "not_found")
 	}
 	_, remote, err := s.resolve(ctx, actor.UserID, current.Binding.IdentityID)
 	if err != nil {
@@ -44,7 +44,7 @@ func (s Service) Sync(ctx context.Context, actor permission.Actor, id string) (m
 		return nil, err
 	}
 	if remoteUUID != current.Binding.RemoteUUID {
-		return nil, conflict("Microsoft profile no longer matches this binding")
+		return nil, conflict("official_profile", "sync", "mismatch")
 	}
 	skinURL, capeURL, skinModel := remoteTextureMetadata(*remote)
 	prepared, err := s.prepareRemoteTextures(ctx, skinURL, capeURL)
@@ -64,14 +64,14 @@ func (s Service) Sync(ctx context.Context, actor permission.Actor, id string) (m
 	}
 	if !updated {
 		s.cleanupPreparedTextures(ctx, prepared)
-		return nil, notFound("official profile binding not found")
+		return nil, notFound("official_profile", "unbind", "not_found")
 	}
 	item, err := s.DB.OfficialProfiles.GetByIDAndUser(ctx, id, actor.UserID)
 	if err != nil {
 		return nil, err
 	}
 	if item == nil {
-		return nil, notFound("official profile binding not found")
+		return nil, notFound("official_profile", "unbind", "not_found")
 	}
 	return bindingResponse(*item), nil
 }
@@ -124,11 +124,11 @@ func (s Service) prepareTexture(ctx context.Context, storage *texturesvc.Texture
 		data, err = util.DownloadTexture(s.HTTPClient, rawURL, util.HardCapBytes)
 	}
 	if err != nil {
-		return preparedTexture{}, util.HTTPError{Status: http.StatusBadGateway, Detail: "failed to download Microsoft profile texture"}
+		return preparedTexture{}, util.HTTPError{Status: http.StatusBadGateway, Object: "minecraft_texture", Operation: "download", Reason: "unavailable"}
 	}
 	hash, created, err := storage.ProcessAndSaveTracked(data, textureType)
 	if err != nil {
-		return preparedTexture{}, util.HTTPError{Status: http.StatusBadGateway, Detail: "Microsoft profile texture is invalid"}
+		return preparedTexture{}, util.HTTPError{Status: http.StatusBadGateway, Object: "minecraft_texture", Operation: "decode", Reason: "invalid"}
 	}
 	return preparedTexture{hash: &hash, created: created}, nil
 }

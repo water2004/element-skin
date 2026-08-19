@@ -30,7 +30,7 @@ func (s AccountService) Me(ctx context.Context, actor permission.Actor) (map[str
 		return nil, err
 	}
 	if u == nil {
-		return nil, util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return nil, util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	profileCount, err := s.DB.Profiles.CountByUser(ctx, actor.UserID)
 	if err != nil {
@@ -68,13 +68,13 @@ func (s AccountService) UpdateSelf(ctx context.Context, actor permission.Actor, 
 	}
 	if err := s.DB.Users.Update(ctx, actor.UserID, fields); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+			return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 		}
 		if userstore.IsEmailConflict(err) {
-			return util.HTTPError{Status: http.StatusBadRequest, Detail: "Email already in use"}
+			return util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "register", Reason: "already_exists"}
 		}
 		if errors.Is(err, userstore.ErrDisplayNameConflict) {
-			return util.HTTPError{Status: http.StatusBadRequest, Detail: "Username already exists"}
+			return util.HTTPError{Status: http.StatusBadRequest, Object: "username", Operation: "reserve", Reason: "conflict"}
 		}
 		return err
 	}
@@ -105,7 +105,7 @@ func (s AccountService) ChangeEmailSelf(ctx context.Context, actor permission.Ac
 		return err
 	}
 	if !consumed {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid or expired verification code"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "verification_code", Operation: "verify", Reason: "invalid"}
 	}
 	restoreCode := func() {
 		_ = s.Verification.Restore(ctx, email, code, verificationsvc.PurposeEmailChange)
@@ -113,10 +113,10 @@ func (s AccountService) ChangeEmailSelf(ctx context.Context, actor permission.Ac
 	if err := s.DB.Users.Update(ctx, actor.UserID, map[string]any{"email": email}); err != nil {
 		restoreCode()
 		if errors.Is(err, pgx.ErrNoRows) {
-			return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+			return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 		}
 		if userstore.IsEmailConflict(err) {
-			return util.HTTPError{Status: http.StatusBadRequest, Detail: "Email already in use"}
+			return util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "register", Reason: "already_exists"}
 		}
 		return err
 	}
@@ -132,10 +132,10 @@ func (s AccountService) ChangePasswordSelf(ctx context.Context, actor permission
 		return err
 	}
 	if u == nil {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "用户不存在"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	if !util.VerifyPassword(oldPassword, u.Password) {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "旧密码错误"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "password", Operation: "verify", Reason: "invalid"}
 	}
 	hash, err := util.HashPassword(newPassword)
 	if err != nil {
@@ -149,7 +149,7 @@ func (s AccountService) ChangePasswordSelf(ctx context.Context, actor permission
 		return err
 	}
 	if !updated {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "用户不存在"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	return s.Redis.InvalidateAuthUser(ctx, actor.UserID)
 }
@@ -163,14 +163,14 @@ func (s AccountService) DeleteSelf(ctx context.Context, actor permission.Actor) 
 		return err
 	}
 	if u == nil {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	isProtected, err := s.DB.Permissions.UserIsProtected(ctx, actor.UserID)
 	if err != nil {
 		return err
 	}
 	if isProtected {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "protected subjects cannot delete their own account"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "protected_subject", Operation: "delete", Reason: "denied"}
 	}
 	if err := s.Redis.DeleteYggTokensByUser(ctx, actor.UserID); err != nil {
 		return err
@@ -191,7 +191,7 @@ func (s AccountService) DeleteSelf(ctx context.Context, actor permission.Actor) 
 		return err
 	}
 	if !ok {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	reportPostCommitError("remove self-deleted user sessions", s.Redis.DeleteYggTokensByUser(ctx, actor.UserID))
 	for _, identityID := range externalIdentityIDs {
@@ -208,19 +208,19 @@ func (s AccountService) DeleteSelf(ctx context.Context, actor permission.Actor) 
 func (s AccountService) normalizedSelfUpdateFields(ctx context.Context, userID string, body map[string]any) (map[string]any, error) {
 	fields := map[string]any{}
 	if _, ok := body["email"]; ok {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Email must be changed through the verification flow"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "update", Reason: "denied"}
 	}
 	if v, ok := body["display_name"].(string); ok && v != "" {
 		v = strings.TrimSpace(v)
 		if v == "" {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Username cannot be empty"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "username", Operation: "validate", Reason: "required"}
 		}
 		taken, err := s.DB.Users.IsDisplayNameTaken(ctx, v, userID)
 		if err != nil {
 			return nil, err
 		}
 		if taken {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Username already exists"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "username", Operation: "reserve", Reason: "conflict"}
 		}
 		fields["display_name"] = v
 	}
@@ -239,12 +239,12 @@ func (s AccountService) normalizedSelfUpdateFields(ctx context.Context, userID s
 					return nil, err
 				}
 				if !exists {
-					return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Avatar texture not found"}
+					return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "avatar", Operation: "resolve", Reason: "not_found"}
 				}
 				fields["avatar_hash"] = hash
 			}
 		} else {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid avatar_hash"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "avatar", Operation: "configure", Reason: "invalid"}
 		}
 	}
 	return fields, nil
@@ -256,11 +256,11 @@ func (s AccountService) validateEmailChangeTarget(ctx context.Context, userID, e
 		return "", err
 	}
 	if user == nil {
-		return "", util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return "", util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	email = strings.TrimSpace(email)
 	if !util.ValidEmail(email) {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid email format"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "validate", Reason: "invalid"}
 	}
 	policy := s.EmailPolicy
 	if policy.DB == nil {
@@ -270,14 +270,14 @@ func (s AccountService) validateEmailChangeTarget(ctx context.Context, userID, e
 		return "", err
 	}
 	if strings.EqualFold(user.Email, email) {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "New email must be different from current email"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "update", Reason: "conflict"}
 	}
 	existing, err := s.DB.Users.GetByEmail(ctx, email)
 	if err != nil {
 		return "", err
 	}
 	if existing != nil {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "Email already in use"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "register", Reason: "already_exists"}
 	}
 	return email, nil
 }

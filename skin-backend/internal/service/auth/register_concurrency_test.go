@@ -85,7 +85,7 @@ func TestConcurrentRegistrationsConsumeSingleUseInviteExactlyOnce(t *testing.T) 
 		case result.err == nil && result.id != "":
 			successes++
 			winner = result.attempt
-		case result.id == "" && httpError(result.err, 400, "invite code has no remaining uses"):
+		case result.id == "" && httpError(result.err, 400, "invite.consume.exhausted"):
 			exhausted++
 		default:
 			t.Fatalf("unexpected concurrent invite result: attempt=%#v id=%q err=%#v", result.attempt, result.id, result.err)
@@ -159,7 +159,7 @@ func TestConcurrentRegistrationsKeepDisplayNameUnique(t *testing.T) {
 		switch {
 		case result.err == nil && result.id != "":
 			successes++
-		case result.id == "" && httpError(result.err, 400, "Username already exists"):
+		case result.id == "" && httpError(result.err, 400, "username.reserve.conflict"):
 			conflicts++
 		default:
 			t.Fatalf("unexpected concurrent registration result: id=%q err=%#v", result.id, result.err)
@@ -231,7 +231,7 @@ func TestConcurrentRegistrationsReturnExactEmailConflict(t *testing.T) {
 		switch {
 		case result.err == nil && result.id != "":
 			successes++
-		case result.id == "" && httpError(result.err, 400, "Email already registered"):
+		case result.id == "" && httpError(result.err, 400, "email.register.already_exists"):
 			conflicts++
 		default:
 			t.Fatalf("unexpected concurrent email registration: id=%q err=%#v", result.id, result.err)

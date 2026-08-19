@@ -26,7 +26,7 @@ func TestNoticeServiceTargetedAudienceOnlyVisibleToTargets(t *testing.T) {
 		ContentMarkdown: "Body",
 		DisplayMode:     noticesvc.DisplayDetail,
 		Audience:        noticesvc.AudienceTargeted,
-	}); created != nil || !httpError(err, 400, "target_user_ids are required for targeted notices") {
+	}); created != nil || !httpError(err, 400, "notice_target.validate.required") {
 		t.Fatalf("targeted without targets mismatch: created=%#v err=%#v", created, err)
 	}
 	if created, err := svc.Create(ctx, actor, noticesvc.CreateInput{
@@ -34,7 +34,7 @@ func TestNoticeServiceTargetedAudienceOnlyVisibleToTargets(t *testing.T) {
 		Summary:       "Wrong audience",
 		Audience:      noticesvc.AudienceUsers,
 		TargetUserIDs: []string{target.ID},
-	}); created != nil || !httpError(err, 400, "target_user_ids require targeted audience") {
+	}); created != nil || !httpError(err, 400, "notice_target.validate.unsupported") {
 		t.Fatalf("non-targeted with targets mismatch: created=%#v err=%#v", created, err)
 	}
 
@@ -77,7 +77,7 @@ func TestNoticeServiceTargetedAudienceOnlyVisibleToTargets(t *testing.T) {
 	if items := otherPage["items"].([]model.NoticeView); len(items) != 0 {
 		t.Fatalf("other user should not see targeted notice: %#v", items)
 	}
-	if _, err := svc.GetForUser(ctx, created.ID, noticeActor(other.ID, "notice.read.owned")); !httpError(err, 404, "notice not found") {
+	if _, err := svc.GetForUser(ctx, created.ID, noticeActor(other.ID, "notice.read.owned")); !httpError(err, 404, "notice.resolve.not_found") {
 		t.Fatalf("other user targeted detail mismatch: %#v", err)
 	}
 	got, err := svc.GetForUser(ctx, created.ID, noticeActor(target.ID, "notice.read.owned"))
@@ -113,7 +113,7 @@ func TestNoticeServiceTargetedAudienceOnlyVisibleToTargets(t *testing.T) {
 	if replacedTargets != 1 {
 		t.Fatalf("replaced target rows=%d want 1", replacedTargets)
 	}
-	if _, err := svc.GetForUser(ctx, created.ID, noticeActor(target.ID, "notice.read.owned")); !httpError(err, 404, "notice not found") {
+	if _, err := svc.GetForUser(ctx, created.ID, noticeActor(target.ID, "notice.read.owned")); !httpError(err, 404, "notice.resolve.not_found") {
 		t.Fatalf("old targeted detail mismatch after replace: %#v", err)
 	}
 	replacedView, err := svc.GetForUser(ctx, replaced.ID, noticeActor(target.ID, "notice.read.owned"))
@@ -123,7 +123,7 @@ func TestNoticeServiceTargetedAudienceOnlyVisibleToTargets(t *testing.T) {
 	if replacedView.Title != "Targeted notice replaced" || replacedView.ContentMarkdown != "Replacement body" {
 		t.Fatalf("replaced targeted detail mismatch: %#v", replacedView)
 	}
-	if _, err := svc.GetForUser(ctx, replaced.ID, noticeActor(other.ID, "notice.read.owned")); !httpError(err, 404, "notice not found") {
+	if _, err := svc.GetForUser(ctx, replaced.ID, noticeActor(other.ID, "notice.read.owned")); !httpError(err, 404, "notice.resolve.not_found") {
 		t.Fatalf("other user replaced targeted detail mismatch: %#v", err)
 	}
 }
@@ -141,7 +141,7 @@ func TestNoticeServiceAudienceAndLifecycleVisibilityExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.GetForUser(ctx, adminOnly.ID, noticeActor(user.ID, "notice.read.owned")); !httpError(err, 404, "notice not found") {
+	if _, err := svc.GetForUser(ctx, adminOnly.ID, noticeActor(user.ID, "notice.read.owned")); !httpError(err, 404, "notice.resolve.not_found") {
 		t.Fatalf("normal user should not see admin notice, got %#v", err)
 	}
 	if got, err := svc.GetForUser(ctx, adminOnly.ID, noticeActor(admin.ID, "notice.read.owned", "notice.read.any")); err != nil || got == nil || got.ID != adminOnly.ID {
@@ -152,7 +152,7 @@ func TestNoticeServiceAudienceAndLifecycleVisibilityExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.GetForUser(ctx, scheduled.ID, noticeActor(admin.ID, "notice.read.owned", "notice.read.any")); !httpError(err, 404, "notice not found") {
+	if _, err := svc.GetForUser(ctx, scheduled.ID, noticeActor(admin.ID, "notice.read.owned", "notice.read.any")); !httpError(err, 404, "notice.resolve.not_found") {
 		t.Fatalf("scheduled notice should be hidden, got %#v", err)
 	}
 	expired, err := svc.Create(ctx, actor, noticesvc.CreateInput{Title: "Expired Soon", ContentMarkdown: "Body", EndsAt: ptrInt64(now + 1)})

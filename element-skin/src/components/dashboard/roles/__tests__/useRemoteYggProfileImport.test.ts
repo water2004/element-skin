@@ -195,7 +195,13 @@ describe('useRemoteYggProfileImport', () => {
     const error = vi.fn()
     const state = useRemoteYggProfileImport({
       error,
-      getProfiles: vi.fn().mockRejectedValue({ response: { data: { detail: 'preview failed' } } }),
+      getProfiles: vi.fn().mockRejectedValue({
+        response: {
+          data: {
+            error: { object: 'remote_profile', operation: 'fetch', reason: 'unavailable' },
+          },
+        },
+      }),
       importProfiles: vi.fn().mockRejectedValue({ message: 'import failed' }),
     })
     state.yggApiUrl.value = 'https://remote.example/api'
@@ -207,7 +213,7 @@ describe('useRemoteYggProfileImport', () => {
     state.selectedYggProfiles.value = ['p1']
     await state.importYggProfile()
 
-    expect(error).toHaveBeenNthCalledWith(1, '获取失败: preview failed')
+    expect(error).toHaveBeenNthCalledWith(1, '获取失败: 相关服务暂时不可用')
     expect(error).toHaveBeenNthCalledWith(2, '导入失败: import failed')
     expect(state.yggLoading.value).toBe(false)
   })

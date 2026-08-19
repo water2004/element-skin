@@ -22,7 +22,7 @@ type authorizationScopes struct {
 func parseScope(raw string) ([]string, error) {
 	parts := strings.Fields(raw)
 	if len(parts) == 0 {
-		return nil, badRequest("scope is required")
+		return nil, badRequest("oauth_scope", "validate", "required")
 	}
 	return validateCodes(parts)
 }
@@ -30,7 +30,7 @@ func parseScope(raw string) ([]string, error) {
 func parseAuthorizationScopes(raw string) (authorizationScopes, error) {
 	parts := strings.Fields(raw)
 	if len(parts) == 0 {
-		return authorizationScopes{}, badRequest("scope is required")
+		return authorizationScopes{}, badRequest("oauth_scope", "validate", "required")
 	}
 	permissionCodes := make([]string, 0, len(parts))
 	oidcScopes := make([]string, 0, 4)
@@ -46,7 +46,7 @@ func parseAuthorizationScopes(raw string) (authorizationScopes, error) {
 		permissionCodes = append(permissionCodes, scope)
 	}
 	if len(oidcScopes) > 0 && !seenOIDC["openid"] {
-		return authorizationScopes{}, badRequest("OIDC scopes require openid")
+		return authorizationScopes{}, badRequest("oidc_scope", "validate", "required")
 	}
 	codes, err := validateCodes(permissionCodes)
 	if err != nil {
@@ -79,7 +79,7 @@ func validateCodes(codes []string) ([]string, error) {
 		code = strings.TrimSpace(code)
 		def, ok := permission.DefinitionByCode(code)
 		if !ok || def.Scope.ID == permission.ScopeSystem {
-			return nil, badRequest("invalid scope")
+			return nil, badRequest("oauth_scope", "validate", "invalid")
 		}
 		if !seen[code] {
 			seen[code] = true

@@ -23,7 +23,7 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 	if _, err := service.ConsumeRegistration(ctx, " "); err == nil {
 		t.Fatal("empty registration ticket should fail")
 	} else {
-		assertHTTPError(t, err, 400, "identity_ticket is required")
+		assertHTTPError(t, err, 400, "identity_ticket.validate.required")
 	}
 	withoutCache := service
 	withoutCache.Redis = nil
@@ -33,13 +33,13 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 	if _, err := service.ConsumeRegistration(ctx, "missing-ticket"); err == nil {
 		t.Fatal("missing registration ticket should fail")
 	} else {
-		assertHTTPError(t, err, 400, "invalid or expired identity_ticket")
+		assertHTTPError(t, err, 400, "identity_ticket.verify.invalid")
 	}
 	setRegistrationState(t, cache, "wrong-kind", map[string]any{"kind": "oidc_authorization"})
 	if _, err := service.ConsumeRegistration(ctx, "wrong-kind"); err == nil {
 		t.Fatal("wrong registration state kind should fail")
 	} else {
-		assertHTTPError(t, err, 400, "invalid or expired identity_ticket")
+		assertHTTPError(t, err, 400, "identity_ticket.verify.invalid")
 	}
 
 	provider.Enabled = false
@@ -48,7 +48,7 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 	if _, err := service.ConsumeRegistration(ctx, "disabled-provider"); err == nil {
 		t.Fatal("disabled registration provider should fail")
 	} else {
-		assertHTTPError(t, err, 403, "registration is no longer available for this identity provider")
+		assertHTTPError(t, err, 403, "registration.create.disabled")
 	}
 	provider.Enabled = true
 	provider.LoginEnabled = false
@@ -57,7 +57,7 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 	if _, err := service.ConsumeRegistration(ctx, "registration-disabled"); err == nil {
 		t.Fatal("provider with registration disabled should fail")
 	} else {
-		assertHTTPError(t, err, 403, "registration is no longer available for this identity provider")
+		assertHTTPError(t, err, 403, "registration.create.disabled")
 	}
 	provider.LoginEnabled = true
 	updateOIDCTestProvider(t, db, provider)
@@ -66,7 +66,7 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 	if _, err := service.ConsumeRegistration(ctx, "missing-subject"); err == nil {
 		t.Fatal("registration without subject should fail")
 	} else {
-		assertHTTPError(t, err, 400, "invalid or expired identity_ticket")
+		assertHTTPError(t, err, 400, "identity_ticket.verify.invalid")
 	}
 	user := testutil.CreateUser(t, db, "registration-existing@test.com", "pw", "RegistrationExisting", false)
 	existing := model.ExternalIdentity{
@@ -80,7 +80,7 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 	if _, err := service.ConsumeRegistration(ctx, "existing-subject"); err == nil {
 		t.Fatal("already linked registration subject should fail")
 	} else {
-		assertHTTPError(t, err, 409, "this external identity is already linked")
+		assertHTTPError(t, err, 409, "identity.link.already_exists")
 	}
 
 	expiresAt := time.Now().Add(time.Hour).Truncate(time.Millisecond)
@@ -109,7 +109,7 @@ func TestOIDCRegistrationTicketLifecycleRejectsInvalidStateAndRestoresExactPaylo
 	if _, err := service.ConsumeRegistration(ctx, "valid-ticket"); err == nil {
 		t.Fatal("consumed registration ticket should not be reusable")
 	} else {
-		assertHTTPError(t, err, 400, "invalid or expired identity_ticket")
+		assertHTTPError(t, err, 400, "identity_ticket.verify.invalid")
 	}
 	if err := service.RestoreRegistration(ctx, pending); err != nil {
 		t.Fatal(err)

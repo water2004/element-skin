@@ -2,7 +2,6 @@ package emailpolicy
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -83,12 +82,12 @@ func (s Service) RequireAllowed(ctx context.Context, email string) error {
 			return nil
 		}
 	}
-	return util.HTTPError{Status: http.StatusBadRequest, Detail: "Email suffix is not allowed"}
+	return util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "validate", Reason: "denied"}
 }
 
 func Normalize(input model.EmailSuffixPolicy) (model.EmailSuffixPolicy, error) {
 	if input.Mode != model.EmailSuffixModeDisabled && input.Mode != model.EmailSuffixModeAllowlist && input.Mode != model.EmailSuffixModeDenylist {
-		return model.EmailSuffixPolicy{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid email suffix policy mode"}
+		return model.EmailSuffixPolicy{}, util.HTTPError{Status: http.StatusBadRequest, Object: "email_policy", Operation: "configure", Reason: "invalid"}
 	}
 	allowlist, err := normalizeList("allowlist", input.Allowlist)
 	if err != nil {
@@ -99,14 +98,14 @@ func Normalize(input model.EmailSuffixPolicy) (model.EmailSuffixPolicy, error) {
 		return model.EmailSuffixPolicy{}, err
 	}
 	if input.Mode == model.EmailSuffixModeAllowlist && len(allowlist) == 0 {
-		return model.EmailSuffixPolicy{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "email suffix allowlist cannot be empty while enabled"}
+		return model.EmailSuffixPolicy{}, util.HTTPError{Status: http.StatusBadRequest, Object: "email_allowlist", Operation: "configure", Reason: "required"}
 	}
 	return model.EmailSuffixPolicy{Mode: input.Mode, Allowlist: allowlist, Denylist: denylist}, nil
 }
 
 func normalizeList(name string, values []string) ([]string, error) {
 	if len(values) > MaxSuffixesPerList {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: fmt.Sprintf("email suffix %s cannot contain more than %d entries", name, MaxSuffixesPerList)}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "email_suffix", Operation: "configure", Reason: "exceeded", Params: map[string]any{"list": name, "max": MaxSuffixesPerList}}
 	}
 	out := make([]string, 0, len(values))
 	seen := make(map[string]struct{}, len(values))
@@ -116,10 +115,10 @@ func normalizeList(name string, values []string) ([]string, error) {
 			suffix = "@" + suffix
 		}
 		if strings.Count(suffix, "@") != 1 || !util.ValidEmail("policy"+suffix) {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: fmt.Sprintf("invalid email suffix %q", value)}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "email_suffix", Operation: "validate", Reason: "invalid", Params: map[string]any{"suffix": value}}
 		}
 		if _, ok := seen[suffix]; ok {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: fmt.Sprintf("duplicate email suffix %q in %s", suffix, name)}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "email_suffix", Operation: "configure", Reason: "conflict", Params: map[string]any{"suffix": suffix, "list": name}}
 		}
 		seen[suffix] = struct{}{}
 		out = append(out, suffix)
@@ -138,5 +137,5 @@ func matchesAny(email string, suffixes []string) bool {
 }
 
 func permissionDenied() error {
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }

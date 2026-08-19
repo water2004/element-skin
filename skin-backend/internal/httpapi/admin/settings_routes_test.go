@@ -164,7 +164,7 @@ func TestSettingsRoutesRejectInvalidGroupAndBadJSONExactly(t *testing.T) {
 	req.SetPathValue("group", "nope")
 	rec := httptest.NewRecorder()
 	h.GetSettingsGroup(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid settings group"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"settings_group\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid group get mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -172,7 +172,7 @@ func TestSettingsRoutesRejectInvalidGroupAndBadJSONExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid json"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad site settings json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -180,7 +180,7 @@ func TestSettingsRoutesRejectInvalidGroupAndBadJSONExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid profile_uuid_mode"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile_uuid_mode\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid profile uuid mode mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -189,7 +189,7 @@ func TestSettingsRoutesRejectInvalidGroupAndBadJSONExactly(t *testing.T) {
 	req.SetPathValue("group", "security")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad named settings json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -198,21 +198,21 @@ func TestSettingsRoutesRejectInvalidGroupAndBadJSONExactly(t *testing.T) {
 	req.SetPathValue("group", "nope")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid settings group"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"settings_group\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid group save mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodGet, "/v2/admin/settings/site", nil)
 	rec = httptest.NewRecorder()
 	h.GetSiteSettings(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("get site settings permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/site", strings.NewReader(`{"site_name":"Denied"}`))
 	rec = httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("save site settings permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -220,7 +220,7 @@ func TestSettingsRoutesRejectInvalidGroupAndBadJSONExactly(t *testing.T) {
 	req.SetPathValue("group", "security")
 	rec = httptest.NewRecorder()
 	h.GetSettingsGroup(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("get named settings permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -228,7 +228,7 @@ func TestSettingsRoutesRejectInvalidGroupAndBadJSONExactly(t *testing.T) {
 	req.SetPathValue("group", "security")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("save named settings permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -242,7 +242,7 @@ func TestSettingsRoutesReturnErrorWhenCacheInvalidationFailsAfterPersist(t *test
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("site save should expose generic error when settings cache invalidation fails: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	got, err := db.Settings.Get(req.Context(), "site_name", "")
@@ -257,7 +257,7 @@ func TestSettingsRoutesReturnErrorWhenCacheInvalidationFailsAfterPersist(t *test
 	req.SetPathValue("group", "easter_eggs")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("named public group save should fail when public cache invalidation fails: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	enabled, err := db.EasterEggs.ListEnabled(req.Context())

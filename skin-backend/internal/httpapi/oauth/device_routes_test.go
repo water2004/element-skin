@@ -65,7 +65,7 @@ func TestOAuthDeviceCodeFlowRoutesIssueDelegatedBearer(t *testing.T) {
 	pendingForm.Set("device_code", deviceCode)
 	pendingRes := doForm(t, router, "/oauth/token", pendingForm, "", "")
 	if pendingRes.Code != http.StatusBadRequest ||
-		pendingRes.Body.String() != "{\"error\":\"authorization_pending\",\"error_description\":\"authorization_pending\"}\n" {
+		pendingRes.Body.String() != "{\"error\":\"authorization_pending\"}\n" {
 		t.Fatalf("pending device token error mismatch: status=%d body=%s", pendingRes.Code, pendingRes.Body.String())
 	}
 

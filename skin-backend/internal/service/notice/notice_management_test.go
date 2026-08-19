@@ -88,20 +88,20 @@ func TestNoticeServiceAdminListMarkReadDeleteAndCursorErrorsExactly(t *testing.T
 			t.Fatalf("admin status %s mismatch: got=%v want=%v", tc.status, gotIDs, tc.wantIDs)
 		}
 	}
-	if _, err := svc.ListForManagement(ctx, actor, noticesvc.ListParams{Status: "archived"}); !httpError(err, 400, "invalid status") {
+	if _, err := svc.ListForManagement(ctx, actor, noticesvc.ListParams{Status: "archived"}); !httpError(err, 400, "status.validate.invalid") {
 		t.Fatalf("invalid admin status error mismatch: %#v", err)
 	}
-	if _, err := svc.ListForManagement(ctx, actor, noticesvc.ListParams{Type: "other"}); !httpError(err, 400, "invalid type") {
+	if _, err := svc.ListForManagement(ctx, actor, noticesvc.ListParams{Type: "other"}); !httpError(err, 400, "type.validate.invalid") {
 		t.Fatalf("invalid admin type error mismatch: %#v", err)
 	}
-	if _, err := svc.ListForManagement(ctx, actor, noticesvc.ListParams{Cursor: "not-a-cursor"}); !httpError(err, 400, "Invalid cursor") {
+	if _, err := svc.ListForManagement(ctx, actor, noticesvc.ListParams{Cursor: "not-a-cursor"}); !httpError(err, 400, "pagination_cursor.decode.invalid") {
 		t.Fatalf("invalid admin cursor error mismatch: %#v", err)
 	}
 	reader := noticeActor(user.ID, "notice.read.owned")
-	if _, err := svc.ListForUser(ctx, reader, noticesvc.ListParams{Type: "other"}); !httpError(err, 400, "invalid type") {
+	if _, err := svc.ListForUser(ctx, reader, noticesvc.ListParams{Type: "other"}); !httpError(err, 400, "type.validate.invalid") {
 		t.Fatalf("invalid user type error mismatch: %#v", err)
 	}
-	if _, err := svc.ListForUser(ctx, reader, noticesvc.ListParams{Cursor: "not-a-cursor"}); !httpError(err, 400, "Invalid cursor") {
+	if _, err := svc.ListForUser(ctx, reader, noticesvc.ListParams{Cursor: "not-a-cursor"}); !httpError(err, 400, "pagination_cursor.decode.invalid") {
 		t.Fatalf("invalid user cursor error mismatch: %#v", err)
 	}
 
@@ -115,10 +115,10 @@ func TestNoticeServiceAdminListMarkReadDeleteAndCursorErrorsExactly(t *testing.T
 	if view == nil || !view.Read || view.ReadAt == nil {
 		t.Fatalf("MarkRead should persist exact read state: %#v", view)
 	}
-	if err := svc.MarkRead(ctx, scheduled.ID, reader); !httpError(err, 404, "notice not found") {
+	if err := svc.MarkRead(ctx, scheduled.ID, reader); !httpError(err, 404, "notice.resolve.not_found") {
 		t.Fatalf("MarkRead hidden notice error mismatch: %#v", err)
 	}
-	if err := svc.Delete(ctx, actor, "missing-notice"); !httpError(err, 404, "notice not found") {
+	if err := svc.Delete(ctx, actor, "missing-notice"); !httpError(err, 404, "notice.resolve.not_found") {
 		t.Fatalf("delete missing error mismatch: %#v", err)
 	}
 	if err := svc.Delete(ctx, actor, enabled.ID); err != nil {

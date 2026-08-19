@@ -73,16 +73,16 @@ func TestAccountServiceRoleMutationDependencyErrorsAndMissingUsers(t *testing.T)
 	svc := accountsvc.AccountService{DB: db, Redis: cache}
 	actor := actorWithPermissions(admin.ID, "permission.grant.any", "permission.revoke.any")
 
-	if err := svc.GrantUserRole(ctx, actor, "missing-role-user", permission.RoleAdmin); !httpErrorIs(err, http.StatusNotFound, "user not found") {
+	if err := svc.GrantUserRole(ctx, actor, "missing-role-user", permission.RoleAdmin); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("grant missing user mismatch: %#v", err)
 	}
-	if err := svc.RevokeUserRole(ctx, actor, "missing-role-user", permission.RoleAdmin); !httpErrorIs(err, http.StatusNotFound, "user not found") {
+	if err := svc.RevokeUserRole(ctx, actor, "missing-role-user", permission.RoleAdmin); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("revoke missing user mismatch: %#v", err)
 	}
-	if err := svc.RevokeUserRole(ctx, actor, target.ID, ""); !httpErrorIs(err, http.StatusBadRequest, "role_id required") {
+	if err := svc.RevokeUserRole(ctx, actor, target.ID, ""); !httpErrorIs(err, http.StatusBadRequest, "role_id.validate.required") {
 		t.Fatalf("revoke empty role mismatch: %#v", err)
 	}
-	if err := svc.RevokeUserRole(ctx, permission.Actor{}, target.ID, permission.RoleAdmin); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.RevokeUserRole(ctx, permission.Actor{}, target.ID, permission.RoleAdmin); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("revoke without permission mismatch: %#v", err)
 	}
 	err := svc.GrantUserRole(ctx, actor, target.ID, permission.RoleAdmin)

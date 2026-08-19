@@ -31,7 +31,7 @@ func actorWithPermissions(userID string, codes ...string) permission.Actor {
 
 func httpErrorIs(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }
 
 func createAccountOAuthClient(t testing.TB, db *database.DB, ownerUserID, clientID string, codes ...string) model.OAuthClient {

@@ -20,7 +20,7 @@ func (h Handler) AuthorizeInfo(w http.ResponseWriter, req *http.Request) {
 func (h Handler) ApproveAuthorization(w http.ResponseWriter, req *http.Request) {
 	var body authorizeBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.oauth.ApproveAuthorization(req.Context(), shared.CurrentActor(req), body.request())

@@ -155,10 +155,10 @@ func TestAccountServiceDeleteUserCascadesAndInvalidatesExactly(t *testing.T) {
 		t.Fatalf("delete should preserve unrelated oauth access token: token=%#v err=%v", token, err)
 	}
 
-	if err := svc.DeleteUser(ctx, actor, adminUser.ID); !httpErrorIs(err, http.StatusForbidden, "cannot delete yourself") {
+	if err := svc.DeleteUser(ctx, actor, adminUser.ID); !httpErrorIs(err, http.StatusForbidden, "user.delete.denied") {
 		t.Fatalf("self delete error mismatch: %#v", err)
 	}
-	if err := svc.DeleteUser(ctx, actor, "missing-account-delete"); !httpErrorIs(err, http.StatusNotFound, "user not found") {
+	if err := svc.DeleteUser(ctx, actor, "missing-account-delete"); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("delete missing user mismatch: %#v", err)
 	}
 }
@@ -199,13 +199,13 @@ func TestAccountServiceResetPasswordRevokesTokensAndInvalidatesExactly(t *testin
 		t.Fatalf("reset should revoke ygg tokens exactly, got %v", err)
 	}
 
-	if err := svc.ResetPassword(ctx, permission.Actor{}, accountsvc.ResetPasswordInput{UserID: target.ID, NewPassword: "NextPassword123"}); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.ResetPassword(ctx, permission.Actor{}, accountsvc.ResetPasswordInput{UserID: target.ID, NewPassword: "NextPassword123"}); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("reset without permission mismatch: %#v", err)
 	}
-	if err := svc.ResetPassword(ctx, actor, accountsvc.ResetPasswordInput{UserID: target.ID}); !httpErrorIs(err, http.StatusBadRequest, "user_id and new_password required") {
+	if err := svc.ResetPassword(ctx, actor, accountsvc.ResetPasswordInput{UserID: target.ID}); !httpErrorIs(err, http.StatusBadRequest, "password_reset.validate.required") {
 		t.Fatalf("reset missing password mismatch: %#v", err)
 	}
-	if err := svc.ResetPassword(ctx, actor, accountsvc.ResetPasswordInput{UserID: "missing-account-reset", NewPassword: "NextPassword123"}); !httpErrorIs(err, http.StatusNotFound, "user not found") {
+	if err := svc.ResetPassword(ctx, actor, accountsvc.ResetPasswordInput{UserID: "missing-account-reset", NewPassword: "NextPassword123"}); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("reset missing user mismatch: %#v", err)
 	}
 }

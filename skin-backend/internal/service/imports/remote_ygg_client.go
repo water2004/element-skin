@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,7 +15,7 @@ import (
 
 func (s RemoteYggService) doJSON(ctx context.Context, method, rawURL string, payload any, out any) error {
 	if err := util.ValidateOutboundURL(rawURL); err != nil {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid remote api url"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "api_url", Operation: "validate", Reason: "invalid"}
 	}
 	var body io.Reader
 	if payload != nil {
@@ -28,7 +27,7 @@ func (s RemoteYggService) doJSON(ctx context.Context, method, rawURL string, pay
 	}
 	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
 	if err != nil {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid remote api url"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "api_url", Operation: "validate", Reason: "invalid"}
 	}
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
@@ -36,15 +35,15 @@ func (s RemoteYggService) doJSON(ctx context.Context, method, rawURL string, pay
 	req.Header.Set("Accept", "application/json")
 	resp, err := remoteYggHTTPClient(s.HTTPClient).Do(req)
 	if err != nil {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "无法获取远端资料，请检查账号或稍后重试"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "remote_profile", Operation: "fetch", Reason: "unavailable"}
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: remoteYggErrorDetail(resp)}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "remote_profile", Operation: "authenticate", Reason: "denied"}
 	}
 	decoder := json.NewDecoder(io.LimitReader(resp.Body, 1<<20))
 	if err := decoder.Decode(out); err != nil {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "远端资料格式无效"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "remote_profile", Operation: "decode", Reason: "invalid"}
 	}
 	return nil
 }
@@ -71,20 +70,4 @@ func remoteYggURL(apiURL string, parts ...string) string {
 		return base
 	}
 	return joined
-}
-
-func remoteYggErrorDetail(resp *http.Response) string {
-	var body struct {
-		ErrorMessage string `json:"errorMessage"`
-		Error        string `json:"error"`
-	}
-	_ = json.NewDecoder(io.LimitReader(resp.Body, 8192)).Decode(&body)
-	detail := strings.TrimSpace(body.ErrorMessage)
-	if detail == "" {
-		detail = strings.TrimSpace(body.Error)
-	}
-	if detail == "" {
-		detail = fmt.Sprintf("HTTP %d", resp.StatusCode)
-	}
-	return "远端认证失败: " + detail
 }

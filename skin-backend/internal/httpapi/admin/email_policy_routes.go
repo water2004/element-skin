@@ -20,7 +20,7 @@ func (h Handler) GetEmailSuffixPolicy(w http.ResponseWriter, req *http.Request) 
 func (h Handler) PutEmailSuffixPolicy(w http.ResponseWriter, req *http.Request) {
 	var body model.EmailSuffixPolicy
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.emailPolicy.Update(req.Context(), shared.CurrentActor(req), body); err != nil {

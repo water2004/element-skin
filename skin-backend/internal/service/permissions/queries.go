@@ -16,7 +16,7 @@ func (s PermissionService) UserPermissions(ctx context.Context, actor permission
 	if ok, err := s.userExists(ctx, targetID); err != nil {
 		return UserPermissionsResponse{}, err
 	} else if !ok {
-		return UserPermissionsResponse{}, util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return UserPermissionsResponse{}, util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	roles, err := s.DB.Permissions.RoleIDsForUser(ctx, targetID)
 	if err != nil {

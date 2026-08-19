@@ -110,7 +110,7 @@ func TestMinecraftRoutesReturnExactProfileAndTextureResponses(t *testing.T) {
 	req.SetPathValue("path", "")
 	rec = httptest.NewRecorder()
 	h.Profiles(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"minecraft route not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_route\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("profiles dispatcher not found mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -130,7 +130,7 @@ func TestMinecraftRoutesValidateBulkBodyAndMissingProfilesExactly(t *testing.T) 
 	req = minecraftPublicRequest(http.MethodPost, "/v2/minecraft/profiles/by-names", strings.NewReader(`[`))
 	rec = httptest.NewRecorder()
 	h.ProfilesByNames(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid bulk json response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -138,7 +138,7 @@ func TestMinecraftRoutesValidateBulkBodyAndMissingProfilesExactly(t *testing.T) 
 	req.SetPathValue("profile_id", "missing-profile")
 	rec = httptest.NewRecorder()
 	h.ProfileByID(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"minecraft profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing profile response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -146,7 +146,7 @@ func TestMinecraftRoutesValidateBulkBodyAndMissingProfilesExactly(t *testing.T) 
 	req.SetPathValue("name", "Missing")
 	rec = httptest.NewRecorder()
 	h.ProfileByName(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"minecraft profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing profile by name mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -154,7 +154,7 @@ func TestMinecraftRoutesValidateBulkBodyAndMissingProfilesExactly(t *testing.T) 
 	req.SetPathValue("profile_id", "missing-profile")
 	rec = httptest.NewRecorder()
 	h.TexturesProperty(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"minecraft profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing textures property mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -169,7 +169,7 @@ func TestMinecraftRoutesValidateBulkBodyAndMissingProfilesExactly(t *testing.T) 
 	req = minecraftPublicRequest(http.MethodPost, "/v2/minecraft/profiles/by-names", strings.NewReader(string(body)))
 	rec = httptest.NewRecorder()
 	h.ProfilesByNames(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"too many names\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"read\",\"reason\":\"exceeded\"}}\n" {
 		t.Fatalf("too many bulk names mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -208,7 +208,7 @@ func TestMinecraftHasJoinedRouteUsesCurrentActorExactly(t *testing.T) {
 	req = req.WithContext(shared.WithActor(req.Context(), clientActorWith("minecraft_session.hasjoined.server")))
 	rec = httptest.NewRecorder()
 	h.HasJoined(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("has joined invalid json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -216,7 +216,7 @@ func TestMinecraftHasJoinedRouteUsesCurrentActorExactly(t *testing.T) {
 	req = req.WithContext(shared.WithActor(req.Context(), clientActorWith("minecraft_session.hasjoined.server")))
 	rec = httptest.NewRecorder()
 	h.HasJoined(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"username and server_id are required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_session\",\"operation\":\"join\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("has joined missing fields mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -224,7 +224,7 @@ func TestMinecraftHasJoinedRouteUsesCurrentActorExactly(t *testing.T) {
 	req = req.WithContext(shared.WithActor(req.Context(), clientActorWith()))
 	rec = httptest.NewRecorder()
 	h.HasJoined(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("has joined missing permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

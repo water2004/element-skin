@@ -2,6 +2,7 @@ package texture
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strings"
 
@@ -59,7 +60,7 @@ func (s UploadService) UploadAndApply(ctx context.Context, input UploadInput, pr
 		return nil, err
 	}
 	if profileID == "" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "uuid and texture_type are required"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "texture", Operation: "upload", Reason: "required"}
 	}
 	if err := requireOwnedOrBoundProfilePermission(input.Actor, profileID, textureApplyOwnedPermission, textureApplyBoundPermission); err != nil {
 		return nil, err
@@ -87,7 +88,7 @@ func (s UploadService) UploadAndApplyBoundProfile(ctx context.Context, input Upl
 		return nil, err
 	}
 	if profileID == "" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "uuid and texture_type are required"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "texture", Operation: "upload", Reason: "required"}
 	}
 	if err := requireBoundProfilePermission(input.Actor, profileID, textureApplyBoundPermission); err != nil {
 		return nil, err
@@ -110,7 +111,14 @@ func (s UploadService) saveLibraryTexture(ctx context.Context, userID string, da
 	}
 	hash, created, err := storage.ProcessAndSaveTracked(data, textureType)
 	if err != nil {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: err.Error()}
+		switch {
+		case errors.Is(err, ErrInvalidPNG):
+			return "", util.HTTPError{Status: http.StatusBadRequest, Object: "texture_format", Operation: "validate", Reason: "unsupported"}
+		case errors.Is(err, ErrInvalidTextureDimensions):
+			return "", util.HTTPError{Status: http.StatusBadRequest, Object: "texture_dimensions", Operation: "validate", Reason: "invalid"}
+		default:
+			return "", err
+		}
 	}
 	if err := s.DB.Textures.AddToLibrary(ctx, userID, hash, textureType, note, isPublic, profile.NormalizeModel(model)); err != nil {
 		if created {
@@ -129,14 +137,14 @@ func (s UploadService) applyUploadedTexture(ctx context.Context, userID, profile
 		return err
 	}
 	if !owns {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "Texture not found in your library"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "texture", Operation: "authorize", Reason: "denied"}
 	}
 	profileOwner, err := s.DB.Profiles.VerifyOwnership(ctx, userID, profileID)
 	if err != nil {
 		return err
 	}
 	if !profileOwner {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "Profile not yours"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "profile", Operation: "authorize", Reason: "denied"}
 	}
 	switch textureType {
 	case "skin":
@@ -144,7 +152,7 @@ func (s UploadService) applyUploadedTexture(ctx context.Context, userID, profile
 	case "cape":
 		return s.DB.Profiles.UpdateCape(ctx, profileID, &hash)
 	default:
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid texture_type"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "texture_type", Operation: "validate", Reason: "invalid"}
 	}
 }
 
@@ -154,14 +162,14 @@ func normalizedUploadTextureType(raw string, defaultSkin bool) (string, error) {
 		textureType = "skin"
 	}
 	if textureType == "" {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "uuid and texture_type are required"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "texture", Operation: "upload", Reason: "required"}
 	}
 	if textureType != "skin" && textureType != "cape" {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid texture_type"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "texture_type", Operation: "validate", Reason: "invalid"}
 	}
 	return textureType, nil
 }
 
 func permissionDenied() error {
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }

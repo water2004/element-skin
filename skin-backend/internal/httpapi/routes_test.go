@@ -22,16 +22,21 @@ func TestRoutesRegistersPublicAndYggdrasilEntrypointsExactly(t *testing.T) {
 		body   string
 		status int
 		want   string
+		exact  bool
 	}{
 		{method: http.MethodGet, path: "/", status: http.StatusOK, want: "implementationName"},
 		{method: http.MethodGet, path: "/v2/public/settings", status: http.StatusOK, want: "site_name"},
-		{method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, status: http.StatusForbidden, want: "Invalid token"},
+		{method: http.MethodPost, path: "/authserver/validate", body: `{"accessToken":"missing"}`, status: http.StatusForbidden, want: "{\"error\":\"ForbiddenOperationException\",\"errorMessage\":\"Invalid token.\"}\n", exact: true},
 	}
 	for _, tc := range cases {
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 		rec := httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
-		if rec.Code != tc.status || !strings.Contains(rec.Body.String(), tc.want) {
+		bodyMatches := rec.Body.String() == tc.want
+		if !tc.exact {
+			bodyMatches = strings.Contains(rec.Body.String(), tc.want)
+		}
+		if rec.Code != tc.status || !bodyMatches {
 			t.Fatalf("%s %s mismatch: status=%d body=%q", tc.method, tc.path, rec.Code, rec.Body.String())
 		}
 	}

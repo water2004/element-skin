@@ -19,14 +19,14 @@ func (s Service) ListForUser(ctx context.Context, actor permission.Actor, params
 	user := noticeUser(actor)
 	cur, err := parseCursor(params.Cursor)
 	if err != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	typ := strings.TrimSpace(params.Type)
 	if params.Dashboard && typ == "" {
 		typ = TypeAnnouncement
 	}
 	if typ != "" && !validType(typ) {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid type"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "type", Operation: "validate", Reason: "invalid"}
 	}
 	return s.DB.Notices.ListForUser(ctx, noticedb.UserListOptions{
 		UserID:               user.ID,
@@ -51,7 +51,7 @@ func (s Service) GetForUser(ctx context.Context, id string, actor permission.Act
 		return nil, err
 	}
 	if item == nil || !visibleToUser(*item, user, database.NowMS()) {
-		return nil, util.HTTPError{Status: http.StatusNotFound, Detail: "notice not found"}
+		return nil, util.HTTPError{Status: http.StatusNotFound, Object: "notice", Operation: "resolve", Reason: "not_found"}
 	}
 	now := database.NowMS()
 	if err := s.DB.Notices.MarkRead(ctx, id, user.ID, now); err != nil {
@@ -74,7 +74,7 @@ func (s Service) MarkRead(ctx context.Context, id string, actor permission.Actor
 		return err
 	}
 	if item == nil || !visibleToUser(*item, user, database.NowMS()) {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "notice not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "notice", Operation: "resolve", Reason: "not_found"}
 	}
 	return s.DB.Notices.MarkRead(ctx, id, user.ID, database.NowMS())
 }
@@ -89,10 +89,10 @@ func (s Service) Dismiss(ctx context.Context, id string, actor permission.Actor)
 		return err
 	}
 	if item == nil || !visibleToUser(*item, user, database.NowMS()) {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "notice not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "notice", Operation: "resolve", Reason: "not_found"}
 	}
 	if !item.Dismissible {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "notice is not dismissible"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "notice", Operation: "dismiss", Reason: "denied"}
 	}
 	return s.DB.Notices.Dismiss(ctx, id, user.ID, database.NowMS())
 }

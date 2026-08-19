@@ -25,16 +25,16 @@ func TestServicePublicClientSecretAndInputValidationPathsExactly(t *testing.T) {
 		status int
 		detail string
 	}{
-		{name: "empty name", input: oauth.ClientInput{Name: "", RedirectURI: "https://app.example/callback", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "invalid name"},
-		{name: "bad redirect", input: oauth.ClientInput{Name: "Bad redirect", RedirectURI: "ftp://app.example/callback", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "invalid redirect_uri"},
-		{name: "redirect with fragment", input: oauth.ClientInput{Name: "Fragment redirect", RedirectURI: "https://app.example/callback#token", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "invalid redirect_uri"},
-		{name: "redirect with credentials", input: oauth.ClientInput{Name: "Credential redirect", RedirectURI: "https://user@app.example/callback", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "invalid redirect_uri"},
-		{name: "bad website", input: oauth.ClientInput{Name: "Bad website", RedirectURI: "https://app.example/callback", WebsiteURL: "://bad", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "invalid website_url"},
-		{name: "website with fragment", input: oauth.ClientInput{Name: "Fragment website", RedirectURI: "https://app.example/callback", WebsiteURL: "https://app.example/#section", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "invalid website_url"},
-		{name: "bad type", input: oauth.ClientInput{Name: "Bad type", RedirectURI: "https://app.example/callback", ClientType: "native", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "invalid client_type"},
-		{name: "bad scope", input: oauth.ClientInput{Name: "Bad scope", RedirectURI: "https://app.example/callback", PermissionCodes: []string{"permission.catalog.system"}}, status: 400, detail: "invalid scope"},
-		{name: "missing actor scope", input: oauth.ClientInput{Name: "Missing actor scope", RedirectURI: "https://app.example/callback", PermissionCodes: []string{"account.ban.any"}}, status: 403, detail: "permission denied"},
-		{name: "public server scope", input: oauth.ClientInput{Name: "Public server scope", RedirectURI: "https://server-public.example/callback", ClientType: oauth.ClientTypePublic, PermissionCodes: []string{"minecraft_session.hasjoined.server"}}, status: 400, detail: "server scope requires confidential client"},
+		{name: "empty name", input: oauth.ClientInput{Name: "", RedirectURI: "https://app.example/callback", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "name.validate.invalid"},
+		{name: "bad redirect", input: oauth.ClientInput{Name: "Bad redirect", RedirectURI: "ftp://app.example/callback", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "redirect_uri.validate.invalid"},
+		{name: "redirect with fragment", input: oauth.ClientInput{Name: "Fragment redirect", RedirectURI: "https://app.example/callback#token", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "redirect_uri.validate.invalid"},
+		{name: "redirect with credentials", input: oauth.ClientInput{Name: "Credential redirect", RedirectURI: "https://user@app.example/callback", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "redirect_uri.validate.invalid"},
+		{name: "bad website", input: oauth.ClientInput{Name: "Bad website", RedirectURI: "https://app.example/callback", WebsiteURL: "://bad", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "website_url.validate.invalid"},
+		{name: "website with fragment", input: oauth.ClientInput{Name: "Fragment website", RedirectURI: "https://app.example/callback", WebsiteURL: "https://app.example/#section", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "website_url.validate.invalid"},
+		{name: "bad type", input: oauth.ClientInput{Name: "Bad type", RedirectURI: "https://app.example/callback", ClientType: "native", PermissionCodes: []string{"account.read.self"}}, status: 400, detail: "oauth_client_type.validate.invalid"},
+		{name: "bad scope", input: oauth.ClientInput{Name: "Bad scope", RedirectURI: "https://app.example/callback", PermissionCodes: []string{"permission.catalog.system"}}, status: 400, detail: "oauth_scope.validate.invalid"},
+		{name: "missing actor scope", input: oauth.ClientInput{Name: "Missing actor scope", RedirectURI: "https://app.example/callback", PermissionCodes: []string{"account.ban.any"}}, status: 403, detail: "permission.check.denied"},
+		{name: "public server scope", input: oauth.ClientInput{Name: "Public server scope", RedirectURI: "https://server-public.example/callback", ClientType: oauth.ClientTypePublic, PermissionCodes: []string{"minecraft_session.hasjoined.server"}}, status: 400, detail: "oauth_scope.authorize.denied"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestServicePublicClientSecretAndInputValidationPathsExactly(t *testing.T) {
 	if publicClient["client_secret"] != nil {
 		t.Fatalf("public client should not expose a secret: %#v", publicClient)
 	}
-	if _, err := svc.RotateClientSecret(ctx, actor, clientID); !isHTTPError(err, 400, "public clients do not have secrets") {
+	if _, err := svc.RotateClientSecret(ctx, actor, clientID); !isHTTPError(err, 400, "client_secret.configure.unsupported") {
 		t.Fatalf("rotate public secret error mismatch: %#v", err)
 	}
 }

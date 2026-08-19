@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
@@ -15,17 +16,17 @@ func TestValidateReviewReasonExactRules(t *testing.T) {
 	}
 
 	empty, err := validateReviewReason(StatusRejected, "   ")
-	if empty != "" || err != (util.HTTPError{Status: http.StatusBadRequest, Detail: "reason is required"}) {
+	if empty != "" || !isInternalHTTPError(err, http.StatusBadRequest, "audit_reason.validate.required") {
 		t.Fatalf("empty rejected reason=%q err=%#v; want exact required error", empty, err)
 	}
 
 	empty, err = validateReviewReason(StatusDisabled, "")
-	if empty != "" || err != (util.HTTPError{Status: http.StatusBadRequest, Detail: "reason is required"}) {
+	if empty != "" || !isInternalHTTPError(err, http.StatusBadRequest, "audit_reason.validate.required") {
 		t.Fatalf("empty disabled reason=%q err=%#v; want exact required error", empty, err)
 	}
 
 	long, err := validateReviewReason(StatusActive, strings.Repeat("理", maxReviewReasonRunes+1))
-	if long != "" || err != (util.HTTPError{Status: http.StatusBadRequest, Detail: "reason too long"}) {
+	if long != "" || !isInternalHTTPError(err, http.StatusBadRequest, "audit_reason.validate.too_long") {
 		t.Fatalf("long active reason len=%d err=%#v; want exact too-long error", len([]rune(long)), err)
 	}
 
@@ -33,6 +34,11 @@ func TestValidateReviewReasonExactRules(t *testing.T) {
 	if err != nil || optional != "" {
 		t.Fatalf("optional active reason=%q err=%v; want empty reason and nil", optional, err)
 	}
+}
+
+func isInternalHTTPError(err error, status int, classification string) bool {
+	var target util.HTTPError
+	return errors.As(err, &target) && target.Status == status && target.Error() == classification
 }
 
 func TestReviewNotificationLabelsAndTruncationExactly(t *testing.T) {

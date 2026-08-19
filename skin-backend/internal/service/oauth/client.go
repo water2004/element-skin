@@ -73,7 +73,7 @@ func (s Service) ListClientsForAdmin(ctx context.Context, actor permission.Actor
 	}
 	status = strings.TrimSpace(status)
 	if status != "" && status != "all" && !validClientStatus(status) {
-		return nil, badRequest("invalid status")
+		return nil, badRequest("status", "validate", "invalid")
 	}
 	clients, err := s.DB.OAuth.ListClientsByStatus(ctx, status, limit)
 	if err != nil {
@@ -122,7 +122,7 @@ func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clien
 		status = current.Status
 	}
 	if !validClientStatus(status) {
-		return nil, badRequest("invalid status")
+		return nil, badRequest("status", "validate", "invalid")
 	}
 	client.ID = current.ID
 	client.OwnerUserID = current.OwnerUserID
@@ -152,7 +152,7 @@ func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clien
 		return nil, err
 	}
 	if !mutation.Updated {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	if credentialAction != dboauth.ClientCredentialsPreserve {
 		reportPostCommitError("remove client access-token races", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
@@ -195,7 +195,7 @@ func (s Service) SubmitClientForReview(ctx context.Context, actor permission.Act
 		return nil, err
 	}
 	if !mutation.Updated {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	reportPostCommitError("remove submitted client access-token races", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
 	reportPostCommitError("notify administrators about submitted client", s.notifyAdminsClientSubmitted(ctx, *client))
@@ -219,7 +219,7 @@ func (s Service) DeleteClient(ctx context.Context, actor permission.Actor, clien
 		return err
 	}
 	if !ok {
-		return notFound("oauth client not found")
+		return notFound("oauth_client", "resolve", "not_found")
 	}
 	reportPostCommitError("remove deleted client access-token races", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
 	return nil

@@ -11,7 +11,7 @@ func TestPasswordHashVerifyAndStrongPasswordMessagesExact(t *testing.T) {
 		t.Fatalf("password hash/verify mismatch: hash=%q", hash)
 	}
 	errs := ValidateStrongPassword("short")
-	want := []string{"密码长度至少 8 位", "密码需包含大写字母", "密码需包含数字"}
+	want := []string{"min_length", "uppercase", "number"}
 	if len(errs) != len(want) {
 		t.Fatalf("unexpected strong password errors: %#v", errs)
 	}
@@ -19,8 +19,5 @@ func TestPasswordHashVerifyAndStrongPasswordMessagesExact(t *testing.T) {
 		if errs[i] != want[i] {
 			t.Fatalf("error %d got %q want %q; all=%#v", i, errs[i], want[i], errs)
 		}
-	}
-	if joined := JoinPasswordErrors(errs); joined != "密码长度至少 8 位；密码需包含大写字母；密码需包含数字" {
-		t.Fatalf("unexpected joined password errors: %q", joined)
 	}
 }

@@ -28,7 +28,7 @@ func TestAccountEmailRoutesRecheckSuffixPolicyBeforeSendingAndCommitting(t *test
 	req := withUserActor(httptest.NewRequest(http.MethodPost, "/v2/users/me/email/verification-code", strings.NewReader(`{"email":"new@blocked.test"}`)), user.ID)
 	rec := httptest.NewRecorder()
 	h.SendEmailChangeCode(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Email suffix is not allowed\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"email\",\"operation\":\"validate\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("blocked send response: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if _, err := cache.GetVerificationCode(t.Context(), "new@blocked.test", "email_change"); !errors.Is(err, redisstore.ErrCacheMiss) {
@@ -51,7 +51,7 @@ func TestAccountEmailRoutesRecheckSuffixPolicyBeforeSendingAndCommitting(t *test
 	req = withUserActor(httptest.NewRequest(http.MethodPut, "/v2/users/me/email", strings.NewReader(`{"email":"new@allowed.test","code":"`+code+`"}`)), user.ID)
 	rec = httptest.NewRecorder()
 	h.ChangeEmail(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Email suffix is not allowed\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"email\",\"operation\":\"validate\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("blocked commit response: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchanged, err := db.Users.GetByID(t.Context(), user.ID)
@@ -119,7 +119,7 @@ func TestAccountEmailRoutesRejectMalformedBodiesExactly(t *testing.T) {
 			req := withUserActor(httptest.NewRequest(http.MethodPost, "/v2/users/me/email", strings.NewReader(`{`)), user.ID)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+			if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 				t.Fatalf("malformed response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 			}
 		})

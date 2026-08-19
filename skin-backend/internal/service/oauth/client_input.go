@@ -11,22 +11,22 @@ import (
 func (s Service) clientFromInput(actor permission.Actor, input ClientInput) (model.OAuthClient, []int64, []string, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" || len(name) > 80 {
-		return model.OAuthClient{}, nil, nil, badRequest("invalid name")
+		return model.OAuthClient{}, nil, nil, badRequest("name", "validate", "invalid")
 	}
 	redirectURI := strings.TrimSpace(input.RedirectURI)
 	if redirectURI != "" && !validHTTPURL(redirectURI) {
-		return model.OAuthClient{}, nil, nil, badRequest("invalid redirect_uri")
+		return model.OAuthClient{}, nil, nil, badRequest("redirect_uri", "validate", "invalid")
 	}
 	websiteURL := strings.TrimSpace(input.WebsiteURL)
 	if websiteURL != "" && !validHTTPURL(websiteURL) {
-		return model.OAuthClient{}, nil, nil, badRequest("invalid website_url")
+		return model.OAuthClient{}, nil, nil, badRequest("website_url", "validate", "invalid")
 	}
 	clientType := strings.TrimSpace(input.ClientType)
 	if clientType == "" {
 		clientType = ClientTypeConfidential
 	}
 	if clientType != ClientTypeConfidential && clientType != ClientTypePublic {
-		return model.OAuthClient{}, nil, nil, badRequest("invalid client_type")
+		return model.OAuthClient{}, nil, nil, badRequest("oauth_client_type", "validate", "invalid")
 	}
 	codes, err := validateCodes(input.PermissionCodes)
 	if err != nil {
@@ -37,7 +37,7 @@ func (s Service) clientFromInput(actor permission.Actor, input ClientInput) (mod
 		def := permission.MustDefinitionByCode(code)
 		if def.Scope.ID == permission.ScopeServer {
 			if clientType != ClientTypeConfidential {
-				return model.OAuthClient{}, nil, nil, badRequest("server scope requires confidential client")
+				return model.OAuthClient{}, nil, nil, badRequest("oauth_scope", "authorize", "denied")
 			}
 			continue
 		}
@@ -61,7 +61,7 @@ func (s Service) clientForActor(ctx context.Context, actor permission.Actor, cli
 		return nil, err
 	}
 	if client == nil {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	if actor.Has(permission.MustDefinitionByCode(anyCode)) {
 		return client, nil

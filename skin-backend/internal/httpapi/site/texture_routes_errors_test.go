@@ -23,7 +23,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid texture_type\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_type\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid upload texture_type mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -34,7 +34,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid texture_type\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_type\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid upload apply type should fail before persisting: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if count, err := db.Textures.CountForUser(req.Context(), user.ID); err != nil || count != 0 {
@@ -46,7 +46,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.AddTexture(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"Texture not found in library\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("add missing texture mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if count, err := db.Textures.CountForUser(req.Context(), user.ID); err != nil || count != 0 {
@@ -58,7 +58,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ApplyTexture(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"Texture not found in your library\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"authorize\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("apply missing texture mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -68,7 +68,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad update json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -78,7 +78,7 @@ func TestTextureRoutesRejectInvalidInputsWithExactErrors(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.TextureDetail(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"Texture not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing texture detail mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -95,7 +95,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid multipart form\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("malformed upload multipart mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -103,7 +103,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"file is required"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"upload_file\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing upload file mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -112,7 +112,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid multipart form\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("malformed upload apply multipart mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -120,7 +120,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"uuid and texture_type are required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"upload\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("upload apply missing uuid mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -128,7 +128,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"file is required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"upload_file\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("upload apply missing file mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -136,7 +136,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"image must be PNG format\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_format\",\"operation\":\"validate\",\"reason\":\"unsupported\"}}\n" {
 		t.Fatalf("upload apply invalid image mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -145,7 +145,7 @@ func TestTextureRoutesRejectMalformedUploadsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ApplyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("apply bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -167,7 +167,7 @@ func TestTextureRoutesInvalidImageReturns400(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"image must be PNG format\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_format\",\"operation\":\"validate\",\"reason\":\"unsupported\"}}\n" {
 		t.Fatalf("invalid image should return 400: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 

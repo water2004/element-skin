@@ -116,7 +116,7 @@ func TestOfficialBindingCreationImportsRemoteTexturesIntoExistingOwnedProfile(t 
 	}
 
 	_, err = service.Create(ctx, actor, identity.ID)
-	assertOfficialHTTPError(t, err, 409, "official profile is already bound")
+	assertOfficialHTTPError(t, err, 409, "official_profile.bind.already_exists")
 }
 
 func TestOfficialBindingUsesDefaultDownloaderAndAllowsMissingCapeExactly(t *testing.T) {
@@ -184,7 +184,7 @@ func TestOfficialBindingRejectsExhaustedProfileNamesWithoutPartialStateExactly(t
 	if result != nil {
 		t.Fatalf("exhausted-name create result=%#v err=%v", result, err)
 	}
-	assertOfficialHTTPError(t, err, http.StatusConflict, "unable to allocate profile name")
+	assertOfficialHTTPError(t, err, http.StatusConflict, "profile_name.allocate.failed")
 	if stored, getErr := db.Profiles.GetByID(ctx, profile.ID); getErr != nil || stored != nil {
 		t.Fatalf("exhausted-name create remote profile=%#v err=%v", stored, getErr)
 	}
@@ -249,7 +249,7 @@ func TestOfficialBindingClaimsTheRemoteUUIDWithExactOwnershipRules(t *testing.T)
 		if created != nil {
 			t.Fatalf("foreign UUID binding=%#v err=%v", created, err)
 		}
-		assertOfficialHTTPError(t, err, 409, "official profile UUID belongs to another user")
+		assertOfficialHTTPError(t, err, 409, "official_profile.bind.conflict")
 		stored, getErr := db.Profiles.GetByID(ctx, profile.ID)
 		if getErr != nil || stored == nil || *stored != foreign {
 			t.Fatalf("foreign UUID conflict mutated profile=%#v err=%v", stored, getErr)
@@ -343,7 +343,7 @@ func TestOfficialBindingConcurrentClaimsLeaveOneExactOwnerAndBinding(t *testing.
 	if len(successes) != 1 || len(failures) != 1 || successes[0].created["profile_id"] != profile.ID {
 		t.Fatalf("concurrent claim results: successes=%#v failures=%#v", successes, failures)
 	}
-	assertOfficialHTTPError(t, failures[0].err, 409, "official profile UUID belongs to another user")
+	assertOfficialHTTPError(t, failures[0].err, 409, "official_profile.bind.conflict")
 	stored, err := db.Profiles.GetByID(ctx, profile.ID)
 	if err != nil || stored == nil || stored.UserID != successes[0].userID || stored.Name != "RemoteSteve" {
 		t.Fatalf("concurrent profile owner mismatch: profile=%#v winner=%#v err=%v", stored, successes[0], err)
@@ -435,7 +435,7 @@ func TestOfficialBindingSyncFailureCleansFilesAndLeavesBindingAndProfileUntouche
 	}
 	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}
 	_, err = service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), created["id"].(string))
-	assertOfficialHTTPError(t, err, 502, "Microsoft profile texture is invalid")
+	assertOfficialHTTPError(t, err, 502, "minecraft_texture.decode.invalid")
 	entries, readErr := os.ReadDir(textureDir)
 	if readErr != nil || len(entries) != 0 {
 		t.Fatalf("failed sync left files=%#v err=%v", entries, readErr)
@@ -461,9 +461,9 @@ func TestOfficialBindingRejectsWrongAdapterAndPermissionsBeforeRemoteCalls(t *te
 	}
 
 	_, err := service.Create(ctx, officialActor(user.ID), identity.ID)
-	assertOfficialHTTPError(t, err, 403, "permission denied")
+	assertOfficialHTTPError(t, err, 403, "permission.check.denied")
 	_, err = service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
-	assertOfficialHTTPError(t, err, 409, "external identity is not a Microsoft identity")
+	assertOfficialHTTPError(t, err, 409, "identity.validate.unsupported")
 	if resolver.calls != 0 {
 		t.Fatalf("rejected binding called Microsoft resolver %d times", resolver.calls)
 	}
@@ -517,7 +517,7 @@ func TestOfficialBindingStopsAfterOneUnauthorizedRetry(t *testing.T) {
 	}
 
 	_, err := service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), external.ID)
-	assertOfficialHTTPError(t, err, 502, "Microsoft profile request failed")
+	assertOfficialHTTPError(t, err, 502, "minecraft_profile.fetch.unavailable")
 	if resolver.calls != 2 || refresher.calls != 1 {
 		t.Fatalf("unauthorized retry count resolver=%d refresh=%d; want 2/1", resolver.calls, refresher.calls)
 	}
@@ -541,7 +541,7 @@ func TestOfficialBindingLifecycleRejectsInvalidOwnershipAndRemoteProfilesExactly
 	if items, err := service.List(ctx, officialActor(user.ID)); items != nil {
 		t.Fatalf("unauthorized binding list=%#v err=%v", items, err)
 	} else {
-		assertOfficialHTTPError(t, err, 403, "permission denied")
+		assertOfficialHTTPError(t, err, 403, "permission.check.denied")
 	}
 	items, err := service.List(ctx, officialActor(user.ID, "official_profile.read.owned"))
 	if err != nil || len(items) != 0 {
@@ -550,32 +550,32 @@ func TestOfficialBindingLifecycleRejectsInvalidOwnershipAndRemoteProfilesExactly
 	if created, err := service.Create(ctx, createActor, " "); created != nil {
 		t.Fatalf("missing identity binding=%#v err=%v", created, err)
 	} else {
-		assertOfficialHTTPError(t, err, 400, "identity_id is required")
+		assertOfficialHTTPError(t, err, 400, "identity_id.validate.required")
 	}
 	other := testutil.CreateUser(t, db, "official-other@test.com", "Password123", "OfficialOther", false)
 	if created, err := service.Create(ctx, createActor, "missing-identity"); created != nil {
 		t.Fatalf("missing identity binding=%#v err=%v", created, err)
 	} else {
-		assertOfficialHTTPError(t, err, 404, "external identity not found")
+		assertOfficialHTTPError(t, err, 404, "identity.resolve.not_found")
 	}
 
 	resolver.result = microsoftsvc.ProfileResult{HasGame: false}
 	if created, err := service.Create(ctx, createActor, external.ID); created != nil {
 		t.Fatalf("no-game binding=%#v err=%v", created, err)
 	} else {
-		assertOfficialHTTPError(t, err, 409, "Microsoft identity does not own Minecraft: Java Edition")
+		assertOfficialHTTPError(t, err, 409, "minecraft_license.verify.required")
 	}
 	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: &microsoftsvc.MinecraftProfile{ID: "invalid", Name: "RemoteSteve"}}
 	if created, err := service.Create(ctx, createActor, external.ID); created != nil {
 		t.Fatalf("invalid remote UUID binding=%#v err=%v", created, err)
 	} else {
-		assertOfficialHTTPError(t, err, 502, "Microsoft profile response is invalid")
+		assertOfficialHTTPError(t, err, 502, "minecraft_profile.decode.invalid")
 	}
 	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: &microsoftsvc.MinecraftProfile{ID: "0123456789abcdef0123456789abcdef", Name: "invalid name!"}}
 	if created, err := service.Create(ctx, createActor, external.ID); created != nil {
 		t.Fatalf("invalid remote name binding=%#v err=%v", created, err)
 	} else {
-		assertOfficialHTTPError(t, err, 502, "Microsoft profile response is invalid")
+		assertOfficialHTTPError(t, err, 502, "minecraft_profile.decode.invalid")
 	}
 
 	resolver.result = microsoftsvc.ProfileResult{HasGame: true, Profile: remoteProfile()}
@@ -589,14 +589,14 @@ func TestOfficialBindingLifecycleRejectsInvalidOwnershipAndRemoteProfilesExactly
 		items[0]["identity_id"] != external.ID {
 		t.Fatalf("created binding list=%#v err=%v", items, err)
 	}
-	assertOfficialHTTPError(t, service.Delete(ctx, officialActor(user.ID), bindingID), 403, "permission denied")
+	assertOfficialHTTPError(t, service.Delete(ctx, officialActor(user.ID), bindingID), 403, "permission.check.denied")
 	assertOfficialHTTPError(t, service.Delete(ctx, officialActor(other.ID, "official_profile.delete.owned"), bindingID), 404,
-		"official profile binding not found")
+		"official_profile.unbind.not_found")
 	if err := service.Delete(ctx, officialActor(user.ID, "official_profile.delete.owned"), bindingID); err != nil {
 		t.Fatal(err)
 	}
 	assertOfficialHTTPError(t, service.Delete(ctx, officialActor(user.ID, "official_profile.delete.owned"), bindingID), 404,
-		"official profile binding not found")
+		"official_profile.unbind.not_found")
 	items, err = service.List(ctx, officialActor(user.ID, "official_profile.read.owned"))
 	if err != nil || len(items) != 0 {
 		t.Fatalf("deleted binding list=%#v err=%v", items, err)
@@ -622,12 +622,12 @@ func TestOfficialBindingSyncHandlesPermissionMismatchDownloadFailureAndNameConfl
 	if result, err := service.Sync(ctx, officialActor(user.ID), bindingID); result != nil {
 		t.Fatalf("unauthorized sync result=%#v err=%v", result, err)
 	} else {
-		assertOfficialHTTPError(t, err, 403, "permission denied")
+		assertOfficialHTTPError(t, err, 403, "permission.check.denied")
 	}
 	if result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), "missing-binding"); result != nil {
 		t.Fatalf("missing sync result=%#v err=%v", result, err)
 	} else {
-		assertOfficialHTTPError(t, err, 404, "official profile binding not found")
+		assertOfficialHTTPError(t, err, 404, "official_profile.unbind.not_found")
 	}
 
 	mismatch := remoteProfile()
@@ -636,7 +636,7 @@ func TestOfficialBindingSyncHandlesPermissionMismatchDownloadFailureAndNameConfl
 	if result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), bindingID); result != nil {
 		t.Fatalf("remote mismatch sync result=%#v err=%v", result, err)
 	} else {
-		assertOfficialHTTPError(t, err, 409, "Microsoft profile no longer matches this binding")
+		assertOfficialHTTPError(t, err, 409, "official_profile.sync.mismatch")
 	}
 
 	withoutTextures := remoteProfile()
@@ -660,7 +660,7 @@ func TestOfficialBindingSyncHandlesPermissionMismatchDownloadFailureAndNameConfl
 	if result, err := service.Sync(ctx, officialActor(user.ID, "official_profile.refresh.owned"), bindingID); result != nil {
 		t.Fatalf("download failure sync result=%#v err=%v", result, err)
 	} else {
-		assertOfficialHTTPError(t, err, 502, "failed to download Microsoft profile texture")
+		assertOfficialHTTPError(t, err, 502, "minecraft_texture.download.unavailable")
 	}
 
 	conflicting := testutil.CreateProfile(t, db, user.ID, "official-conflicting-name", "RemoteConflict")
@@ -788,7 +788,7 @@ func officialTextureDownloader(t *testing.T) func(context.Context, string) ([]by
 func assertOfficialHTTPError(t *testing.T, err error, status int, detail string) {
 	t.Helper()
 	var httpErr util.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.Status != status || httpErr.Detail != detail {
+	if !errors.As(err, &httpErr) || httpErr.Status != status || httpErr.Error() != detail {
 		t.Fatalf("HTTP error mismatch: got=%#v want status=%d detail=%q", err, status, detail)
 	}
 }

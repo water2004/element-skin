@@ -22,27 +22,27 @@ type PendingRegistration struct {
 func (s Service) ConsumeRegistration(ctx context.Context, ticket string) (PendingRegistration, error) {
 	ticket = strings.TrimSpace(ticket)
 	if ticket == "" {
-		return PendingRegistration{}, badRequest("identity_ticket is required")
+		return PendingRegistration{}, badRequest("identity_ticket", "validate", "required")
 	}
 	if s.Redis == nil {
 		return PendingRegistration{}, errors.New("identity state store is not configured")
 	}
 	state, err := s.Redis.PopState(ctx, ticket)
 	if errors.Is(err, redisstore.ErrCacheMiss) {
-		return PendingRegistration{}, badRequest("invalid or expired identity_ticket")
+		return PendingRegistration{}, badRequest("identity_ticket", "verify", "invalid")
 	}
 	if err != nil {
 		return PendingRegistration{}, err
 	}
 	if stateString(state, "kind") != registrationStateKind {
-		return PendingRegistration{}, badRequest("invalid or expired identity_ticket")
+		return PendingRegistration{}, badRequest("identity_ticket", "verify", "invalid")
 	}
 	provider, err := s.DB.Identities.GetProvider(ctx, stateString(state, "provider_id"))
 	if err != nil {
 		return PendingRegistration{}, err
 	}
 	if provider == nil || !provider.Enabled || !provider.LoginEnabled {
-		return PendingRegistration{}, forbiddenDetail("registration is no longer available for this identity provider")
+		return PendingRegistration{}, forbiddenCode("registration", "create", "disabled")
 	}
 	claims := OIDCClaims{
 		Subject:       stateString(state, "subject"),
@@ -52,12 +52,12 @@ func (s Service) ConsumeRegistration(ctx context.Context, ticket string) (Pendin
 		AvatarURL:     stateString(state, "avatar_url"),
 	}
 	if claims.Subject == "" {
-		return PendingRegistration{}, badRequest("invalid or expired identity_ticket")
+		return PendingRegistration{}, badRequest("identity_ticket", "verify", "invalid")
 	}
 	if existing, err := s.DB.Identities.GetByProviderSubject(ctx, provider.ID, claims.Subject); err != nil {
 		return PendingRegistration{}, err
 	} else if existing != nil {
-		return PendingRegistration{}, conflict("this external identity is already linked")
+		return PendingRegistration{}, conflict("identity", "link", "already_exists")
 	}
 	tokens := OIDCTokens{
 		AccessToken:  stateString(state, "access_token"),

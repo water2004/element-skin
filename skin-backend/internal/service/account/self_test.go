@@ -155,11 +155,11 @@ func TestAccountServiceRejectsInvalidSelfUpdatesAndWrongPasswordExactly(t *testi
 		body map[string]any
 		want string
 	}{
-		{"direct email change", map[string]any{"email": "new-account@test.com"}, "Email must be changed through the verification flow"},
-		{"duplicate display name", map[string]any{"display_name": other.DisplayName}, "Username already exists"},
-		{"blank display name", map[string]any{"display_name": "   "}, "Username cannot be empty"},
-		{"missing avatar", map[string]any{"avatar_hash": "missing_avatar_hash"}, "Avatar texture not found"},
-		{"invalid avatar type", map[string]any{"avatar_hash": 123}, "Invalid avatar_hash"},
+		{"direct email change", map[string]any{"email": "new-account@test.com"}, "email.update.denied"},
+		{"duplicate display name", map[string]any{"display_name": other.DisplayName}, "username.reserve.conflict"},
+		{"blank display name", map[string]any{"display_name": "   "}, "username.validate.required"},
+		{"missing avatar", map[string]any{"avatar_hash": "missing_avatar_hash"}, "avatar.resolve.not_found"},
+		{"invalid avatar type", map[string]any{"avatar_hash": 123}, "avatar.configure.invalid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := svc.UpdateSelf(ctx, actor, tc.body)
@@ -173,7 +173,7 @@ func TestAccountServiceRejectsInvalidSelfUpdatesAndWrongPasswordExactly(t *testi
 		t.Fatalf("invalid updates should not mutate account: user=%#v err=%v", unchanged, err)
 	}
 
-	if err := svc.ChangePasswordSelf(ctx, actor, "WrongPassword", "NewPassword123"); !httpErrorIs(err, http.StatusForbidden, "旧密码错误") {
+	if err := svc.ChangePasswordSelf(ctx, actor, "WrongPassword", "NewPassword123"); !httpErrorIs(err, http.StatusForbidden, "password.verify.invalid") {
 		t.Fatalf("wrong old password should reject exactly, got %#v", err)
 	}
 	afterWrongPassword, err := db.Users.GetByID(ctx, user.ID)
@@ -182,11 +182,11 @@ func TestAccountServiceRejectsInvalidSelfUpdatesAndWrongPasswordExactly(t *testi
 	}
 
 	missingPasswordActor := actorWithPermissions("missing-user", "account_password.update.self")
-	if err := svc.ChangePasswordSelf(ctx, missingPasswordActor, "Password123", "NewPassword123"); !httpErrorIs(err, http.StatusNotFound, "用户不存在") {
+	if err := svc.ChangePasswordSelf(ctx, missingPasswordActor, "Password123", "NewPassword123"); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("missing user password change should reject exactly, got %#v", err)
 	}
 	missingUpdateActor := actorWithPermissions("missing-user", "account.update.self")
-	if err := svc.UpdateSelf(ctx, missingUpdateActor, map[string]any{"preferred_language": "en_US"}); !httpErrorIs(err, http.StatusNotFound, "user not found") {
+	if err := svc.UpdateSelf(ctx, missingUpdateActor, map[string]any{"preferred_language": "en_US"}); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("missing user account update should reject exactly, got %#v", err)
 	}
 }
@@ -237,7 +237,7 @@ func TestAccountServiceSelfPermissionDenials(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			actor := actorWithPermissions(user.ID, tc.actorCode)
-			if err := tc.call(actor); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+			if err := tc.call(actor); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 				t.Fatalf("expected 403 permission denied, got %#v", err)
 			}
 		})

@@ -13,6 +13,6 @@ func (s Service) IssueToken(ctx context.Context, req TokenRequest) (TokenRespons
 	case "urn:ietf:params:oauth:grant-type:device_code":
 		return s.deviceCodeToken(ctx, req)
 	default:
-		return TokenResponse{}, badRequest("unsupported grant_type")
+		return TokenResponse{}, badRequest("grant_type", "validate", "unsupported")
 	}
 }

@@ -40,7 +40,7 @@ func TestAuthRejectsMissingInvalidAndNonAdminExactly(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v2/users/me", nil))
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "not authenticated") {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing cookie auth mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -48,7 +48,7 @@ func TestAuthRejectsMissingInvalidAndNonAdminExactly(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: "not-a-jwt"})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "not authenticated") {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("invalid jwt auth mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -60,7 +60,7 @@ func TestAuthRejectsMissingInvalidAndNonAdminExactly(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "permission denied") {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("non-admin auth mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -100,7 +100,7 @@ func TestPublicAuthUsesGuestAndRejectsInvalidOrDeniedAuthenticatedActorsExactly(
 		req.Header.Set("Authorization", "Bearer invalid-public-token")
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+		if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 			t.Fatalf("invalid public bearer mismatch for %s: status=%d body=%q", path, rec.Code, rec.Body.String())
 		}
 	}
@@ -118,7 +118,7 @@ func TestPublicAuthUsesGuestAndRejectsInvalidOrDeniedAuthenticatedActorsExactly(
 		req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+		if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 			t.Fatalf("denied authenticated public actor mismatch for %s: status=%d body=%q", path, rec.Code, rec.Body.String())
 		}
 	}
@@ -172,7 +172,7 @@ func TestPublicV2ResourcesUseGuestAndRejectInvalidOrDeniedCredentialsExactly(t *
 			invalidReq.Header.Set("Authorization", "Bearer invalid-public-v2-token")
 			invalidRec := httptest.NewRecorder()
 			router.ServeHTTP(invalidRec, invalidReq)
-			if invalidRec.Code != http.StatusUnauthorized || invalidRec.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+			if invalidRec.Code != http.StatusUnauthorized || invalidRec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 				t.Fatalf("invalid credential response mismatch: status=%d body=%q", invalidRec.Code, invalidRec.Body.String())
 			}
 
@@ -180,7 +180,7 @@ func TestPublicV2ResourcesUseGuestAndRejectInvalidOrDeniedCredentialsExactly(t *
 			deniedReq.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 			deniedRec := httptest.NewRecorder()
 			router.ServeHTTP(deniedRec, deniedReq)
-			if deniedRec.Code != http.StatusForbidden || deniedRec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if deniedRec.Code != http.StatusForbidden || deniedRec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("denied actor response mismatch: status=%d body=%q", deniedRec.Code, deniedRec.Body.String())
 			}
 		})
@@ -245,7 +245,7 @@ func TestAuthFailsClosedWhenColdCacheCannotBePopulated(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("cold-cache write failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if cache.setCalls != 1 {
@@ -343,7 +343,7 @@ func TestAuthAcceptsDelegatedBearerAndNarrowsPermissionsExactly(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+rawToken)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("delegated bearer update denial mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -477,7 +477,7 @@ func TestAuthAcceptsClientBearerAndRejectsInactiveOrMissingBearerExactly(t *test
 	req.Header.Set("Authorization", "Bearer missing-token")
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing bearer mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -495,7 +495,7 @@ func TestAuthAcceptsClientBearerAndRejectsInactiveOrMissingBearerExactly(t *test
 	req.Header.Set("Authorization", "Bearer "+expired)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("expired bearer mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -551,9 +551,9 @@ var publicV2ResourceCases = []publicV2ResourceCase{
 	{name: "public settings", method: http.MethodGet, path: "/v2/public/settings", guestStatus: http.StatusOK, guestContains: `"site_name"`},
 	{name: "homepage media", method: http.MethodGet, path: "/v2/public/homepage-media", guestStatus: http.StatusOK, guestBody: "{\"items\":[]}\n"},
 	{name: "fallback status", method: http.MethodGet, path: "/v2/public/fallback-status", guestStatus: http.StatusOK, guestContains: `"endpoints":[]`},
-	{name: "profile by name", method: http.MethodGet, path: "/v2/minecraft/profiles/by-name/Missing", guestStatus: http.StatusNotFound, guestBody: "{\"detail\":\"minecraft profile not found\"}\n"},
-	{name: "profile by id", method: http.MethodGet, path: "/v2/minecraft/profiles/missing", guestStatus: http.StatusNotFound, guestBody: "{\"detail\":\"minecraft profile not found\"}\n"},
-	{name: "textures property", method: http.MethodGet, path: "/v2/minecraft/profiles/missing/textures-property", guestStatus: http.StatusNotFound, guestBody: "{\"detail\":\"minecraft profile not found\"}\n"},
+	{name: "profile by name", method: http.MethodGet, path: "/v2/minecraft/profiles/by-name/Missing", guestStatus: http.StatusNotFound, guestBody: "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n"},
+	{name: "profile by id", method: http.MethodGet, path: "/v2/minecraft/profiles/missing", guestStatus: http.StatusNotFound, guestBody: "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n"},
+	{name: "textures property", method: http.MethodGet, path: "/v2/minecraft/profiles/missing/textures-property", guestStatus: http.StatusNotFound, guestBody: "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n"},
 	{name: "profiles by names", method: http.MethodPost, path: "/v2/minecraft/profiles/by-names", body: `{"names":[]}`, guestStatus: http.StatusOK, guestBody: "{\"items\":[]}\n"},
 }
 

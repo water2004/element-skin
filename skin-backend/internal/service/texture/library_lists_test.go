@@ -17,7 +17,7 @@ func TestTextureLibraryCursorsAndDisabledPublicLibraryExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 	svc := newLibraryService(db)
-	if _, err := svc.PublicLibrary(ctx, permission.Actor{}, "", 10, "skin", "", "latest"); !httpErrorIs(err, 403, "permission denied") {
+	if _, err := svc.PublicLibrary(ctx, permission.Actor{}, "", 10, "skin", "", "latest"); !httpErrorIs(err, 403, "permission.check.denied") {
 		t.Fatalf("PublicLibrary without public permission mismatch: %#v", err)
 	}
 	user := testutil.CreateUser(t, db, "site-profile-cursor@test.com", "Password123", "ProfileCursor", false)
@@ -25,10 +25,10 @@ func TestTextureLibraryCursorsAndDisabledPublicLibraryExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.ListMyTextures(ctx, textureUserActor(user.ID), "not-base64", 10, "skin"); !httpErrorIs(err, 400, "Invalid cursor") {
+	if _, err := svc.ListMyTextures(ctx, textureUserActor(user.ID), "not-base64", 10, "skin"); !httpErrorIs(err, 400, "pagination_cursor.decode.invalid") {
 		t.Fatalf("invalid texture cursor should reject exactly, got %#v", err)
 	}
-	if _, err := svc.PublicLibrary(ctx, texturePublicActor(), "not-base64", 10, "skin", "", "latest"); !httpErrorIs(err, 400, "Invalid cursor") {
+	if _, err := svc.PublicLibrary(ctx, texturePublicActor(), "not-base64", 10, "skin", "", "latest"); !httpErrorIs(err, 400, "pagination_cursor.decode.invalid") {
 		t.Fatalf("invalid public library cursor should reject exactly, got %#v", err)
 	}
 
@@ -38,7 +38,7 @@ func TestTextureLibraryCursorsAndDisabledPublicLibraryExactly(t *testing.T) {
 	if err := svc.Settings.InvalidateCache(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.PublicLibrary(ctx, texturePublicActor(), "", 10, "skin", "", "latest"); !httpErrorIs(err, 403, "Skin library is disabled by administrator") {
+	if _, err := svc.PublicLibrary(ctx, texturePublicActor(), "", 10, "skin", "", "latest"); !httpErrorIs(err, 403, "texture_library.read.disabled") {
 		t.Fatalf("disabled public library should reject exactly, got %#v", err)
 	}
 }
@@ -166,7 +166,7 @@ func TestPublicLibraryRejectsIncompleteAndCrossSortCursors(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := svc.PublicLibrary(ctx, texturePublicActor(), tc.cursor, 10, "skin", "", tc.sort)
-			if result != nil || !httpErrorIs(err, 400, "Invalid cursor") {
+			if result != nil || !httpErrorIs(err, 400, "pagination_cursor.decode.invalid") {
 				t.Fatalf("PublicLibrary result=%#v err=%#v; want nil and exact invalid cursor", result, err)
 			}
 		})
@@ -182,7 +182,7 @@ func TestPrivateTextureListsRejectIncompleteCursors(t *testing.T) {
 	textureResult, err := svc.ListMyTextures(ctx, textureUserActor(user.ID), util.EncodeCursor(map[string]any{
 		"last_created_at": int64(1234),
 	}), 10, "skin")
-	if textureResult != nil || !httpErrorIs(err, 400, "Invalid cursor") {
+	if textureResult != nil || !httpErrorIs(err, 400, "pagination_cursor.decode.invalid") {
 		t.Fatalf("ListMyTextures result=%#v err=%#v; want nil and exact invalid cursor", textureResult, err)
 	}
 
@@ -190,7 +190,7 @@ func TestPrivateTextureListsRejectIncompleteCursors(t *testing.T) {
 		"last_created_at": 1.5,
 		"last_hash":       "cursor_hash",
 	}), 10, "skin")
-	if textureResult != nil || !httpErrorIs(err, 400, "Invalid cursor") {
+	if textureResult != nil || !httpErrorIs(err, 400, "pagination_cursor.decode.invalid") {
 		t.Fatalf("ListMyTextures fractional cursor result=%#v err=%#v; want nil and exact invalid cursor", textureResult, err)
 	}
 }

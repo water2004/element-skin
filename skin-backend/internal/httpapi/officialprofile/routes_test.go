@@ -62,7 +62,7 @@ func TestOfficialProfileRoutesUseExactSeparateV2ResourceContracts(t *testing.T) 
 	badReq = badReq.WithContext(shared.WithActor(badReq.Context(), actor))
 	badRec := httptest.NewRecorder()
 	h.Create(badRec, badReq)
-	if badRec.Code != http.StatusBadRequest || badRec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if badRec.Code != http.StatusBadRequest || badRec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid create mismatch: status=%d body=%q", badRec.Code, badRec.Body.String())
 	}
 
@@ -129,7 +129,7 @@ func TestOfficialProfileRoutesReturnExactPermissionError(t *testing.T) {
 	req = req.WithContext(shared.WithActor(req.Context(), routeActor("user-without-permission")))
 	rec := httptest.NewRecorder()
 	h.List(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("permission error mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

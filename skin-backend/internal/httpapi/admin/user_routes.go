@@ -69,7 +69,7 @@ func (h Handler) SetUserPermissionOverride(w http.ResponseWriter, req *http.Requ
 		Effect string `json:"effect"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	code := req.PathValue("permission_code")
@@ -113,7 +113,7 @@ func (h Handler) BanUser(w http.ResponseWriter, req *http.Request) {
 		Reason      string `json:"reason"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	until, err := h.accounts.BanUser(req.Context(), shared.CurrentActor(req), req.PathValue("user_id"), accountsvc.BanUserInput{
@@ -138,7 +138,7 @@ func (h Handler) UnbanUser(w http.ResponseWriter, req *http.Request) {
 func (h Handler) ResetUserPassword(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.accounts.ResetPassword(req.Context(), shared.CurrentActor(req), accountsvc.ResetPasswordInput{

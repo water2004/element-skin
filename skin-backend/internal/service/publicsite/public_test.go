@@ -255,20 +255,20 @@ func TestPublicSiteServiceRequiresPublicPermissionExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	redis := testutil.NewMemoryRedis()
 	svc := publicsitesvc.Service{DB: db, Redis: redis, Settings: settingssvc.Settings{DB: db, Redis: redis}}
-	if got, err := svc.PublicSettings(t.Context(), permission.Actor{}); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if got, err := svc.PublicSettings(t.Context(), permission.Actor{}); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("PublicSettings result=%#v err=%#v", got, err)
 	}
-	if got, err := svc.HomepageMedia(t.Context(), permission.Actor{}); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if got, err := svc.HomepageMedia(t.Context(), permission.Actor{}); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("HomepageMedia result=%#v err=%#v", got, err)
 	}
-	if got, err := svc.FallbackStatus(t.Context(), permission.Actor{}, time.Unix(1, 0)); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if got, err := svc.FallbackStatus(t.Context(), permission.Actor{}, time.Unix(1, 0)); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("FallbackStatus result=%#v err=%#v", got, err)
 	}
 }
 
 func publicSiteHTTPError(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }
 
 type fallbackStatusForTest struct {

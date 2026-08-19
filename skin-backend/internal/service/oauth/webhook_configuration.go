@@ -14,7 +14,7 @@ const maxWebhookEndpointsPerClient = 5
 
 func (s Service) prepareWebhookEndpoints(ctx context.Context, clientID, clientType string, inputs []WebhookEndpointInput, permissionCodes []string, updatedAt int64) ([]model.WebhookEndpoint, map[string]string, error) {
 	if len(inputs) > maxWebhookEndpointsPerClient {
-		return nil, nil, badRequest("too many webhook endpoints")
+		return nil, nil, badRequest("webhook_endpoint", "configure", "exceeded")
 	}
 	existing, err := s.DB.Webhooks.ListEndpointsByClient(ctx, clientID)
 	if err != nil {
@@ -39,10 +39,10 @@ func (s Service) prepareWebhookEndpoints(ctx context.Context, clientID, clientTy
 	for _, input := range inputs {
 		url := strings.TrimSpace(input.URL)
 		if !validWebhookURL(url) {
-			return nil, nil, badRequest("invalid webhook url")
+			return nil, nil, badRequest("webhook_url", "validate", "invalid")
 		}
 		if seenURLs[url] {
-			return nil, nil, badRequest("duplicate webhook url")
+			return nil, nil, badRequest("webhook_endpoint", "configure", "conflict")
 		}
 		seenURLs[url] = true
 		eventTypes, err := validateWebhookEventTypes(input.EventTypes, clientType, allowedPermissions)
@@ -60,10 +60,10 @@ func (s Service) prepareWebhookEndpoints(ctx context.Context, clientID, clientTy
 		endpointID := strings.TrimSpace(input.ID)
 		endpoint, exists := existingByID[endpointID]
 		if endpointID != "" && !exists {
-			return nil, nil, badRequest("invalid webhook endpoint id")
+			return nil, nil, badRequest("webhook_endpoint", "validate", "invalid")
 		}
 		if seenIDs[endpointID] && endpointID != "" {
-			return nil, nil, badRequest("duplicate webhook endpoint id")
+			return nil, nil, badRequest("webhook_endpoint", "configure", "conflict")
 		}
 		if endpointID == "" {
 			randomID, err := util.GenerateUUIDNoDash()
@@ -105,7 +105,7 @@ func (s Service) prepareWebhookEndpoints(ctx context.Context, clientID, clientTy
 
 func validateWebhookEventTypes(raw []string, clientType string, allowedPermissions map[string]bool) ([]string, error) {
 	if len(raw) == 0 {
-		return nil, badRequest("webhook events are required")
+		return nil, badRequest("webhook_event", "subscribe", "required")
 	}
 	seen := map[string]bool{}
 	eventTypes := make([]string, 0, len(raw))
@@ -113,13 +113,13 @@ func validateWebhookEventTypes(raw []string, clientType string, allowedPermissio
 		eventType = strings.TrimSpace(eventType)
 		definition, ok := corewebhook.DefinitionByType(eventType)
 		if !ok {
-			return nil, badRequest("invalid webhook event")
+			return nil, badRequest("webhook_event", "validate", "invalid")
 		}
 		allowed := definition.DelegatedPermissionCode != "" && allowedPermissions[definition.DelegatedPermissionCode]
 		allowed = allowed || clientType == ClientTypeConfidential &&
 			definition.ApplicationPermissionCode != "" && allowedPermissions[definition.ApplicationPermissionCode]
 		if !allowed {
-			return nil, badRequest("webhook event exceeds client permission limit")
+			return nil, badRequest("webhook_event", "subscribe", "denied")
 		}
 		if !seen[eventType] {
 			seen[eventType] = true

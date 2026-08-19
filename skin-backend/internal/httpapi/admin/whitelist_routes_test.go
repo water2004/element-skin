@@ -78,7 +78,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.OfficialWhitelist(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"endpoint_id is required"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"fallback_endpoint\",\"operation\":\"configure\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing endpoint id list mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -86,7 +86,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.AddOfficialWhitelist(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad whitelist json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -94,7 +94,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.AddOfficialWhitelist(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"username is required"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"username\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing username add mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -102,7 +102,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.AddOfficialWhitelist(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"endpoint_id is required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"fallback_endpoint\",\"operation\":\"configure\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing endpoint add mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -111,7 +111,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req.SetPathValue("username", "Steve")
 	rec = httptest.NewRecorder()
 	h.RemoveOfficialWhitelist(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"endpoint_id is required"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"fallback_endpoint\",\"operation\":\"configure\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing endpoint id remove mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -119,7 +119,7 @@ func TestWhitelistRoutesRejectInvalidInputsExactly(t *testing.T) {
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.AddOfficialWhitelist(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"fallback endpoint not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"fallback_endpoint\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing endpoint add mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if ok, err := db.Fallbacks.IsUserInWhitelist(req.Context(), "Alex", 999); err != nil || ok {

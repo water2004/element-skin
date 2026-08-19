@@ -109,7 +109,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec := httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("ban bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -119,7 +119,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"banned_until is required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"user_ban\",\"operation\":\"configure\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("ban expired timestamp mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if banned, err := db.Users.IsBanned(req.Context(), target.ID); err != nil || banned {
@@ -132,7 +132,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"reason is required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"audit_reason\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("ban missing reason mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if banned, err := db.Users.IsBanned(req.Context(), target.ID); err != nil || banned {
@@ -145,7 +145,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.UnbanUser(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("unban missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -154,7 +154,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"user_id and new_password required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"password_reset\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("reset missing password mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -163,7 +163,7 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("reset missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -203,7 +203,7 @@ func TestUnbanReturnsNotFoundWhenUserIsDeletedAfterAuthorizationCheck(t *testing
 		t.Fatal(err)
 	}
 	rec := <-result
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("user deleted before unban should return exact not found: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -251,7 +251,7 @@ func TestUserRoutesDeleteUserAndInvalidateAuthCacheExactly(t *testing.T) {
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteUser(rec, req)
-	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"detail":"user not found"`) {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("delete missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -271,7 +271,7 @@ func TestUserMutationRoutesHandleAuthInvalidationFailuresExactly(t *testing.T) {
 		req.SetPathValue("role_id", permission.RoleAdmin)
 		rec := httptest.NewRecorder()
 		h.GrantUserRole(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("grant role cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if hasRole, err := db.Permissions.UserHasRole(t.Context(), target.ID, permission.RoleAdmin); err != nil || !hasRole {
@@ -299,7 +299,7 @@ func TestUserMutationRoutesHandleAuthInvalidationFailuresExactly(t *testing.T) {
 		req.SetPathValue("role_id", permission.RoleAdmin)
 		rec := httptest.NewRecorder()
 		h.RevokeUserRole(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("revoke role cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if hasRole, err := db.Permissions.UserHasRole(t.Context(), target.ID, permission.RoleAdmin); err != nil || hasRole {
@@ -324,7 +324,7 @@ func TestUserMutationRoutesHandleAuthInvalidationFailuresExactly(t *testing.T) {
 		req.SetPathValue("user_id", target.ID)
 		rec := httptest.NewRecorder()
 		h.BanUser(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("ban user cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		updated, err := db.Users.GetByID(t.Context(), target.ID)
@@ -352,7 +352,7 @@ func TestUserMutationRoutesHandleAuthInvalidationFailuresExactly(t *testing.T) {
 		req.SetPathValue("user_id", target.ID)
 		rec := httptest.NewRecorder()
 		h.UnbanUser(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("unban user cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		updated, err := db.Users.GetByID(t.Context(), target.ID)
@@ -377,7 +377,7 @@ func TestUserMutationRoutesHandleAuthInvalidationFailuresExactly(t *testing.T) {
 		req.SetPathValue("user_id", target.ID)
 		rec := httptest.NewRecorder()
 		h.DeleteUser(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("delete user cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if user, err := db.Users.GetByID(t.Context(), target.ID); err != nil || user == nil || user.Email != target.Email || user.DisplayName != target.DisplayName {
@@ -404,7 +404,7 @@ func TestUserMutationRoutesHandleAuthInvalidationFailuresExactly(t *testing.T) {
 		req = withAdminActor(req, adminUser.ID)
 		rec := httptest.NewRecorder()
 		h.ResetUserPassword(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("reset password cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		updated, err := db.Users.GetByID(t.Context(), target.ID)

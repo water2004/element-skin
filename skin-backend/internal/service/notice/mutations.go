@@ -42,7 +42,7 @@ func (s Service) Patch(ctx context.Context, actor permission.Actor, id string, i
 		return nil, err
 	}
 	if existing == nil {
-		return nil, util.HTTPError{Status: http.StatusNotFound, Detail: "notice not found"}
+		return nil, util.HTTPError{Status: http.StatusNotFound, Object: "notice", Operation: "resolve", Reason: "not_found"}
 	}
 	updated := *existing
 	applyPatch(&updated, input)
@@ -59,14 +59,14 @@ func (s Service) Patch(ctx context.Context, actor permission.Actor, id string, i
 		return nil, err
 	}
 	if updated.Audience == AudienceTargeted && existing.Audience != AudienceTargeted {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "target_user_ids are required for targeted notices"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "notice_target", Operation: "validate", Reason: "required"}
 	}
 	ok, err := s.DB.Notices.Replace(ctx, id, updated)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, util.HTTPError{Status: http.StatusNotFound, Detail: "notice not found"}
+		return nil, util.HTTPError{Status: http.StatusNotFound, Object: "notice", Operation: "resolve", Reason: "not_found"}
 	}
 	return &updated, nil
 }
@@ -80,7 +80,7 @@ func (s Service) Delete(ctx context.Context, actor permission.Actor, id string) 
 		return err
 	}
 	if !ok {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "notice not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "notice", Operation: "resolve", Reason: "not_found"}
 	}
 	return nil
 }

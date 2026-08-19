@@ -24,10 +24,10 @@ func (s Service) exchangeAuthorizationCode(ctx context.Context, req TokenRequest
 		return TokenResponse{}, err
 	}
 	if code == nil {
-		return TokenResponse{}, badRequest("invalid authorization code")
+		return TokenResponse{}, badRequest("authorization_code", "verify", "invalid")
 	}
 	if !validPKCE(req.CodeVerifier, code.CodeChallenge) {
-		return TokenResponse{}, badRequest("invalid code_verifier")
+		return TokenResponse{}, badRequest("code_verifier", "verify", "invalid")
 	}
 	activeCodes, err := s.activeGrantPermissionCodes(ctx, code.GrantID, code.UserID, client.ID)
 	if err != nil {
@@ -40,7 +40,7 @@ func (s Service) exchangeAuthorizationCode(ctx context.Context, req TokenRequest
 	codes := intersectPermissionCodes(permissionCodesFromIDs(codePermissionIDs), activeCodes)
 	oidcScopes := intersectOIDCScopes(code.OIDCScopes, grantOIDCScopes)
 	if !active || (len(codes) == 0 && len(oidcScopes) == 0) {
-		return TokenResponse{}, badRequest("invalid authorization code")
+		return TokenResponse{}, badRequest("authorization_code", "verify", "invalid")
 	}
 	return s.issueTokens(ctx, client.ID, code.UserID, code.GrantID, codes, oidcScopes, code.Nonce)
 }
@@ -56,7 +56,7 @@ func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenRespo
 		return TokenResponse{}, err
 	}
 	if old == nil || old.ClientID != client.ID || old.RevokedAt != nil || old.ExpiresAt <= database.NowMS() {
-		return TokenResponse{}, badRequest("invalid refresh_token")
+		return TokenResponse{}, badRequest("refresh_token", "verify", "invalid")
 	}
 	codes, err := s.activeGrantPermissionCodes(ctx, old.GrantID, old.UserID, client.ID)
 	if err != nil {
@@ -68,7 +68,7 @@ func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenRespo
 	}
 	oidcScopes := intersectOIDCScopes(old.OIDCScopes, grantOIDCScopes)
 	if !active || (len(codes) == 0 && len(oidcScopes) == 0) {
-		return TokenResponse{}, badRequest("invalid refresh_token")
+		return TokenResponse{}, badRequest("refresh_token", "verify", "invalid")
 	}
 	accessRaw, accessHash, refreshRaw, refreshHash, err := tokenPair()
 	if err != nil {
@@ -85,7 +85,7 @@ func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenRespo
 		return TokenResponse{}, err
 	}
 	if !ok {
-		return TokenResponse{}, badRequest("invalid refresh_token")
+		return TokenResponse{}, badRequest("refresh_token", "verify", "invalid")
 	}
 	if err := s.storeAccessToken(ctx, redisstore.OAuthAccessToken{
 		TokenHash:     accessHash,
@@ -108,7 +108,7 @@ func (s Service) clientCredentialsToken(ctx context.Context, req TokenRequest) (
 		return TokenResponse{}, err
 	}
 	if client.ClientType != ClientTypeConfidential {
-		return TokenResponse{}, badRequest("client_credentials requires a confidential client")
+		return TokenResponse{}, badRequest("oauth_client", "authenticate", "unsupported")
 	}
 	actor, err := s.DB.Permissions.ActorForClient(ctx, client.ID, permissiondb.EffectiveOptions{
 		SessionKind: permission.SessionKindClient,

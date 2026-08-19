@@ -113,7 +113,8 @@
 - JSON 请求解析使用 `shared.DecodeJSON`。
 - Multipart 文件读取使用 `shared.MultipartFileBytes` 或同类共享 helper。
 - 成功响应使用 `util.JSON`。
-- 普通错误使用 `util.HTTPError{Status, Detail}`，输出格式为 `{"detail":"..."}`。
+- 普通错误使用 `util.HTTPError{Status, Object, Operation, Reason, Params}`，输出格式为 `{"error":{"object":"...","operation":"...","reason":"...","params":{}}}`；`params` 为空时省略。
+- 普通 `/v2` 错误不返回面向用户的 `detail`、`message` 或展示文本。后端只返回稳定三元组与受控参数，前端负责本地化。
 - Yggdrasil 协议错误保持现有 `YggError` 格式，不和站点 API 混用。
 - 未找到、无权限、非法输入应返回明确的 HTTP 状态，不用 500 掩盖业务错误。
 
@@ -149,7 +150,7 @@
 - OAuth 授权码、设备码、刷新令牌和 Client Credentials 的 token 链路必须独立，不复用站点 cookie JWT 或 Yggdrasil token。
 - Client Credentials 使用应用权限主体，例如 `client:{client_id}`，不创建用户授权 grant。
 - 用户授权 grant 与 token 链路必须绑定，撤销 grant 后对应 refresh token 和 access token 应失效。
-- OAuth 标准端点应遵循 OAuth 错误响应格式；普通站点 API 继续使用 `{"detail":"..."}`。
+- OAuth 标准端点应遵循 OAuth 错误响应格式；普通站点 API 使用 `object`、`operation`、`reason` 三元组错误对象。
 - OAuth、权限模型或 `/v2` API 行为变更必须同步更新开发者文档。
 
 ### 3.7 配置与 CORS

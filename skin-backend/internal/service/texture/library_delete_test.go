@@ -88,7 +88,7 @@ func TestDeleteMissingWardrobeTextureReturnsNotFoundAndKeepsAppliedHash(t *testi
 
 	err := svc.DeleteTexture(ctx, textureUserActor(other.ID), "texture_service_missing_delete", "skin")
 	var httpErr util.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.Status != 404 || httpErr.Detail != "Texture not found" {
+	if !errors.As(err, &httpErr) || httpErr.Status != 404 || httpErr.Error() != "texture.resolve.not_found" {
 		t.Fatalf("missing wardrobe delete should return exact 404 error, got %#v", err)
 	}
 	if info, err := db.Textures.GetInfo(ctx, owner.ID, "texture_service_missing_delete", "skin"); err != nil || info == nil {

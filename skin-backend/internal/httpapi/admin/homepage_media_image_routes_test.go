@@ -109,7 +109,7 @@ func TestHomepageMediaUploadValidatesWebPAndRejectsMalformedMultipartExactly(t *
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing")
 	rec := httptest.NewRecorder()
 	h.UploadHomepageImage(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid multipart form\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("image malformed multipart mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -118,21 +118,21 @@ func TestHomepageMediaUploadValidatesWebPAndRejectsMalformedMultipartExactly(t *
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing")
 	rec = httptest.NewRecorder()
 	h.UploadHomepagePanorama(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid multipart form\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("panorama malformed multipart mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	req = multipartUploadRequest(t, "/v2/admin/homepage-media/image", "not_file", "slide.png", pngBytes(t, 8, 8))
 	rec = httptest.NewRecorder()
 	h.UploadHomepageImage(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"file is required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"upload_file\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("image missing file mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	req = multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "not_file", "panorama.zip", standardPanoramaZip(t))
 	rec = httptest.NewRecorder()
 	h.UploadHomepagePanorama(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"file is required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"upload_file\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("panorama missing file mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 

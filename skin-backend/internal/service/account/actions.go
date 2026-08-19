@@ -16,7 +16,7 @@ func (s AccountService) DeleteUser(ctx context.Context, actor permission.Actor, 
 		return permissionDenied()
 	}
 	if targetID == actor.UserID {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "cannot delete yourself"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "user", Operation: "delete", Reason: "denied"}
 	}
 	target, err := s.modifiableUser(ctx, actor, targetID)
 	if err != nil {
@@ -41,7 +41,7 @@ func (s AccountService) DeleteUser(ctx context.Context, actor permission.Actor, 
 		return err
 	}
 	if !ok {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	reportPostCommitError("remove deleted user sessions", s.Redis.DeleteYggTokensByUser(ctx, target.ID))
 	for _, identityID := range externalIdentityIDs {
@@ -62,7 +62,7 @@ func (s AccountService) ResetPassword(ctx context.Context, actor permission.Acto
 	userID := strings.TrimSpace(input.UserID)
 	newPassword := input.NewPassword
 	if userID == "" || newPassword == "" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "user_id and new_password required"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "password_reset", Operation: "validate", Reason: "required"}
 	}
 	target, err := s.modifiableUser(ctx, actor, userID)
 	if err != nil {
@@ -80,7 +80,7 @@ func (s AccountService) ResetPassword(ctx context.Context, actor permission.Acto
 		return err
 	}
 	if !updated {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	return s.Redis.InvalidateAuthUser(ctx, target.ID)
 }
@@ -90,7 +90,7 @@ func (s AccountService) BanUser(ctx context.Context, actor permission.Actor, tar
 		return 0, permissionDenied()
 	}
 	if input.BannedUntil < time.Now().Add(-24*time.Hour).UnixMilli() {
-		return 0, util.HTTPError{Status: http.StatusBadRequest, Detail: "banned_until is required"}
+		return 0, util.HTTPError{Status: http.StatusBadRequest, Object: "user_ban", Operation: "configure", Reason: "required"}
 	}
 	reason, err := normalizedBanReason(input.Reason)
 	if err != nil {
@@ -102,7 +102,7 @@ func (s AccountService) BanUser(ctx context.Context, actor permission.Actor, tar
 	}
 	if err := s.DB.Users.Ban(ctx, target.ID, input.BannedUntil); err != nil {
 		if database.IsNoRows(err) {
-			return 0, util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+			return 0, util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 		}
 		return 0, err
 	}
@@ -125,7 +125,7 @@ func (s AccountService) UnbanUser(ctx context.Context, actor permission.Actor, t
 	}
 	if err := s.DB.Users.Unban(ctx, target.ID); err != nil {
 		if database.IsNoRows(err) {
-			return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+			return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 		}
 		return err
 	}
@@ -166,10 +166,10 @@ func (s AccountService) deleteExternalIdentityAccessTokens(ctx context.Context, 
 func normalizedBanReason(raw string) (string, error) {
 	reason := strings.TrimSpace(raw)
 	if reason == "" {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "reason is required"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "audit_reason", Operation: "validate", Reason: "required"}
 	}
 	if len([]rune(reason)) > accountBanReasonMaxRunes {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "reason too long"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "audit_reason", Operation: "validate", Reason: "too_long"}
 	}
 	return reason, nil
 }

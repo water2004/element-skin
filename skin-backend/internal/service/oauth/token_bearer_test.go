@@ -54,19 +54,19 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 	activateOAuthClient(t, db, otherID)
 
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "password"})
-	assertHTTPError(t, err, 400, "unsupported grant_type")
+	assertHTTPError(t, err, 400, "grant_type.validate.unsupported")
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "client_credentials", ClientID: clientID, ClientSecret: "wrong"})
-	assertHTTPError(t, err, 400, "invalid client_secret")
+	assertHTTPError(t, err, 400, "client_secret.verify.invalid")
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "authorization_code", ClientID: clientID, ClientSecret: clientSecret, Code: "missing-code", CodeVerifier: "valid-verifier-abcdefghijklmnopqrstuvwxyz", RedirectURI: "https://token-errors.example/callback"})
-	assertHTTPError(t, err, 400, "invalid authorization code")
+	assertHTTPError(t, err, 400, "authorization_code.verify.invalid")
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "refresh_token", ClientID: clientID, ClientSecret: clientSecret, RefreshToken: "missing-refresh"})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 	for _, tc := range []struct {
 		name     string
 		verifier string
 		detail   string
 	}{
-		{name: "wrong verifier", verifier: "wrong-verifier-abcdefghijklmnopqrstuvwxyz", detail: "invalid code_verifier"},
+		{name: "wrong verifier", verifier: "wrong-verifier-abcdefghijklmnopqrstuvwxyz", detail: "code_verifier.verify.invalid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			verifier := "token-verifier-abcdefghijklmnopqrstuvwxyz"
@@ -98,7 +98,7 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 				CodeVerifier: verifier,
 				RedirectURI:  "https://token-errors.example/callback",
 			})
-			assertHTTPError(t, err, 400, "invalid authorization code")
+			assertHTTPError(t, err, 400, "authorization_code.verify.invalid")
 		})
 	}
 	refreshVerifier := "refresh-revoke-verifier-abcdefghijklmnopqrstuvwxyz"
@@ -124,7 +124,7 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.RevokeToken(ctx, otherID, otherSecret, refreshToken.RefreshToken); !isHTTPError(err, 403, "permission denied") {
+	if err := svc.RevokeToken(ctx, otherID, otherSecret, refreshToken.RefreshToken); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("wrong client refresh revoke error mismatch: %#v", err)
 	}
 	if err := svc.RevokeToken(ctx, clientID, clientSecret, refreshToken.RefreshToken); err != nil {
@@ -136,11 +136,11 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 		ClientSecret: clientSecret,
 		RefreshToken: refreshToken.RefreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 	if err := svc.RevokeToken(ctx, clientID, clientSecret, "missing-token"); err != nil {
 		t.Fatalf("revoking a missing token should be a no-op: %v", err)
 	}
-	if _, err := svc.Introspect(ctx, actor, "missing-token"); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.Introspect(ctx, actor, "missing-token"); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("introspect without permission error mismatch: %#v", err)
 	}
 	inactive, err := svc.Introspect(ctx, adminActor, "missing-token")
@@ -168,7 +168,7 @@ func TestServiceTokenErrorBranchesAndBearerInvalidationExactly(t *testing.T) {
 	if err := svc.Redis.SetOAuthAccessToken(ctx, token, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.RevokeToken(ctx, clientID, clientSecret, rawAccess); !isHTTPError(err, 403, "permission denied") {
+	if err := svc.RevokeToken(ctx, clientID, clientSecret, rawAccess); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("wrong client revoke error mismatch: %#v", err)
 	}
 	if err := svc.RevokeToken(ctx, otherID, otherSecret, rawAccess); err != nil {

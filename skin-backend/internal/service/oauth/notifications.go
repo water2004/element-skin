@@ -148,11 +148,11 @@ func validateReviewReason(status, reason string) (string, error) {
 	reason = strings.TrimSpace(reason)
 	if status == StatusRejected || status == StatusDisabled {
 		if reason == "" {
-			return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "reason is required"}
+			return "", util.HTTPError{Status: http.StatusBadRequest, Object: "audit_reason", Operation: "validate", Reason: "required"}
 		}
 	}
 	if len([]rune(reason)) > maxReviewReasonRunes {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "reason too long"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "audit_reason", Operation: "validate", Reason: "too_long"}
 	}
 	return reason, nil
 }

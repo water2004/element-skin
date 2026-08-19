@@ -23,7 +23,7 @@ func TestAccountServiceDeleteSelfRejectsProtectedRoleAndDeletesPlainUserExactly(
 	protected := testutil.CreateUser(t, db, "self-delete-protected@test.com", "Password123", "SelfDeleteProtected", true, true)
 	plain := testutil.CreateUser(t, db, "self-delete-plain@test.com", "Password123", "SelfDeletePlain", false)
 
-	if err := svc.DeleteSelf(ctx, actorWithPermissions(protected.ID, "account.delete.self")); !httpErrorIs(err, http.StatusForbidden, "protected subjects cannot delete their own account") {
+	if err := svc.DeleteSelf(ctx, actorWithPermissions(protected.ID, "account.delete.self")); !httpErrorIs(err, http.StatusForbidden, "protected_subject.delete.denied") {
 		t.Fatalf("protected self delete mismatch: %#v", err)
 	}
 	if got, err := db.Users.GetByID(ctx, protected.ID); err != nil || got == nil {

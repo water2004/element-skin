@@ -17,7 +17,7 @@ func TestTextureLibraryWardrobeAndPatchParsingExactState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := svc.AddTextureToWardrobe(ctx, textureUserActor(collector.ID), "missing_wardrobe_skin", "skin"); !httpErrorIs(err, 404, "Texture not found in library") {
+	if err := svc.AddTextureToWardrobe(ctx, textureUserActor(collector.ID), "missing_wardrobe_skin", "skin"); !httpErrorIs(err, 404, "texture.resolve.not_found") {
 		t.Fatalf("missing wardrobe add mismatch: %#v", err)
 	}
 	if count, err := db.Textures.CountForUser(ctx, collector.ID); err != nil || count != 0 {

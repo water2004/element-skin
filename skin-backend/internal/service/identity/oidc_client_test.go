@@ -142,14 +142,14 @@ func TestStandardOIDCClientClassifiesRejectedRefreshExactly(t *testing.T) {
 
 func TestStandardOIDCClientRejectsMalformedExchangeAndRefreshResponsesExactly(t *testing.T) {
 	tests := []struct {
-		name       string
-		status     int
-		body       string
-		wantDetail string
+		name               string
+		status             int
+		body               string
+		wantClassification string
 	}{
-		{name: "exchange rejected", status: http.StatusBadRequest, body: `{"error":"invalid_grant"}`, wantDetail: "OIDC token exchange failed"},
-		{name: "missing ID token", status: http.StatusOK, body: `{"access_token":"access","token_type":"Bearer"}`, wantDetail: "OIDC token response did not include an ID token"},
-		{name: "invalid ID token", status: http.StatusOK, body: `{"access_token":"access","token_type":"Bearer","id_token":"not-a-jwt"}`, wantDetail: "OIDC ID token verification failed"},
+		{name: "exchange rejected", status: http.StatusBadRequest, body: `{"error":"invalid_grant"}`, wantClassification: "identity_token.exchange.failed"},
+		{name: "missing ID token", status: http.StatusOK, body: `{"access_token":"access","token_type":"Bearer"}`, wantClassification: "id_token.exchange.required"},
+		{name: "invalid ID token", status: http.StatusOK, body: `{"access_token":"access","token_type":"Bearer","id_token":"not-a-jwt"}`, wantClassification: "id_token.verify.invalid"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -170,7 +170,7 @@ func TestStandardOIDCClientRejectsMalformedExchangeAndRefreshResponsesExactly(t 
 			claims, tokens, err := (identity.StandardOIDCClient{HTTPClient: server.Client()}).ExchangeAndVerify(
 				context.Background(), provider, "secret", "code", "https://site.example/callback", "verifier", "nonce",
 			)
-			if claims != (identity.OIDCClaims{}) || tokens.AccessToken != "" || err == nil || err.Error() != tc.wantDetail {
+			if claims != (identity.OIDCClaims{}) || tokens.AccessToken != "" || err == nil || err.Error() != tc.wantClassification {
 				t.Fatalf("malformed exchange claims=%#v tokens=%#v err=%v", claims, tokens, err)
 			}
 		})
@@ -187,7 +187,7 @@ func TestStandardOIDCClientRejectsMalformedExchangeAndRefreshResponsesExactly(t 
 			context.Background(), model.IdentityProvider{ClientID: "client", TokenEndpoint: server.URL},
 			"secret", "refresh", []string{"openid"},
 		)
-		if tokens.AccessToken != "" || err == nil || err.Error() != "OIDC token refresh failed" {
+		if tokens.AccessToken != "" || err == nil || err.Error() != "identity_token.refresh.failed" {
 			t.Fatalf("upstream refresh tokens=%#v err=%v", tokens, err)
 		}
 	})
@@ -202,7 +202,7 @@ func TestStandardOIDCClientRejectsMalformedExchangeAndRefreshResponsesExactly(t 
 			context.Background(), model.IdentityProvider{ClientID: "client", TokenEndpoint: server.URL},
 			"secret", "refresh", []string{"openid"},
 		)
-		if tokens.AccessToken != "" || err == nil || err.Error() != "OIDC token refresh response did not include an access token" {
+		if tokens.AccessToken != "" || err == nil || err.Error() != "access_token.exchange.required" {
 			t.Fatalf("missing access refresh tokens=%#v err=%v", tokens, err)
 		}
 	})

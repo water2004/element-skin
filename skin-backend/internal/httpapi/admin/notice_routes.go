@@ -27,7 +27,7 @@ func (h Handler) Notices(w http.ResponseWriter, req *http.Request) {
 func (h Handler) CreateNotice(w http.ResponseWriter, req *http.Request) {
 	var body noticesvc.CreateInput
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.notices.Create(req.Context(), shared.CurrentActor(req), body)
@@ -41,7 +41,7 @@ func (h Handler) CreateNotice(w http.ResponseWriter, req *http.Request) {
 func (h Handler) PatchNotice(w http.ResponseWriter, req *http.Request) {
 	var raw map[string]json.RawMessage
 	if err := shared.DecodeJSON(req, &raw); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	body, err := noticePatchInput(raw)
@@ -166,7 +166,7 @@ func patchString(raw json.RawMessage) (string, error) {
 	}
 	var value string
 	if err := json.Unmarshal(raw, &value); err != nil {
-		return "", util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid patch value"}
+		return "", util.HTTPError{Status: http.StatusBadRequest, Object: "patch_value", Operation: "decode", Reason: "invalid"}
 	}
 	return value, nil
 }
@@ -174,7 +174,7 @@ func patchString(raw json.RawMessage) (string, error) {
 func patchBool(raw json.RawMessage) (bool, error) {
 	var value bool
 	if err := json.Unmarshal(raw, &value); err != nil {
-		return false, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid patch value"}
+		return false, util.HTTPError{Status: http.StatusBadRequest, Object: "patch_value", Operation: "decode", Reason: "invalid"}
 	}
 	return value, nil
 }
@@ -185,7 +185,7 @@ func patchOptionalInt64(raw json.RawMessage) (*int64, bool, error) {
 	}
 	var value int64
 	if err := json.Unmarshal(raw, &value); err != nil {
-		return nil, false, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid patch value"}
+		return nil, false, util.HTTPError{Status: http.StatusBadRequest, Object: "patch_value", Operation: "decode", Reason: "invalid"}
 	}
 	return &value, false, nil
 }

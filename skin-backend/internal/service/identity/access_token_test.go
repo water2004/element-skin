@@ -107,12 +107,12 @@ func TestExternalIdentityAccessTokenRejectsForeignAndMarksRejectedRefreshForReau
 	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(), TokenRefresher: refresher}
 
 	_, err := service.AccessTokenForOwnedIdentity(ctx, other.ID, external.ID)
-	assertHTTPError(t, err, 404, "external identity not found")
+	assertHTTPError(t, err, 404, "identity.resolve.not_found")
 	if refresher.calls != 0 {
 		t.Fatalf("foreign identity triggered refresh calls=%d", refresher.calls)
 	}
 	_, err = service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
-	assertHTTPError(t, err, 409, "external identity must be reauthorized")
+	assertHTTPError(t, err, 409, "identity.authorize.required")
 	credential, getErr := db.Identities.GetCredential(ctx, external.ID)
 	if getErr != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationReauthorizationRequired || credential.LastRefreshErrorAt == nil {
 		t.Fatalf("credential lookup after rejected refresh=%#v err=%v", credential, getErr)
@@ -123,7 +123,7 @@ func TestExternalIdentityAccessTokenRejectsForeignAndMarksRejectedRefreshForReau
 		t.Fatalf("rejected refresh mutated token=%q calls=%d err=%v", refreshToken, refresher.calls, decryptErr)
 	}
 	_, err = service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
-	assertHTTPError(t, err, 409, "external identity must be reauthorized")
+	assertHTTPError(t, err, 409, "identity.authorize.required")
 	if refresher.calls != 1 {
 		t.Fatalf("reauthorization-required identity refreshed again: calls=%d", refresher.calls)
 	}
@@ -219,13 +219,13 @@ func TestExternalIdentityAccessTokenRejectsInvalidDependenciesWithoutCorruptingC
 		user, provider, external := createRefreshIdentity(t, db)
 		service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(), TokenRefresher: &fakeTokenRefresher{}}
 		_, err := service.AccessTokenForOwnedIdentity(ctx, " ", external.ID)
-		assertHTTPError(t, err, 400, "identity_id is required")
+		assertHTTPError(t, err, 400, "identity_id.validate.required")
 		_, err = service.AccessTokenForOwnedIdentity(ctx, user.ID, " ")
-		assertHTTPError(t, err, 400, "identity_id is required")
+		assertHTTPError(t, err, 400, "identity_id.validate.required")
 		provider.Enabled = false
 		updateOIDCTestProvider(t, db, provider)
 		_, err = service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
-		assertHTTPError(t, err, 409, "external identity provider is unavailable")
+		assertHTTPError(t, err, 409, "identity_provider.use.unavailable")
 	})
 
 	t.Run("missing credential", func(t *testing.T) {
@@ -251,7 +251,7 @@ func TestExternalIdentityAccessTokenRejectsInvalidDependenciesWithoutCorruptingC
 		}
 		service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(), TokenRefresher: &fakeTokenRefresher{}}
 		_, err := service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
-		assertHTTPError(t, err, 409, "external identity must be reauthorized")
+		assertHTTPError(t, err, 409, "identity.authorize.required")
 		credential, getErr := db.Identities.GetCredential(ctx, external.ID)
 		if getErr != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationReauthorizationRequired ||
 			credential.LastRefreshErrorAt == nil {
@@ -266,7 +266,7 @@ func TestExternalIdentityAccessTokenRejectsInvalidDependenciesWithoutCorruptingC
 		refresher := &fakeTokenRefresher{err: errors.New("temporary upstream failure")}
 		service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore(), TokenRefresher: refresher}
 		_, err := service.AccessTokenForOwnedIdentity(ctx, user.ID, external.ID)
-		assertHTTPError(t, err, 502, "external identity token refresh failed")
+		assertHTTPError(t, err, 502, "identity_token.refresh.failed")
 		credential, getErr := db.Identities.GetCredential(ctx, external.ID)
 		if getErr != nil || credential == nil || credential.AuthorizationStatus != model.ExternalIdentityAuthorizationActive ||
 			credential.LastRefreshErrorAt == nil || refresher.calls != 1 {

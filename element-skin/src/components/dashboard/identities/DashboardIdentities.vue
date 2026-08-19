@@ -88,7 +88,7 @@ import {
 import { getOfficialProfileBindings } from '@/api/official-profiles'
 import type { ExternalIdentity, IdentityProvider, OfficialProfileBinding, User } from '@/api/types'
 import type { IdentityProviderGroup } from './viewTypes'
-import { getErrorMessage } from '@/utils/error'
+import { getApiErrorMessage, getErrorMessage, type ApiErrorDescriptor } from '@/utils/error'
 
 const user = inject<Ref<User | null>>('user', ref(null))
 const route = useRoute()
@@ -225,22 +225,32 @@ function goToRoles() {
 }
 
 onMounted(async () => {
-  const identityError = route.query.identity_error
-  if (identityError === 'account_mismatch') {
-    ElMessage.error('重新连接失败：请选择这个身份原来对应的外部账号')
-  } else if (identityError === 'already_linked') {
-    ElMessage.error('该外部身份已经绑定，不能重复绑定')
-  } else if (identityError === 'authorization_incomplete') {
-    ElMessage.info('身份连接未完成，原有身份没有改变')
+  const redirectedError = identityRedirectError()
+  if (redirectedError?.reason === 'incomplete') {
+    ElMessage.info(getApiErrorMessage(redirectedError))
+  } else if (redirectedError) {
+    ElMessage.error(getApiErrorMessage(redirectedError, '身份连接失败'))
   } else if (typeof route.query.linked_identity_id === 'string') {
     ElMessage.success('身份连接已更新')
   }
-  if (typeof identityError === 'string' || typeof route.query.linked_identity_id === 'string') {
+  if (redirectedError || typeof route.query.linked_identity_id === 'string') {
     const query = { ...route.query }
-    delete query.identity_error
+    delete query.error_object
+    delete query.error_operation
+    delete query.error_reason
     delete query.linked_identity_id
     await router.replace({ query })
   }
   await loadIdentityState()
 })
+
+function identityRedirectError(): ApiErrorDescriptor | null {
+  const object = route.query.error_object
+  const operation = route.query.error_operation
+  const reason = route.query.error_reason
+  if (typeof object !== 'string' || typeof operation !== 'string' || typeof reason !== 'string') {
+    return null
+  }
+  return { object, operation, reason }
+}
 </script>

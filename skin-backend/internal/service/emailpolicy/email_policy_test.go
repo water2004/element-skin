@@ -36,10 +36,10 @@ func TestNormalizeCanonicalizesSortsAndRejectsInvalidInputsExactly(t *testing.T)
 		input  model.EmailSuffixPolicy
 		detail string
 	}{
-		{"mode", model.EmailSuffixPolicy{Mode: "other"}, "invalid email suffix policy mode"},
-		{"empty allowlist", model.EmailSuffixPolicy{Mode: model.EmailSuffixModeAllowlist}, "email suffix allowlist cannot be empty while enabled"},
-		{"invalid suffix", model.EmailSuffixPolicy{Mode: model.EmailSuffixModeDisabled, Allowlist: []string{"not-a-domain"}}, `invalid email suffix "not-a-domain"`},
-		{"duplicate", model.EmailSuffixPolicy{Mode: model.EmailSuffixModeDisabled, Denylist: []string{"QQ.com", "@qq.com"}}, `duplicate email suffix "@qq.com" in denylist`},
+		{"mode", model.EmailSuffixPolicy{Mode: "other"}, "email_policy.configure.invalid"},
+		{"empty allowlist", model.EmailSuffixPolicy{Mode: model.EmailSuffixModeAllowlist}, "email_allowlist.configure.required"},
+		{"invalid suffix", model.EmailSuffixPolicy{Mode: model.EmailSuffixModeDisabled, Allowlist: []string{"not-a-domain"}}, "email_suffix.validate.invalid"},
+		{"duplicate", model.EmailSuffixPolicy{Mode: model.EmailSuffixModeDisabled, Denylist: []string{"QQ.com", "@qq.com"}}, "email_suffix.configure.conflict"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -54,7 +54,7 @@ func TestNormalizeCanonicalizesSortsAndRejectsInvalidInputsExactly(t *testing.T)
 	for index := range tooMany {
 		tooMany[index] = fmt.Sprintf("suffix-%d.test", index)
 	}
-	if _, err := emailpolicysvc.Normalize(model.EmailSuffixPolicy{Mode: model.EmailSuffixModeDisabled, Allowlist: tooMany}); !httpErrorIs(err, http.StatusBadRequest, "email suffix allowlist cannot contain more than 256 entries") {
+	if _, err := emailpolicysvc.Normalize(model.EmailSuffixPolicy{Mode: model.EmailSuffixModeDisabled, Allowlist: tooMany}); !httpErrorIs(err, http.StatusBadRequest, "email_suffix.configure.exceeded") {
 		t.Fatalf("oversized allowlist error=%#v", err)
 	}
 }
@@ -70,7 +70,7 @@ func TestServiceEnforcesLiteralCaseInsensitiveSuffixModes(t *testing.T) {
 	if err := svc.RequireAllowed(t.Context(), " User@Example.COM "); err != nil {
 		t.Fatalf("exact suffix should be allowed: %v", err)
 	}
-	if err := svc.RequireAllowed(t.Context(), "user@sub.example.com"); !httpErrorIs(err, http.StatusBadRequest, "Email suffix is not allowed") {
+	if err := svc.RequireAllowed(t.Context(), "user@sub.example.com"); !httpErrorIs(err, http.StatusBadRequest, "email.validate.denied") {
 		t.Fatalf("subdomain suffix should not inherit allowlist: %#v", err)
 	}
 
@@ -81,7 +81,7 @@ func TestServiceEnforcesLiteralCaseInsensitiveSuffixModes(t *testing.T) {
 	if err := svc.RequireAllowed(t.Context(), "user@allowed.test"); err != nil {
 		t.Fatalf("unmatched denylist suffix should be allowed: %v", err)
 	}
-	if err := svc.RequireAllowed(t.Context(), "user@BLOCKED.TEST"); !httpErrorIs(err, http.StatusBadRequest, "Email suffix is not allowed") {
+	if err := svc.RequireAllowed(t.Context(), "user@BLOCKED.TEST"); !httpErrorIs(err, http.StatusBadRequest, "email.validate.denied") {
 		t.Fatalf("matched denylist suffix error=%#v", err)
 	}
 }
@@ -94,7 +94,7 @@ func TestServiceUpdateRequiresSettingsPermissionPersistsAndInvalidatesPublicCach
 		t.Fatal(err)
 	}
 	input := model.EmailSuffixPolicy{Mode: model.EmailSuffixModeDenylist, Allowlist: []string{"Allowed.Test"}, Denylist: []string{"Blocked.Test"}}
-	if err := svc.Update(t.Context(), permission.Actor{}, input); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.Update(t.Context(), permission.Actor{}, input); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("missing update permission error=%#v", err)
 	}
 	if err := svc.Update(t.Context(), actor("site_settings.update.any"), input); err != nil {
@@ -108,7 +108,7 @@ func TestServiceUpdateRequiresSettingsPermissionPersistsAndInvalidatesPublicCach
 	if err != nil || !reflect.DeepEqual(got, want) {
 		t.Fatalf("read policy=%#v err=%v want=%#v", got, err, want)
 	}
-	if _, err := svc.Read(t.Context(), permission.Actor{}); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.Read(t.Context(), permission.Actor{}); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("missing read permission error=%#v", err)
 	}
 }
@@ -123,5 +123,5 @@ func actor(codes ...string) permission.Actor {
 
 func httpErrorIs(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }

@@ -91,7 +91,7 @@ func TestSendEmailChangeRejectsDisabledAndMissingSenderExactly(t *testing.T) {
 	settings := settingssvc.Settings{DB: db, Redis: cache}
 	svc := verificationsvc.Service{DB: db, Redis: cache, Settings: settings}
 
-	if result, err := svc.SendEmailChange(ctx, "disabled@test.com"); result != nil || !httpErrorIs(err, 400, "Email verification is disabled") {
+	if result, err := svc.SendEmailChange(ctx, "disabled@test.com"); result != nil || !httpErrorIs(err, 400, "email_verification.create.disabled") {
 		t.Fatalf("disabled result=%#v err=%#v", result, err)
 	}
 	if err := db.Settings.Set(ctx, "email_verify_enabled", "true"); err != nil {
@@ -160,7 +160,7 @@ func TestPublicVerificationLifecycleCoversRegisterResetVerifyConsumeAndRestoreEx
 		t.Fatal("registered user has no id")
 	}
 	result, err = svc.SendPublic(ctx, registered.Email, verificationsvc.PurposeRegister)
-	if result != nil || !httpErrorIs(err, 400, "Email already registered") || sender.calls != 1 {
+	if result != nil || !httpErrorIs(err, 400, "email.register.already_exists") || sender.calls != 1 {
 		t.Fatalf("registered email result=%#v calls=%d err=%#v", result, sender.calls, err)
 	}
 	result, err = svc.SendPublic(ctx, "missing@test.com", verificationsvc.PurposeReset)
@@ -186,11 +186,11 @@ func TestPublicVerificationRejectsInvalidEmailAndPurposeBeforeDeliveryExactly(t 
 	}
 
 	result, err := svc.SendPublic(ctx, "not-an-email", verificationsvc.PurposeRegister)
-	if result != nil || !httpErrorIs(err, 400, "Invalid email format") {
+	if result != nil || !httpErrorIs(err, 400, "email.validate.invalid") {
 		t.Fatalf("invalid email result=%#v err=%#v", result, err)
 	}
 	result, err = svc.SendPublic(ctx, "valid@test.com", "unknown")
-	if result != nil || !httpErrorIs(err, 400, "invalid verification type") || sender.calls != 0 {
+	if result != nil || !httpErrorIs(err, 400, "verification_type.validate.invalid") || sender.calls != 0 {
 		t.Fatalf("invalid purpose result=%#v calls=%d err=%#v", result, sender.calls, err)
 	}
 }
@@ -200,5 +200,5 @@ func httpErrorIs(err error, status int, detail string) bool {
 	if !errors.As(err, &target) {
 		return false
 	}
-	return target.Status == status && target.Detail == detail
+	return target.Status == status && target.Error() == detail
 }

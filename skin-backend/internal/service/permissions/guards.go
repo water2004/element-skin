@@ -18,16 +18,16 @@ func (s PermissionService) userExists(ctx context.Context, userID string) (bool,
 
 func ensurePermissionOverrideAllowed(actor permission.Actor, targetID string, def permission.Definition) error {
 	if def.Code == manageProtectedPermission.Code {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "protected management permission must be transferred"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "protected_permission", Operation: "transfer", Reason: "required"}
 	}
 	if !protectedPermission(def) {
 		return nil
 	}
 	if targetID == actor.UserID {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "cannot modify protected permission on yourself"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "protected_permission", Operation: "update", Reason: "denied"}
 	}
 	if !actor.Has(manageProtectedPermission) {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "protected permission management required"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "protected_permission", Operation: "manage", Reason: "required"}
 	}
 	return nil
 }
@@ -37,5 +37,5 @@ func protectedPermission(def permission.Definition) bool {
 }
 
 func permissionDenied() error {
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }

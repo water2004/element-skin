@@ -233,7 +233,16 @@ export interface YggdrasilImportResult {
   items: Profile[]
   success_count: number
   failure_count: number
-  failed: Array<{ profile_id: string; profile_name: string; detail: string }>
+  failed: Array<{
+    profile_id: string
+    profile_name: string
+    error: {
+      object: string
+      operation: string
+      reason: string
+      params?: Record<string, unknown>
+    }
+  }>
 }
 
 export interface HomepageMedia {

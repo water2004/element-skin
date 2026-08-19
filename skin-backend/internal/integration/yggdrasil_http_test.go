@@ -328,7 +328,7 @@ func TestTextureUploadAndYggdrasilTextureRoutes(t *testing.T) {
 	oversized := doMultipart(t, h, "POST", "/v2/users/me/textures", map[string]string{
 		"texture_type": "skin",
 	}, "file", "too-large.png", bytes.Repeat([]byte("x"), 16<<20+1), cookie)
-	if oversized.Code != 400 || !strings.Contains(oversized.Body.String(), "File too large") {
+	if oversized.Code != 400 || oversized.Body.String() != "{\"error\":{\"object\":\"upload_file\",\"operation\":\"validate\",\"reason\":\"too_large\"}}\n" {
 		t.Fatalf("oversized texture upload should be rejected, got %d body=%s", oversized.Code, oversized.Body.String())
 	}
 

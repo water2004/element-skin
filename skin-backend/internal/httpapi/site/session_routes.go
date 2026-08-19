@@ -13,7 +13,7 @@ func (h Handler) Login(w http.ResponseWriter, req *http.Request) {
 	}
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.authSvc.Login(req.Context(), body["email"], body["password"])
@@ -42,7 +42,7 @@ func (h Handler) Register(w http.ResponseWriter, req *http.Request) {
 	}
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	id, err := h.authSvc.RegisterWithIdentity(
@@ -67,12 +67,12 @@ func (h Handler) SendVerificationCode(w http.ResponseWriter, req *http.Request) 
 	}
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	email := body["email"]
 	if email == "" {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "email required"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "email", Operation: "validate", Reason: "required"})
 		return
 	}
 	res, err := h.authSvc.SendVerificationCode(req.Context(), email, body["type"])
@@ -89,11 +89,11 @@ func (h Handler) ResetPassword(w http.ResponseWriter, req *http.Request) {
 	}
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if body["email"] == "" || body["password"] == "" || body["code"] == "" {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "email, password and code required"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "registration", Operation: "validate", Reason: "required"})
 		return
 	}
 	if err := h.authSvc.ResetPassword(req.Context(), body["email"], body["password"], body["code"]); err != nil {
@@ -106,7 +106,7 @@ func (h Handler) ResetPassword(w http.ResponseWriter, req *http.Request) {
 func (h Handler) RefreshToken(w http.ResponseWriter, req *http.Request) {
 	c, err := req.Cookie("refresh_token")
 	if err != nil || c.Value == "" {
-		util.Error(w, util.HTTPError{Status: 401, Detail: "not authenticated"})
+		util.Error(w, util.HTTPError{Status: 401, Object: "authentication", Operation: "verify", Reason: "required"})
 		return
 	}
 	res, err := h.authSvc.RotateRefresh(req.Context(), c.Value)

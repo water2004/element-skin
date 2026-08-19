@@ -39,7 +39,7 @@ var _ mailsvc.Sender = testMailSender{}
 
 func httpError(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }
 
 func closedPoolError(err error) bool {

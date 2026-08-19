@@ -38,7 +38,7 @@ func TestWebhookEventCatalogRejectsUnrelatedApplicationPermissionsExactly(t *tes
 		{"oauth_grant.read.owned"},
 	} {
 		_, err := service.WebhookEventCatalog(oauthActorWithPermissions(codes...))
-		assertHTTPError(t, err, 403, "permission denied")
+		assertHTTPError(t, err, 403, "permission.check.denied")
 	}
 }
 

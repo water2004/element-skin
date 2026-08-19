@@ -69,7 +69,7 @@ func TestServiceCleanupGrantsRequiresSystemMaintenanceAndUsesLifecycleBoundaries
 	}
 
 	result, err := svc.CleanupGrants(ctx, actor, now)
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 	if result != (oauth.GrantCleanupResult{}) {
 		t.Fatalf("non-system cleanup result=%#v want zero result", result)
 	}
@@ -78,7 +78,7 @@ func TestServiceCleanupGrantsRequiresSystemMaintenanceAndUsesLifecycleBoundaries
 		bits.Set(permission.MustDefinitionByCode(onlyCode).BitIndex)
 		partialActor := permission.Actor{SubjectID: "system:partial", Permissions: bits}
 		result, err = svc.CleanupGrants(ctx, partialActor, now)
-		assertHTTPError(t, err, 403, "permission denied")
+		assertHTTPError(t, err, 403, "permission.check.denied")
 		if result != (oauth.GrantCleanupResult{}) {
 			t.Fatalf("cleanup with only %s result=%#v want zero result", onlyCode, result)
 		}

@@ -94,7 +94,7 @@ func TestUserRoutesReturnInternalServerErrorWhenDatabaseIsClosedExactly(t *testi
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			tc.call(rec, tc.req)
-			if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+			if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 				t.Fatalf("%s closed database response mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
 		})
@@ -114,7 +114,7 @@ func TestUserRoutesProtectProtectedSubjectFromPlainAdminExactly(t *testing.T) {
 	req = withAdminActor(req, plainAdmin.ID)
 	rec := httptest.NewRecorder()
 	h.DeleteUser(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"detail":"cannot modify protected subject"`) {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_subject\",\"operation\":\"update\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("plain admin deleting protected subject mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -124,7 +124,7 @@ func TestUserRoutesProtectProtectedSubjectFromPlainAdminExactly(t *testing.T) {
 	req = withAdminActor(req, plainAdmin.ID)
 	rec = httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"detail":"cannot modify protected subject"`) {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_subject\",\"operation\":\"update\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("plain admin banning protected subject mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -134,7 +134,7 @@ func TestUserRoutesProtectProtectedSubjectFromPlainAdminExactly(t *testing.T) {
 	req = withAdminActor(req, plainAdmin.ID)
 	rec = httptest.NewRecorder()
 	h.UnbanUser(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"cannot modify protected subject\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_subject\",\"operation\":\"update\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("plain admin unbanning protected subject mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -150,7 +150,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.Users(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("user list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -159,7 +159,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.Users(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("user list incomplete cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -168,7 +168,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	req.SetPathValue("user_id", "missing-user")
 	rec = httptest.NewRecorder()
 	h.User(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing user detail mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -179,7 +179,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	req = withProtectedActor(req, protectedAdmin.ID)
 	rec = httptest.NewRecorder()
 	h.GrantUserRole(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing role grant target mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -188,7 +188,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	req.SetPathValue("user_id", "missing-user")
 	rec = httptest.NewRecorder()
 	h.TransferProtectedSubject(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing transfer target mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -198,7 +198,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	req.SetPathValue("role_id", "")
 	rec = httptest.NewRecorder()
 	h.GrantUserRole(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"role_id required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"role_id\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("blank role grant mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -208,7 +208,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	req.SetPathValue("role_id", "")
 	rec = httptest.NewRecorder()
 	h.RevokeUserRole(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"role_id required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"role_id\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("blank role revoke mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -217,7 +217,7 @@ func TestUserRoutesRejectMissingTargetsAndMalformedResetWithoutMutation(t *testi
 	req = withProtectedActor(req, protectedAdmin.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("malformed reset payload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -245,7 +245,7 @@ func TestAdminResetPasswordPreservesCredentialsAndRefreshWhenYggRevocationFails(
 	req = withAdminActor(req, adminUser.ID)
 	rec := httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("admin reset ygg failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchanged, err := db.Users.GetByID(t.Context(), target.ID)
@@ -274,7 +274,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		req = withAdminActor(req, adminUser.ID)
 		rec := httptest.NewRecorder()
 		h.Users(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("list role attachment failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
@@ -283,7 +283,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		req.SetPathValue("user_id", target.ID)
 		rec = httptest.NewRecorder()
 		h.User(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("detail role lookup failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})
@@ -303,7 +303,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		req.SetPathValue("role_id", permission.RoleAdmin)
 		rec := httptest.NewRecorder()
 		h.GrantUserRole(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("grant role persistence failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
@@ -313,7 +313,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		req.SetPathValue("role_id", permission.RoleAdmin)
 		rec = httptest.NewRecorder()
 		h.RevokeUserRole(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("revoke role persistence failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})
@@ -329,7 +329,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		req.SetPathValue("role_id", permission.RoleAdmin)
 		rec := httptest.NewRecorder()
 		h.RevokeUserRole(rec, req)
-		if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+		if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 			t.Fatalf("revoke missing target mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})
@@ -348,7 +348,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		req.SetPathValue("user_id", target.ID)
 		rec := httptest.NewRecorder()
 		h.UnbanUser(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("unban protected-subject check failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
@@ -357,7 +357,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		req.SetPathValue("user_id", target.ID)
 		rec = httptest.NewRecorder()
 		h.DeleteUser(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("delete protected-subject check failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
@@ -365,7 +365,7 @@ func TestUserRoutesReturnExactErrorsAfterPrimaryLookupSucceeds(t *testing.T) {
 		req = withAdminActor(req, adminUser.ID)
 		rec = httptest.NewRecorder()
 		h.ResetUserPassword(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("reset protected-subject check failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})

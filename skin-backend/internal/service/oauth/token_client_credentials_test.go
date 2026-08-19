@@ -210,14 +210,14 @@ func TestServiceClientCredentialsReviewApprovalGrantsRequestedClientScopesExactl
 		ClientSecret: clientSecret,
 		Scope:        "account.delete.any",
 	})
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "client_credentials",
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 		Scope:        "account.read.self",
 	})
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 }
 
 func TestServiceClientCredentialsCannotUseRemovedApplicationPermissionExactly(t *testing.T) {
@@ -278,7 +278,7 @@ func TestServiceClientCredentialsCannotUseRemovedApplicationPermissionExactly(t 
 		ClientSecret: clientSecret,
 		Scope:        "invite.create.any",
 	})
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 	kept, err := svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "client_credentials",
 		ClientID:     clientID,
@@ -316,7 +316,7 @@ func TestServiceClientCredentialsRejectsPublicClientAndExcessScopeExactly(t *tes
 		GrantType: "client_credentials",
 		ClientID:  publicClient["client_id"].(string),
 	})
-	assertHTTPError(t, err, 400, "client_credentials requires a confidential client")
+	assertHTTPError(t, err, 400, "oauth_client.authenticate.unsupported")
 
 	confidential, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
 		Name:            "Confidential app",
@@ -334,7 +334,7 @@ func TestServiceClientCredentialsRejectsPublicClientAndExcessScopeExactly(t *tes
 		ClientSecret: confidential["client_secret"].(string),
 		Scope:        "minecraft_session.hasjoined.server",
 	})
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 }
 
 func TestServiceClientCredentialsDefaultScopeAndInactiveClientExactly(t *testing.T) {
@@ -371,14 +371,14 @@ func TestServiceClientCredentialsDefaultScopeAndInactiveClientExactly(t *testing
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 	})
-	assertHTTPError(t, err, 400, "invalid client_id")
+	assertHTTPError(t, err, 400, "client_id.verify.invalid")
 	activateOAuthClient(t, db, clientID)
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "client_credentials",
 		ClientID:     clientID,
 		ClientSecret: clientSecret,
 	})
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 
 	grantClientPermission(t, db, clientID, "minecraft_profile.read.public")
 	grantClientPermission(t, db, clientID, "minecraft_session.hasjoined.server")

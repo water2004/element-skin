@@ -165,12 +165,12 @@ func TestSettingsGroupsAndRemoteYggImportHTTP(t *testing.T) {
 	}
 
 	getProfiles := doJSON(t, h, "POST", "/v2/imports/remote-ygg/profiles/preview", map[string]any{}, userCookie)
-	if getProfiles.Code != 400 || !strings.Contains(getProfiles.Body.String(), "api_url, username and password are required") {
+	if getProfiles.Code != 400 || getProfiles.Body.String() != "{\"error\":{\"object\":\"credentials\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("remote get-profiles validation unexpected: %d %s", getProfiles.Code, getProfiles.Body.String())
 	}
 	testutil.CreateProfile(t, db, user.ID, "existing_remote_name", "RemotePlayer")
 	single := doJSON(t, h, "POST", "/v2/imports/remote-ygg/profiles/import", map[string]any{"profile_id": "remote_single", "profile_name": "RemotePlayer"}, userCookie)
-	if single.Code != 400 || !strings.Contains(single.Body.String(), "api_url is required") {
+	if single.Code != 400 || single.Body.String() != "{\"error\":{\"object\":\"api_url\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("single remote import validation status=%d body=%s", single.Code, single.Body.String())
 	}
 	singleProfile, _ := db.Profiles.GetByID(context.Background(), "remote_single")

@@ -66,7 +66,7 @@ func (h Handler) PatchHomepageMedia(w http.ResponseWriter, req *http.Request) {
 		DurationMS          *int     `json:"duration_ms"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json body"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	item, err := h.homepage.Patch(req.Context(), shared.CurrentActor(req), req.PathValue("id"), homepagesvc.PatchInput{
@@ -92,7 +92,7 @@ func (h Handler) ReorderHomepageMedia(w http.ResponseWriter, req *http.Request) 
 		IDs []string `json:"ids"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json body"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.homepage.Reorder(req.Context(), shared.CurrentActor(req), body.IDs); err != nil {

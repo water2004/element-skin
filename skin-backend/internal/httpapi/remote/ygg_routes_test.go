@@ -38,7 +38,7 @@ func TestRemoteYggRoutesValidateAndReturnExactBodies(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "profile_id and profile_name are required") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile\",\"operation\":\"import\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("import profile validation mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -46,7 +46,7 @@ func TestRemoteYggRoutesValidateAndReturnExactBodies(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfiles(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "profiles cannot be empty") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile\",\"operation\":\"import\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("import profiles empty validation mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -54,7 +54,7 @@ func TestRemoteYggRoutesValidateAndReturnExactBodies(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.GetProfiles(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("preview bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -62,7 +62,7 @@ func TestRemoteYggRoutesValidateAndReturnExactBodies(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("single import bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -70,7 +70,7 @@ func TestRemoteYggRoutesValidateAndReturnExactBodies(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfiles(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("batch import bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -102,7 +102,7 @@ func TestRemoteYggRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T)
 			req = withUserActorWithoutPermission(req, user.ID, tc.exclude)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != tc.wantStatus || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != tc.wantStatus || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("permission denial mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 			}
 		})
@@ -137,9 +137,23 @@ func TestRemoteYggRoutesImportProfileAndBatchPersistExactProfiles(t *testing.T) 
 	h.ImportProfiles(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"success_count":1`) ||
 		!strings.Contains(rec.Body.String(), `"failure_count":1`) ||
-		!strings.Contains(rec.Body.String(), `"id":"remote_batch_one"`) ||
-		!strings.Contains(rec.Body.String(), `"detail":"profile_id and profile_name are required"`) {
+		!strings.Contains(rec.Body.String(), `"id":"remote_batch_one"`) {
 		t.Fatalf("batch remote import response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var batch map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &batch); err != nil {
+		t.Fatal(err)
+	}
+	failed, ok := batch["failed"].([]any)
+	if !ok || len(failed) != 1 {
+		t.Fatalf("batch failure list mismatch: %#v", batch)
+	}
+	failure, ok := failed[0].(map[string]any)
+	descriptor, descriptorOK := failure["error"].(map[string]any)
+	if !ok || !descriptorOK || len(failure) != 3 || len(descriptor) != 3 ||
+		failure["profile_id"] != "" || failure["profile_name"] != "Broken" ||
+		descriptor["object"] != "profile" || descriptor["operation"] != "import" || descriptor["reason"] != "required" {
+		t.Fatalf("batch failure descriptor mismatch: %#v", failed[0])
 	}
 	profile, err = db.Profiles.GetByID(req.Context(), "remote_batch_one")
 	if err != nil || profile == nil || profile.UserID != user.ID || profile.Name != "BatchOne" || profile.SkinHash == nil {

@@ -115,7 +115,7 @@ func TestTextureUploadKeepsProfileHashAndModelAtomicWhenModelIsRejected(t *testi
 	rec := httptest.NewRecorder()
 	h.UploadTexture(rec, req)
 
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("atomic model rejection response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchanged, err := db.Profiles.GetByID(t.Context(), profile.ID)

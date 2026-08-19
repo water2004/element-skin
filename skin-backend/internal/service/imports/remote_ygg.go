@@ -28,7 +28,7 @@ func (s RemoteYggService) PreviewProfiles(ctx context.Context, actor permission.
 	apiURL = strings.TrimSpace(apiURL)
 	username = strings.TrimSpace(username)
 	if apiURL == "" || username == "" || password == "" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "api_url, username and password are required"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "credentials", Operation: "validate", Reason: "required"}
 	}
 	var out struct {
 		AvailableProfiles []RemoteYggProfile `json:"availableProfiles"`
@@ -62,7 +62,7 @@ func (s RemoteYggService) ImportProfile(ctx context.Context, actor permission.Ac
 	}
 	apiURL = strings.TrimSpace(apiURL)
 	if apiURL == "" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "api_url is required"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "api_url", Operation: "validate", Reason: "required"}
 	}
 	assets, err := s.FetchTextureAssets(ctx, apiURL, profileID)
 	if err != nil {
@@ -79,7 +79,7 @@ func (s RemoteYggService) ImportProfiles(ctx context.Context, actor permission.A
 	return importer.ImportProfiles(ctx, actor, profiles, func(ctx context.Context, id string) ([]TextureAsset, error) {
 		apiURL = strings.TrimSpace(apiURL)
 		if apiURL == "" {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "api_url is required"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "api_url", Operation: "validate", Reason: "required"}
 		}
 		return s.FetchTextureAssets(ctx, apiURL, id)
 	}), nil
@@ -96,13 +96,13 @@ func requireImportPermission(actor permission.Actor, definition permission.Defin
 	if actor.Has(definition) {
 		return nil
 	}
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }
 
 func (s RemoteYggService) FetchTextureAssets(ctx context.Context, apiURL, profileID string) ([]TextureAsset, error) {
 	profileID = strings.TrimSpace(strings.ReplaceAll(profileID, "-", ""))
 	if apiURL == "" || profileID == "" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "api_url and profile_id are required"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "texture_asset", Operation: "validate", Reason: "required"}
 	}
 	var out remoteYggProfileResponse
 	if err := s.doJSON(ctx, http.MethodGet, remoteYggURL(apiURL, "sessionserver/session/minecraft/profile", profileID), nil, &out); err != nil {

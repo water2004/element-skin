@@ -60,7 +60,7 @@ func (s Service) Create(ctx context.Context, actor permission.Actor, identityID 
 	}
 	identityID = strings.TrimSpace(identityID)
 	if identityID == "" {
-		return nil, badRequest("identity_id is required")
+		return nil, badRequest("identity_id", "validate", "required")
 	}
 	access, remote, err := s.resolve(ctx, actor.UserID, identityID)
 	if err != nil {
@@ -96,14 +96,14 @@ func (s Service) Create(ctx context.Context, actor permission.Actor, identityID 
 	}); err != nil {
 		s.cleanupPreparedTextures(ctx, prepared)
 		if errors.Is(err, officialstore.ErrProfileOwnedByAnotherUser) {
-			return nil, conflict("official profile UUID belongs to another user")
+			return nil, conflict("official_profile", "bind", "conflict")
 		}
 		if errors.Is(err, officialstore.ErrProfileNameUnavailable) {
-			return nil, conflict("unable to allocate profile name")
+			return nil, conflict("profile_name", "allocate", "failed")
 		}
 		if constraint := uniqueConstraint(err); constraint == "official_profile_bindings_profile_id_key" ||
 			constraint == "idx_official_profile_bindings_remote_uuid" {
-			return nil, conflict("official profile is already bound")
+			return nil, conflict("official_profile", "bind", "already_exists")
 		}
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (s Service) Delete(ctx context.Context, actor permission.Actor, id string) 
 		return err
 	}
 	if !deleted {
-		return notFound("official profile binding not found")
+		return notFound("official_profile", "unbind", "not_found")
 	}
 	return nil
 }
@@ -137,14 +137,14 @@ func (s Service) resolve(ctx context.Context, userID, identityID string) (identi
 		return identitysvc.AuthorizedIdentity{}, nil, err
 	}
 	if identity == nil || identity.UserID != userID {
-		return identitysvc.AuthorizedIdentity{}, nil, notFound("external identity not found")
+		return identitysvc.AuthorizedIdentity{}, nil, notFound("identity", "resolve", "not_found")
 	}
 	provider, err := s.DB.Identities.GetProvider(ctx, identity.ProviderID)
 	if err != nil {
 		return identitysvc.AuthorizedIdentity{}, nil, err
 	}
 	if provider == nil || provider.Adapter != identitysvc.AdapterMicrosoft {
-		return identitysvc.AuthorizedIdentity{}, nil, conflict("external identity is not a Microsoft identity")
+		return identitysvc.AuthorizedIdentity{}, nil, conflict("identity", "validate", "unsupported")
 	}
 	access, err := s.Identities.AccessTokenForOwnedIdentity(ctx, userID, identityID)
 	if err != nil {
@@ -163,10 +163,10 @@ func (s Service) resolve(ctx context.Context, userID, identityID string) (identi
 		result, err = resolver.Resolve(ctx, access.AccessToken)
 	}
 	if err != nil {
-		return identitysvc.AuthorizedIdentity{}, nil, util.HTTPError{Status: http.StatusBadGateway, Detail: "Microsoft profile request failed"}
+		return identitysvc.AuthorizedIdentity{}, nil, util.HTTPError{Status: http.StatusBadGateway, Object: "minecraft_profile", Operation: "fetch", Reason: "unavailable"}
 	}
 	if !result.HasGame || result.Profile == nil {
-		return identitysvc.AuthorizedIdentity{}, nil, conflict("Microsoft identity does not own Minecraft: Java Edition")
+		return identitysvc.AuthorizedIdentity{}, nil, conflict("minecraft_license", "verify", "required")
 	}
 	return access, result.Profile, nil
 }
@@ -174,10 +174,10 @@ func (s Service) resolve(ctx context.Context, userID, identityID string) (identi
 func normalizeRemoteProfile(profile microsoftsvc.MinecraftProfile) (string, error) {
 	id := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(profile.ID), "-", ""))
 	if decoded, err := hex.DecodeString(id); err != nil || len(decoded) != 16 {
-		return "", util.HTTPError{Status: http.StatusBadGateway, Detail: "Microsoft profile response is invalid"}
+		return "", util.HTTPError{Status: http.StatusBadGateway, Object: "minecraft_profile", Operation: "decode", Reason: "invalid"}
 	}
 	if !util.ValidProfileName(profile.Name) {
-		return "", util.HTTPError{Status: http.StatusBadGateway, Detail: "Microsoft profile response is invalid"}
+		return "", util.HTTPError{Status: http.StatusBadGateway, Object: "minecraft_profile", Operation: "decode", Reason: "invalid"}
 	}
 	return id, nil
 }
@@ -228,7 +228,15 @@ func uniqueConstraint(err error) string {
 	return ""
 }
 
-func badRequest(detail string) util.HTTPError { return util.HTTPError{Status: 400, Detail: detail} }
-func forbidden() util.HTTPError               { return util.HTTPError{Status: 403, Detail: "permission denied"} }
-func notFound(detail string) util.HTTPError   { return util.HTTPError{Status: 404, Detail: detail} }
-func conflict(detail string) util.HTTPError   { return util.HTTPError{Status: 409, Detail: detail} }
+func badRequest(object, operation, reason string) util.HTTPError {
+	return util.HTTPError{Status: 400, Object: object, Operation: operation, Reason: reason}
+}
+func forbidden() util.HTTPError {
+	return util.HTTPError{Status: 403, Object: "permission", Operation: "check", Reason: "denied"}
+}
+func notFound(object, operation, reason string) util.HTTPError {
+	return util.HTTPError{Status: 404, Object: object, Operation: operation, Reason: reason}
+}
+func conflict(object, operation, reason string) util.HTTPError {
+	return util.HTTPError{Status: 409, Object: object, Operation: operation, Reason: reason}
+}

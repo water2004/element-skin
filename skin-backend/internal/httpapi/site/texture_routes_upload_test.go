@@ -104,7 +104,7 @@ func TestTextureRoutesUploadApplyFailureKeepsUploadedLibraryRow(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"Profile not yours\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"profile\",\"operation\":\"authorize\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("upload apply foreign profile mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -138,7 +138,7 @@ func TestTextureUploadRemovesNewFileWhenDatabaseInsertFails(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("database upload failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if count, err := db.Textures.CountForUser(t.Context(), user.ID); err != nil || count != 0 {
@@ -176,7 +176,7 @@ func TestTextureUploadKeepsNewFileWhenAnotherTextureTypeReferencesHash(t *testin
 	req = withUserActor(req, uploader.ID)
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("duplicate reference upload failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if _, err := os.Stat(filepath.Join(cfg.TexturesDir, hash+".png")); err != nil {

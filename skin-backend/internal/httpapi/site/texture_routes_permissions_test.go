@@ -136,7 +136,7 @@ func TestTextureRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T) {
 			req := withUserActorWithoutPermission(tc.makeRequest(), user.ID, tc.permission)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("permission denial mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 			}
 		})
@@ -159,7 +159,7 @@ func TestTextureRoutesIsPublicWithoutPermissionReturns403(t *testing.T) {
 	req = withUserActorWithoutPermission(req, user.ID, "texture.update_visibility.owned")
 	rec := httptest.NewRecorder()
 	h.UploadMyTexture(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("is_public without update_visibility should return 403: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -172,7 +172,7 @@ func TestTextureRoutesIsPublicWithoutPermissionReturns403(t *testing.T) {
 	req = withUserActorWithoutPermission(req, user.ID, "texture.update_visibility.owned")
 	rec = httptest.NewRecorder()
 	h.UploadAndApplyTexture(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("upload apply is_public without update_visibility should return 403: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 

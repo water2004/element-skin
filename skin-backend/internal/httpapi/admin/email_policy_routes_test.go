@@ -52,9 +52,9 @@ func TestEmailSuffixPolicyRoutesRejectBadInputAndMissingPermissionsExactly(t *te
 		status int
 		want   string
 	}{
-		{"malformed", `{`, true, http.StatusBadRequest, "{\"detail\":\"invalid json\"}\n"},
-		{"empty allowlist", `{"mode":"allowlist","allowlist":[],"denylist":[]}`, true, http.StatusBadRequest, "{\"detail\":\"email suffix allowlist cannot be empty while enabled\"}\n"},
-		{"missing update permission", `{"mode":"disabled","allowlist":[],"denylist":[]}`, false, http.StatusForbidden, "{\"detail\":\"permission denied\"}\n"},
+		{"malformed", `{`, true, http.StatusBadRequest, "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{"empty allowlist", `{"mode":"allowlist","allowlist":[],"denylist":[]}`, true, http.StatusBadRequest, "{\"error\":{\"object\":\"email_allowlist\",\"operation\":\"configure\",\"reason\":\"required\"}}\n"},
+		{"missing update permission", `{"mode":"disabled","allowlist":[],"denylist":[]}`, false, http.StatusForbidden, "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPut, "/v2/admin/settings/email-suffix-policy", strings.NewReader(tc.body))
@@ -72,7 +72,7 @@ func TestEmailSuffixPolicyRoutesRejectBadInputAndMissingPermissionsExactly(t *te
 	req := httptest.NewRequest(http.MethodGet, "/v2/admin/settings/email-suffix-policy", nil)
 	rec := httptest.NewRecorder()
 	h.GetEmailSuffixPolicy(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("get without permission: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

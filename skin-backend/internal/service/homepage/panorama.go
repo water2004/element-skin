@@ -15,7 +15,7 @@ import (
 func ReadPanoramaZip(data []byte) (map[string][]byte, error) {
 	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid panorama zip"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "panorama_archive", Operation: "decode", Reason: "invalid"}
 	}
 	required := map[string]bool{}
 	for i := 0; i < 6; i++ {
@@ -25,10 +25,10 @@ func ReadPanoramaZip(data []byte) (map[string][]byte, error) {
 	for _, f := range reader.File {
 		name := filepath.ToSlash(f.Name)
 		if strings.Contains(name, "/") || strings.Contains(name, `\`) {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "panorama files must be at zip root"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "panorama_archive", Operation: "validate", Reason: "invalid"}
 		}
 		if _, ok := required[name]; !ok {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "panorama zip must contain only panorama_0.png through panorama_5.png"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "panorama_archive", Operation: "validate", Reason: "invalid"}
 		}
 		rc, err := f.Open()
 		if err != nil {
@@ -40,17 +40,17 @@ func ReadPanoramaZip(data []byte) (map[string][]byte, error) {
 			return nil, err
 		}
 		if len(content) > MaxImageBytes {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "panorama face too large"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "panorama_face", Operation: "validate", Reason: "too_large"}
 		}
 		if err := validateImageData(content, ".png"); err != nil {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid panorama face image"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "panorama_face", Operation: "validate", Reason: "invalid"}
 		}
 		required[name] = true
 		out[name] = content
 	}
 	for name, ok := range required {
 		if !ok {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "missing " + name}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "panorama_face", Operation: "validate", Reason: "required", Params: map[string]any{"face": name}}
 		}
 	}
 	return out, nil

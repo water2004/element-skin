@@ -143,7 +143,7 @@ func assertPgCode(t *testing.T, err error, code string) {
 
 func isHTTPError(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }
 
 func stringSetFromStrings(values []string) map[string]bool {

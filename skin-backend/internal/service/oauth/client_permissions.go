@@ -16,7 +16,7 @@ func (s Service) ClientPermissions(ctx context.Context, actor permission.Actor, 
 		return nil, err
 	}
 	if client == nil {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	subjectID := permissiondb.SubjectIDForClient(client.ID)
 	effective, err := s.DB.Permissions.EffectivePermissionsForClient(ctx, client.ID, permissiondb.EffectiveOptions{})
@@ -51,7 +51,7 @@ func (s Service) ClientPermissions(ctx context.Context, actor permission.Actor, 
 
 func (s Service) SetClientPermissionOverride(ctx context.Context, actor permission.Actor, clientID, code, effect string) error {
 	if effect != "allow" && effect != "deny" {
-		return badRequest("invalid permission override effect")
+		return badRequest("permission_override", "configure", "invalid")
 	}
 	if effect == "allow" {
 		if err := actor.Require(permission.MustDefinitionByCode("permission.grant.any")); err != nil {
@@ -67,11 +67,11 @@ func (s Service) SetClientPermissionOverride(ctx context.Context, actor permissi
 		return err
 	}
 	if client == nil {
-		return notFound("oauth client not found")
+		return notFound("oauth_client", "resolve", "not_found")
 	}
 	def, ok := permission.DefinitionByCode(code)
 	if !ok || def.Scope.ID == permission.ScopeSystem {
-		return badRequest("invalid permission")
+		return badRequest("permission", "validate", "invalid")
 	}
 	subjectID := permissiondb.SubjectIDForClient(client.ID)
 	if err := s.DB.Permissions.InvalidateSubjectCache(ctx, subjectID); err != nil {
@@ -97,11 +97,11 @@ func (s Service) ClearClientPermissionOverride(ctx context.Context, actor permis
 		return err
 	}
 	if client == nil {
-		return notFound("oauth client not found")
+		return notFound("oauth_client", "resolve", "not_found")
 	}
 	def, ok := permission.DefinitionByCode(code)
 	if !ok {
-		return badRequest("invalid permission")
+		return badRequest("permission", "validate", "invalid")
 	}
 	subjectID := permissiondb.SubjectIDForClient(client.ID)
 	if err := s.DB.Permissions.InvalidateSubjectCache(ctx, subjectID); err != nil {
@@ -115,7 +115,7 @@ func (s Service) ClearClientPermissionOverride(ctx context.Context, actor permis
 		return err
 	}
 	if !ok {
-		return notFound("permission override not found")
+		return notFound("permission_override", "resolve", "not_found")
 	}
 	reportPostCommitError("invalidate cleared client permission cache race", s.DB.Permissions.InvalidateSubjectCache(ctx, subjectID))
 	reportPostCommitError("remove cleared client permission access tokens", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
@@ -127,7 +127,7 @@ func reviewedClientPermissionIDs(codes []string) ([]int64, error) {
 	for _, code := range codes {
 		def, ok := permission.DefinitionByCode(code)
 		if !ok || def.Scope.ID == permission.ScopeSystem {
-			return nil, badRequest("invalid permission")
+			return nil, badRequest("permission", "validate", "invalid")
 		}
 		if !isAppOnlyPermission(def) {
 			continue

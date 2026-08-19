@@ -92,7 +92,7 @@ func TestTextureRoutesDeleteMissingWardrobeRowDoesNotClearAppliedProfile(t *test
 	req = withUserActor(req, other.ID)
 	rec := httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"Texture not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("delete missing wardrobe row should return not found: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	applied, err := db.Profiles.GetByID(req.Context(), profile.ID)

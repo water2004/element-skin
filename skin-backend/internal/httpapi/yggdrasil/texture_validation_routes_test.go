@@ -37,7 +37,7 @@ func TestTextureRoutesRejectProfileMismatchAndInvalidTypeExactly(t *testing.T) {
 	req.SetPathValue("texture_type", "skin")
 	rec := httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), `"detail":"Invalid token"`) {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"access_token\",\"operation\":\"verify\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("profile mismatch should be generic 401 invalid token: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -47,7 +47,7 @@ func TestTextureRoutesRejectProfileMismatchAndInvalidTypeExactly(t *testing.T) {
 	req.SetPathValue("texture_type", "elytra")
 	rec = httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"Invalid texture_type"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_type\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid texture type mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -71,7 +71,7 @@ func TestTextureUploadRejectsInvalidTypeBeforeParsingMultipartOrWritingRows(t *t
 	req.SetPathValue("texture_type", "elytra")
 	rec := httptest.NewRecorder()
 	h.UploadTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid texture_type\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_type\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid upload texture type mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if count, err := db.Textures.CountForUser(context.Background(), user.ID); err != nil || count != 0 {
@@ -101,7 +101,7 @@ func TestTextureUploadRejectsUnboundTokenAndBadMultipartExactly(t *testing.T) {
 	req.SetPathValue("texture_type", "skin")
 	rec := httptest.NewRecorder()
 	h.UploadTexture(rec, req)
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), `"detail":"Invalid token"`) {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"access_token\",\"operation\":\"verify\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("unbound upload token mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -114,7 +114,7 @@ func TestTextureUploadRejectsUnboundTokenAndBadMultipartExactly(t *testing.T) {
 	req.SetPathValue("texture_type", "skin")
 	rec = httptest.NewRecorder()
 	h.UploadTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid multipart form"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad multipart upload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -147,7 +147,7 @@ func TestTextureUploadRejectsMissingFileAndNonPNGExactly(t *testing.T) {
 	req.SetPathValue("texture_type", "skin")
 	rec := httptest.NewRecorder()
 	h.UploadTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"file is required"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"upload_file\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing file upload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -170,7 +170,7 @@ func TestTextureUploadRejectsMissingFileAndNonPNGExactly(t *testing.T) {
 	req.SetPathValue("texture_type", "skin")
 	rec = httptest.NewRecorder()
 	h.UploadTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"image must be PNG format"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_format\",\"operation\":\"validate\",\"reason\":\"unsupported\"}}\n" {
 		t.Fatalf("non-PNG upload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

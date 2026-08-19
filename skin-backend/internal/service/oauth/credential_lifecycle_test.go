@@ -24,9 +24,9 @@ type delegatedCredentialFixture struct {
 
 func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExactly(t *testing.T) {
 	for _, tc := range []struct {
-		name              string
-		transition        func(context.Context, oauth.Service, permission.Actor, permission.Actor, string) error
-		wantRefreshDetail string
+		name                      string
+		transition                func(context.Context, oauth.Service, permission.Actor, permission.Actor, string) error
+		wantRefreshClassification string
 	}{
 		{
 			name: "administrator rejects client",
@@ -34,7 +34,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 				_, err := svc.ReviewClient(ctx, admin, clientID, oauth.StatusRejected, "review rejected")
 				return err
 			},
-			wantRefreshDetail: "invalid client_id",
+			wantRefreshClassification: "client_id.verify.invalid",
 		},
 		{
 			name: "administrator disables client",
@@ -42,7 +42,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 				_, err := svc.ReviewClient(ctx, admin, clientID, oauth.StatusDisabled, "security incident")
 				return err
 			},
-			wantRefreshDetail: "invalid client_id",
+			wantRefreshClassification: "client_id.verify.invalid",
 		},
 		{
 			name: "developer submits active client for review",
@@ -50,7 +50,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 				_, err := svc.SubmitClientForReview(ctx, owner, clientID)
 				return err
 			},
-			wantRefreshDetail: "invalid client_id",
+			wantRefreshClassification: "client_id.verify.invalid",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -91,7 +91,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 				ClientSecret: credential.clientSecret,
 				RefreshToken: credential.refreshToken,
 			})
-			assertHTTPError(t, err, 400, tc.wantRefreshDetail)
+			assertHTTPError(t, err, 400, tc.wantRefreshClassification)
 		})
 	}
 }
@@ -136,14 +136,14 @@ func TestServiceSecretRotationInvalidatesCredentialsButPreservesAuthorizationsEx
 		ClientSecret: newSecret,
 		RefreshToken: credential.refreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "client_credentials",
 		ClientID:     credential.clientID,
 		ClientSecret: credential.clientSecret,
 		Scope:        "account.read.self",
 	})
-	assertHTTPError(t, err, 400, "invalid client_secret")
+	assertHTTPError(t, err, 400, "client_secret.verify.invalid")
 }
 
 func TestServiceGrantRevocationInvalidatesOnlyThatGrantCredentialsExactly(t *testing.T) {
@@ -238,7 +238,7 @@ func TestServiceClientPermissionReductionRevokesOnlyIncompatibleGrantExactly(t *
 		ClientSecret: clientSecret,
 		RefreshToken: updateCredential.refreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 }
 
 func TestServiceClientMetadataUpdatePreservesCredentialsExactly(t *testing.T) {
@@ -317,7 +317,7 @@ func TestServiceClientRedirectUpdateInvalidatesCredentialsButPreservesGrantExact
 		ClientSecret: credential.clientSecret,
 		RefreshToken: credential.refreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 }
 
 func issueDelegatedCredential(t *testing.T, ctx context.Context, db *database.DB, svc oauth.Service, actor permission.Actor, name, redirectURI, scope string) delegatedCredentialFixture {

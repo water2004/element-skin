@@ -28,7 +28,7 @@ func TestTextureRoutesRejectBadPublicValue(t *testing.T) {
 	req.SetPathValue("hash", "admin_route_hash")
 	rec := httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid is_public") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_visibility\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad public value should be rejected exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -41,7 +41,7 @@ func TestTextureRoutesRejectInvalidPatchTextureType(t *testing.T) {
 	req.SetPathValue("hash", "admin_route_hash")
 	rec := httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "Invalid texture_type") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_type\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid texture type should be rejected exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -55,7 +55,7 @@ func TestTextureRoutesRejectNoUpdateFieldsAndMissingTextureExactly(t *testing.T)
 	req.SetPathValue("hash", "missing_hash")
 	rec := httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "至少需要一个更新字段") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"update\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("empty update should be rejected exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -64,7 +64,7 @@ func TestTextureRoutesRejectNoUpdateFieldsAndMissingTextureExactly(t *testing.T)
 	req.SetPathValue("hash", "missing_hash")
 	rec = httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
-	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"detail":"Texture not found"`) {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing texture update should be 404 exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -73,7 +73,7 @@ func TestTextureRoutesRejectNoUpdateFieldsAndMissingTextureExactly(t *testing.T)
 	req.SetPathValue("hash", "missing_hash")
 	rec = httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "per-user deletion requires user_id") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"delete\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("non-force delete without user_id mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -133,7 +133,7 @@ func TestTextureRoutesRejectMalformedAndInvalidModelWithoutMutation(t *testing.T
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.Textures(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("texture list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	for _, cursor := range []string{
@@ -144,7 +144,7 @@ func TestTextureRoutesRejectMalformedAndInvalidModelWithoutMutation(t *testing.T
 		req = withAdminActor(req, "admin-test-user")
 		rec = httptest.NewRecorder()
 		h.Textures(rec, req)
-		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 			t.Fatalf("texture list malformed cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	}
@@ -154,7 +154,7 @@ func TestTextureRoutesRejectMalformedAndInvalidModelWithoutMutation(t *testing.T
 	req.SetPathValue("hash", "admin_model_hash")
 	rec = httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("texture malformed patch mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -163,7 +163,7 @@ func TestTextureRoutesRejectMalformedAndInvalidModelWithoutMutation(t *testing.T
 	req.SetPathValue("hash", "admin_model_hash")
 	rec = httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid model\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"texture_model\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid texture model mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -256,7 +256,7 @@ func TestTextureRoutesRejectMissingPermissionsExactly(t *testing.T) {
 			req.SetPathValue("hash", "blocked_hash")
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("%s missing permission response mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
 		})
@@ -282,7 +282,7 @@ func TestAdminTexturePatchRollsBackAllFieldsOnDatabaseFailure(t *testing.T) {
 	req.SetPathValue("hash", "admin_patch_rollback")
 	rec := httptest.NewRecorder()
 	h.UpdateTexture(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("admin atomic patch failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	info, err := db.Textures.GetInfo(t.Context(), user.ID, "admin_patch_rollback", "skin")
@@ -336,7 +336,7 @@ func TestAdminTexturePatchReturnsNotFoundWhenLibraryRowIsDeletedAfterRead(t *tes
 	}
 
 	rec := <-result
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"Texture not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"texture\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("deleted texture patch should return exact not found: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	info, err := db.Textures.GetInfo(t.Context(), user.ID, hash, "skin")

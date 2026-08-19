@@ -85,7 +85,7 @@ func (s Service) GetProvider(ctx context.Context, actor permission.Actor, id str
 		return nil, err
 	}
 	if item == nil {
-		return nil, notFound("identity provider not found")
+		return nil, notFound("identity_provider", "resolve", "not_found")
 	}
 	return adminProviderResponse(*item), nil
 }
@@ -106,7 +106,7 @@ func (s Service) CreateProvider(ctx context.Context, actor permission.Actor, inp
 	item.UpdatedAt = item.CreatedAt
 	if err := s.DB.Identities.CreateProvider(ctx, item); err != nil {
 		if isUniqueViolation(err) {
-			return nil, conflict("an identity provider with this issuer and client_id already exists")
+			return nil, conflict("identity_provider", "create", "conflict")
 		}
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (s Service) UpdateProvider(ctx context.Context, actor permission.Actor, id 
 		return nil, err
 	}
 	if current == nil {
-		return nil, notFound("identity provider not found")
+		return nil, notFound("identity_provider", "resolve", "not_found")
 	}
 	item, err := s.providerFromInput(ctx, input, current)
 	if err != nil {
@@ -134,12 +134,12 @@ func (s Service) UpdateProvider(ctx context.Context, actor permission.Actor, id 
 	updated, err := s.DB.Identities.UpdateProvider(ctx, item)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, conflict("an identity provider with this issuer and client_id already exists")
+			return nil, conflict("identity_provider", "create", "conflict")
 		}
 		return nil, err
 	}
 	if !updated {
-		return nil, notFound("identity provider not found")
+		return nil, notFound("identity_provider", "resolve", "not_found")
 	}
 	return adminProviderResponse(item), nil
 }
@@ -154,7 +154,7 @@ func (s Service) DeleteProvider(ctx context.Context, actor permission.Actor, id 
 		return err
 	}
 	if provider == nil {
-		return notFound("identity provider not found")
+		return notFound("identity_provider", "resolve", "not_found")
 	}
 	if s.Redis == nil {
 		return errors.New("identity cache store is not configured")
@@ -173,7 +173,7 @@ func (s Service) DeleteProvider(ctx context.Context, actor permission.Actor, id 
 		return err
 	}
 	if !deleted {
-		return notFound("identity provider not found")
+		return notFound("identity_provider", "resolve", "not_found")
 	}
 	for _, identityID := range deletedIdentityIDs {
 		// The database deletion is already committed. Cached tokens cannot be used
@@ -205,14 +205,14 @@ func (s Service) UpdateIdentityLabel(ctx context.Context, actor permission.Actor
 	}
 	label = strings.TrimSpace(label)
 	if len([]rune(label)) > 80 {
-		return badRequest("identity label must not exceed 80 characters")
+		return badRequest("identity_label", "validate", "too_long")
 	}
 	updated, err := s.DB.Identities.UpdateIdentityLabel(ctx, strings.TrimSpace(id), actor.UserID, label, database.NowMS())
 	if err != nil {
 		return err
 	}
 	if !updated {
-		return notFound("external identity not found")
+		return notFound("identity", "resolve", "not_found")
 	}
 	return nil
 }
@@ -227,7 +227,7 @@ func (s Service) DeleteIdentity(ctx context.Context, actor permission.Actor, id 
 		return err
 	}
 	if item == nil || item.UserID != actor.UserID {
-		return notFound("external identity not found")
+		return notFound("identity", "resolve", "not_found")
 	}
 	if s.Redis != nil {
 		if err := s.Redis.DeleteExternalAccessToken(ctx, id); err != nil {
@@ -239,7 +239,7 @@ func (s Service) DeleteIdentity(ctx context.Context, actor permission.Actor, id 
 		return err
 	}
 	if !deleted {
-		return notFound("external identity not found")
+		return notFound("identity", "resolve", "not_found")
 	}
 	if s.Redis != nil {
 		reportPostCommitError("remove deleted identity token race", s.Redis.DeleteExternalAccessToken(ctx, id))
@@ -254,23 +254,23 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 	input.IconURL = strings.TrimSpace(input.IconURL)
 	input.Adapter = strings.TrimSpace(input.Adapter)
 	if input.Name == "" || len([]rune(input.Name)) > 80 {
-		return model.IdentityProvider{}, badRequest("provider name is required and must not exceed 80 characters")
+		return model.IdentityProvider{}, badRequest("identity_provider_name", "validate", "invalid")
 	}
 	if input.ClientID == "" || len(input.ClientID) > 512 {
-		return model.IdentityProvider{}, badRequest("client_id is required and must not exceed 512 characters")
+		return model.IdentityProvider{}, badRequest("client_id", "validate", "invalid")
 	}
 	if input.Adapter == "" {
 		input.Adapter = AdapterGenericOIDC
 	}
 	if input.Adapter != AdapterGenericOIDC && input.Adapter != AdapterMicrosoft {
-		return model.IdentityProvider{}, badRequest("invalid provider adapter")
+		return model.IdentityProvider{}, badRequest("identity_provider_adapter", "validate", "invalid")
 	}
 	if err := validateEndpointURL(input.IssuerURL); err != nil {
-		return model.IdentityProvider{}, badRequest("invalid issuer_url")
+		return model.IdentityProvider{}, badRequest("issuer_url", "validate", "invalid")
 	}
 	if input.IconURL != "" {
 		if err := validateEndpointURL(input.IconURL); err != nil {
-			return model.IdentityProvider{}, badRequest("invalid icon_url")
+			return model.IdentityProvider{}, badRequest("icon_url", "validate", "invalid")
 		}
 	}
 	scopes, err := normalizeScopes(input.Scopes)
@@ -278,7 +278,7 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 		return model.IdentityProvider{}, err
 	}
 	if input.Adapter == AdapterMicrosoft && (!hasScope(scopes, "XboxLive.signin") || !hasScope(scopes, "offline_access")) {
-		return model.IdentityProvider{}, badRequest("Microsoft providers must request XboxLive.signin and offline_access scopes")
+		return model.IdentityProvider{}, badRequest("identity_provider_scope", "configure", "required")
 	}
 	discovery := s.Discovery
 	if discovery == nil {
@@ -286,19 +286,23 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 	}
 	metadata, err := discovery.Discover(ctx, input.IssuerURL)
 	if err != nil {
-		return model.IdentityProvider{}, badRequest(err.Error())
+		object, operation, reason, params := util.ErrorClassification(err)
+		if object == util.InternalErrorObject {
+			object, operation, reason = "identity_provider", "discover", "failed"
+		}
+		return model.IdentityProvider{}, badRequest(object, operation, reason, params)
 	}
 	if metadata.Issuer != input.IssuerURL {
-		return model.IdentityProvider{}, badRequest("OIDC discovery issuer does not exactly match issuer_url")
+		return model.IdentityProvider{}, badRequest("identity_provider", "discover", "mismatch")
 	}
 	for _, endpoint := range []string{metadata.AuthorizationEndpoint, metadata.TokenEndpoint, metadata.JWKSURI} {
 		if err := validateEndpointURL(endpoint); err != nil {
-			return model.IdentityProvider{}, badRequest("OIDC discovery document contains an invalid required endpoint")
+			return model.IdentityProvider{}, badRequest("identity_provider", "discover", "invalid")
 		}
 	}
 	if metadata.UserInfoEndpoint != "" {
 		if err := validateEndpointURL(metadata.UserInfoEndpoint); err != nil {
-			return model.IdentityProvider{}, badRequest("OIDC discovery document contains an invalid userinfo endpoint")
+			return model.IdentityProvider{}, badRequest("identity_provider", "discover", "invalid")
 		}
 	}
 	secretCiphertext := ""
@@ -349,7 +353,7 @@ func normalizeScopes(scopes []string) ([]string, error) {
 	for _, scope := range scopes {
 		for _, item := range strings.Fields(scope) {
 			if len(item) > 128 || strings.ContainsAny(item, `"\\`) {
-				return nil, badRequest("invalid OIDC scope")
+				return nil, badRequest("oidc_scope", "validate", "invalid")
 			}
 			if !seen[item] {
 				seen[item] = true
@@ -361,7 +365,7 @@ func normalizeScopes(scopes []string) ([]string, error) {
 		out = append(out, "openid")
 	}
 	if len(out) > 32 {
-		return nil, badRequest("too many OIDC scopes")
+		return nil, badRequest("oidc_scope", "validate", "exceeded")
 	}
 	sort.Strings(out)
 	return out, nil
@@ -439,7 +443,22 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }
 
-func badRequest(detail string) util.HTTPError { return util.HTTPError{Status: 400, Detail: detail} }
-func forbidden() util.HTTPError               { return util.HTTPError{Status: 403, Detail: "permission denied"} }
-func notFound(detail string) util.HTTPError   { return util.HTTPError{Status: 404, Detail: detail} }
-func conflict(detail string) util.HTTPError   { return util.HTTPError{Status: 409, Detail: detail} }
+func badRequest(object, operation, reason string, params ...map[string]any) util.HTTPError {
+	return util.HTTPError{Status: 400, Object: object, Operation: operation, Reason: reason, Params: errorParams(params)}
+}
+func forbidden() util.HTTPError {
+	return util.HTTPError{Status: 403, Object: "permission", Operation: "check", Reason: "denied"}
+}
+func notFound(object, operation, reason string) util.HTTPError {
+	return util.HTTPError{Status: 404, Object: object, Operation: operation, Reason: reason}
+}
+func conflict(object, operation, reason string) util.HTTPError {
+	return util.HTTPError{Status: 409, Object: object, Operation: operation, Reason: reason}
+}
+
+func errorParams(values []map[string]any) map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	return values[0]
+}

@@ -25,7 +25,7 @@ func New(db *database.DB, cfg config.Config, redis redisstore.Store, settings se
 }
 
 func yggErr(status int, code, msg string) error {
-	return util.HTTPError{Status: status, Detail: msg, YggError: code}
+	return util.YggError{Status: status, Code: code, Message: msg}
 }
 
 func (y Yggdrasil) signer() (*Signer, error) {

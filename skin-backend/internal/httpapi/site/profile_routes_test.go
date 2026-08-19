@@ -159,7 +159,7 @@ func TestProfileRoutesUseProfileIDPathValueAndRejectMissingPermissionsExactly(t 
 			req := withUserActorWithoutPermission(tc.makeReq(), user.ID, tc.permission)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("%s permission mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
 		})
@@ -179,7 +179,7 @@ func TestProfileRoutesRejectForeignProfileExactly(t *testing.T) {
 	req = withUserActor(req, other.ID)
 	rec := httptest.NewRecorder()
 	h.UpdateProfile(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), `"detail":"not allowed"`) {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("foreign update should be rejected exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchanged, err := db.Profiles.GetByID(req.Context(), profile.ID)
@@ -200,7 +200,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.CreateProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("create bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -208,7 +208,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.CreateProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "角色名只能包含字母") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile_name\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("create invalid name mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -217,7 +217,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"角色名已被占用\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile_name\",\"operation\":\"reserve\",\"reason\":\"conflict\"}}\n" {
 		t.Fatalf("rename conflict mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	unchanged, err := db.Profiles.GetByID(req.Context(), target.ID)
@@ -229,7 +229,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ListMyProfiles(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("list invalid cursor mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -238,7 +238,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteProfile(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("delete missing profile mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -252,7 +252,7 @@ func TestProfileRoutesRejectInvalidInputsAndConflictsExactly(t *testing.T) {
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.UpdateProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("update bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -286,7 +286,7 @@ func TestProfileRoutesRejectForeignTextureClearsWithoutMutation(t *testing.T) {
 			req = withUserActor(req, other.ID)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"not allowed\"}\n" {
+			if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("foreign %s clear mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
 		})

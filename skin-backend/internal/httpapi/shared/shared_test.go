@@ -177,14 +177,14 @@ func TestReadMultipartUploadRejectsExactMalformedInputs(t *testing.T) {
 	if !reflect.DeepEqual(upload, shared.MultipartUpload{}) {
 		t.Fatalf("oversized upload should return zero upload, got %#v", upload)
 	}
-	assertSharedHTTPError(t, err, http.StatusBadRequest, "File too large")
+	assertSharedHTTPError(t, err, http.StatusBadRequest, "upload_file.validate.too_large")
 
 	req = readMultipartUploadRequest(t, "note", "ignored.txt", []byte("abcde"), map[string]string{"title": "missing"})
 	upload, err = shared.ReadMultipartUpload(req, "file", 5)
 	if !reflect.DeepEqual(upload, shared.MultipartUpload{}) {
 		t.Fatalf("missing file should return zero upload, got %#v", upload)
 	}
-	assertSharedHTTPError(t, err, http.StatusBadRequest, "file is required")
+	assertSharedHTTPError(t, err, http.StatusBadRequest, "upload_file.validate.required")
 
 	req = httptest.NewRequest(http.MethodPost, "/upload", bytes.NewBufferString("not multipart"))
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=missing")
@@ -192,7 +192,7 @@ func TestReadMultipartUploadRejectsExactMalformedInputs(t *testing.T) {
 	if !reflect.DeepEqual(upload, shared.MultipartUpload{}) {
 		t.Fatalf("malformed upload should return zero upload, got %#v", upload)
 	}
-	assertSharedHTTPError(t, err, http.StatusBadRequest, "invalid multipart form")
+	assertSharedHTTPError(t, err, http.StatusBadRequest, "request.decode.invalid")
 }
 
 func TestReadMultipartUploadRejectsAmbiguousAndExcessivePartsExactly(t *testing.T) {
@@ -225,7 +225,7 @@ func TestReadMultipartUploadRejectsAmbiguousAndExcessivePartsExactly(t *testing.
 					_, _ = part.Write([]byte("x"))
 				}
 			},
-			detail: "duplicate file field",
+			detail: "upload_field.decode.conflict",
 		},
 		{
 			name: "duplicate field",
@@ -233,14 +233,14 @@ func TestReadMultipartUploadRejectsAmbiguousAndExcessivePartsExactly(t *testing.
 				_ = writer.WriteField("title", "first")
 				_ = writer.WriteField("title", "second")
 			},
-			detail: "duplicate multipart field",
+			detail: "upload_field.decode.conflict",
 		},
 		{
 			name: "oversized field",
 			parts: func(writer *multipart.Writer) {
 				_ = writer.WriteField("title", strings.Repeat("x", shared.MaxMultipartFieldBytes+1))
 			},
-			detail: "multipart field too large",
+			detail: "upload_field.decode.too_large",
 		},
 		{
 			name: "too many fields",
@@ -249,7 +249,7 @@ func TestReadMultipartUploadRejectsAmbiguousAndExcessivePartsExactly(t *testing.
 					_ = writer.WriteField(fmt.Sprintf("field_%d", index), "x")
 				}
 			},
-			detail: "too many multipart fields",
+			detail: "upload_field.decode.exceeded",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -292,7 +292,7 @@ func assertSharedHTTPError(t *testing.T, err error, status int, detail string) {
 	if !ok {
 		t.Fatalf("error type=%T detail=%v, want util.HTTPError{%d,%q}", err, err, status, detail)
 	}
-	if httpErr.Status != status || httpErr.Detail != detail {
+	if httpErr.Status != status || httpErr.Error() != detail {
 		t.Fatalf("HTTPError=%#v, want status=%d detail=%q", httpErr, status, detail)
 	}
 }

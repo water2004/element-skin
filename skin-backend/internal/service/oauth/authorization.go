@@ -57,7 +57,7 @@ func (s Service) RevokeGrant(ctx context.Context, actor permission.Actor, grantI
 		return err
 	}
 	if !ok {
-		return notFound("oauth grant not found")
+		return notFound("oauth_grant", "resolve", "not_found")
 	}
 	reportPostCommitError("remove revoked grant access tokens", s.Redis.DeleteOAuthAccessTokensByGrant(ctx, grantID))
 	return nil
@@ -150,23 +150,23 @@ func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Acto
 
 func (s Service) validAuthorizationRequest(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (model.OAuthClient, authorizationScopes, error) {
 	if req.ResponseType != "code" {
-		return model.OAuthClient{}, authorizationScopes{}, badRequest("response_type must be code")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("response_type", "validate", "unsupported")
 	}
 	client, err := s.DB.OAuth.GetClient(ctx, strings.TrimSpace(req.ClientID))
 	if err != nil {
 		return model.OAuthClient{}, authorizationScopes{}, err
 	}
 	if client == nil || client.Status != StatusActive {
-		return model.OAuthClient{}, authorizationScopes{}, badRequest("invalid client_id")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("client_id", "verify", "invalid")
 	}
 	if req.RedirectURI != client.RedirectURI {
-		return model.OAuthClient{}, authorizationScopes{}, badRequest("invalid redirect_uri")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("redirect_uri", "validate", "invalid")
 	}
 	if req.CodeChallengeMethod != "S256" || strings.TrimSpace(req.CodeChallenge) == "" {
-		return model.OAuthClient{}, authorizationScopes{}, badRequest("PKCE S256 is required")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("pkce", "authorize", "required")
 	}
 	if len(req.Nonce) > 512 {
-		return model.OAuthClient{}, authorizationScopes{}, badRequest("nonce is too long")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("oidc_nonce", "validate", "too_long")
 	}
 	scopes, err := parseAuthorizationScopes(req.Scope)
 	if err != nil {
@@ -180,13 +180,13 @@ func (s Service) validAuthorizationRequest(ctx context.Context, actor permission
 	for _, code := range scopes.Permissions {
 		def := permission.MustDefinitionByCode(code)
 		if def.Scope.ID == permission.ScopeServer {
-			return model.OAuthClient{}, authorizationScopes{}, badRequest("invalid scope")
+			return model.OAuthClient{}, authorizationScopes{}, badRequest("oauth_scope", "validate", "invalid")
 		}
 		if !actor.Has(def) {
 			return model.OAuthClient{}, authorizationScopes{}, forbidden()
 		}
 		if !clientAllowed[int64(def.ID)] {
-			return model.OAuthClient{}, authorizationScopes{}, badRequest("scope exceeds client permission limit")
+			return model.OAuthClient{}, authorizationScopes{}, badRequest("oauth_scope", "authorize", "denied")
 		}
 	}
 	return *client, scopes, nil
@@ -211,7 +211,7 @@ func (s Service) activeGrantPermissionCodes(ctx context.Context, grantID, userID
 func authorizationRedirect(rawURL, code, state string) (string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return "", badRequest("invalid redirect_uri")
+		return "", badRequest("redirect_uri", "validate", "invalid")
 	}
 	q := u.Query()
 	q.Set("code", code)

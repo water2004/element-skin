@@ -21,7 +21,7 @@ func (h Handler) Create(w http.ResponseWriter, req *http.Request) {
 		IdentityID string `json:"identity_id"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	item, err := h.service.Create(req.Context(), shared.CurrentActor(req), body.IdentityID)

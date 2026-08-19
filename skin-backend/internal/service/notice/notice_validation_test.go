@@ -25,27 +25,27 @@ func TestNoticeServiceValidatesInputsWithoutPersistingInvalidRows(t *testing.T) 
 		{
 			name:  "detail requires summary",
 			input: noticesvc.CreateInput{Title: "Detail", ContentMarkdown: "Body", DisplayMode: noticesvc.DisplayDetail},
-			want:  "summary is required for detail notices",
+			want:  "notice_summary.validate.required",
 		},
 		{
 			name:  "detail requires content",
 			input: noticesvc.CreateInput{Title: "Detail", Summary: "Summary", DisplayMode: noticesvc.DisplayDetail},
-			want:  "content_markdown is required for detail notices",
+			want:  "notice_content.validate.required",
 		},
 		{
 			name:  "invalid link protocol",
 			input: noticesvc.CreateInput{Title: "Bad Link", ContentMarkdown: "Body", LinkText: "Open", LinkURL: "javascript:alert(1)"},
-			want:  "invalid link_url",
+			want:  "notice_link.validate.invalid",
 		},
 		{
 			name:  "link text pair required",
 			input: noticesvc.CreateInput{Title: "Half Link", ContentMarkdown: "Body", LinkURL: "/notifications/abc"},
-			want:  "link_text and link_url must be provided together",
+			want:  "notice_link.validate.incomplete",
 		},
 		{
 			name:  "ends after starts",
 			input: noticesvc.CreateInput{Title: "Bad Time", ContentMarkdown: "Body", StartsAt: ptrInt64(20), EndsAt: ptrInt64(10)},
-			want:  "ends_at must be greater than starts_at",
+			want:  "notice_time_range.validate.invalid",
 		},
 	}
 	for _, tc := range cases {
@@ -93,16 +93,16 @@ func TestNoticeServiceValidationCoversLengthsLevelsAudienceLinksAndPatchClearsEx
 		mutate func(*noticesvc.CreateInput)
 		detail string
 	}{
-		{"invalid type", func(in *noticesvc.CreateInput) { in.Type = "other" }, "invalid type"},
-		{"title required", func(in *noticesvc.CreateInput) { in.Title = " " }, "title is required"},
-		{"title too long", func(in *noticesvc.CreateInput) { in.Title = strings.Repeat("测", noticesvc.MaxTitleLen+1) }, "title too long"},
-		{"summary too long", func(in *noticesvc.CreateInput) { in.Summary = strings.Repeat("测", noticesvc.MaxSummaryLen+1) }, "summary too long"},
-		{"content too long", func(in *noticesvc.CreateInput) { in.ContentMarkdown = strings.Repeat("a", noticesvc.MaxContentLen+1) }, "content_markdown too long"},
-		{"invalid display", func(in *noticesvc.CreateInput) { in.DisplayMode = "popup" }, "invalid display_mode"},
-		{"invalid level", func(in *noticesvc.CreateInput) { in.Level = "loud" }, "invalid level"},
-		{"invalid audience", func(in *noticesvc.CreateInput) { in.Audience = "guests" }, "invalid audience"},
-		{"unsafe protocol-relative link", func(in *noticesvc.CreateInput) { in.LinkText = "Open"; in.LinkURL = "//evil.example" }, "invalid link_url"},
-		{"unsafe control link", func(in *noticesvc.CreateInput) { in.LinkText = "Open"; in.LinkURL = "/ok\nbad" }, "invalid link_url"},
+		{"type.validate.invalid", func(in *noticesvc.CreateInput) { in.Type = "other" }, "type.validate.invalid"},
+		{"title required", func(in *noticesvc.CreateInput) { in.Title = " " }, "notice_title.validate.required"},
+		{"notice_title.validate.too_long", func(in *noticesvc.CreateInput) { in.Title = strings.Repeat("测", noticesvc.MaxTitleLen+1) }, "notice_title.validate.too_long"},
+		{"notice_summary.validate.too_long", func(in *noticesvc.CreateInput) { in.Summary = strings.Repeat("测", noticesvc.MaxSummaryLen+1) }, "notice_summary.validate.too_long"},
+		{"content too long", func(in *noticesvc.CreateInput) { in.ContentMarkdown = strings.Repeat("a", noticesvc.MaxContentLen+1) }, "notice_content.validate.too_long"},
+		{"invalid display", func(in *noticesvc.CreateInput) { in.DisplayMode = "popup" }, "notice_display_mode.validate.invalid"},
+		{"notice_level.validate.invalid", func(in *noticesvc.CreateInput) { in.Level = "loud" }, "notice_level.validate.invalid"},
+		{"notice_audience.validate.invalid", func(in *noticesvc.CreateInput) { in.Audience = "guests" }, "notice_audience.validate.invalid"},
+		{"unsafe protocol-relative link", func(in *noticesvc.CreateInput) { in.LinkText = "Open"; in.LinkURL = "//evil.example" }, "notice_link.validate.invalid"},
+		{"unsafe control link", func(in *noticesvc.CreateInput) { in.LinkText = "Open"; in.LinkURL = "/ok\nbad" }, "notice_link.validate.invalid"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
