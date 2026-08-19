@@ -268,7 +268,7 @@ def test_exchange_device_code_maps_oauth_error_exactly(response_json) -> None:
 
     assert exc.value.status_code == 400
     assert exc.value.error == "authorization_pending"
-    assert exc.value.detail == "authorization pending"
+    assert str(exc.value) == "authorization_pending"
     assert recorder.requests[0].form == {
         "grant_type": ["urn:ietf:params:oauth:grant-type:device_code"],
         "client_id": ["client-1"],
@@ -493,4 +493,4 @@ def test_poll_device_token_reraises_unexpected_oauth_error(response_json) -> Non
         oauth.poll_device_token("device-code-1", interval=1, timeout=30, store=False)
 
     assert exc.value.error == "invalid_grant"
-    assert exc.value.detail == "device code expired"
+    assert str(exc.value) == "invalid_grant"

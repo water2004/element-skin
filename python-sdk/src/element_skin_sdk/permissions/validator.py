@@ -82,8 +82,18 @@ class PermissionValidator:
         if missing:
             raise PermissionDenied(
                 403,
-                f"missing required permission: {', '.join(missing)}",
-                response_body={"detail": "missing required permission", "missing_permissions": missing},
+                "permission",
+                "check",
+                "denied",
+                params={"missing_permissions": missing},
+                response_body={
+                    "error": {
+                        "object": "permission",
+                        "operation": "check",
+                        "reason": "denied",
+                        "params": {"missing_permissions": missing},
+                    }
+                },
             )
 
 

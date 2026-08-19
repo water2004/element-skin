@@ -18,21 +18,26 @@ class InvalidScope(ValidationError):
 
 
 class APIError(ElementSkinError):
-    """Raised for non-2xx HTTP API responses."""
+    """Raised for a structured non-2xx Element Skin API response."""
 
     def __init__(
         self,
         status_code: int,
-        detail: str,
+        object: str,
+        operation: str,
+        reason: str,
         *,
+        params: dict[str, object] | None = None,
         response_body: object | None = None,
-        error: str | None = None,
     ):
-        super().__init__(detail)
+        classification = f"{object}.{operation}.{reason}"
+        super().__init__(classification)
         self.status_code = status_code
-        self.detail = detail
+        self.object = object
+        self.operation = operation
+        self.reason = reason
+        self.params = params or {}
         self.response_body = response_body
-        self.error = error
 
 
 class AuthenticationError(APIError):
@@ -47,8 +52,14 @@ class NotFound(APIError):
     """Raised when a resource does not exist."""
 
 
-class OAuthError(APIError):
+class OAuthError(ElementSkinError):
     """Raised for OAuth protocol errors."""
+
+    def __init__(self, status_code: int, error: str, *, response_body: object | None = None):
+        super().__init__(error)
+        self.status_code = status_code
+        self.error = error
+        self.response_body = response_body
 
 
 class WebhookError(ValidationError):

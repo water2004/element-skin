@@ -52,10 +52,15 @@ def test_local_permission_check_blocks_request_before_transport(response_json) -
         api.me()
 
     assert exc.value.status_code == 403
-    assert exc.value.detail == "missing required permission: account.read.self"
+    assert str(exc.value) == "permission.check.denied"
+    assert exc.value.params == {"missing_permissions": ["account.read.self"]}
     assert exc.value.response_body == {
-        "detail": "missing required permission",
-        "missing_permissions": ["account.read.self"],
+        "error": {
+            "object": "permission",
+            "operation": "check",
+            "reason": "denied",
+            "params": {"missing_permissions": ["account.read.self"]},
+        }
     }
     assert recorder.requests == []
 
@@ -100,7 +105,8 @@ def test_email_change_permission_check_blocks_both_requests(response_json) -> No
         with pytest.raises(PermissionDenied) as exc:
             call()
         assert exc.value.status_code == 403
-        assert exc.value.detail == "missing required permission: account.update.self"
+        assert str(exc.value) == "permission.check.denied"
+        assert exc.value.params == {"missing_permissions": ["account.update.self"]}
     assert recorder.requests == []
 
 
@@ -297,8 +303,11 @@ def test_minecraft_has_joined_posts_exact_json(response_json) -> None:
     }
 
 
-def test_http_error_maps_detail_exactly(response_json) -> None:
-    recorder = RequestRecorder(lambda request: response_json({"detail": "texture not found"}, 404))
+def test_http_error_maps_structured_error_exactly(response_json) -> None:
+    payload = {
+        "error": {"object": "texture", "operation": "resolve", "reason": "not_found"}
+    }
+    recorder = RequestRecorder(lambda request: response_json(payload, 404))
     api = ElementSkinAPI(
         "https://skin.example.test",
         access_token="access-token-1",
@@ -310,8 +319,12 @@ def test_http_error_maps_detail_exactly(response_json) -> None:
         api.get_texture("missing-hash", "skin")
 
     assert exc.value.status_code == 404
-    assert exc.value.detail == "texture not found"
-    assert exc.value.response_body == {"detail": "texture not found"}
+    assert (exc.value.object, exc.value.operation, exc.value.reason) == (
+        "texture",
+        "resolve",
+        "not_found",
+    )
+    assert exc.value.response_body == payload
 
 
 def test_api_context_manager_closes_owned_client(response_json) -> None:

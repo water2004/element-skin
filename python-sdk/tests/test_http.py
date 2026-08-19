@@ -47,22 +47,22 @@ def test_http_put_and_delete_helpers_use_exact_methods(response_json) -> None:
 
 
 @pytest.mark.parametrize(
-    ("status_code", "payload", "expected_cls", "expected_detail"),
+    ("status_code", "descriptor", "expected_cls"),
     [
-        (401, {"detail": "missing token"}, AuthenticationError, "missing token"),
-        (403, {"detail": "forbidden"}, PermissionDenied, "forbidden"),
-        (404, {"detail": "missing"}, NotFound, "missing"),
-        (409, {"detail": "conflict"}, APIError, "conflict"),
-        (500, {"message": "boom"}, APIError, "Internal Server Error"),
+        (401, {"object": "authentication", "operation": "verify", "reason": "required"}, AuthenticationError),
+        (403, {"object": "permission", "operation": "check", "reason": "denied"}, PermissionDenied),
+        (404, {"object": "profile", "operation": "resolve", "reason": "not_found"}, NotFound),
+        (409, {"object": "identity", "operation": "link", "reason": "conflict"}, APIError),
+        (500, {"object": "server", "operation": "handle", "reason": "failed"}, APIError),
     ],
 )
 def test_http_error_mapping_for_site_api(
     response_json,
     status_code: int,
-    payload: dict[str, str],
+    descriptor: dict[str, str],
     expected_cls: type[APIError],
-    expected_detail: str,
 ) -> None:
+    payload = {"error": descriptor}
     recorder = RequestRecorder(lambda request: response_json(payload, status_code))
     client = HTTPClient("https://skin.example.test", transport=recorder.transport())
 
@@ -70,7 +70,12 @@ def test_http_error_mapping_for_site_api(
         client.get("/v2/failure")
 
     assert exc.value.status_code == status_code
-    assert exc.value.detail == expected_detail
+    assert exc.value.object == descriptor["object"]
+    assert exc.value.operation == descriptor["operation"]
+    assert exc.value.reason == descriptor["reason"]
+    assert str(exc.value) == ".".join(
+        (descriptor["object"], descriptor["operation"], descriptor["reason"])
+    )
     assert exc.value.response_body == payload
 
 
@@ -82,8 +87,29 @@ def test_http_error_mapping_for_plain_text_response() -> None:
         client.get("/v2/plain")
 
     assert exc.value.status_code == 418
-    assert exc.value.detail == "I'm a teapot"
+    assert exc.value.object == "response"
+    assert exc.value.operation == "decode"
+    assert exc.value.reason == "invalid"
     assert exc.value.response_body == "plain failure"
+
+
+def test_http_error_preserves_structured_params(response_json) -> None:
+    payload = {
+        "error": {
+            "object": "password",
+            "operation": "validate",
+            "reason": "invalid",
+            "params": {"rules": ["min_length", "number"]},
+        }
+    }
+    recorder = RequestRecorder(lambda request: response_json(payload, 400))
+    client = HTTPClient("https://skin.example.test", transport=recorder.transport())
+
+    with pytest.raises(APIError) as exc:
+        client.post("/v2/users/me/password")
+
+    assert exc.value.params == {"rules": ["min_length", "number"]}
+    assert exc.value.response_body == payload
 
 
 def test_http_oauth_error_uses_error_when_description_missing(response_json) -> None:
@@ -95,5 +121,5 @@ def test_http_oauth_error_uses_error_when_description_missing(response_json) -> 
 
     assert exc.value.status_code == 401
     assert exc.value.error == "invalid_client"
-    assert exc.value.detail == "invalid_client"
+    assert str(exc.value) == "invalid_client"
     assert exc.value.response_body == {"error": "invalid_client"}
