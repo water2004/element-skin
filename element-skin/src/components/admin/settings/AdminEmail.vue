@@ -237,6 +237,7 @@ import {
 import type { EmailSuffixPolicy } from '@/api/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const emailSettings = reactive({
   email_verify_enabled: false,
@@ -259,13 +260,10 @@ const emailSuffixPolicy = reactive<EmailSuffixPolicy>({
   denylist: [],
 })
 
-const settingsSnapshot = ref('')
-const policySnapshot = ref('')
-
-const hasSettingsChanges = computed(() => settingsSnapshot.value !== '' && settingsSnapshot.value !== JSON.stringify(emailSettings))
-const hasPolicyChanges = computed(
-  () => policySnapshot.value !== '' && policySnapshot.value !== JSON.stringify(emailSuffixPolicy),
-)
+const settingsDirty = useDirtySnapshot(computed(() => emailSettings))
+const policyDirty = useDirtySnapshot(computed(() => emailSuffixPolicy))
+const hasSettingsChanges = settingsDirty.hasChanges
+const hasPolicyChanges = policyDirty.hasChanges
 
 async function loadSettings() {
   try {
@@ -278,8 +276,8 @@ async function loadSettings() {
       emailSettings.smtp_password = '' // Don't show password
     }
     Object.assign(emailSuffixPolicy, policyResponse.data)
-    settingsSnapshot.value = JSON.stringify(emailSettings)
-    policySnapshot.value = JSON.stringify(emailSuffixPolicy)
+    settingsDirty.capture()
+    policyDirty.capture()
   } catch {
     ElMessage.error('加载邮件设置失败')
   }
@@ -325,7 +323,7 @@ async function saveEmailSuffixPolicy() {
     ElMessage.success('邮箱后缀策略已保存')
     const response = await getAdminEmailSuffixPolicy()
     Object.assign(emailSuffixPolicy, response.data)
-    policySnapshot.value = JSON.stringify(emailSuffixPolicy)
+    policyDirty.capture()
   } catch {
     ElMessage.error('保存邮箱后缀策略失败')
   } finally {
@@ -339,7 +337,7 @@ async function saveSettings() {
     await saveAdminSettingsGroup('email', emailSettings)
     ElMessage.success('设置已保存')
     emailSettings.smtp_password = '' // Clear password field after save
-    settingsSnapshot.value = JSON.stringify(emailSettings)
+    settingsDirty.capture()
   } catch {
     ElMessage.error('保存失败')
   } finally {

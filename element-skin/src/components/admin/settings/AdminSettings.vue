@@ -231,12 +231,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Setting, Monitor, Lock, Key } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const settings = reactive({
   site: {
@@ -274,25 +275,27 @@ const regulatoryCollapse = ref<string[]>([])
 
 type SettingsGroup = 'site' | 'security' | 'auth'
 
-const snapshots = reactive<Record<SettingsGroup, string>>({
-  site: '',
-  security: '',
-  auth: '',
-})
-
-function snapshotGroup(group: SettingsGroup) {
-  return JSON.stringify(settings[group])
-}
+const siteDirty = useDirtySnapshot(computed(() => settings.site))
+const securityDirty = useDirtySnapshot(computed(() => settings.security))
+const authDirty = useDirtySnapshot(computed(() => settings.auth))
 
 function hasGroupChanges(group: SettingsGroup) {
-  return snapshots[group] !== '' && snapshots[group] !== snapshotGroup(group)
+  if (group === 'site') return siteDirty.hasChanges.value
+  if (group === 'security') return securityDirty.hasChanges.value
+  return authDirty.hasChanges.value
+}
+
+function captureGroup(group: SettingsGroup) {
+  if (group === 'site') siteDirty.capture()
+  else if (group === 'security') securityDirty.capture()
+  else authDirty.capture()
 }
 
 async function loadGroup(group: SettingsGroup) {
   try {
     const res = await getAdminSettingsGroup(group)
     Object.assign(settings[group], res.data)
-    snapshots[group] = snapshotGroup(group)
+    captureGroup(group)
   } catch {
     ElMessage.error(`加载 ${group} 设置失败`)
   }
@@ -306,7 +309,7 @@ async function saveGroup(group: SettingsGroup) {
   saving[group] = true
   try {
     await saveAdminSettingsGroup(group, settings[group])
-    snapshots[group] = snapshotGroup(group)
+    captureGroup(group)
     ElMessage.success('设置已更新')
   } catch {
     ElMessage.error('保存失败')

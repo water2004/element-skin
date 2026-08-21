@@ -65,12 +65,12 @@ import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/setti
 import PageHeader from '@/components/common/PageHeader.vue'
 import { availableEasterEggs } from '@/easter-eggs'
 import UiCard from '@/components/ui/UiCard.vue'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const easterEggOptions = availableEasterEggs()
 const enabledIds = ref<string[]>([])
 const saving = ref(false)
-const snapshot = ref('')
-const hasChanges = computed(() => snapshot.value !== '' && snapshot.value !== JSON.stringify(enabledIds.value))
+const { hasChanges, capture } = useDirtySnapshot(computed(() => enabledIds.value))
 
 async function loadSettings() {
   try {
@@ -79,7 +79,7 @@ async function loadSettings() {
     enabledIds.value = Array.isArray(enabled)
       ? enabled.filter((item): item is string => typeof item === 'string')
       : []
-    snapshot.value = JSON.stringify(enabledIds.value)
+    capture()
   } catch {
     ElMessage.error('加载彩蛋设置失败')
   }
@@ -101,7 +101,7 @@ async function saveSettings() {
       easter_eggs_enabled: enabledIds.value,
     })
     ElMessage.success('彩蛋设置已更新')
-    snapshot.value = JSON.stringify(enabledIds.value)
+    capture()
   } catch {
     ElMessage.error('保存彩蛋设置失败')
   } finally {

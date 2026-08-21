@@ -213,6 +213,7 @@ import { saveFallbackConfiguration } from '@/components/admin/mojang/fallbackSav
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import { getErrorMessage } from '@/utils/error'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const settings = ref<FallbackSettingsForm>({
   fallback_strategy: 'serial',
@@ -220,11 +221,8 @@ const settings = ref<FallbackSettingsForm>({
 })
 const fallbacks = ref<FallbackRow[]>([])
 const saving = ref(false)
-const snapshot = ref('')
-const hasChanges = computed(
-  () =>
-    snapshot.value !== '' &&
-    snapshot.value !== JSON.stringify(toFallbackSettingsPayload(settings.value, fallbacks.value)),
+const { hasChanges, capture } = useDirtySnapshot(
+  computed(() => toFallbackSettingsPayload(settings.value, fallbacks.value)),
 )
 
 async function fetchSettings() {
@@ -233,7 +231,7 @@ async function fetchSettings() {
     const normalized = normalizeFallbackSettings(res.data, fallbacks.value)
     settings.value = normalized.settings
     fallbacks.value = normalized.rows.map((row) => reactive(row))
-    snapshot.value = JSON.stringify(toFallbackSettingsPayload(settings.value, fallbacks.value))
+    capture()
   } catch {
     ElMessage.error('加载 Fallback 配置失败')
   }
@@ -250,7 +248,7 @@ async function saveSettings() {
     const normalized = normalizeFallbackSettings(savedSettings, fallbacks.value)
     settings.value = normalized.settings
     fallbacks.value = normalized.rows.map((row) => reactive(row))
-    snapshot.value = JSON.stringify(toFallbackSettingsPayload(settings.value, fallbacks.value))
+    capture()
 
     ElMessage.success('所有配置及白名单已成功同步')
   } catch (e: unknown) {
