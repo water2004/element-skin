@@ -6,6 +6,13 @@
     >
       <template #icon><Connection /></template>
       <template #actions>
+        <el-tag
+          v-if="hasChanges"
+          size="small"
+          type="warning"
+          effect="dark"
+          >有未保存更改</el-tag
+        >
         <el-button
           type="primary"
           :icon="Check"
@@ -167,7 +174,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage, ElLoading } from 'element-plus'
 import {
   Plus,
@@ -194,6 +201,7 @@ import {
   moveFallback,
   normalizeFallbackSettings,
   removeFallbackAt,
+  toFallbackSettingsPayload,
   type FallbackSettingsForm,
 } from '@/components/admin/mojang/fallbackSettings'
 import {
@@ -212,6 +220,12 @@ const settings = ref<FallbackSettingsForm>({
 })
 const fallbacks = ref<FallbackRow[]>([])
 const saving = ref(false)
+const snapshot = ref('')
+const hasChanges = computed(
+  () =>
+    snapshot.value !== '' &&
+    snapshot.value !== JSON.stringify(toFallbackSettingsPayload(settings.value, fallbacks.value)),
+)
 
 async function fetchSettings() {
   try {
@@ -219,6 +233,7 @@ async function fetchSettings() {
     const normalized = normalizeFallbackSettings(res.data, fallbacks.value)
     settings.value = normalized.settings
     fallbacks.value = normalized.rows.map((row) => reactive(row))
+    snapshot.value = JSON.stringify(toFallbackSettingsPayload(settings.value, fallbacks.value))
   } catch {
     ElMessage.error('加载 Fallback 配置失败')
   }
@@ -235,6 +250,7 @@ async function saveSettings() {
     const normalized = normalizeFallbackSettings(savedSettings, fallbacks.value)
     settings.value = normalized.settings
     fallbacks.value = normalized.rows.map((row) => reactive(row))
+    snapshot.value = JSON.stringify(toFallbackSettingsPayload(settings.value, fallbacks.value))
 
     ElMessage.success('所有配置及白名单已成功同步')
   } catch (e: unknown) {

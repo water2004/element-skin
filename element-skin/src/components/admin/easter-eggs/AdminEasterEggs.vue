@@ -3,6 +3,13 @@
     <PageHeader title="彩蛋列表" subtitle="配置服务端允许启用的节日彩蛋">
       <template #icon><MagicStick /></template>
       <template #actions>
+        <el-tag
+          v-if="hasChanges"
+          size="small"
+          type="warning"
+          effect="dark"
+          >有未保存更改</el-tag
+        >
         <el-button :icon="Refresh" @click="loadSettings" class="hover-lift"> 重新加载 </el-button>
         <el-button type="primary" :loading="saving" @click="saveSettings" class="hover-lift">
           保存
@@ -57,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MagicStick, Refresh } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
@@ -68,6 +75,8 @@ import UiCard from '@/components/ui/UiCard.vue'
 const easterEggOptions = availableEasterEggs()
 const enabledIds = ref<string[]>([])
 const saving = ref(false)
+const snapshot = ref('')
+const hasChanges = computed(() => snapshot.value !== '' && snapshot.value !== JSON.stringify(enabledIds.value))
 
 async function loadSettings() {
   try {
@@ -76,6 +85,7 @@ async function loadSettings() {
     enabledIds.value = Array.isArray(enabled)
       ? enabled.filter((item): item is string => typeof item === 'string')
       : []
+    snapshot.value = JSON.stringify(enabledIds.value)
   } catch {
     ElMessage.error('加载彩蛋设置失败')
   }
@@ -97,6 +107,7 @@ async function saveSettings() {
       easter_eggs_enabled: enabledIds.value,
     })
     ElMessage.success('彩蛋设置已更新')
+    snapshot.value = JSON.stringify(enabledIds.value)
   } catch {
     ElMessage.error('保存彩蛋设置失败')
   } finally {

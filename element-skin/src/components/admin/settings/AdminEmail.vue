@@ -15,6 +15,14 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Postcard /></el-icon>
             <span>SMTP 与验证配置</span>
+            <el-tag
+              v-if="hasSettingsChanges"
+              size="small"
+              type="warning"
+              effect="dark"
+              class="ml-2"
+              >有未保存更改</el-tag
+            >
           </div>
           <el-button
             type="primary"
@@ -118,6 +126,14 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Filter /></el-icon>
             <span>账户邮箱后缀策略</span>
+            <el-tag
+              v-if="hasPolicyChanges"
+              size="small"
+              type="warning"
+              effect="dark"
+              class="ml-2"
+              >有未保存更改</el-tag
+            >
           </div>
           <el-button
             type="primary"
@@ -209,7 +225,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Message, Postcard, Filter } from '@element-plus/icons-vue'
 import {
@@ -243,6 +259,14 @@ const emailSuffixPolicy = reactive<EmailSuffixPolicy>({
   denylist: [],
 })
 
+const settingsSnapshot = ref('')
+const policySnapshot = ref('')
+
+const hasSettingsChanges = computed(() => settingsSnapshot.value !== '' && settingsSnapshot.value !== JSON.stringify(emailSettings))
+const hasPolicyChanges = computed(
+  () => policySnapshot.value !== '' && policySnapshot.value !== JSON.stringify(emailSuffixPolicy),
+)
+
 async function loadSettings() {
   try {
     const [settingsResponse, policyResponse] = await Promise.all([
@@ -254,6 +278,8 @@ async function loadSettings() {
       emailSettings.smtp_password = '' // Don't show password
     }
     Object.assign(emailSuffixPolicy, policyResponse.data)
+    settingsSnapshot.value = JSON.stringify(emailSettings)
+    policySnapshot.value = JSON.stringify(emailSuffixPolicy)
   } catch {
     ElMessage.error('加载邮件设置失败')
   }
@@ -299,6 +325,7 @@ async function saveEmailSuffixPolicy() {
     ElMessage.success('邮箱后缀策略已保存')
     const response = await getAdminEmailSuffixPolicy()
     Object.assign(emailSuffixPolicy, response.data)
+    policySnapshot.value = JSON.stringify(emailSuffixPolicy)
   } catch {
     ElMessage.error('保存邮箱后缀策略失败')
   } finally {
@@ -312,6 +339,7 @@ async function saveSettings() {
     await saveAdminSettingsGroup('email', emailSettings)
     ElMessage.success('设置已保存')
     emailSettings.smtp_password = '' // Clear password field after save
+    settingsSnapshot.value = JSON.stringify(emailSettings)
   } catch {
     ElMessage.error('保存失败')
   } finally {

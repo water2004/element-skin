@@ -16,6 +16,14 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Monitor /></el-icon>
             <span>基础设置</span>
+            <el-tag
+              v-if="hasGroupChanges('site')"
+              size="small"
+              type="warning"
+              effect="dark"
+              class="ml-2"
+              >有未保存更改</el-tag
+            >
           </div>
           <el-button
             type="primary"
@@ -136,6 +144,14 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Lock /></el-icon>
             <span>安全与速率限制</span>
+            <el-tag
+              v-if="hasGroupChanges('security')"
+              size="small"
+              type="warning"
+              effect="dark"
+              class="ml-2"
+              >有未保存更改</el-tag
+            >
           </div>
           <el-button
             type="primary"
@@ -183,6 +199,14 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Key /></el-icon>
             <span>令牌与认证 (JWT)</span>
+            <el-tag
+              v-if="hasGroupChanges('auth')"
+              size="small"
+              type="warning"
+              effect="dark"
+              class="ml-2"
+              >有未保存更改</el-tag
+            >
           </div>
           <el-button
             type="primary"
@@ -250,10 +274,25 @@ const regulatoryCollapse = ref<string[]>([])
 
 type SettingsGroup = 'site' | 'security' | 'auth'
 
+const snapshots = reactive<Record<SettingsGroup, string>>({
+  site: '',
+  security: '',
+  auth: '',
+})
+
+function snapshotGroup(group: SettingsGroup) {
+  return JSON.stringify(settings[group])
+}
+
+function hasGroupChanges(group: SettingsGroup) {
+  return snapshots[group] !== '' && snapshots[group] !== snapshotGroup(group)
+}
+
 async function loadGroup(group: SettingsGroup) {
   try {
     const res = await getAdminSettingsGroup(group)
     Object.assign(settings[group], res.data)
+    snapshots[group] = snapshotGroup(group)
   } catch {
     ElMessage.error(`加载 ${group} 设置失败`)
   }
@@ -267,6 +306,7 @@ async function saveGroup(group: SettingsGroup) {
   saving[group] = true
   try {
     await saveAdminSettingsGroup(group, settings[group])
+    snapshots[group] = snapshotGroup(group)
     ElMessage.success('设置已更新')
   } catch {
     ElMessage.error('保存失败')
