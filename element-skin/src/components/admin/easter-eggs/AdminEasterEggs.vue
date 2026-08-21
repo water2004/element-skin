@@ -41,13 +41,7 @@
             <el-icon><MagicStick /></el-icon>
           </div>
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap mb-2">
-              <h3 class="m-0 text-[17px] font-bold text-[var(--color-heading)]">{{ egg.name }}</h3>
-              <el-tag v-if="enabledIds.includes(egg.id)" type="success" effect="light"
-                >已启用</el-tag
-              >
-              <el-tag v-else type="info" effect="plain">未启用</el-tag>
-            </div>
+            <h3 class="m-0 mb-2 text-[17px] font-bold text-[var(--color-heading)]">{{ egg.name }}</h3>
             <p class="m-0 mb-3 text-[var(--color-text-light)] leading-normal">
               {{ egg.description }}
             </p>
