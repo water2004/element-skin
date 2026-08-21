@@ -16,14 +16,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Monitor /></el-icon>
             <span>基础设置</span>
-            <el-tag
-              v-if="hasGroupChanges('site')"
-              size="small"
-              type="warning"
-              effect="dark"
-              class="ml-2"
-              >有未保存更改</el-tag
-            >
+            <DirtyTag :visible="hasGroupChanges('site')" />
           </div>
           <el-button
             type="primary"
@@ -144,14 +137,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Lock /></el-icon>
             <span>安全与速率限制</span>
-            <el-tag
-              v-if="hasGroupChanges('security')"
-              size="small"
-              type="warning"
-              effect="dark"
-              class="ml-2"
-              >有未保存更改</el-tag
-            >
+            <DirtyTag :visible="hasGroupChanges('security')" />
           </div>
           <el-button
             type="primary"
@@ -199,14 +185,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Key /></el-icon>
             <span>令牌与认证 (JWT)</span>
-            <el-tag
-              v-if="hasGroupChanges('auth')"
-              size="small"
-              type="warning"
-              effect="dark"
-              class="ml-2"
-              >有未保存更改</el-tag
-            >
+            <DirtyTag :visible="hasGroupChanges('auth')" />
           </div>
           <el-button
             type="primary"
@@ -237,6 +216,7 @@ import { Refresh, Setting, Monitor, Lock, Key } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const settings = reactive({

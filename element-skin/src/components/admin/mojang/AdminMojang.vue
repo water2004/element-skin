@@ -6,13 +6,7 @@
     >
       <template #icon><Connection /></template>
       <template #actions>
-        <el-tag
-          v-if="hasChanges"
-          size="small"
-          type="warning"
-          effect="dark"
-          >有未保存更改</el-tag
-        >
+        <DirtyTag :visible="hasChanges" :spaced="false" />
         <el-button
           type="primary"
           :icon="Check"
@@ -212,6 +206,7 @@ import {
 import { saveFallbackConfiguration } from '@/components/admin/mojang/fallbackSave'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
 import { getErrorMessage } from '@/utils/error'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 

@@ -15,14 +15,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Postcard /></el-icon>
             <span>SMTP 与验证配置</span>
-            <el-tag
-              v-if="hasSettingsChanges"
-              size="small"
-              type="warning"
-              effect="dark"
-              class="ml-2"
-              >有未保存更改</el-tag
-            >
+            <DirtyTag :visible="hasSettingsChanges" />
           </div>
           <el-button
             type="primary"
@@ -126,14 +119,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Filter /></el-icon>
             <span>账户邮箱后缀策略</span>
-            <el-tag
-              v-if="hasPolicyChanges"
-              size="small"
-              type="warning"
-              effect="dark"
-              class="ml-2"
-              >有未保存更改</el-tag
-            >
+            <DirtyTag :visible="hasPolicyChanges" />
           </div>
           <el-button
             type="primary"
@@ -237,6 +223,7 @@ import {
 import type { EmailSuffixPolicy } from '@/api/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const emailSettings = reactive({

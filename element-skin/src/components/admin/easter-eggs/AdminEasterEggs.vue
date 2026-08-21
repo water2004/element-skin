@@ -3,13 +3,7 @@
     <PageHeader title="彩蛋列表" subtitle="配置服务端允许启用的节日彩蛋">
       <template #icon><MagicStick /></template>
       <template #actions>
-        <el-tag
-          v-if="hasChanges"
-          size="small"
-          type="warning"
-          effect="dark"
-          >有未保存更改</el-tag
-        >
+        <DirtyTag :visible="hasChanges" :spaced="false" />
         <el-button :icon="Refresh" @click="loadSettings" class="hover-lift"> 重新加载 </el-button>
         <el-button type="primary" :loading="saving" @click="saveSettings" class="hover-lift">
           保存
@@ -65,6 +59,7 @@ import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/setti
 import PageHeader from '@/components/common/PageHeader.vue'
 import { availableEasterEggs } from '@/easter-eggs'
 import UiCard from '@/components/ui/UiCard.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const easterEggOptions = availableEasterEggs()
