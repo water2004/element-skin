@@ -97,6 +97,10 @@ func TestUpsertActiveGrantReusesLogicalGrantAndRollsBackAuthorizationCodeFailure
 	if !reflect.DeepEqual(grants, []model.OAuthGrant{wantGrant}) {
 		t.Fatalf("upserted grants mismatch:\n got=%#v\nwant=%#v", grants, []model.OAuthGrant{wantGrant})
 	}
+	adminGrants, err := db.OAuth.ListGrantsForAdmin(ctx, 10)
+	if err != nil || !reflect.DeepEqual(adminGrants, []model.OAuthGrant{wantGrant}) {
+		t.Fatalf("admin grants mismatch:\n got=%#v\nwant=%#v err=%v", adminGrants, []model.OAuthGrant{wantGrant}, err)
+	}
 	gotPermissions, err := db.OAuth.GrantPermissionIDs(ctx, first.ID)
 	if err != nil || !reflect.DeepEqual(gotPermissions, secondPermissions) {
 		t.Fatalf("updated grant permissions=%v err=%v want=%v", gotPermissions, err, secondPermissions)

@@ -266,7 +266,7 @@ func TestServiceClientCredentialsCannotUseRemovedApplicationPermissionExactly(t 
 		RedirectURI:     "https://client-limit.example/callback",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"invite.read.any"},
-	}, oauth.StatusActive); err != nil {
+	}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.Redis.GetOAuthAccessToken(ctx, util.HashRefreshToken(before.AccessToken)); !errors.Is(err, redisstore.ErrCacheMiss) {

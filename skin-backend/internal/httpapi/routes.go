@@ -144,6 +144,8 @@ func (r *Router) routes() {
 	r.handle("GET /v2/admin/oauth/apps", oauthRoutes.Auth(oauthRoutes.ListAdminApps))
 	r.handle("GET /v2/admin/oauth/apps/{client_id}", oauthRoutes.Auth(oauthRoutes.GetApp))
 	r.handle("PATCH /v2/admin/oauth/apps/{client_id}/review", oauthRoutes.Auth(oauthRoutes.ReviewApp))
+	r.handle("GET /v2/admin/oauth/grants", oauthRoutes.Auth(oauthRoutes.ListAdminGrants))
+	r.handle("DELETE /v2/admin/oauth/grants/{grant_id}", oauthRoutes.Auth(oauthRoutes.RevokeAdminGrant))
 	r.handle("GET /v2/admin/profiles", adminRoutes.Auth(adminRoutes.Profiles))
 	r.handle("PATCH /v2/admin/profiles/{profile_id}", adminRoutes.Auth(adminRoutes.UpdateProfile))
 	r.handle("DELETE /v2/admin/profiles/{profile_id}", adminRoutes.Auth(adminRoutes.DeleteProfile))

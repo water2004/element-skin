@@ -11,11 +11,14 @@ export function startIdentityAuthorization(data: {
   provider_id: string
   intent: 'login' | 'link'
   identity_id?: string
+  return_to?: string
 }): Promise<{ data: { authorization_url: string; expires_in: number } }> {
   return client.post('/v2/identity-authorizations', data)
 }
 
-export function getExternalIdentities(): Promise<{ data: ItemListResponse<ExternalIdentity> }> {
+export function getExternalIdentities(): Promise<{
+  data: ItemListResponse<ExternalIdentity>
+}> {
   return client.get('/v2/users/me/identities')
 }
 

@@ -18,7 +18,7 @@
             </el-text>
           </div>
 
-          <div class="flex flex-wrap justify-end gap-2">
+          <div v-if="canReview" class="flex flex-wrap justify-end gap-2">
             <el-button
               v-if="app.status !== 'active'"
               type="success"
@@ -130,6 +130,7 @@ const props = defineProps<{
   catalog: PermissionDefinition[]
   loading: boolean
   reviewing: boolean
+  canReview: boolean
 }>()
 
 defineEmits<{

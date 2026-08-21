@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	GrantIssuanceGrace    = authorizationCodeTTL
+	GrantIssuanceGrace    = authorizationCodeTTL + accessTokenTTL
 	RevokedGrantRetention = 30 * 24 * time.Hour
 )
 
@@ -60,6 +60,41 @@ func (s Service) RevokeGrant(ctx context.Context, actor permission.Actor, grantI
 		return notFound("oauth_grant", "resolve", "not_found")
 	}
 	reportPostCommitError("remove revoked grant access tokens", s.Redis.DeleteOAuthAccessTokensByGrant(ctx, grantID))
+	return nil
+}
+
+func (s Service) ListGrantsForAdmin(ctx context.Context, actor permission.Actor, limit int) ([]map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("oauth_grant.read.any")); err != nil {
+		return nil, forbidden()
+	}
+	grants, err := s.DB.OAuth.ListGrantsForAdmin(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(grants))
+	for _, grant := range grants {
+		codes, err := s.grantPermissionCodes(ctx, grant.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, grantResponse(grant, codes))
+	}
+	return out, nil
+}
+
+func (s Service) RevokeGrantForAdmin(ctx context.Context, actor permission.Actor, grantID string) error {
+	if err := actor.Require(permission.MustDefinitionByCode("oauth_grant.revoke.any")); err != nil {
+		return forbidden()
+	}
+	revokedAt := database.NowMS()
+	ok, err := s.DB.OAuth.RevokeGrantAndCredentials(ctx, grantID, "", revokedAt)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return notFound("oauth_grant", "resolve", "not_found")
+	}
+	reportPostCommitError("remove administratively revoked grant access tokens", s.Redis.DeleteOAuthAccessTokensByGrant(ctx, grantID))
 	return nil
 }
 

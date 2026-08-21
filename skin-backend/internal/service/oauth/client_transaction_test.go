@@ -36,7 +36,8 @@ func TestServiceClientMutationFailureBoundariesExactly(t *testing.T) {
 		_, err = failing.UpdateClient(ctx, actor, clientID, oauth.ClientInput{
 			Name: "After cache failure", RedirectURI: "https://cache-fail.example/changed",
 			ClientType: oauth.ClientTypeConfidential, PermissionCodes: []string{"account.read.self"},
-		}, oauth.StatusPending)
+		})
+
 		if !errors.Is(err, forced) {
 			t.Fatalf("update cache failure=%v want=%v", err, forced)
 		}
@@ -71,7 +72,8 @@ func TestServiceClientMutationFailureBoundariesExactly(t *testing.T) {
 		updated, err := service.UpdateClient(ctx, actor, clientID, oauth.ClientInput{
 			Name: "After post commit", RedirectURI: "https://post-commit.example/changed",
 			ClientType: oauth.ClientTypeConfidential, PermissionCodes: []string{"account.read.self"},
-		}, oauth.StatusPending)
+		})
+
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -118,7 +120,8 @@ func TestServiceClientMutationFailureBoundariesExactly(t *testing.T) {
 		_, err = service.UpdateClient(ctx, actor, credential.clientID, oauth.ClientInput{
 			Name: "Changed transactional update", RedirectURI: "https://transaction.example/changed",
 			ClientType: oauth.ClientTypeConfidential, PermissionCodes: []string{"account.read.self"},
-		}, oauth.StatusActive)
+		})
+
 		assertPgCode(t, err, "P0001")
 
 		stored, err := db.OAuth.GetClient(ctx, credential.clientID)

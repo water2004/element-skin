@@ -78,7 +78,8 @@ func TestServiceOAuthPermissionCodeDependencyErrorsExactly(t *testing.T) {
 				RedirectURI:     "https://code-dependency.example/updated",
 				ClientType:      oauth.ClientTypeConfidential,
 				PermissionCodes: []string{"account.read.self"},
-			}, oauth.StatusActive)
+			})
+
 			return err
 		}, assertErr: func(t *testing.T, err error) {
 			assertPgCode(t, err, "42P01")

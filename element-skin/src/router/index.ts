@@ -227,7 +227,7 @@ router.beforeEach(async (to) => {
       if (canAccessAdminPath(to.path, permissions)) return true
       return { path: firstAdminPath }
     } catch {
-      return { path: '/login' }
+      return loginRedirect(to.fullPath)
     }
   }
 
@@ -242,9 +242,13 @@ router.beforeEach(async (to) => {
     if (canAccessSitePath(to.path, permissions)) return true
     return { path: firstSitePath }
   } catch {
-    return { path: '/login' }
+    return loginRedirect(to.fullPath)
   }
 })
+
+function loginRedirect(returnTo: string) {
+  return { path: '/login', query: { redirect: returnTo } }
+}
 
 installEasterEggRouterHooks(router)
 

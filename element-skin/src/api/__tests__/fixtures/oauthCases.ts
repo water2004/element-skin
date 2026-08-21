@@ -9,12 +9,15 @@ import {
   getOAuthAuthorizationDetails,
   getOAuthApp,
   getOAuthClientPermissions,
+  getOpenIDConfiguration,
   getOAuthWebhookEventCatalog,
   getPermissionCatalog,
   listAdminOAuthApps,
+  listAdminOAuthGrants,
   listOAuthApps,
   listOAuthGrants,
   revokeOAuthGrant,
+  revokeAdminOAuthGrant,
   rotateOAuthSecret,
   reviewAdminOAuthApp,
   setOAuthClientPermission,
@@ -39,12 +42,19 @@ const authorizationRequest = {
   redirect_uri: 'https://app.example/callback',
   scope: 'account.read.self profile.read.owned',
   state: 'opaque-state',
+  nonce: 'opaque-nonce',
   code_challenge: 'challenge',
   code_challenge_method: 'S256',
 }
 
 export function oauthApiCases(): ApiCase[] {
   return [
+    {
+      name: 'getOpenIDConfiguration gets public OIDC discovery metadata',
+      method: 'get',
+      call: getOpenIDConfiguration,
+      args: ['/.well-known/openid-configuration'],
+    },
     {
       name: 'listOAuthApps gets app list with limit',
       method: 'get',
@@ -84,8 +94,8 @@ export function oauthApiCases(): ApiCase[] {
     {
       name: 'updateOAuthApp patches app payload',
       method: 'patch',
-      call: () => updateOAuthApp('client-1', { ...oauthPayload, status: 'disabled' }),
-      args: ['/v2/oauth/apps/client-1', { ...oauthPayload, status: 'disabled' }],
+      call: () => updateOAuthApp('client-1', oauthPayload),
+      args: ['/v2/oauth/apps/client-1', oauthPayload],
     },
     {
       name: 'deleteOAuthApp deletes app',
@@ -153,6 +163,18 @@ export function oauthApiCases(): ApiCase[] {
         '/v2/admin/oauth/apps/client-1/review',
         { status: 'rejected', reason: 'Missing support contact' },
       ],
+    },
+    {
+      name: 'listAdminOAuthGrants gets global grant list',
+      method: 'get',
+      call: () => listAdminOAuthGrants(30),
+      args: ['/v2/admin/oauth/grants', { params: { limit: 30 } }],
+    },
+    {
+      name: 'revokeAdminOAuthGrant revokes a global grant',
+      method: 'delete',
+      call: () => revokeAdminOAuthGrant('grant-1'),
+      args: ['/v2/admin/oauth/grants/grant-1'],
     },
     {
       name: 'getOAuthAuthorizationDetails gets authorization request details',

@@ -58,6 +58,7 @@ export interface OAuthGrant {
   created_at: number
   revoked_at?: number | null
   permissions: string[]
+  oidc_scopes: string[]
 }
 
 export interface OAuthClientInput {
@@ -100,6 +101,7 @@ export interface OAuthAuthorizationRequest {
   redirect_uri: string
   scope: string
   state?: string
+  nonce?: string
   code_challenge: string
   code_challenge_method: string
 }
@@ -107,6 +109,7 @@ export interface OAuthAuthorizationRequest {
 export interface OAuthAuthorizationDetails {
   client: OAuthClient
   scopes: OAuthPermissionScope[]
+  oidc_scopes: string[]
   redirect_uri: string
   state?: string
 }
@@ -130,4 +133,17 @@ export interface PermissionCatalogResponse {
 
 export interface OAuthWebhookEventCatalogResponse {
   events: OAuthWebhookEventDefinition[]
+}
+
+export interface OpenIDConfiguration {
+  issuer: string
+  authorization_endpoint: string
+  token_endpoint: string
+  userinfo_endpoint: string
+  jwks_uri: string
+  revocation_endpoint: string
+  response_types_supported: string[]
+  grant_types_supported: string[]
+  subject_types_supported: string[]
+  scopes_supported: string[]
 }

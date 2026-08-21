@@ -54,13 +54,7 @@ export const adminPageAccess: AdminPageAccess[] = [
   },
   {
     path: '/admin/oauth-apps',
-    permissions: [
-      'oauth_app.read.any',
-      'oauth_app.update.any',
-      'oauth_app.delete.any',
-      'oauth_grant.read.any',
-      'oauth_grant.revoke.any',
-    ],
+    permissions: ['oauth_app.read.any', 'oauth_grant.read.any'],
   },
   {
     path: '/admin/identity-providers',

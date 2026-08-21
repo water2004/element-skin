@@ -190,6 +190,24 @@ func (s Store) ListGrantsByUser(ctx context.Context, userID string, limit int) (
 		return nil, err
 	}
 	defer rows.Close()
+	return scanGrants(rows)
+}
+
+func (s Store) ListGrantsForAdmin(ctx context.Context, limit int) ([]model.OAuthGrant, error) {
+	rows, err := s.Pool.Query(ctx, `
+		SELECT id, user_id, subject_id, client_id, oidc_scopes, status, created_at, revoked_at
+		FROM delegated_permission_grants
+		ORDER BY created_at DESC, id DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanGrants(rows)
+}
+
+func scanGrants(rows pgx.Rows) ([]model.OAuthGrant, error) {
 	var grants []model.OAuthGrant
 	for rows.Next() {
 		var grant model.OAuthGrant

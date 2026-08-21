@@ -84,7 +84,8 @@ func TestServiceOAuthAppWebhookConfigurationIsOptionalPermissionBoundAndSecretSa
 			{ID: endpointID, URL: "https://hooks.example/profile-v2", EventTypes: []string{"profile.updated"}, Enabled: &disabled},
 			{URL: "https://hooks.example/texture", EventTypes: []string{"texture.deleted", "texture.created"}, Enabled: &enabled},
 		},
-	}, oauth.StatusPending)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +114,8 @@ func TestServiceOAuthAppWebhookConfigurationIsOptionalPermissionBoundAndSecretSa
 			EventTypes: []string{"profile.updated"},
 			Enabled:    &enabled,
 		}},
-	}, oauth.StatusPending)
+	})
+
 	assertHTTPError(t, err, 400, "webhook_event.subscribe.denied")
 	unchanged, err := svc.GetClient(ctx, actor, created["client_id"].(string))
 	if err != nil || unchanged["name"] != "Webhook configured app updated" || !reflect.DeepEqual(unchanged["permissions"], []string{"profile.read.owned", "texture.read.owned"}) {

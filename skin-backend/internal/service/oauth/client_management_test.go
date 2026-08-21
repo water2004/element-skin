@@ -112,7 +112,8 @@ func TestServiceClientManagementReviewSecretDeleteAndAdminListExactly(t *testing
 		WebsiteURL:      "https://managed.example/docs",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, oauth.StatusActive)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +196,7 @@ func TestServiceClientManagementRejectsUnauthorizedMissingAndInvalidStateExactly
 		Name:            "Missing",
 		RedirectURI:     "https://missing.example/callback",
 		PermissionCodes: []string{"account.read.self"},
-	}, "active"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
+	}); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("update missing client mismatch: %#v", err)
 	}
 	if _, err := svc.SubmitClientForReview(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
@@ -203,6 +204,12 @@ func TestServiceClientManagementRejectsUnauthorizedMissingAndInvalidStateExactly
 	}
 	if _, err := svc.ReviewClient(ctx, permission.Actor{}, "missing-client", oauth.StatusActive, ""); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("review without permission mismatch: %#v", err)
+	}
+	updateOnlyBits := permission.NewBitSet(len(permission.Definitions))
+	updateOnlyBits.Set(permission.MustDefinitionByCode("oauth_app.update.any").BitIndex)
+	updateOnlyActor := permission.Actor{SubjectID: "user:update-only", UserID: owner.ID, Permissions: updateOnlyBits}
+	if _, err := svc.ReviewClient(ctx, updateOnlyActor, "missing-client", oauth.StatusActive, ""); !isHTTPError(err, 403, "permission.check.denied") {
+		t.Fatalf("review with update-only permission mismatch: %#v", err)
 	}
 	if _, err := svc.ReviewClient(ctx, adminActor, "missing-client", oauth.StatusActive, ""); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("review missing client mismatch: %#v", err)
@@ -241,20 +248,13 @@ func TestServiceClientManagementRejectsUnauthorizedMissingAndInvalidStateExactly
 		RedirectURI:     "https://reject-state.example/callback",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, "")
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	if keptStatus["status"] != oauth.StatusPending || keptStatus["name"] != "Reject state app kept" {
-		t.Fatalf("admin update with empty status should preserve current status: %#v", keptStatus)
-	}
-	if _, err := svc.UpdateClient(ctx, adminActor, clientID, oauth.ClientInput{
-		Name:            "Reject state app updated",
-		RedirectURI:     "https://reject-state.example/callback",
-		ClientType:      oauth.ClientTypeConfidential,
-		PermissionCodes: []string{"account.read.self"},
-	}, "archived"); !isHTTPError(err, 400, "status.validate.invalid") {
-		t.Fatalf("update invalid status mismatch: %#v", err)
+		t.Fatalf("admin configuration update should preserve current status: %#v", keptStatus)
 	}
 	if err := svc.ClearClientPermissionOverride(ctx, adminActor, clientID, "not.a.permission"); !isHTTPError(err, 400, "permission.validate.invalid") {
 		t.Fatalf("clear invalid permission mismatch: %#v", err)

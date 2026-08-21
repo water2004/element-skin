@@ -62,4 +62,11 @@ describe('admin page permission access', () => {
     )
     expect(canAccessAdminPath('/admin/identity-providers', ['oauth_app.read.any'])).toBe(false)
   })
+
+  it('requires a readable OAuth resource before exposing the application administration page', () => {
+    expect(canAccessAdminPath('/admin/oauth-apps', ['oauth_app.read.any'])).toBe(true)
+    expect(canAccessAdminPath('/admin/oauth-apps', ['oauth_grant.read.any'])).toBe(true)
+    expect(canAccessAdminPath('/admin/oauth-apps', ['oauth_app.review.any'])).toBe(false)
+    expect(canAccessAdminPath('/admin/oauth-apps', ['oauth_grant.revoke.any'])).toBe(false)
+  })
 })

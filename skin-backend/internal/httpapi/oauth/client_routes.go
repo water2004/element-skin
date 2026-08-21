@@ -64,7 +64,7 @@ func (h Handler) UpdateApp(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
-	res, err := h.oauth.UpdateClient(req.Context(), shared.CurrentActor(req), req.PathValue("client_id"), body.input(), body.Status)
+	res, err := h.oauth.UpdateClient(req.Context(), shared.CurrentActor(req), req.PathValue("client_id"), body.input())
 	if err != nil {
 		util.Error(w, err)
 		return
@@ -118,7 +118,6 @@ type appBody struct {
 	RedirectURI      string                `json:"redirect_uri"`
 	WebsiteURL       string                `json:"website_url"`
 	ClientType       string                `json:"client_type"`
-	Status           string                `json:"status"`
 	PermissionCodes  []string              `json:"permissions"`
 	WebhookEndpoints []webhookEndpointBody `json:"webhook_endpoints"`
 }

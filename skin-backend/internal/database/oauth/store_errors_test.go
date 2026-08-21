@@ -124,6 +124,10 @@ func TestStoreClosedPoolReturnsExactDependencyErrorsForEveryOAuthTable(t *testin
 			_, err := db.OAuth.ListGrantsByUser(ctx, grant.UserID, 10)
 			return err
 		}},
+		{name: "admin list grants", call: func() error {
+			_, err := db.OAuth.ListGrantsForAdmin(ctx, 10)
+			return err
+		}},
 		{name: "grant permission ids", call: func() error {
 			_, err := db.OAuth.GrantPermissionIDs(ctx, grant.ID)
 			return err

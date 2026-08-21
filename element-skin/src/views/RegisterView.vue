@@ -142,6 +142,7 @@ import { getErrorMessage, isValidationError } from '@/utils/error'
 import { getIdentityProviders } from '@/api/identity'
 import EmailSuffixInput from '@/components/common/EmailSuffixInput.vue'
 import { disabledEmailSuffixPolicy, emailSuffixPolicyError } from '@/utils/emailSuffixPolicy'
+import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
 const route = useRoute()
@@ -162,7 +163,9 @@ const form = reactive({
 
 const emailVerifyEnabled = ref(false)
 const requireInvite = ref(false)
-const emailSuffixPolicy = ref<PublicEmailSuffixPolicy>({ ...disabledEmailSuffixPolicy })
+const emailSuffixPolicy = ref<PublicEmailSuffixPolicy>({
+  ...disabledEmailSuffixPolicy,
+})
 const codeLoading = ref(false)
 const countdown = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
@@ -172,6 +175,7 @@ const identityTicket = ref(
 const identityProviderId =
   typeof route.query.provider_id === 'string' ? route.query.provider_id : ''
 const identityProviderName = ref('')
+const loginReturnTo = internalRedirectTarget(route.query.redirect, '')
 
 const rules: FormRules = {
   username: [
@@ -324,7 +328,10 @@ async function register() {
 
     // 延迟跳转，让用户看到成功消息
     setTimeout(() => {
-      router.push('/login')
+      router.push({
+        path: '/login',
+        query: loginReturnTo ? { redirect: loginReturnTo } : {},
+      })
     }, 1500)
   } catch (e: unknown) {
     if (!isValidationError(e)) {

@@ -16,6 +16,7 @@ func (h Handler) StartAuthorization(w http.ResponseWriter, req *http.Request) {
 		ProviderID string `json:"provider_id"`
 		Intent     string `json:"intent"`
 		IdentityID string `json:"identity_id"`
+		ReturnTo   string `json:"return_to"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
 		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
@@ -27,6 +28,7 @@ func (h Handler) StartAuthorization(w http.ResponseWriter, req *http.Request) {
 		body.ProviderID,
 		body.Intent,
 		body.IdentityID,
+		body.ReturnTo,
 	)
 	if err != nil {
 		util.Error(w, err)
@@ -68,12 +70,20 @@ func (h Handler) AuthorizationCallback(w http.ResponseWriter, req *http.Request)
 			session["refresh_token"].(string),
 			session["refresh_max_age_seconds"].(int),
 		)
-		h.redirectToSite(w, req, "/dashboard", nil)
+		path := result.ReturnTo
+		if path == "" {
+			path = "/dashboard"
+		}
+		h.redirectToSite(w, req, path, nil)
 	case "registration":
-		h.redirectToSite(w, req, "/register", url.Values{
+		query := url.Values{
 			"identity_ticket": []string{result.RegistrationTicket},
 			"provider_id":     []string{result.ProviderID},
-		})
+		}
+		if result.ReturnTo != "" {
+			query.Set("redirect", result.ReturnTo)
+		}
+		h.redirectToSite(w, req, "/register", query)
 	default:
 		util.Error(w, util.HTTPError{Status: http.StatusInternalServerError, Object: "identity", Operation: "authorize", Reason: "invalid"})
 	}

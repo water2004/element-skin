@@ -46,8 +46,30 @@ export function identityApiCases(): ApiCase[] {
     {
       name: 'startIdentityAuthorization posts provider and intent',
       method: 'post',
-      call: () => startIdentityAuthorization({ provider_id: 'provider-1', intent: 'link' }),
+      call: () =>
+        startIdentityAuthorization({
+          provider_id: 'provider-1',
+          intent: 'link',
+        }),
       args: ['/v2/identity-authorizations', { provider_id: 'provider-1', intent: 'link' }],
+    },
+    {
+      name: 'startIdentityAuthorization preserves an internal login return target',
+      method: 'post',
+      call: () =>
+        startIdentityAuthorization({
+          provider_id: 'provider-1',
+          intent: 'login',
+          return_to: '/oauth/authorize?client_id=client-1&state=opaque',
+        }),
+      args: [
+        '/v2/identity-authorizations',
+        {
+          provider_id: 'provider-1',
+          intent: 'login',
+          return_to: '/oauth/authorize?client_id=client-1&state=opaque',
+        },
+      ],
     },
     {
       name: 'startIdentityAuthorization targets one identity when reconnecting',
@@ -60,7 +82,11 @@ export function identityApiCases(): ApiCase[] {
         }),
       args: [
         '/v2/identity-authorizations',
-        { provider_id: 'provider-1', intent: 'link', identity_id: 'identity-1' },
+        {
+          provider_id: 'provider-1',
+          intent: 'link',
+          identity_id: 'identity-1',
+        },
       ],
     },
     {

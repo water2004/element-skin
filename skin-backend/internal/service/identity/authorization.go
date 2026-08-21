@@ -39,9 +39,10 @@ type AuthorizationResult struct {
 	IdentityID         string
 	RegistrationTicket string
 	ProviderID         string
+	ReturnTo           string
 }
 
-func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor, providerID, intent, identityID string) (AuthorizationStart, error) {
+func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor, providerID, intent, identityID, returnTo string) (AuthorizationStart, error) {
 	provider, err := s.DB.Identities.GetProvider(ctx, strings.TrimSpace(providerID))
 	if err != nil {
 		return AuthorizationStart{}, err
@@ -59,6 +60,10 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 		}
 		if !provider.LoginEnabled {
 			return AuthorizationStart{}, forbiddenCode("identity_provider", "login", "disabled")
+		}
+		returnTo, err = normalizedReturnTo(returnTo)
+		if err != nil {
+			return AuthorizationStart{}, err
 		}
 	case AuthorizationIntentLink:
 		if err := actor.Require(permission.MustDefinitionByCode("external_identity.create.owned")); err != nil || actor.UserID == "" {
@@ -101,6 +106,7 @@ func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor,
 		"user_id":       actor.UserID,
 		"nonce":         nonce,
 		"pkce_verifier": pkceVerifier,
+		"return_to":     returnTo,
 	}
 	loginHint := ""
 	if targetIdentity != nil {
@@ -182,6 +188,7 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		return AuthorizationResult{}, badRequest(object, operation, reason, params)
 	}
 	intent := stateString(stored, "intent")
+	returnTo := stateString(stored, "return_to")
 	existing, err := s.DB.Identities.GetByProviderSubject(ctx, provider.ID, claims.Subject)
 	if err != nil {
 		return AuthorizationResult{}, err
@@ -219,7 +226,7 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 			if err := s.updateIdentityAuthorization(ctx, *existing, claims, tokens); err != nil {
 				return AuthorizationResult{}, err
 			}
-			return AuthorizationResult{Intent: intent, UserID: existing.UserID, IdentityID: existing.ID, ProviderID: provider.ID}, nil
+			return AuthorizationResult{Intent: intent, UserID: existing.UserID, IdentityID: existing.ID, ProviderID: provider.ID, ReturnTo: returnTo}, nil
 		}
 		if !provider.LoginEnabled {
 			return AuthorizationResult{}, forbiddenCode("identity_provider", "login", "disabled")
@@ -228,7 +235,7 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		if err != nil {
 			return AuthorizationResult{}, err
 		}
-		return AuthorizationResult{Intent: "registration", RegistrationTicket: ticket, ProviderID: provider.ID}, nil
+		return AuthorizationResult{Intent: "registration", RegistrationTicket: ticket, ProviderID: provider.ID, ReturnTo: returnTo}, nil
 	default:
 		return AuthorizationResult{}, badRequest("authorization_intent", "validate", "invalid")
 	}
@@ -379,6 +386,21 @@ func (s Service) RedirectURI() string {
 		base = strings.TrimRight(strings.TrimSpace(s.Config.SiteURL), "/")
 	}
 	return base + "/v2/auth/oidc/callback"
+}
+
+func normalizedReturnTo(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	if strings.Contains(raw, `\`) || strings.IndexFunc(raw, func(r rune) bool { return r < 0x20 || r == 0x7f }) >= 0 {
+		return "", badRequest("return_to", "validate", "invalid")
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.IsAbs() || u.Host != "" || !strings.HasPrefix(u.Path, "/") || strings.HasPrefix(u.Path, "//") || u.Path == "/login" {
+		return "", badRequest("return_to", "validate", "invalid")
+	}
+	return u.String(), nil
 }
 
 func opaqueToken() (string, error) {
