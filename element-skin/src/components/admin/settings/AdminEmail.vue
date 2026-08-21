@@ -3,8 +3,8 @@
     <PageHeader title="邮件服务设置" subtitle="配置 SMTP 服务器以启用注册验证、找回密码等通知功能">
       <template #icon><Message /></template>
       <template #actions>
-        <el-button type="primary" :icon="Refresh" @click="loadSettings" plain class="hover-lift">
-          刷新配置
+        <el-button :icon="Refresh" plain @click="loadSettings" class="hover-lift">
+          重新加载
         </el-button>
       </template>
     </PageHeader>

@@ -3,8 +3,8 @@
     <PageHeader title="站点设置" subtitle="管理站点基础配置、安全策略及第三方集成">
       <template #icon><Setting /></template>
       <template #actions>
-        <el-button type="primary" :icon="Refresh" @click="loadAllSettings" class="hover-lift">
-          重新加载所有
+        <el-button :icon="Refresh" plain @click="loadAllSettings" class="hover-lift">
+          重新加载
         </el-button>
       </template>
     </PageHeader>

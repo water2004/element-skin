@@ -4,7 +4,7 @@
       <template #icon><MagicStick /></template>
       <template #actions>
         <DirtyTag :visible="hasChanges" :spaced="false" />
-        <el-button :icon="Refresh" @click="loadSettings" class="hover-lift"> 重新加载 </el-button>
+        <el-button :icon="Refresh" plain @click="loadSettings" class="hover-lift"> 重新加载 </el-button>
         <el-button type="primary" :loading="saving" @click="saveSettings" class="hover-lift">
           保存
         </el-button>
