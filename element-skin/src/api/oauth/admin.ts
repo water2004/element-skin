@@ -1,5 +1,5 @@
 import apiClient from '../client'
-import type { OAuthClient, OAuthClientStatus, OAuthClientSummary } from './types'
+import type { OAuthClient, OAuthClientStatus, OAuthClientSummary, OAuthGrant } from './types'
 
 export function listAdminOAuthApps(status: OAuthClientStatus | 'all' = 'all', limit = 100) {
   return apiClient.get<{ items: OAuthClientSummary[] }>('/v2/admin/oauth/apps', {
@@ -20,4 +20,14 @@ export function reviewAdminOAuthApp(
     status,
     reason,
   })
+}
+
+export function listAdminOAuthGrants(limit = 100) {
+  return apiClient.get<{ items: OAuthGrant[] }>('/v2/admin/oauth/grants', {
+    params: { limit },
+  })
+}
+
+export function revokeAdminOAuthGrant(grantId: string) {
+  return apiClient.delete<void>(`/v2/admin/oauth/grants/${grantId}`)
 }

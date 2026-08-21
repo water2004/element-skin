@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-[calc(100vh-160px)] px-4 py-10">
-    <UiCard class="mx-auto max-w-3xl p-8">
+    <UiCard class="mx-auto max-w-3xl [--el-card-padding:1rem] sm:[--el-card-padding:2rem]">
       <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 class="m-0 text-2xl font-semibold text-[var(--color-heading)]">授权第三方应用</h1>
@@ -30,6 +30,7 @@
         v-else-if="details"
         :client="details.client"
         :scopes="details.scopes"
+        :oidc-scopes="details.oidc_scopes"
         :request-details="authorizationDetails"
         :deciding="deciding"
         @approve="approve"
@@ -78,6 +79,7 @@ const authorizationRequest = computed<OAuthAuthorizationRequest>(() => ({
   redirect_uri: queryString('redirect_uri'),
   scope: queryString('scope'),
   state: queryString('state') || undefined,
+  nonce: queryString('nonce') || undefined,
   code_challenge: queryString('code_challenge'),
   code_challenge_method: queryString('code_challenge_method'),
 }))

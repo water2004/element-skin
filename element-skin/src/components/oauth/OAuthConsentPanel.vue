@@ -40,8 +40,12 @@
           :key="item.label"
           class="rounded-md bg-[var(--color-background-soft)] px-3 py-2"
         >
-          <div class="text-xs text-[var(--color-text-light)]">{{ item.label }}</div>
-          <div class="mt-1 break-all text-[var(--color-heading)]">{{ item.value }}</div>
+          <div class="text-xs text-[var(--color-text-light)]">
+            {{ item.label }}
+          </div>
+          <div class="mt-1 break-all text-[var(--color-heading)]">
+            {{ item.value }}
+          </div>
         </div>
       </div>
     </section>
@@ -49,9 +53,22 @@
     <section>
       <div class="mb-3 flex items-center justify-between gap-3">
         <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">请求权限</h2>
-        <el-tag>{{ scopes.length }} 项</el-tag>
+        <el-tag>{{ scopes.length + oidcScopes.length }} 项</el-tag>
       </div>
       <div class="space-y-3">
+        <div
+          v-for="scope in oidcScopes"
+          :key="scope"
+          class="rounded-lg border border-[var(--color-border)] p-4"
+        >
+          <div class="flex flex-wrap items-center gap-2">
+            <PermissionToneTag label="OpenID Connect" tone="sky" variant="category" />
+            <PermissionToneTag :label="scope" tone="slate" :title="oidcScopeDescription(scope)" />
+          </div>
+          <p class="mt-3 mb-0 text-sm text-[var(--color-text)]">
+            {{ oidcScopeDescription(scope) }}
+          </p>
+        </div>
         <div
           v-for="scope in scopes"
           :key="scope.code"
@@ -94,6 +111,7 @@ withDefaults(
   defineProps<{
     client: OAuthClient
     scopes: OAuthPermissionScope[]
+    oidcScopes?: string[]
     requestDetails?: OAuthConsentDetail[]
     deciding?: boolean
     approveLabel?: string
@@ -101,6 +119,7 @@ withDefaults(
   }>(),
   {
     requestDetails: () => [],
+    oidcScopes: () => [],
     deciding: false,
     approveLabel: '允许',
     denyLabel: '拒绝',
@@ -111,4 +130,14 @@ const emit = defineEmits<{
   approve: []
   deny: []
 }>()
+
+function oidcScopeDescription(scope: string) {
+  const descriptions: Record<string, string> = {
+    openid: '确认你在本站的身份，并向应用提供稳定的用户标识。',
+    profile: '读取你的显示名称和首选语言。',
+    email: '读取你的邮箱地址及其验证状态。',
+    offline_access: '在你不使用应用时继续访问；本站会向应用签发可撤销的刷新令牌。',
+  }
+  return descriptions[scope] || scope
+}
 </script>

@@ -35,7 +35,7 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 	base := h.baseURL()
 	metadata := map[string]any{
 		"issuer":                                     base,
-		"authorization_endpoint":                     base + "/oauth/authorize",
+		"authorization_endpoint":                     h.authorizationEndpointURL(),
 		"device_authorization_endpoint":              base + "/oauth/device/code",
 		"token_endpoint":                             base + "/oauth/token",
 		"revocation_endpoint":                        base + "/oauth/revoke",
@@ -69,6 +69,13 @@ func (h Handler) baseURL() string {
 		return strings.TrimRight(h.cfg.APIURL, "/")
 	}
 	return strings.TrimRight(h.cfg.SiteURL, "/")
+}
+
+func (h Handler) authorizationEndpointURL() string {
+	if base := strings.TrimRight(strings.TrimSpace(h.cfg.SiteURL), "/"); base != "" {
+		return base + "/oauth/authorize"
+	}
+	return h.baseURL() + "/oauth/authorize"
 }
 
 func (h Handler) scopeCodes() []string {

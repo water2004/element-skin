@@ -10,7 +10,7 @@ import (
 )
 
 func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clientID, status, reason string) (map[string]any, error) {
-	if err := actor.Require(permission.MustDefinitionByCode("oauth_app.update.any")); err != nil {
+	if err := actor.Require(permission.MustDefinitionByCode("oauth_app.review.any")); err != nil {
 		return nil, forbidden()
 	}
 	if !validClientStatus(status) || status == StatusPending {

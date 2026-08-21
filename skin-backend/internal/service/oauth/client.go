@@ -102,7 +102,7 @@ func (s Service) GetClient(ctx context.Context, actor permission.Actor, clientID
 	return clientResponse(*client, codes, "", endpoints, nil), nil
 }
 
-func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clientID string, input ClientInput, status string) (map[string]any, error) {
+func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clientID string, input ClientInput) (map[string]any, error) {
 	current, err := s.clientForActor(ctx, actor, clientID, "oauth_app.update.owned", "oauth_app.update.any")
 	if err != nil {
 		return nil, err
@@ -115,19 +115,10 @@ func (s Service) UpdateClient(ctx context.Context, actor permission.Actor, clien
 	if err != nil {
 		return nil, err
 	}
-	if !actor.Has(permission.MustDefinitionByCode("oauth_app.update.any")) {
-		status = current.Status
-	}
-	if status == "" {
-		status = current.Status
-	}
-	if !validClientStatus(status) {
-		return nil, badRequest("status", "validate", "invalid")
-	}
 	client.ID = current.ID
 	client.OwnerUserID = current.OwnerUserID
 	client.SecretHash = current.SecretHash
-	client.Status = status
+	client.Status = current.Status
 	client.CreatedAt = current.CreatedAt
 	client.UpdatedAt = database.NowMS()
 	endpoints, endpointSecrets, err := s.prepareWebhookEndpoints(ctx, client.ID, client.ClientType, input.WebhookEndpoints, permissionCodes, client.UpdatedAt)

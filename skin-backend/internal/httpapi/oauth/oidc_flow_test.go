@@ -42,7 +42,7 @@ func TestOpenIDAuthorizationCodeFlowIssuesVerifiablePairwiseIdentityExactly(t *t
 	router.ServeHTTP(metadataRec, httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil))
 	metadata := decodeMap(t, metadataRec.Body.Bytes())
 	if metadataRec.Code != http.StatusOK || metadata["issuer"] != cfg.APIURL ||
-		metadata["authorization_endpoint"] != cfg.APIURL+"/oauth/authorize" ||
+		metadata["authorization_endpoint"] != cfg.SiteURL+"/oauth/authorize" ||
 		metadata["token_endpoint"] != cfg.APIURL+"/oauth/token" ||
 		metadata["userinfo_endpoint"] != cfg.APIURL+"/oauth/userinfo" ||
 		metadata["jwks_uri"] != cfg.APIURL+"/oauth/jwks" {
@@ -55,13 +55,48 @@ func TestOpenIDAuthorizationCodeFlowIssuesVerifiablePairwiseIdentityExactly(t *t
 		t.Fatalf("ID-token algorithms mismatch: %#v", metadata["id_token_signing_alg_values_supported"])
 	}
 
+	onlineVerifier := "oidc-online-verifier-abcdefghijklmnopqrstuvwxyz"
+	onlineAuthorization := doJSON(t, router, http.MethodPost, "/oauth/authorize", map[string]any{
+		"response_type":         "code",
+		"client_id":             clientID,
+		"redirect_uri":          "https://relying-party.example/callback",
+		"scope":                 "openid profile",
+		"state":                 "online-state",
+		"nonce":                 "online-nonce",
+		"code_challenge":        pkceChallenge(onlineVerifier),
+		"code_challenge_method": "S256",
+	}, session, "")
+	if onlineAuthorization.Code != http.StatusOK {
+		t.Fatalf("online OIDC authorization status=%d body=%q", onlineAuthorization.Code, onlineAuthorization.Body.String())
+	}
+	onlineCode := decodeMap(t, onlineAuthorization.Body.Bytes())["code"].(string)
+	onlineTokenRec := doForm(t, router, "/oauth/token", url.Values{
+		"grant_type":    {"authorization_code"},
+		"client_id":     {clientID},
+		"code":          {onlineCode},
+		"code_verifier": {onlineVerifier},
+		"redirect_uri":  {"https://relying-party.example/callback"},
+	}, "", "")
+	onlineToken := decodeMap(t, onlineTokenRec.Body.Bytes())
+	if onlineTokenRec.Code != http.StatusOK || onlineToken["access_token"] == "" || onlineToken["id_token"] == "" ||
+		onlineToken["refresh_token"] != nil || onlineToken["scope"] != "openid profile" {
+		t.Fatalf("online OIDC token response mismatch: status=%d token=%#v", onlineTokenRec.Code, onlineToken)
+	}
+	var onlineRefreshCount int
+	if err := db.Pool.QueryRow(t.Context(), `SELECT COUNT(*) FROM oauth_refresh_tokens WHERE client_id=$1`, clientID).Scan(&onlineRefreshCount); err != nil {
+		t.Fatal(err)
+	}
+	if onlineRefreshCount != 0 {
+		t.Fatalf("online OIDC authorization stored %d refresh tokens, want 0", onlineRefreshCount)
+	}
+
 	verifier := "oidc-server-verifier-abcdefghijklmnopqrstuvwxyz"
 	challenge := pkceChallenge(verifier)
 	authorizeQuery := url.Values{
 		"response_type":         {"code"},
 		"client_id":             {clientID},
 		"redirect_uri":          {"https://relying-party.example/callback"},
-		"scope":                 {"openid profile email"},
+		"scope":                 {"openid profile email offline_access"},
 		"state":                 {"oidc-state"},
 		"nonce":                 {"oidc-nonce"},
 		"code_challenge":        {challenge},
@@ -75,7 +110,7 @@ func TestOpenIDAuthorizationCodeFlowIssuesVerifiablePairwiseIdentityExactly(t *t
 	if infoRec.Code != http.StatusOK || len(info["scopes"].([]any)) != 0 {
 		t.Fatalf("OIDC authorization details mismatch: status=%d body=%#v", infoRec.Code, info)
 	}
-	if scopes := info["oidc_scopes"].([]any); len(scopes) != 3 || scopes[0] != "email" || scopes[1] != "openid" || scopes[2] != "profile" {
+	if scopes := info["oidc_scopes"].([]any); len(scopes) != 4 || scopes[0] != "email" || scopes[1] != "offline_access" || scopes[2] != "openid" || scopes[3] != "profile" {
 		t.Fatalf("OIDC scope details mismatch: %#v", info["oidc_scopes"])
 	}
 
@@ -83,7 +118,7 @@ func TestOpenIDAuthorizationCodeFlowIssuesVerifiablePairwiseIdentityExactly(t *t
 		"response_type":         "code",
 		"client_id":             clientID,
 		"redirect_uri":          "https://relying-party.example/callback",
-		"scope":                 "openid profile email",
+		"scope":                 "openid profile email offline_access",
 		"state":                 "oidc-state",
 		"nonce":                 "oidc-nonce",
 		"code_challenge":        challenge,
@@ -115,7 +150,7 @@ func TestOpenIDAuthorizationCodeFlowIssuesVerifiablePairwiseIdentityExactly(t *t
 	refreshToken, _ := token["refresh_token"].(string)
 	idToken, _ := token["id_token"].(string)
 	if accessToken == "" || refreshToken == "" || idToken == "" || token["token_type"] != "Bearer" ||
-		token["scope"] != "email openid profile" || len(token["permissions"].([]any)) != 0 {
+		token["scope"] != "email offline_access openid profile" || len(token["permissions"].([]any)) != 0 {
 		t.Fatalf("OIDC token response mismatch: %#v", token)
 	}
 
@@ -155,12 +190,12 @@ func TestOpenIDAuthorizationCodeFlowIssuesVerifiablePairwiseIdentityExactly(t *t
 	}
 	refreshed := decodeMap(t, refreshRec.Body.Bytes())
 	refreshClaims := parseAndVerifyIDToken(t, refreshed["id_token"].(string), publicKey, keyID, clientID)
-	if refreshClaims["sub"] != subject || refreshClaims["nonce"] != nil || refreshed["scope"] != "email openid profile" {
+	if refreshClaims["sub"] != subject || refreshClaims["nonce"] != nil || refreshed["scope"] != "email offline_access openid profile" {
 		t.Fatalf("refreshed ID token mismatch: token=%#v claims=%#v", refreshed, refreshClaims)
 	}
 
 	grants, err := db.OAuth.ListGrantsByUser(t.Context(), user.ID, 10)
-	if err != nil || len(grants) != 1 || len(grants[0].OIDCScopes) != 3 {
+	if err != nil || len(grants) != 1 || len(grants[0].OIDCScopes) != 4 {
 		t.Fatalf("stored OIDC grant mismatch: grants=%#v err=%v", grants, err)
 	}
 	revoke := doJSON(t, router, http.MethodDelete, "/v2/oauth/grants/"+grants[0].ID, nil, session, "")

@@ -493,6 +493,8 @@ invite.delete.any
 - pairwise `sub`；
 - UserInfo、JWKS 与 OIDC Discovery；
 - Authorization Code 请求中的 nonce 会绑定到授权码并写入 ID Token；
+- `authorization_endpoint` 指向站点前端授权页，登录前后完整保留授权请求；
+- OIDC Authorization Code 只有请求并获批 `offline_access` 时才签发 refresh token；
 - grant 撤销后 refresh token、access token 和 UserInfo 立即失效。已签发的自包含 ID Token 不做
   在线撤销，依靠短有效期自然过期。
 

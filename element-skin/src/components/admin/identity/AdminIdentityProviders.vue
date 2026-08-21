@@ -1,6 +1,6 @@
 <template>
   <div class="max-w-[1000px] mx-auto py-5 animate-fade-in">
-    <PageHeader title="OIDC 身份提供方" subtitle="配置允许用户登录和绑定的外部 OIDC 端点">
+    <PageHeader title="OpenID Connect" subtitle="管理本站作为身份提供方和客户端的两类接入">
       <template #icon><Connection /></template>
       <template #actions>
         <ActionBar>
@@ -11,16 +11,71 @@
       </template>
     </PageHeader>
 
-    <el-alert
-      type="info"
-      :closable="false"
-      show-icon
-      class="mb-6"
-      title="Microsoft 也是普通 OIDC 身份提供方"
-      description="选择 Microsoft 适配器只会开放本站的正版角色能力；身份登录、绑定、重新授权和令牌存储仍走同一套 OIDC 路径。"
-    />
+    <UiCard shadow="never" class="mb-6">
+      <div class="flex flex-col gap-5">
+        <div>
+          <div class="flex items-center gap-2 text-lg font-semibold text-[var(--color-heading)]">
+            <el-icon><Promotion /></el-icon>
+            本站作为 OIDC Provider
+          </div>
+          <p class="mt-2 mb-0 text-sm leading-6 text-[var(--color-text-light)]">
+            外部站点可以把本站作为登录源。应用先在“第三方应用”中登记精确回调地址，审核通过后使用
+            Authorization Code + PKCE 发起授权。
+          </p>
+        </div>
 
-    <OidcRedirectUriNotice :uri="redirectUri" class="mb-6 mt-4" />
+        <div v-loading="discoveryLoading" class="grid gap-3 md:grid-cols-2">
+          <div
+            v-for="endpoint in serverEndpoints"
+            :key="endpoint.label"
+            class="rounded-lg border border-[var(--color-border)] bg-[var(--color-background-soft)] p-3"
+          >
+            <div class="text-xs text-[var(--color-text-light)]">
+              {{ endpoint.label }}
+            </div>
+            <el-text copyable class="mt-1 block break-all font-mono text-xs">
+              {{ endpoint.value }}
+            </el-text>
+          </div>
+        </div>
+
+        <el-alert
+          v-if="discoveryError"
+          type="error"
+          :closable="false"
+          title="无法读取本站 OIDC 发现文档"
+        />
+        <el-alert
+          v-else
+          type="info"
+          :closable="false"
+          title="标准身份 scopes 由用户授权"
+          description="openid、profile、email 和 offline_access 不属于站点 API 权限，无需管理员逐项审批；应用仍需登记并通过应用审核。"
+        />
+
+        <div class="flex flex-wrap gap-3">
+          <el-button
+            v-if="canManageOwnApps"
+            type="primary"
+            @click="router.push('/dashboard/oauth')"
+          >
+            登记第三方应用
+          </el-button>
+          <el-button v-if="canReviewApps" @click="router.push('/admin/oauth-apps')">
+            审核应用与授权
+          </el-button>
+        </div>
+      </div>
+    </UiCard>
+
+    <div class="mb-4">
+      <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">本站作为 OIDC Client</h2>
+      <p class="mt-1 mb-0 text-sm text-[var(--color-text-light)]">
+        下列外部身份提供方可用于本站登录、身份绑定和重新授权。
+      </p>
+    </div>
+
+    <OidcRedirectUriNotice :uri="redirectUri" class="mb-6" />
 
     <div v-loading="loading" class="min-h-[220px]">
       <div v-if="providers.length" class="grid gap-4">
@@ -76,7 +131,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Connection, Plus } from '@element-plus/icons-vue'
+import { Connection, Plus, Promotion } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import ActionBar from '@/components/common/ActionBar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -85,24 +140,54 @@ import { deleteIdentityProvider, getAdminIdentityProviders } from '@/api/admin/i
 import type { AdminIdentityProvider, User } from '@/api/types'
 import { getErrorMessage } from '@/utils/error'
 import OidcRedirectUriNotice from './OidcRedirectUriNotice.vue'
+import { getOpenIDConfiguration, type OpenIDConfiguration } from '@/api/oauth'
 
 const router = useRouter()
 const user = inject<Ref<User | null>>('user', ref(null))
 const providers = ref<AdminIdentityProvider[]>([])
 const loading = ref(false)
 const redirectUri = ref('')
+const discovery = ref<OpenIDConfiguration | null>(null)
+const discoveryLoading = ref(false)
+const discoveryError = ref(false)
 const permissionSet = computed(() => new Set(user.value?.permissions || []))
 const canRead = computed(() => permissionSet.value.has('identity_provider.read.any'))
 const canCreate = computed(() => permissionSet.value.has('identity_provider.create.any'))
 const canUpdate = computed(() => permissionSet.value.has('identity_provider.update.any'))
 const canDelete = computed(() => permissionSet.value.has('identity_provider.delete.any'))
+const canManageOwnApps = computed(() => permissionSet.value.has('oauth_app.read.owned'))
+const canReviewApps = computed(
+  () =>
+    permissionSet.value.has('oauth_app.read.any') ||
+    permissionSet.value.has('oauth_grant.read.any'),
+)
+const serverEndpoints = computed(() => {
+  if (!discovery.value) return []
+  return [
+    {
+      label: '发现文档',
+      value: `${discovery.value.issuer}/.well-known/openid-configuration`,
+    },
+    { label: 'Issuer', value: discovery.value.issuer },
+    {
+      label: 'Authorization Endpoint',
+      value: discovery.value.authorization_endpoint,
+    },
+    { label: 'Token Endpoint', value: discovery.value.token_endpoint },
+    { label: 'UserInfo Endpoint', value: discovery.value.userinfo_endpoint },
+    { label: 'JWKS URI', value: discovery.value.jwks_uri },
+  ]
+})
 
 function openCreate() {
   void router.push({ name: 'admin-identity-provider-create' })
 }
 
 function openEdit(provider: AdminIdentityProvider) {
-  void router.push({ name: 'admin-identity-provider-edit', params: { provider_id: provider.id } })
+  void router.push({
+    name: 'admin-identity-provider-edit',
+    params: { provider_id: provider.id },
+  })
 }
 
 async function loadProviders() {
@@ -137,4 +222,17 @@ async function removeProvider(provider: AdminIdentityProvider) {
 }
 
 onMounted(loadProviders)
+
+onMounted(async () => {
+  discoveryLoading.value = true
+  discoveryError.value = false
+  try {
+    const response = await getOpenIDConfiguration()
+    discovery.value = response.data
+  } catch {
+    discoveryError.value = true
+  } finally {
+    discoveryLoading.value = false
+  }
+})
 </script>

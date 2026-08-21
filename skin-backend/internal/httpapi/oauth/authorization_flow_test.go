@@ -175,9 +175,17 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 		t.Fatalf("grant permission list mismatch: %#v", grantPermissions)
 	}
 	grantID := grants[0].(map[string]any)["id"].(string)
-	revokeGrantRes := doJSON(t, router, http.MethodDelete, "/v2/oauth/grants/"+grantID, nil, session, "")
+	adminGrantsRes := doJSON(t, router, http.MethodGet, "/v2/admin/oauth/grants?limit=10", nil, adminSession, "")
+	if adminGrantsRes.Code != http.StatusOK {
+		t.Fatalf("admin grant list status=%d body=%s", adminGrantsRes.Code, adminGrantsRes.Body.String())
+	}
+	adminGrants := decodeMap(t, adminGrantsRes.Body.Bytes())["items"].([]any)
+	if len(adminGrants) != 1 || adminGrants[0].(map[string]any)["id"] != grantID || adminGrants[0].(map[string]any)["user_id"] != user.ID {
+		t.Fatalf("admin grant list mismatch: %#v", adminGrants)
+	}
+	revokeGrantRes := doJSON(t, router, http.MethodDelete, "/v2/admin/oauth/grants/"+grantID, nil, adminSession, "")
 	if revokeGrantRes.Code != http.StatusNoContent || revokeGrantRes.Body.Len() != 0 {
-		t.Fatalf("revoke grant mismatch: status=%d body=%s", revokeGrantRes.Code, revokeGrantRes.Body.String())
+		t.Fatalf("admin revoke grant mismatch: status=%d body=%s", revokeGrantRes.Code, revokeGrantRes.Body.String())
 	}
 	revokeGrantAgainRes := doJSON(t, router, http.MethodDelete, "/v2/oauth/grants/"+grantID, nil, session, "")
 	if revokeGrantAgainRes.Code != http.StatusNotFound || revokeGrantAgainRes.Body.String() != "{\"error\":{\"object\":\"oauth_grant\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {

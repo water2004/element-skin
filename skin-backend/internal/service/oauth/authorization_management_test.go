@@ -109,6 +109,19 @@ func TestServiceClientPermissionAndGrantManagementExactly(t *testing.T) {
 	if len(grantPermissions) != 1 || grantPermissions[0] != "account.read.self" {
 		t.Fatalf("grant permissions mismatch: %#v", grantPermissions)
 	}
+	adminGrants, err := svc.ListGrantsForAdmin(ctx, adminActor, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(adminGrants) != 1 || adminGrants[0]["id"] != grants[0]["id"] || adminGrants[0]["user_id"] != user.ID {
+		t.Fatalf("admin grant list mismatch: %#v", adminGrants)
+	}
+	if _, err := svc.ListGrantsForAdmin(ctx, permission.Actor{}, 10); !isHTTPError(err, 403, "permission.check.denied") {
+		t.Fatalf("admin grant list without permission mismatch: %#v", err)
+	}
+	if err := svc.RevokeGrantForAdmin(ctx, permission.Actor{}, grants[0]["id"].(string)); !isHTTPError(err, 403, "permission.check.denied") {
+		t.Fatalf("admin grant revoke without permission mismatch: %#v", err)
+	}
 	if err := svc.RevokeGrant(ctx, userActor, grants[0]["id"].(string)); err != nil {
 		t.Fatal(err)
 	}
@@ -120,5 +133,48 @@ func TestServiceClientPermissionAndGrantManagementExactly(t *testing.T) {
 	}
 	if err := svc.RevokeGrant(ctx, permission.Actor{}, grants[0]["id"].(string)); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("revoke grant without permission mismatch: %#v", err)
+	}
+
+	adminVerifier := "admin-grant-revoke-verifier-abcdefghijklmnopqrstuvwxyz"
+	adminApproved, err := svc.ApproveAuthorization(ctx, userActor, oauth.AuthorizationRequest{
+		ResponseType:        "code",
+		ClientID:            clientID,
+		RedirectURI:         "https://perms.example/callback",
+		Scope:               "account.read.self",
+		CodeChallenge:       pkceChallenge(adminVerifier),
+		CodeChallengeMethod: "S256",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminToken, err := svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:    "authorization_code",
+		ClientID:     clientID,
+		ClientSecret: created["client_secret"].(string),
+		Code:         adminApproved["code"].(string),
+		RedirectURI:  "https://perms.example/callback",
+		CodeVerifier: adminVerifier,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminGrants, err = svc.ListGrantsForAdmin(ctx, adminActor, 10)
+	if err != nil || len(adminGrants) != 2 || adminGrants[0]["status"] != oauth.StatusActive {
+		t.Fatalf("admin active grant list mismatch: grants=%#v err=%v", adminGrants, err)
+	}
+	adminGrantID := adminGrants[0]["id"].(string)
+	if err := svc.RevokeGrantForAdmin(ctx, adminActor, adminGrantID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RevokeGrantForAdmin(ctx, adminActor, adminGrantID); !isHTTPError(err, 404, "oauth_grant.resolve.not_found") {
+		t.Fatalf("second admin grant revoke mismatch: %#v", err)
+	}
+	if _, err := svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:    "refresh_token",
+		ClientID:     clientID,
+		ClientSecret: created["client_secret"].(string),
+		RefreshToken: adminToken.RefreshToken,
+	}); !isHTTPError(err, 400, "refresh_token.verify.invalid") {
+		t.Fatalf("administratively revoked refresh token mismatch: %#v", err)
 	}
 }

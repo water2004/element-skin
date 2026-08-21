@@ -1,4 +1,5 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
+import { loginRedirectLocation } from '@/utils/internalRedirect'
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || '',
@@ -38,7 +39,7 @@ function redirectToLogin(): void {
   const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
   const loginPath = base + '/login'
   if (window.location.pathname !== loginPath) {
-    window.location.assign(loginPath)
+    window.location.assign(loginRedirectLocation(window.location, import.meta.env.BASE_URL || '/'))
   }
 }
 

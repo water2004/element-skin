@@ -10,7 +10,9 @@ import type {
 } from './types'
 
 export function listOAuthApps(limit = 50) {
-  return apiClient.get<{ items: OAuthClient[] }>('/v2/oauth/apps', { params: { limit } })
+  return apiClient.get<{ items: OAuthClient[] }>('/v2/oauth/apps', {
+    params: { limit },
+  })
 }
 
 export function getOAuthApp(clientId: string) {
@@ -22,7 +24,9 @@ export function getOAuthWebhookEventCatalog() {
 }
 
 export function listOAuthGrants(limit = 50) {
-  return apiClient.get<{ items: OAuthGrant[] }>('/v2/oauth/grants', { params: { limit } })
+  return apiClient.get<{ items: OAuthGrant[] }>('/v2/oauth/grants', {
+    params: { limit },
+  })
 }
 
 export function revokeOAuthGrant(grantId: string) {
@@ -37,7 +41,7 @@ export function createOAuthApp(payload: OAuthClientInput) {
   return apiClient.post<OAuthClient>('/v2/oauth/apps', payload)
 }
 
-export function updateOAuthApp(clientId: string, payload: OAuthClientInput & { status?: string }) {
+export function updateOAuthApp(clientId: string, payload: OAuthClientInput) {
   return apiClient.patch<OAuthClient>(`/v2/oauth/apps/${clientId}`, payload)
 }
 

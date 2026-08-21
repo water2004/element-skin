@@ -70,6 +70,9 @@ func (s Service) refreshToken(ctx context.Context, req TokenRequest) (TokenRespo
 	if !active || (len(codes) == 0 && len(oidcScopes) == 0) {
 		return TokenResponse{}, badRequest("refresh_token", "verify", "invalid")
 	}
+	if hasOIDCScope(oidcScopes, "openid") && !hasOIDCScope(oidcScopes, "offline_access") {
+		return TokenResponse{}, badRequest("refresh_token", "verify", "invalid")
+	}
 	accessRaw, accessHash, refreshRaw, refreshHash, err := tokenPair()
 	if err != nil {
 		return TokenResponse{}, err
@@ -153,7 +156,7 @@ func (s Service) clientCredentialsToken(ctx context.Context, req TokenRequest) (
 }
 
 func (s Service) issueTokens(ctx context.Context, clientID, userID, grantID string, codes, oidcScopes []string, nonce string) (TokenResponse, error) {
-	accessRaw, accessHash, refreshRaw, refreshHash, err := tokenPair()
+	accessRaw, accessHash, err := generateToken()
 	if err != nil {
 		return TokenResponse{}, err
 	}
@@ -162,9 +165,17 @@ func (s Service) issueTokens(ctx context.Context, clientID, userID, grantID stri
 	if err != nil {
 		return TokenResponse{}, err
 	}
-	refresh := model.OAuthToken{TokenHash: refreshHash, ClientID: clientID, UserID: userID, GrantID: grantID, OIDCScopes: oidcScopes, ExpiresAt: now + int64(refreshTokenTTL/time.Millisecond), CreatedAt: now}
-	if err := s.DB.OAuth.CreateRefreshToken(ctx, refresh); err != nil {
-		return TokenResponse{}, err
+	refreshRaw := ""
+	if shouldIssueRefreshToken(oidcScopes) {
+		var refreshHash string
+		refreshRaw, refreshHash, err = generateToken()
+		if err != nil {
+			return TokenResponse{}, err
+		}
+		refresh := model.OAuthToken{TokenHash: refreshHash, ClientID: clientID, UserID: userID, GrantID: grantID, OIDCScopes: oidcScopes, ExpiresAt: now + int64(refreshTokenTTL/time.Millisecond), CreatedAt: now}
+		if err := s.DB.OAuth.CreateRefreshToken(ctx, refresh); err != nil {
+			return TokenResponse{}, err
+		}
 	}
 	if err := s.storeAccessToken(ctx, redisstore.OAuthAccessToken{
 		TokenHash:     accessHash,
@@ -179,6 +190,10 @@ func (s Service) issueTokens(ctx context.Context, clientID, userID, grantID stri
 		return TokenResponse{}, err
 	}
 	return tokenResponse(accessRaw, refreshRaw, codes, oidcScopes, idToken), nil
+}
+
+func shouldIssueRefreshToken(oidcScopes []string) bool {
+	return !hasOIDCScope(oidcScopes, "openid") || hasOIDCScope(oidcScopes, "offline_access")
 }
 
 func (s Service) storeAccessToken(ctx context.Context, token redisstore.OAuthAccessToken) error {

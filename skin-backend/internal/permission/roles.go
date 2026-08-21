@@ -151,6 +151,7 @@ var Roles = []Role{
 			"cache.invalidate.any",
 			"oauth_app.read.any",
 			"oauth_app.update.any",
+			"oauth_app.review.any",
 			"oauth_app.delete.any",
 			"oauth_grant.read.any",
 			"oauth_grant.revoke.any",

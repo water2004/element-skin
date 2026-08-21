@@ -16,9 +16,13 @@ const adminApiMocks = vi.hoisted(() => ({
 const identityApiMocks = vi.hoisted(() => ({
   getIdentityProviders: vi.fn(),
 }))
+const oauthApiMocks = vi.hoisted(() => ({
+  getOpenIDConfiguration: vi.fn(),
+}))
 
 vi.mock('@/api/admin/identity-providers', () => adminApiMocks)
 vi.mock('@/api/identity', () => identityApiMocks)
+vi.mock('@/api/oauth', () => oauthApiMocks)
 
 const redirectUri = 'https://skin.example/api/v2/auth/oidc/callback'
 const provider: AdminIdentityProvider = {
@@ -51,9 +55,40 @@ beforeEach(() => {
   identityApiMocks.getIdentityProviders.mockResolvedValue({
     data: { items: [], redirect_uri: redirectUri },
   })
+  oauthApiMocks.getOpenIDConfiguration.mockResolvedValue({
+    data: {
+      issuer: 'https://skin.example/api',
+      authorization_endpoint: 'https://skin.example/oauth/authorize',
+      token_endpoint: 'https://skin.example/api/oauth/token',
+      userinfo_endpoint: 'https://skin.example/api/oauth/userinfo',
+      jwks_uri: 'https://skin.example/api/oauth/jwks',
+      revocation_endpoint: 'https://skin.example/api/oauth/revoke',
+      response_types_supported: ['code'],
+      grant_types_supported: ['authorization_code', 'refresh_token'],
+      subject_types_supported: ['pairwise'],
+      scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
+    },
+  })
 })
 
 describe('OIDC identity provider pages', () => {
+  it('explains both OIDC roles with exact discovery endpoints and no Microsoft banner', async () => {
+    const mounted = await mountPage('/admin/identity-providers', providerRoutes(), [
+      'identity_provider.read.any',
+    ])
+    await flushUI()
+
+    expect(mounted.root.textContent).toContain('本站作为 OIDC Provider')
+    expect(mounted.root.textContent).toContain(
+      'https://skin.example/api/.well-known/openid-configuration',
+    )
+    expect(mounted.root.textContent).toContain('https://skin.example/oauth/authorize')
+    expect(mounted.root.textContent).toContain('本站作为 OIDC Client')
+    expect(mounted.root.textContent).not.toContain('Microsoft 也是普通 OIDC 身份提供方')
+    expect(oauthApiMocks.getOpenIDConfiguration).toHaveBeenCalledTimes(1)
+    mounted.unmount()
+  })
+
   it('navigates from the provider list to standalone create and edit routes', async () => {
     const createPage = await mountPage('/admin/identity-providers', providerRoutes(), [
       'identity_provider.read.any',

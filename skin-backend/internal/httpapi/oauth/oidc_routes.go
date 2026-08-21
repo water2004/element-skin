@@ -13,7 +13,7 @@ func (h Handler) OpenIDConfiguration(w http.ResponseWriter, _ *http.Request) {
 	base := h.baseURL()
 	util.JSON(w, http.StatusOK, map[string]any{
 		"issuer":                                base,
-		"authorization_endpoint":                base + "/oauth/authorize",
+		"authorization_endpoint":                h.authorizationEndpointURL(),
 		"token_endpoint":                        base + "/oauth/token",
 		"userinfo_endpoint":                     base + "/oauth/userinfo",
 		"jwks_uri":                              base + "/oauth/jwks",

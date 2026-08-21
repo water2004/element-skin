@@ -208,7 +208,8 @@ func TestServiceClientPermissionReductionRevokesOnlyIncompatibleGrantExactly(t *
 		RedirectURI:     "https://permission-reduction.example/callback",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, oauth.StatusActive)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +261,8 @@ func TestServiceClientMetadataUpdatePreservesCredentialsExactly(t *testing.T) {
 		WebsiteURL:      "https://metadata.example",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, oauth.StatusActive)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +304,8 @@ func TestServiceClientRedirectUpdateInvalidatesCredentialsButPreservesGrantExact
 		RedirectURI:     "https://redirect.example/new-callback",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, oauth.StatusActive)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}

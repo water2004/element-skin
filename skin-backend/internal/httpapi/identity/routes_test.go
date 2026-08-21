@@ -375,7 +375,7 @@ func TestIdentityAuthorizationCallbackIssuesSessionAndRegistrationRedirectsExact
 	}
 
 	startLogin := identityRouteRequest(http.MethodPost, "/v2/identity-authorizations",
-		`{"provider_id":"identity-route-real-callback","intent":"login"}`, permission.GuestActor())
+		`{"provider_id":"identity-route-real-callback","intent":"login","return_to":"/oauth/authorize?client_id=route-client&state=route-state"}`, permission.GuestActor())
 	loginStartRecorder := httptest.NewRecorder()
 	h.StartAuthorization(loginStartRecorder, startLogin)
 	loginAuthorizationURL := authorizationURLFromResponse(t, loginStartRecorder)
@@ -386,8 +386,8 @@ func TestIdentityAuthorizationCallbackIssuesSessionAndRegistrationRedirectsExact
 		"/v2/auth/oidc/callback?code=login-code&state="+url.QueryEscape(loginState), "", permission.GuestActor())
 	loginRecorder := httptest.NewRecorder()
 	h.AuthorizationCallback(loginRecorder, loginCallback)
-	if loginRecorder.Code != http.StatusSeeOther || loginRecorder.Header().Get("Location") != "http://test/dashboard" ||
-		loginRecorder.Body.String() != "<a href=\"http://test/dashboard\">See Other</a>.\n\n" {
+	if loginRecorder.Code != http.StatusSeeOther || loginRecorder.Header().Get("Location") != "http://test/oauth/authorize?client_id=route-client&state=route-state" ||
+		loginRecorder.Body.String() != "<a href=\"http://test/oauth/authorize?client_id=route-client&amp;state=route-state\">See Other</a>.\n\n" {
 		t.Fatalf("login callback status=%d location=%q body=%q", loginRecorder.Code, loginRecorder.Header().Get("Location"), loginRecorder.Body.String())
 	}
 	cookies := map[string]*http.Cookie{}
@@ -404,7 +404,7 @@ func TestIdentityAuthorizationCallbackIssuesSessionAndRegistrationRedirectsExact
 	}
 
 	startRegistration := identityRouteRequest(http.MethodPost, "/v2/identity-authorizations",
-		`{"provider_id":"identity-route-real-callback","intent":"login"}`, permission.GuestActor())
+		`{"provider_id":"identity-route-real-callback","intent":"login","return_to":"/oauth/authorize?client_id=registration-client&state=registration-state"}`, permission.GuestActor())
 	registrationStartRecorder := httptest.NewRecorder()
 	h.StartAuthorization(registrationStartRecorder, startRegistration)
 	registrationAuthorizationURL := authorizationURLFromResponse(t, registrationStartRecorder)
@@ -421,7 +421,9 @@ func TestIdentityAuthorizationCallbackIssuesSessionAndRegistrationRedirectsExact
 	}
 	if registrationRecorder.Code != http.StatusSeeOther || location.Scheme != "http" || location.Host != "test" ||
 		location.Path != "/register" || location.Query().Get("provider_id") != provider.ID ||
-		location.Query().Get("identity_ticket") == "" || len(registrationRecorder.Result().Cookies()) != 0 {
+		location.Query().Get("identity_ticket") == "" ||
+		location.Query().Get("redirect") != "/oauth/authorize?client_id=registration-client&state=registration-state" ||
+		len(registrationRecorder.Result().Cookies()) != 0 {
 		t.Fatalf("registration callback status=%d location=%q cookies=%#v", registrationRecorder.Code,
 			registrationRecorder.Header().Get("Location"), registrationRecorder.Result().Cookies())
 	}

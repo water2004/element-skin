@@ -32,6 +32,17 @@ func TestOAuthRoutesRejectMalformedInputsExactly(t *testing.T) {
 		t.Fatalf("create route error app status=%d body=%s", createRes.Code, createRes.Body.String())
 	}
 	clientID := decodeMap(t, createRes.Body.Bytes())["client_id"].(string)
+	updateWithStatus := doJSON(t, router, http.MethodPatch, "/v2/oauth/apps/"+clientID, map[string]any{
+		"name":         "Configuration-only update",
+		"redirect_uri": "https://malformed.example/callback",
+		"client_type":  "confidential",
+		"permissions":  []string{"account.read.self"},
+		"status":       "active",
+	}, adminSession, "")
+	updatedClient := decodeMap(t, updateWithStatus.Body.Bytes())
+	if updateWithStatus.Code != http.StatusOK || updatedClient["status"] != "pending" || updatedClient["name"] != "Configuration-only update" {
+		t.Fatalf("generic update must preserve review status: status=%d body=%#v", updateWithStatus.Code, updatedClient)
+	}
 
 	for _, tc := range []struct {
 		name   string
@@ -141,6 +152,11 @@ func TestOAuthHandlerForwardsServiceErrorsExactly(t *testing.T) {
 			handler.ClientPermissions(rec, req)
 		}},
 		{name: "list grants", method: http.MethodGet, path: "/v2/oauth/grants", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: handler.ListGrants},
+		{name: "admin list grants", method: http.MethodGet, path: "/v2/admin/oauth/grants", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: handler.ListAdminGrants},
+		{name: "admin revoke grant", method: http.MethodDelete, path: "/v2/admin/oauth/grants/missing", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: func(rec http.ResponseWriter, req *http.Request) {
+			req.SetPathValue("grant_id", "missing")
+			handler.RevokeAdminGrant(rec, req)
+		}},
 		{name: "authorize info", method: http.MethodGet, path: "/oauth/authorize", status: http.StatusBadRequest, body: "{\"error\":{\"object\":\"response_type\",\"operation\":\"validate\",\"reason\":\"unsupported\"}}\n", call: handler.AuthorizeInfo},
 		{name: "device info", method: http.MethodGet, path: "/oauth/device?user_code=missing", status: http.StatusForbidden, body: "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n", call: handler.DeviceInfo},
 	} {

@@ -81,7 +81,7 @@
 
 <script setup lang="ts">
 import { reactive, ref, inject, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock, Right, Connection } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
@@ -89,8 +89,10 @@ import { siteLogin } from '@/api/auth'
 import { getIdentityProviders, startIdentityAuthorization } from '@/api/identity'
 import type { IdentityProvider } from '@/api/types'
 import { getErrorMessage, isValidationError } from '@/utils/error'
+import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
+const route = useRoute()
 const fetchMe = inject<() => Promise<void>>('fetchMe')
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
@@ -143,7 +145,7 @@ async function login() {
     if (fetchMe) await fetchMe()
 
     ElMessage.success('登录成功！')
-    router.push('/dashboard')
+    await router.replace(loginReturnTarget())
   } catch (e: unknown) {
     if (!isValidationError(e)) {
       ElMessage.error('登录失败: ' + getErrorMessage(e, '登录失败'))
@@ -156,12 +158,20 @@ async function login() {
 async function loginWithProvider(providerId: string) {
   try {
     authorizingProviderId.value = providerId
-    const res = await startIdentityAuthorization({ provider_id: providerId, intent: 'login' })
+    const res = await startIdentityAuthorization({
+      provider_id: providerId,
+      intent: 'login',
+      return_to: loginReturnTarget(),
+    })
     window.location.assign(res.data.authorization_url)
   } catch (e: unknown) {
     authorizingProviderId.value = ''
     ElMessage.error('外部登录失败: ' + getErrorMessage(e, '无法开始登录'))
   }
+}
+
+function loginReturnTarget() {
+  return internalRedirectTarget(route.query.redirect)
 }
 </script>
 

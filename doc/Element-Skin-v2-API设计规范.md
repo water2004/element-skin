@@ -289,6 +289,10 @@ GET /.well-known/oauth-protected-resource
 GET /oauth/jwks
 ```
 
+Discovery 中的 `issuer`、token、userinfo 和 JWKS 端点使用 `server.api_url`；
+`authorization_endpoint` 是浏览器交互入口，必须使用 `server.site_url + /oauth/authorize`，不得指向只返回
+JSON 的后端路由。未登录用户转到登录页时必须保留完整授权查询参数，登录成功后回到原授权请求。
+
 协议端点：
 
 ```text
@@ -307,7 +311,9 @@ OIDC 标准 scope 为 `openid`、`profile`、`email`、`offline_access`；请求
 不配置任何站点权限，因此其 access token 不能调用受保护的 `/v2` API。
 
 ID token 使用本站独立 RSA 密钥签名，包含 pairwise `sub`。`profile` 和 `email` claim 仅在对应
-scope 获批时出现。grant 撤销后关联 access token、refresh token 和 userinfo 立即失效。
+scope 获批时出现。只有 OIDC 授权包含 `offline_access` 时 token endpoint 才签发 refresh token；
+纯 OAuth 授权继续按 OAuth token 生命周期签发 refresh token。grant 撤销后关联 access token、
+refresh token 和 userinfo 立即失效。
 
 ## 6. 站点 API 路由
 
@@ -434,6 +440,7 @@ Webhook 只异步发送用户 UUID 和资源 ID 等基础信息，接收方通�
 ```text
 /v2/admin/users/*
 /v2/admin/oauth/apps/*
+/v2/admin/oauth/grants/*
 /v2/admin/profiles/*
 /v2/admin/textures/*
 /v2/admin/invites/*
@@ -511,6 +518,7 @@ provider 冲突均终止启动并保留旧设置。旧版没有持久化用户 r
 - 连接授权取消和目标 subject 不匹配时，callback 必须以精确错误码返回身份管理页；
 - 正版绑定按远端 UUID 创建或复用本站角色、跨用户冲突、并发唯一性、显式同步、图片失败清理和
   数据库事务；
-- OIDC-only client 的零站点权限、pairwise subject、userinfo、refresh 和 grant 撤销；
+- OIDC-only client 的零站点权限、pairwise subject、userinfo、带或不带 `offline_access` 的精确 refresh
+  token 行为和 grant 撤销；
 - `/v2` 精确 method/path/body/status/response，旧 `/v1` 与旧未版本化站点路径返回 `404`；
 - 前端权限入口、API wrapper 精确请求、TypeScript 构建和关键交互。

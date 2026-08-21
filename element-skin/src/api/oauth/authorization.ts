@@ -4,10 +4,17 @@ import type {
   OAuthAuthorizationApproval,
   OAuthAuthorizationDetails,
   OAuthAuthorizationRequest,
+  OpenIDConfiguration,
 } from './types'
 
+export function getOpenIDConfiguration() {
+  return apiClient.get<OpenIDConfiguration>('/.well-known/openid-configuration')
+}
+
 export function getOAuthAuthorizationDetails(params: OAuthAuthorizationRequest) {
-  return apiClient.get<OAuthAuthorizationDetails>('/oauth/authorize', { params })
+  return apiClient.get<OAuthAuthorizationDetails>('/oauth/authorize', {
+    params,
+  })
 }
 
 export function approveOAuthAuthorization(payload: OAuthAuthorizationRequest) {
