@@ -101,6 +101,7 @@ import {
 import type { PermissionDefinition } from '@/api/types'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import AdminOAuthAppDetailDialog from '@/components/admin/oauth/AdminOAuthAppDetailDialog.vue'
 import { getErrorMessage } from '@/utils/error'
 
