@@ -103,12 +103,12 @@
               <el-radio value="limited">次数限制</el-radio>
               <el-radio value="unlimited">无限使用</el-radio>
             </el-radio-group>
+          </el-form-item>
+          <el-form-item v-if="inviteUsesMode === 'limited'" label="次数">
             <el-input-number
-              v-if="inviteUsesMode === 'limited'"
               v-model="inviteUses"
               :min="1"
               :max="1000"
-              class="w-full"
             />
           </el-form-item>
 
@@ -250,6 +250,9 @@ const getRemainingColor = (row: Invite) => {
 async function confirmCreateInvite() {
   const code = inviteMode.value === 'auto' ? previewInviteCode.value : customInviteCode.value.trim()
   if (!code || code.length < 6) return ElMessage.warning('邀请码长度不足')
+  if (inviteMode.value === 'manual' && !/^[A-Za-z0-9_]{6,32}$/.test(code)) {
+    return ElMessage.warning('邀请码仅支持 6-32 位字母、数字或下划线')
+  }
 
   creating.value = true
   try {
