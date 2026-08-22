@@ -6,6 +6,7 @@
     >
       <template #icon><Connection /></template>
       <template #actions>
+        <DirtyTag :visible="hasChanges" :spaced="false" />
         <el-button
           type="primary"
           :icon="Check"
@@ -167,7 +168,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage, ElLoading } from 'element-plus'
 import {
   Plus,
@@ -194,6 +195,7 @@ import {
   moveFallback,
   normalizeFallbackSettings,
   removeFallbackAt,
+  toFallbackSettingsPayload,
   type FallbackSettingsForm,
 } from '@/components/admin/mojang/fallbackSettings'
 import {
@@ -204,7 +206,9 @@ import {
 import { saveFallbackConfiguration } from '@/components/admin/mojang/fallbackSave'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
 import { getErrorMessage } from '@/utils/error'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const settings = ref<FallbackSettingsForm>({
   fallback_strategy: 'serial',
@@ -212,6 +216,9 @@ const settings = ref<FallbackSettingsForm>({
 })
 const fallbacks = ref<FallbackRow[]>([])
 const saving = ref(false)
+const { hasChanges, capture } = useDirtySnapshot(
+  computed(() => toFallbackSettingsPayload(settings.value, fallbacks.value)),
+)
 
 async function fetchSettings() {
   try {
@@ -219,6 +226,7 @@ async function fetchSettings() {
     const normalized = normalizeFallbackSettings(res.data, fallbacks.value)
     settings.value = normalized.settings
     fallbacks.value = normalized.rows.map((row) => reactive(row))
+    capture()
   } catch {
     ElMessage.error('加载 Fallback 配置失败')
   }
@@ -235,6 +243,7 @@ async function saveSettings() {
     const normalized = normalizeFallbackSettings(savedSettings, fallbacks.value)
     settings.value = normalized.settings
     fallbacks.value = normalized.rows.map((row) => reactive(row))
+    capture()
 
     ElMessage.success('所有配置及白名单已成功同步')
   } catch (e: unknown) {

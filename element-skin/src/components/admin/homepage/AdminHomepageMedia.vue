@@ -3,24 +3,14 @@
     <PageHeader title="首页图片" subtitle="管理静态图与 Panorama 的播放顺序、时长和镜头轨迹">
       <template #icon><PictureFilled /></template>
       <template #actions>
-        <div class="flex items-center flex-wrap gap-3">
-          <el-button
-            type="primary"
-            :icon="Check"
-            size="large"
-            :loading="saving"
-            :disabled="loading || !hasChanges"
-            @click="saveChanges"
-          >
-            保存配置
-          </el-button>
+        <ActionBar>
           <el-upload
             action="#"
             :http-request="uploadImage"
             :show-file-list="false"
             accept=".png,.jpg,.jpeg,.webp"
           >
-            <el-button :icon="Upload" size="large">上传图片</el-button>
+            <el-button :icon="Upload" size="large" class="hover-lift">上传图片</el-button>
           </el-upload>
           <el-upload
             action="#"
@@ -28,9 +18,20 @@
             :show-file-list="false"
             accept=".zip"
           >
-            <el-button :icon="Box" size="large">上传 Panorama</el-button>
+            <el-button :icon="Box" size="large" class="hover-lift">上传 Panorama</el-button>
           </el-upload>
-        </div>
+          <el-button
+            type="primary"
+            :icon="Check"
+            size="large"
+            :loading="saving"
+            :disabled="loading || !hasChanges"
+            class="hover-lift"
+            @click="saveChanges"
+          >
+            保存配置
+          </el-button>
+        </ActionBar>
       </template>
     </PageHeader>
 
@@ -91,6 +92,7 @@ import {
 } from '@/components/admin/homepage/homepageMediaState'
 import { saveHomepageMediaChanges } from '@/components/admin/homepage/homepageMediaSave'
 import { useHomepageMediaDrag } from '@/components/admin/homepage/useHomepageMediaDrag'
+import ActionBar from '@/components/common/ActionBar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { getErrorMessage } from '@/utils/error'
 

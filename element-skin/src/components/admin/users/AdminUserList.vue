@@ -4,13 +4,13 @@
       <template #icon><UserFilled /></template>
       <template #actions>
         <el-button
-          type="primary"
           :icon="Refresh"
-          @click="refreshUsersFromFirst"
           plain
+          :loading="loading"
+          @click="refreshUsersFromFirst"
           class="hover-lift"
         >
-          刷新列表
+          刷新
         </el-button>
       </template>
     </PageHeader>

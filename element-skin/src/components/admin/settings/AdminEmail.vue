@@ -3,8 +3,8 @@
     <PageHeader title="邮件服务设置" subtitle="配置 SMTP 服务器以启用注册验证、找回密码等通知功能">
       <template #icon><Message /></template>
       <template #actions>
-        <el-button type="primary" :icon="Refresh" @click="loadSettings" plain class="hover-lift">
-          刷新配置
+        <el-button :icon="Refresh" plain @click="loadSettings" class="hover-lift">
+          重新加载
         </el-button>
       </template>
     </PageHeader>
@@ -15,6 +15,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Postcard /></el-icon>
             <span>SMTP 与验证配置</span>
+            <DirtyTag :visible="hasSettingsChanges" />
           </div>
           <el-button
             type="primary"
@@ -118,6 +119,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Filter /></el-icon>
             <span>账户邮箱后缀策略</span>
+            <DirtyTag :visible="hasPolicyChanges" />
           </div>
           <el-button
             type="primary"
@@ -209,7 +211,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Message, Postcard, Filter } from '@element-plus/icons-vue'
 import {
@@ -221,6 +223,8 @@ import {
 import type { EmailSuffixPolicy } from '@/api/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const emailSettings = reactive({
   email_verify_enabled: false,
@@ -243,6 +247,11 @@ const emailSuffixPolicy = reactive<EmailSuffixPolicy>({
   denylist: [],
 })
 
+const settingsDirty = useDirtySnapshot(computed(() => emailSettings))
+const policyDirty = useDirtySnapshot(computed(() => emailSuffixPolicy))
+const hasSettingsChanges = settingsDirty.hasChanges
+const hasPolicyChanges = policyDirty.hasChanges
+
 async function loadSettings() {
   try {
     const [settingsResponse, policyResponse] = await Promise.all([
@@ -254,6 +263,8 @@ async function loadSettings() {
       emailSettings.smtp_password = '' // Don't show password
     }
     Object.assign(emailSuffixPolicy, policyResponse.data)
+    settingsDirty.capture()
+    policyDirty.capture()
   } catch {
     ElMessage.error('加载邮件设置失败')
   }
@@ -299,6 +310,7 @@ async function saveEmailSuffixPolicy() {
     ElMessage.success('邮箱后缀策略已保存')
     const response = await getAdminEmailSuffixPolicy()
     Object.assign(emailSuffixPolicy, response.data)
+    policyDirty.capture()
   } catch {
     ElMessage.error('保存邮箱后缀策略失败')
   } finally {
@@ -312,6 +324,7 @@ async function saveSettings() {
     await saveAdminSettingsGroup('email', emailSettings)
     ElMessage.success('设置已保存')
     emailSettings.smtp_password = '' // Clear password field after save
+    settingsDirty.capture()
   } catch {
     ElMessage.error('保存失败')
   } finally {

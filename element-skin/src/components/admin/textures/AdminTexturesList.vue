@@ -4,13 +4,13 @@
       <template #icon><Picture /></template>
       <template #actions>
         <el-button
-          type="primary"
           :icon="Refresh"
-          @click="refreshTexturesFromFirst"
           plain
+          :loading="loading"
+          @click="refreshTexturesFromFirst"
           class="hover-lift"
         >
-          刷新列表
+          刷新
         </el-button>
       </template>
     </PageHeader>
