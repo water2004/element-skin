@@ -9,8 +9,16 @@ import httpx
 
 from ..http import HTTPClient
 from ..models import TokenSet
-from ..permissions import AccountScopes, MinecraftScopes, ProfileScopes, TextureScopes, WardrobeScopes
+from ..permissions import (
+    AccountScopes,
+    InviteScopes,
+    MinecraftScopes,
+    ProfileScopes,
+    TextureScopes,
+    WardrobeScopes,
+)
 from ..permissions.validator import PermissionValidator
+from .invites import encode_invite_code
 
 
 class ElementSkinAPI:
@@ -146,6 +154,35 @@ class ElementSkinAPI:
             "/v2/minecraft/session/has-joined",
             json=_clean_params({"username": username, "server_id": server_id, "ip": ip}),
         )
+
+    def list_invites(
+        self,
+        *,
+        cursor: str | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        self._require(InviteScopes.READ_ANY)
+        return self._http.get(
+            "/v2/admin/invites",
+            params=_clean_params({"cursor": cursor, "limit": page_size}),
+        )
+
+    def create_invite(
+        self,
+        code: str | None = None,
+        *,
+        total_uses: int | None = 1,
+        note: str = "",
+    ) -> dict[str, Any]:
+        self._require(InviteScopes.CREATE_ANY)
+        payload: dict[str, Any] = {"total_uses": total_uses, "note": note}
+        if code is not None:
+            payload["code_base64"] = encode_invite_code(code)
+        return self._http.post("/v2/admin/invites", json=payload)
+
+    def delete_invite(self, code: str) -> None:
+        self._require(InviteScopes.DELETE_ANY)
+        self._http.delete(f"/v2/admin/invites/{encode_invite_code(code)}")
 
     def _require(self, *permissions: str) -> None:
         PermissionValidator.require_token_permissions(self.permissions, permissions)

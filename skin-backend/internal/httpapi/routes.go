@@ -156,7 +156,7 @@ func (r *Router) routes() {
 	r.handle("DELETE /v2/admin/textures/{hash}", adminRoutes.Auth(adminRoutes.DeleteTexture))
 	r.handle("GET /v2/admin/invites", adminRoutes.Auth(adminRoutes.Invites))
 	r.handle("POST /v2/admin/invites", adminRoutes.Auth(adminRoutes.CreateInvite))
-	r.handle("DELETE /v2/admin/invites/{code}", adminRoutes.Auth(adminRoutes.DeleteInvite))
+	r.handle("DELETE /v2/admin/invites/{code_base64}", adminRoutes.Auth(adminRoutes.DeleteInvite))
 	r.handle("GET /v2/admin/official-whitelist", adminRoutes.Auth(adminRoutes.OfficialWhitelist))
 	r.handle("POST /v2/admin/official-whitelist", adminRoutes.Auth(adminRoutes.AddOfficialWhitelist))
 	r.handle("DELETE /v2/admin/official-whitelist/{username}", adminRoutes.Auth(adminRoutes.RemoveOfficialWhitelist))

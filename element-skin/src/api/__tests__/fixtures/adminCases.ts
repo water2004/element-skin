@@ -200,22 +200,31 @@ function inviteCases(): ApiCase[] {
       args: ['/v2/admin/invites', { params: { cursor: null, limit: 50 } }],
     },
     {
-      name: 'createAdminInvite posts invite payload',
+      name: 'createAdminInvite encodes arbitrary invite text as unpadded Base64URL',
       method: 'post',
-      call: () => createAdminInvite({ code: 'WELCOME', total_uses: 10, note: 'Launch' }),
-      args: ['/v2/admin/invites', { code: 'WELCOME', total_uses: 10, note: 'Launch' }],
+      call: () => createAdminInvite({ code: '欢迎/"\\', total_uses: 10, note: 'Launch' }),
+      args: ['/v2/admin/invites', { total_uses: 10, note: 'Launch', code_base64: '5qyi6L-OLyJc' }],
     },
     {
       name: 'createAdminInvite preserves explicit unlimited usage',
       method: 'post',
       call: () => createAdminInvite({ code: 'UNLIMITED', total_uses: null, note: 'No limit' }),
-      args: ['/v2/admin/invites', { code: 'UNLIMITED', total_uses: null, note: 'No limit' }],
+      args: [
+        '/v2/admin/invites',
+        { total_uses: null, note: 'No limit', code_base64: 'VU5MSU1JVEVE' },
+      ],
     },
     {
-      name: 'deleteAdminInvite deletes invite code',
+      name: 'createAdminInvite omits code_base64 for server-generated code',
+      method: 'post',
+      call: () => createAdminInvite({ total_uses: 1, note: 'Generated' }),
+      args: ['/v2/admin/invites', { total_uses: 1, note: 'Generated' }],
+    },
+    {
+      name: 'deleteAdminInvite encodes arbitrary invite text in path',
       method: 'delete',
-      call: () => deleteAdminInvite('WELCOME'),
-      args: ['/v2/admin/invites/WELCOME'],
+      call: () => deleteAdminInvite('欢迎/"\\'),
+      args: ['/v2/admin/invites/5qyi6L-OLyJc'],
     },
   ]
 }

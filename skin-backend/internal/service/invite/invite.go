@@ -22,6 +22,7 @@ type Service struct {
 
 type CreateInput struct {
 	Code         string
+	CodeSet      bool
 	TotalUses    any
 	TotalUsesSet bool
 	Note         string
@@ -49,15 +50,15 @@ func (s Service) Create(ctx context.Context, actor permission.Actor, input Creat
 		return nil, err
 	}
 	code := input.Code
-	if code == "" {
+	if code == "" && !input.CodeSet {
 		id, err := util.GenerateUUIDNoDash()
 		if err != nil {
 			return nil, err
 		}
 		code = id + id[:8]
 	}
-	if len(code) < 4 {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "invite", Operation: "validate", Reason: "out_of_range"}
+	if code == "" {
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "invite", Operation: "validate", Reason: "required"}
 	}
 	defaultTotal := 1
 	total := &defaultTotal

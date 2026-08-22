@@ -127,11 +127,11 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 		t.Fatal("texture should be deleted from user library")
 	}
 
-	createInvite := doJSON(t, h, "POST", "/v2/admin/invites", map[string]any{"code": "INV_HTTP", "total_uses": 5, "note": "API Code"}, adminCookie)
+	createInvite := doJSON(t, h, "POST", "/v2/admin/invites", map[string]any{"code_base64": "SU5WX0hUVFA", "total_uses": 5, "note": "API Code"}, adminCookie)
 	if createInvite.Code != http.StatusCreated {
 		t.Fatalf("create invite status=%d body=%s", createInvite.Code, createInvite.Body.String())
 	}
-	badInvite := doRawJSON(t, h, "POST", "/v2/admin/invites", `{"code":"BAD_INVITE"`, adminCookie)
+	badInvite := doRawJSON(t, h, "POST", "/v2/admin/invites", `{"code_base64":"QkFEX0lOVklURQ"`, adminCookie)
 	if badInvite.Code != 400 {
 		t.Fatalf("malformed invite JSON should be 400, got %d body=%s", badInvite.Code, badInvite.Body.String())
 	}
@@ -151,7 +151,7 @@ func TestAdminProfilesTexturesInvitesHTTP(t *testing.T) {
 	if !found {
 		t.Fatal("created invite not listed")
 	}
-	delInvite := doJSON(t, h, "DELETE", "/v2/admin/invites/INV_HTTP", nil, adminCookie)
+	delInvite := doJSON(t, h, "DELETE", "/v2/admin/invites/SU5WX0hUVFA", nil, adminCookie)
 	if delInvite.Code != http.StatusNoContent || delInvite.Body.Len() != 0 {
 		t.Fatalf("delete invite status=%d body=%s", delInvite.Code, delInvite.Body.String())
 	}

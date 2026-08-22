@@ -1,6 +1,7 @@
 """Python SDK for Element Skin OAuth, API, and Webhook access."""
 
 from .api.client import ElementSkinAPI
+from .api.invites import encode_invite_code
 from .exceptions import (
     APIError,
     AuthenticationError,
@@ -32,6 +33,7 @@ __all__ = [
     "AuthenticationError",
     "ElementSkinAPI",
     "ElementSkinError",
+    "encode_invite_code",
     "FileTokenStore",
     "InvalidScope",
     "MemoryReplayGuard",

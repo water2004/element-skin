@@ -36,7 +36,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
-from element_skin_sdk import OAuthClient  # noqa: E402
+from element_skin_sdk import OAuthClient, encode_invite_code  # noqa: E402
 from element_skin_sdk.exceptions import OAuthError  # noqa: E402
 from element_skin_sdk.http import HTTPClient  # noqa: E402
 from element_skin_sdk.oauth.pkce import create_code_challenge, generate_code_verifier  # noqa: E402
@@ -428,7 +428,7 @@ def create_invite(api: HTTPClient, code: str, total_uses: int | None, note: str)
     return api.post(
         "/v2/admin/invites",
         json={
-            "code": code,
+            "code_base64": encode_invite_code(code),
             "total_uses": total_uses,
             "note": note,
         },
@@ -436,7 +436,7 @@ def create_invite(api: HTTPClient, code: str, total_uses: int | None, note: str)
 
 
 def delete_invite(api: HTTPClient, code: str) -> None:
-    api.delete(f"/v2/admin/invites/{code}")
+    api.delete(f"/v2/admin/invites/{encode_invite_code(code)}")
 
 
 def contains_invite(page: dict[str, Any], code: str) -> bool:

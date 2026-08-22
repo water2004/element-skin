@@ -8,6 +8,7 @@ from element_skin_sdk.exceptions import APIError, PermissionDenied
 from element_skin_sdk.models import TokenSet
 from element_skin_sdk.permissions import (
     AccountScopes,
+    InviteScopes,
     MinecraftScopes,
     ProfileScopes,
     TextureScopes,
@@ -301,6 +302,70 @@ def test_minecraft_has_joined_posts_exact_json(response_json) -> None:
         "server_id": "server-hash",
         "ip": "127.0.0.1",
     }
+
+
+def test_invite_wrappers_use_exact_permissions_and_base64url_transport(response_json) -> None:
+    page = {"items": [], "has_next": False, "next_cursor": "", "page_size": 0}
+    created = {"code": '欢迎/"\\', "total_uses": None, "note": "任意字符"}
+    responses = [response_json(page), response_json(created, 201), httpx.Response(204)]
+    recorder = RequestRecorder(lambda request: responses.pop(0))
+    api = ElementSkinAPI(
+        "https://skin.example.test",
+        access_token="access-token-1",
+        permissions=(InviteScopes.READ_ANY, InviteScopes.CREATE_ANY, InviteScopes.DELETE_ANY),
+        transport=recorder.transport(),
+    )
+
+    assert api.list_invites(cursor="invite-cursor", page_size=15) == page
+    assert api.create_invite('欢迎/"\\', total_uses=None, note="任意字符") == created
+    assert api.delete_invite('欢迎/"\\') is None
+    assert [
+        (request.method, request.path, request.query, request.json_body)
+        for request in recorder.requests
+    ] == [
+        ("GET", "/v2/admin/invites", {"cursor": ["invite-cursor"], "limit": ["15"]}, None),
+        (
+            "POST",
+            "/v2/admin/invites",
+            {},
+            {"code_base64": "5qyi6L-OLyJc", "total_uses": None, "note": "任意字符"},
+        ),
+        ("DELETE", "/v2/admin/invites/5qyi6L-OLyJc", {}, None),
+    ]
+
+
+def test_invite_create_omits_code_for_server_generation(response_json) -> None:
+    generated = {"code": "generated", "total_uses": 1, "note": "Generated"}
+    recorder = RequestRecorder(lambda request: response_json(generated, 201))
+    api = ElementSkinAPI(
+        "https://skin.example.test",
+        access_token="access-token-1",
+        permissions=(InviteScopes.CREATE_ANY,),
+        transport=recorder.transport(),
+    )
+
+    assert api.create_invite(note="Generated") == generated
+    assert recorder.requests[0].json_body == {"total_uses": 1, "note": "Generated"}
+
+
+def test_invite_permission_checks_block_all_requests(response_json) -> None:
+    recorder = RequestRecorder(lambda request: response_json({}, 204))
+    api = ElementSkinAPI(
+        "https://skin.example.test",
+        access_token="access-token-1",
+        permissions=(AccountScopes.READ_SELF,),
+        transport=recorder.transport(),
+    )
+
+    for call, permission in (
+        (lambda: api.list_invites(), InviteScopes.READ_ANY),
+        (lambda: api.create_invite("INVITE"), InviteScopes.CREATE_ANY),
+        (lambda: api.delete_invite("INVITE"), InviteScopes.DELETE_ANY),
+    ):
+        with pytest.raises(PermissionDenied) as exc:
+            call()
+        assert exc.value.params == {"missing_permissions": [permission]}
+    assert recorder.requests == []
 
 
 def test_http_error_maps_structured_error_exactly(response_json) -> None:

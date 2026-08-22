@@ -153,16 +153,20 @@ func TestInviteServiceRejectsInvalidInputsAndPermissionsExactly(t *testing.T) {
 	if _, err := svc.List(ctx, actor, util.EncodeCursor(map[string]any{"last_created_at": database.NowMS()}), 10); !inviteHTTPError(err, http.StatusBadRequest, "pagination_cursor.decode.invalid") {
 		t.Fatalf("incomplete cursor mismatch: %#v", err)
 	}
-	if _, err := svc.Create(ctx, actor, invitesvc.CreateInput{Code: "abc"}); !inviteHTTPError(err, http.StatusBadRequest, "invite.validate.out_of_range") {
-		t.Fatalf("short code mismatch: %#v", err)
+	if _, err := svc.Create(ctx, actor, invitesvc.CreateInput{CodeSet: true}); !inviteHTTPError(err, http.StatusBadRequest, "invite.validate.required") {
+		t.Fatalf("explicit empty code mismatch: %#v", err)
+	}
+	oneCharacter, err := svc.Create(ctx, actor, invitesvc.CreateInput{Code: "引", CodeSet: true})
+	if err != nil || oneCharacter["code"] != "引" || oneCharacter["total_uses"] != 1 {
+		t.Fatalf("single-character Unicode code mismatch: created=%#v err=%v", oneCharacter, err)
 	}
 	for _, totalUses := range []any{"2", float64(0), float64(1.5), float64(2147483648)} {
 		if _, err := svc.Create(ctx, actor, invitesvc.CreateInput{Code: "bad_total_" + util.StripUUIDDashes("00000000-0000-0000-0000-000000000000"), TotalUses: totalUses}); !inviteHTTPError(err, http.StatusBadRequest, "invite_usage_limit.validate.invalid") {
 			t.Fatalf("invalid total_uses=%#v mismatch: %#v", totalUses, err)
 		}
 	}
-	if row, err := db.Invites.Get(ctx, "abc"); err != nil || row != nil {
-		t.Fatalf("rejected invite must not be persisted: row=%#v err=%v", row, err)
+	if row, err := db.Invites.Get(ctx, "引"); err != nil || row == nil || row.Code != "引" {
+		t.Fatalf("arbitrary non-empty invite must be persisted: row=%#v err=%v", row, err)
 	}
 
 	db.Close()

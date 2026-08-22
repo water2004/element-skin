@@ -63,10 +63,7 @@
     </UiCard>
 
     <!-- Create Invite Dialog -->
-    <UiDialog
-      v-model="inviteDialogVisible"
-      title="创建新邀请码"
-    >
+    <UiDialog v-model="inviteDialogVisible" title="创建新邀请码">
       <div class="p-6">
         <el-form label-position="top">
           <el-form-item label="生成模式">
@@ -76,13 +73,13 @@
             </UiSegmented>
           </el-form-item>
 
-          <el-form-item v-if="inviteMode === 'manual'" label="邀请码文本">
-            <el-input
-              v-model="customInviteCode"
-              placeholder="6-32位 字母/数字/下划线"
-              maxlength="32"
-              show-word-limit
-            />
+          <el-form-item v-if="inviteMode === 'manual'" label="邀请码文本" required>
+            <div class="w-full">
+              <el-input v-model="customInviteCode" placeholder="请输入邀请码，支持任意字符" />
+              <p class="mt-1.5 mb-0 text-xs text-[var(--color-text-light)]">
+                支持空格、引号、斜杠、反斜杠和 Unicode 字符；提交时会安全编码，邀请码原文不会改变。
+              </p>
+            </div>
           </el-form-item>
 
           <el-form-item v-else label="随机预览">
@@ -105,11 +102,7 @@
             </el-radio-group>
           </el-form-item>
           <el-form-item v-if="inviteUsesMode === 'limited'" label="次数">
-            <el-input-number
-              v-model="inviteUses"
-              :min="1"
-              :max="1000"
-            />
+            <el-input-number v-model="inviteUses" :min="1" :max="1000" />
           </el-form-item>
 
           <el-form-item label="备注 (可选)">
@@ -248,11 +241,8 @@ const getRemainingColor = (row: Invite) => {
 }
 
 async function confirmCreateInvite() {
-  const code = inviteMode.value === 'auto' ? previewInviteCode.value : customInviteCode.value.trim()
-  if (!code || code.length < 6) return ElMessage.warning('邀请码长度不足')
-  if (inviteMode.value === 'manual' && !/^[A-Za-z0-9_]{6,32}$/.test(code)) {
-    return ElMessage.warning('邀请码仅支持 6-32 位字母、数字或下划线')
-  }
+  const code = inviteMode.value === 'auto' ? previewInviteCode.value : customInviteCode.value
+  if (code.length === 0) return ElMessage.warning('请输入邀请码')
 
   creating.value = true
   try {
