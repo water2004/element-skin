@@ -450,8 +450,12 @@ Client Credentials 首批站点能力包括 Minecraft 服务端查询和经管�
 POST /v2/minecraft/session/has-joined
 GET  /v2/admin/invites
 POST /v2/admin/invites
-DELETE /v2/admin/invites/{id}
+DELETE /v2/admin/invites/{code_base64}
 ```
+
+`POST` 的可选 `code_base64` 和 `DELETE` 的 `{code_base64}` 都是邀请码 UTF-8 字节的无填充
+Base64URL 表示。省略创建请求中的 `code_base64` 才表示由服务端生成；不接受旧 `code` 明文字段。
+这只是 `/v2` 传输编码，列表、创建响应和最终注册仍使用邀请码原文。
 
 对应权限示例：
 

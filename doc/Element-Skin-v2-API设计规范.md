@@ -454,6 +454,29 @@ Webhook 只异步发送用户 UUID 和资源 ID 等基础信息，接收方通�
 管理 API 与普通站点 API 使用相同响应规则。列表使用 `items` 或统一 Cursor 分页；创建返回 `201`；
 更新在需要最新资源时返回 `200`，否则返回 `204`；删除返回 `204`。
 
+邀请码管理的传输格式固定如下：
+
+```text
+GET    /v2/admin/invites
+POST   /v2/admin/invites
+DELETE /v2/admin/invites/{code_base64}
+```
+
+手动创建时，客户端将邀请码原文按 UTF-8 编码，再使用无填充 Base64URL 放入 `code_base64`：
+
+```json
+{
+  "code_base64": "5qyi6L-OLyJc",
+  "total_uses": 1,
+  "note": "示例"
+}
+```
+
+上例解码后是 `欢迎/"\`。省略 `code_base64` 表示由服务端生成邀请码；空值、非法 Base64URL、
+非法 UTF-8 和包含 U+0000 的文本均返回 `invite_code.decode.invalid`，不提供旧 `code` 明文字段旁路。
+删除路径使用相同编码。响应和注册接口中的 `invite` 始终使用解码后的邀请码原文，因此空格、大小写、
+引号和斜杠均保持不变。
+
 邮箱设置页通过 `GET /v2/admin/settings/email-suffix-policy` 一次读取模式、白名单和黑名单完整数组，
 通过 `PUT /v2/admin/settings/email-suffix-policy` 原子替换完整策略。该资源使用
 `site_settings.read.any` 和 `site_settings.update.any` 权限，不提供分页或单条规则旁路。
