@@ -105,13 +105,18 @@
           />
         </el-form-item>
 
-        <el-form-item v-if="requireInvite" label="邀请码" prop="invite">
-          <el-input
-            v-model="form.invite"
-            placeholder="请输入邀请码"
-            :prefix-icon="Ticket"
-            @keyup.enter="register"
-          />
+        <el-form-item v-if="requireInvite" label="邀请码" prop="invite" required>
+          <div class="w-full">
+            <el-input
+              v-model="form.invite"
+              placeholder="请输入管理员提供的邀请码"
+              :prefix-icon="Ticket"
+              @keyup.enter="register"
+            />
+            <p class="mt-1.5 mb-0 text-xs text-[var(--color-text-light)]">
+              邀请码会按原文校验，请保留其中的空格、大小写和符号。
+            </p>
+          </div>
         </el-form-item>
 
         <el-form-item>
@@ -131,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
@@ -177,7 +182,7 @@ const identityProviderId =
 const identityProviderName = ref('')
 const loginReturnTo = internalRedirectTarget(route.query.redirect, '')
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 3, message: '用户名至少需要3个字符', trigger: 'blur' },
@@ -204,18 +209,9 @@ const rules: FormRules = {
     },
   ],
   code: [{ required: true, message: '请输入验证码' }],
-  invite: [
-    {
-      validator: (_rule, value, callback) => {
-        if (requireInvite.value && !String(value || '').trim()) {
-          callback(new Error('请输入邀请码'))
-          return
-        }
-        callback()
-      },
-      trigger: 'blur',
-    },
-  ],
+  invite: requireInvite.value
+    ? [{ required: true, message: '请输入邀请码', trigger: ['blur', 'change'] }]
+    : [],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码至少需要6个字符', trigger: 'blur' },
@@ -233,7 +229,7 @@ const rules: FormRules = {
       trigger: 'blur',
     },
   ],
-}
+}))
 
 async function loadRegistrationSettings() {
   settingsLoading.value = true
@@ -319,7 +315,7 @@ async function register() {
       email: form.email,
       password: form.password,
       code: form.code,
-      ...(requireInvite.value ? { invite: form.invite.trim() } : {}),
+      ...(requireInvite.value ? { invite: form.invite } : {}),
       ...(identityTicket.value ? { identity_ticket: identityTicket.value } : {}),
     }
 
