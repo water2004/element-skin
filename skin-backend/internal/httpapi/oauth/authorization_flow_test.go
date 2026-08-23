@@ -21,7 +21,7 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 	session := webCookie(t, cfg.JWTSecret, user.ID)
 	adminSession := webCookie(t, cfg.JWTSecret, admin.ID)
 
-	createRes := doJSON(t, router, http.MethodPost, "/v1/oauth/apps", map[string]any{
+	createRes := doJSON(t, router, http.MethodPost, "/v2/oauth/apps", map[string]any{
 		"name":         "Flow app",
 		"description":  "Flow app description",
 		"redirect_uri": "https://client.example/callback",
@@ -88,7 +88,7 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 	form.Set("code_verifier", verifier)
 	form.Set("redirect_uri", "https://client.example/wrong-callback")
 	wrongRedirectRes := doForm(t, router, "/oauth/token", form, "", "")
-	if wrongRedirectRes.Code != http.StatusBadRequest || wrongRedirectRes.Body.String() != "{\"error\":\"invalid_grant\",\"error_description\":\"invalid authorization code\"}\n" {
+	if wrongRedirectRes.Code != http.StatusBadRequest || wrongRedirectRes.Body.String() != "{\"error\":\"invalid_grant\"}\n" {
 		t.Fatalf("wrong redirect token response mismatch: status=%d body=%s", wrongRedirectRes.Code, wrongRedirectRes.Body.String())
 	}
 	form.Set("redirect_uri", "https://client.example/callback")
@@ -103,7 +103,7 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 		t.Fatalf("token response mismatch: %#v", token)
 	}
 
-	meRes := doJSON(t, router, http.MethodGet, "/v1/users/me", nil, nil, access)
+	meRes := doJSON(t, router, http.MethodGet, "/v2/users/me", nil, nil, access)
 	if meRes.Code != http.StatusOK {
 		t.Fatalf("bearer me status=%d body=%s", meRes.Code, meRes.Body.String())
 	}
@@ -116,8 +116,8 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 		t.Fatalf("delegated permissions should be narrowed exactly: %#v", permissions)
 	}
 
-	updateRes := doJSON(t, router, http.MethodPatch, "/v1/users/me", map[string]any{"display_name": "ShouldFail"}, nil, access)
-	if updateRes.Code != http.StatusForbidden || !strings.Contains(updateRes.Body.String(), "permission denied") {
+	updateRes := doJSON(t, router, http.MethodPatch, "/v2/users/me", map[string]any{"display_name": "ShouldFail"}, nil, access)
+	if updateRes.Code != http.StatusForbidden || updateRes.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("unauthorized bearer update mismatch: status=%d body=%s", updateRes.Code, updateRes.Body.String())
 	}
 
@@ -158,10 +158,10 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 		t.Fatalf("inactive introspection mismatch: status=%d body=%s", introspectRes.Code, introspectRes.Body.String())
 	}
 	reuseRes := doForm(t, router, "/oauth/token", refreshForm, "", "")
-	if reuseRes.Code != http.StatusBadRequest || reuseRes.Body.String() != "{\"error\":\"invalid_grant\",\"error_description\":\"invalid refresh_token\"}\n" {
+	if reuseRes.Code != http.StatusBadRequest || reuseRes.Body.String() != "{\"error\":\"invalid_grant\"}\n" {
 		t.Fatalf("refresh reuse mismatch: status=%d body=%s", reuseRes.Code, reuseRes.Body.String())
 	}
-	grantsRes := doJSON(t, router, http.MethodGet, "/v1/oauth/grants?limit=10", nil, session, "")
+	grantsRes := doJSON(t, router, http.MethodGet, "/v2/oauth/grants?limit=10", nil, session, "")
 	if grantsRes.Code != http.StatusOK {
 		t.Fatalf("grant list status=%d body=%s", grantsRes.Code, grantsRes.Body.String())
 	}
@@ -175,12 +175,20 @@ func TestOAuthAuthorizationCodeFlowIssuesDelegatedBearerForV1API(t *testing.T) {
 		t.Fatalf("grant permission list mismatch: %#v", grantPermissions)
 	}
 	grantID := grants[0].(map[string]any)["id"].(string)
-	revokeGrantRes := doJSON(t, router, http.MethodDelete, "/v1/oauth/grants/"+grantID, nil, session, "")
-	if revokeGrantRes.Code != http.StatusOK || revokeGrantRes.Body.String() != "{\"ok\":true}\n" {
-		t.Fatalf("revoke grant mismatch: status=%d body=%s", revokeGrantRes.Code, revokeGrantRes.Body.String())
+	adminGrantsRes := doJSON(t, router, http.MethodGet, "/v2/admin/oauth/grants?limit=10", nil, adminSession, "")
+	if adminGrantsRes.Code != http.StatusOK {
+		t.Fatalf("admin grant list status=%d body=%s", adminGrantsRes.Code, adminGrantsRes.Body.String())
 	}
-	revokeGrantAgainRes := doJSON(t, router, http.MethodDelete, "/v1/oauth/grants/"+grantID, nil, session, "")
-	if revokeGrantAgainRes.Code != http.StatusNotFound || !strings.Contains(revokeGrantAgainRes.Body.String(), "oauth grant not found") {
+	adminGrants := decodeMap(t, adminGrantsRes.Body.Bytes())["items"].([]any)
+	if len(adminGrants) != 1 || adminGrants[0].(map[string]any)["id"] != grantID || adminGrants[0].(map[string]any)["user_id"] != user.ID {
+		t.Fatalf("admin grant list mismatch: %#v", adminGrants)
+	}
+	revokeGrantRes := doJSON(t, router, http.MethodDelete, "/v2/admin/oauth/grants/"+grantID, nil, adminSession, "")
+	if revokeGrantRes.Code != http.StatusNoContent || revokeGrantRes.Body.Len() != 0 {
+		t.Fatalf("admin revoke grant mismatch: status=%d body=%s", revokeGrantRes.Code, revokeGrantRes.Body.String())
+	}
+	revokeGrantAgainRes := doJSON(t, router, http.MethodDelete, "/v2/oauth/grants/"+grantID, nil, session, "")
+	if revokeGrantAgainRes.Code != http.StatusNotFound || revokeGrantAgainRes.Body.String() != "{\"error\":{\"object\":\"oauth_grant\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("revoke grant replay mismatch: status=%d body=%s", revokeGrantAgainRes.Code, revokeGrantAgainRes.Body.String())
 	}
 }

@@ -31,7 +31,7 @@ func actorWithPermissions(userID string, codes ...string) permission.Actor {
 
 func httpErrorIs(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }
 
 func createAccountOAuthClient(t testing.TB, db *database.DB, ownerUserID, clientID string, codes ...string) model.OAuthClient {
@@ -49,7 +49,7 @@ func createAccountOAuthClient(t testing.TB, db *database.DB, ownerUserID, client
 		CreatedAt:   2000,
 		UpdatedAt:   2000,
 	}
-	if err := db.OAuth.CreateClient(context.Background(), client, accountOAuthPermissionIDs(codes...)); err != nil {
+	if err := db.OAuth.CreateClient(context.Background(), client, accountOAuthPermissionIDs(codes...), nil); err != nil {
 		t.Fatal(err)
 	}
 	return client
@@ -96,8 +96,9 @@ func accountNoticeByTitle(t testing.TB, notices []model.NoticeView, title string
 
 type accountFailStore struct {
 	redisstore.Store
-	failInvalidate bool
-	failYggDelete  bool
+	failInvalidate     bool
+	failYggDelete      bool
+	failExternalDelete bool
 }
 
 func (s *accountFailStore) InvalidateAuthUser(ctx context.Context, userID string) error {
@@ -112,6 +113,13 @@ func (s *accountFailStore) DeleteYggTokensByUser(ctx context.Context, userID str
 		return errors.New("ygg token deletion failed")
 	}
 	return s.Store.DeleteYggTokensByUser(ctx, userID)
+}
+
+func (s *accountFailStore) DeleteExternalAccessToken(ctx context.Context, identityID string) error {
+	if s.failExternalDelete {
+		return errors.New("external access token deletion failed")
+	}
+	return s.Store.DeleteExternalAccessToken(ctx, identityID)
 }
 
 func assertAccountPgCode(t *testing.T, err error, code string) {

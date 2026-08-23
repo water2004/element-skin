@@ -19,14 +19,14 @@ func (h Handler) GetSiteSettings(w http.ResponseWriter, req *http.Request) {
 func (h Handler) SaveSiteSettings(w http.ResponseWriter, req *http.Request) {
 	var body map[string]any
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.settings.UpdateGroup(req.Context(), shared.CurrentActor(req), "site", body); err != nil {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) GetSettingsGroup(w http.ResponseWriter, req *http.Request) {
@@ -41,12 +41,12 @@ func (h Handler) GetSettingsGroup(w http.ResponseWriter, req *http.Request) {
 func (h Handler) SaveSettingsGroup(w http.ResponseWriter, req *http.Request) {
 	var body map[string]any
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.settings.UpdateGroup(req.Context(), shared.CurrentActor(req), req.PathValue("group"), body); err != nil {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }

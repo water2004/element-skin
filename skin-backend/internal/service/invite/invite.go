@@ -22,6 +22,7 @@ type Service struct {
 
 type CreateInput struct {
 	Code         string
+	CodeSet      bool
 	TotalUses    any
 	TotalUsesSet bool
 	Note         string
@@ -33,7 +34,7 @@ func (s Service) List(ctx context.Context, actor permission.Actor, cursor string
 	}
 	lastCreated, lastCode, err := cursorCreatedHash(cursor, "last_code")
 	if err != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	res, err := s.DB.Invites.List(ctx, limit, lastCreated, lastCode)
 	if err != nil {
@@ -49,15 +50,15 @@ func (s Service) Create(ctx context.Context, actor permission.Actor, input Creat
 		return nil, err
 	}
 	code := input.Code
-	if code == "" {
+	if code == "" && !input.CodeSet {
 		id, err := util.GenerateUUIDNoDash()
 		if err != nil {
 			return nil, err
 		}
 		code = id + id[:8]
 	}
-	if len(code) < 4 {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invite code too short"}
+	if code == "" {
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "invite", Operation: "validate", Reason: "required"}
 	}
 	defaultTotal := 1
 	total := &defaultTotal
@@ -66,7 +67,7 @@ func (s Service) Create(ctx context.Context, actor permission.Actor, input Creat
 	} else if input.TotalUses != nil {
 		v, ok := input.TotalUses.(float64)
 		if !ok || v < 1 || v != math.Trunc(v) || v > float64(math.MaxInt32) {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "total_uses must be a positive integer"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "invite_usage_limit", Operation: "validate", Reason: "invalid"}
 		}
 		value := int(v)
 		total = &value
@@ -92,7 +93,7 @@ func requirePermission(actor permission.Actor, def permission.Definition) error 
 	if actor.Has(def) {
 		return nil
 	}
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }
 
 func cursorCreatedHash(cursor, hashKey string) (*int64, string, error) {
@@ -103,7 +104,7 @@ func cursorCreatedHash(cursor, hashKey string) (*int64, string, error) {
 	value, ok := util.CursorInt64(m["last_created_at"])
 	hash, hashOK := m[hashKey].(string)
 	if !ok || !hashOK || hash == "" {
-		return nil, "", util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, "", util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	created := &value
 	return created, hash, nil

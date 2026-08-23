@@ -90,7 +90,7 @@ func TestServiceAuthorizationCodeFlowNarrowsActorExactly(t *testing.T) {
 		CodeVerifier: verifier,
 		RedirectURI:  "https://client.example/wrong-callback",
 	})
-	assertHTTPError(t, err, 400, "invalid authorization code")
+	assertHTTPError(t, err, 400, "authorization_code.verify.invalid")
 	token, err := svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "authorization_code",
 		ClientID:     clientID,
@@ -140,7 +140,7 @@ func TestServiceAuthorizationCodeFlowNarrowsActorExactly(t *testing.T) {
 		ClientSecret: clientSecret,
 		RefreshToken: token.RefreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 	if err := svc.RevokeToken(ctx, clientID, clientSecret, refreshed.AccessToken); err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +160,7 @@ func TestServiceAuthorizationCodeFlowNarrowsActorExactly(t *testing.T) {
 		ClientSecret: clientSecret,
 		RefreshToken: refreshed.RefreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 }
 
 func TestServiceRejectsInvalidAuthorizationRequestExactly(t *testing.T) {
@@ -188,7 +188,7 @@ func TestServiceRejectsInvalidAuthorizationRequestExactly(t *testing.T) {
 	}
 	clientID := client["client_id"].(string)
 	_, err = svc.AuthorizationDetails(ctx, actor, oauth.AuthorizationRequest{ResponseType: "token"})
-	assertHTTPError(t, err, 400, "response_type must be code")
+	assertHTTPError(t, err, 400, "response_type.validate.unsupported")
 	_, err = svc.AuthorizationDetails(ctx, actor, oauth.AuthorizationRequest{
 		ResponseType:        "code",
 		ClientID:            clientID,
@@ -197,7 +197,7 @@ func TestServiceRejectsInvalidAuthorizationRequestExactly(t *testing.T) {
 		CodeChallenge:       pkceChallenge("invalid-verifier-abcdefghijklmnopqrstuvwxyz"),
 		CodeChallengeMethod: "S256",
 	})
-	assertHTTPError(t, err, 400, "invalid client_id")
+	assertHTTPError(t, err, 400, "client_id.verify.invalid")
 	activateOAuthClient(t, db, clientID)
 	baseReq := oauth.AuthorizationRequest{
 		ResponseType:        "code",
@@ -214,13 +214,13 @@ func TestServiceRejectsInvalidAuthorizationRequestExactly(t *testing.T) {
 		detail string
 		actor  permission.Actor
 	}{
-		{name: "bad client", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.ClientID = "missing-client" }), status: 400, detail: "invalid client_id", actor: actor},
-		{name: "bad redirect", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.RedirectURI = "https://client.example/other" }), status: 400, detail: "invalid redirect_uri", actor: actor},
-		{name: "missing pkce", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.CodeChallengeMethod = "plain" }), status: 400, detail: "PKCE S256 is required", actor: actor},
-		{name: "empty scope", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.Scope = "" }), status: 400, detail: "scope is required", actor: actor},
-		{name: "invalid scope", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.Scope = "permission.catalog.system" }), status: 400, detail: "invalid scope", actor: actor},
-		{name: "actor lacks scope", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.Scope = "texture.delete.any" }), status: 403, detail: "permission denied", actor: otherActor},
-		{name: "client lacks scope", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.Scope = "account.update.self" }), status: 400, detail: "scope exceeds client permission limit", actor: actor},
+		{name: "bad client", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.ClientID = "missing-client" }), status: 400, detail: "client_id.verify.invalid", actor: actor},
+		{name: "bad redirect", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.RedirectURI = "https://client.example/other" }), status: 400, detail: "redirect_uri.validate.invalid", actor: actor},
+		{name: "missing pkce", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.CodeChallengeMethod = "plain" }), status: 400, detail: "pkce.authorize.required", actor: actor},
+		{name: "empty scope", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.Scope = "" }), status: 400, detail: "oauth_scope.validate.required", actor: actor},
+		{name: "oauth_scope.validate.invalid", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.Scope = "permission.catalog.system" }), status: 400, detail: "oauth_scope.validate.invalid", actor: actor},
+		{name: "actor lacks scope", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.Scope = "texture.delete.any" }), status: 403, detail: "permission.check.denied", actor: otherActor},
+		{name: "client lacks scope", req: withAuthReq(baseReq, func(req *oauth.AuthorizationRequest) { req.Scope = "account.update.self" }), status: 400, detail: "oauth_scope.authorize.denied", actor: actor},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := svc.AuthorizationDetails(ctx, tc.actor, tc.req)
@@ -247,5 +247,5 @@ func TestServiceRejectsInvalidAuthorizationRequestExactly(t *testing.T) {
 		CodeChallenge:       pkceChallenge("server-denied-verifier-abcdefghijklmnopqrstuvwxyz"),
 		CodeChallengeMethod: "S256",
 	})
-	assertHTTPError(t, err, 400, "invalid scope")
+	assertHTTPError(t, err, 400, "oauth_scope.validate.invalid")
 }

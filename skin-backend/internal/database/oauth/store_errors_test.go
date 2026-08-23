@@ -66,9 +66,9 @@ func TestStoreClosedPoolReturnsExactDependencyErrorsForEveryOAuthTable(t *testin
 		name string
 		call func() error
 	}{
-		{name: "create client", call: func() error { return db.OAuth.CreateClient(ctx, client, permissionIDs("account.read.self")) }},
+		{name: "create client", call: func() error { return db.OAuth.CreateClient(ctx, client, permissionIDs("account.read.self"), nil) }},
 		{name: "update client", call: func() error {
-			_, err := db.OAuth.UpdateClient(ctx, client, permissionIDs("account.read.self"))
+			_, err := db.OAuth.UpdateClient(ctx, client, permissionIDs("account.read.self"), nil)
 			return err
 		}},
 		{name: "rotate client secret", call: func() error {
@@ -103,6 +103,10 @@ func TestStoreClosedPoolReturnsExactDependencyErrorsForEveryOAuthTable(t *testin
 			_, err := db.OAuth.ClientPermissionIDs(ctx, client.ID)
 			return err
 		}},
+		{name: "client has permission", call: func() error {
+			_, err := db.OAuth.ClientHasPermission(ctx, client.ID, 1)
+			return err
+		}},
 		{name: "create grant", call: func() error { return db.OAuth.CreateGrant(ctx, grant, permissionIDs("account.read.self")) }},
 		{name: "revoke grant", call: func() error {
 			_, err := db.OAuth.RevokeGrant(ctx, grant.ID, grant.UserID, 2000)
@@ -120,8 +124,16 @@ func TestStoreClosedPoolReturnsExactDependencyErrorsForEveryOAuthTable(t *testin
 			_, err := db.OAuth.ListGrantsByUser(ctx, grant.UserID, 10)
 			return err
 		}},
+		{name: "admin list grants", call: func() error {
+			_, err := db.OAuth.ListGrantsForAdmin(ctx, 10)
+			return err
+		}},
 		{name: "grant permission ids", call: func() error {
 			_, err := db.OAuth.GrantPermissionIDs(ctx, grant.ID)
+			return err
+		}},
+		{name: "authorization permission state", call: func() error {
+			_, err := db.OAuth.AuthorizationPermissionState(ctx, grant.UserID, grant.ClientID, 1, 2)
 			return err
 		}},
 		{name: "create authorization code", call: func() error {
@@ -195,13 +207,13 @@ func TestStoreRollsBackOAuthWritesOnExactForeignKeyFailures(t *testing.T) {
 		CreatedAt:   1000,
 		UpdatedAt:   1000,
 	}
-	if err := db.OAuth.CreateClient(ctx, validClient, []int64{}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, validClient, []int64{}, nil); err != nil {
 		t.Fatal(err)
 	}
 
 	duplicate := validClient
 	duplicate.Name = "Duplicate should not win"
-	err := db.OAuth.CreateClient(ctx, duplicate, []int64{})
+	err := db.OAuth.CreateClient(ctx, duplicate, []int64{}, nil)
 	assertPgCode(t, err, "23505")
 	stored, err := db.OAuth.GetClient(ctx, validClient.ID)
 	if err != nil {
@@ -221,7 +233,7 @@ func TestStoreRollsBackOAuthWritesOnExactForeignKeyFailures(t *testing.T) {
 		CreatedAt:   1100,
 		UpdatedAt:   1100,
 	}
-	err = db.OAuth.CreateClient(ctx, invalidPermissionClient, []int64{9_999_999})
+	err = db.OAuth.CreateClient(ctx, invalidPermissionClient, []int64{9_999_999}, nil)
 	assertPgCode(t, err, "23503")
 	if got, err := db.OAuth.GetClient(ctx, invalidPermissionClient.ID); err != nil || got != nil {
 		t.Fatalf("client with invalid permission should roll back: client=%#v err=%v", got, err)

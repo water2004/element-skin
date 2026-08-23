@@ -60,6 +60,52 @@
           </div>
         </section>
 
+        <section v-if="officialBinding" class="border-b border-[var(--color-border)] py-3.5">
+          <div
+            class="mb-2.5 text-xs font-bold uppercase tracking-[0.5px] text-[var(--color-text-light)]"
+          >
+            正版角色
+          </div>
+          <div class="rounded-xl bg-[var(--color-background-soft)] p-3">
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <div class="truncate text-sm font-semibold text-[var(--color-heading)]">
+                  {{ officialBinding.remote_name }}
+                </div>
+                <div class="mt-1 truncate text-xs text-[var(--color-text-light)]">
+                  {{ officialBinding.identity.label || officialBinding.identity.provider_name }}
+                </div>
+              </div>
+              <el-tag type="success" effect="dark" size="small">正版</el-tag>
+            </div>
+            <div
+              class="mt-3 break-all rounded bg-[var(--color-card-background)] px-2 py-1 font-mono text-[11px] text-[var(--el-text-color-secondary)]"
+            >
+              UUID: {{ formatUUID(officialBinding.remote_uuid) }}
+            </div>
+            <ActionBar full>
+              <el-button
+                v-if="canSyncOfficialBinding"
+                type="success"
+                plain
+                class="flex-1 rounded-lg"
+                @click="$emit('sync-official', officialBinding)"
+              >
+                同步正版数据
+              </el-button>
+              <el-button
+                v-if="canDeleteOfficialBinding"
+                type="warning"
+                plain
+                class="flex-1 rounded-lg"
+                @click="$emit('unbind-official', officialBinding)"
+              >
+                解除绑定
+              </el-button>
+            </ActionBar>
+          </div>
+        </section>
+
         <section
           class="border-b border-[var(--color-border)] py-3.5"
           v-if="profile.skin_hash || profile.cape_hash"
@@ -69,7 +115,7 @@
           >
             快捷操作
           </div>
-          <div class="apply-row flex gap-2">
+          <ActionBar full>
             <el-button
               v-if="profile.skin_hash"
               type="primary"
@@ -97,7 +143,7 @@
             >
               清除披风
             </el-button>
-          </div>
+          </ActionBar>
         </section>
 
         <section class="mt-auto py-3.5">
@@ -119,8 +165,9 @@
 import { ref, watch } from 'vue'
 import type { InputInstance } from 'element-plus'
 import { Edit } from '@element-plus/icons-vue'
-import type { Profile } from '@/api/types'
+import type { OfficialProfileBinding, Profile } from '@/api/types'
 import SkinViewer from '@/components/SkinViewer.vue'
+import ActionBar from '@/components/common/ActionBar.vue'
 import { formatUUID } from '@/utils/format'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiViewerLayout from '@/components/ui/UiViewerLayout.vue'
@@ -129,6 +176,9 @@ const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{
   profile: Profile | null
   texturesUrl: (hash: string | null | undefined) => string
+  officialBinding?: OfficialProfileBinding | null
+  canSyncOfficialBinding: boolean
+  canDeleteOfficialBinding: boolean
 }>()
 
 defineEmits<{
@@ -136,6 +186,8 @@ defineEmits<{
   'set-avatar': [profile: Profile]
   'clear-skin': [profileId: string]
   'clear-cape': [profileId: string]
+  'sync-official': [binding: OfficialProfileBinding]
+  'unbind-official': [binding: OfficialProfileBinding]
   delete: [profileId: string]
 }>()
 
@@ -156,10 +208,6 @@ function focusNameInput() {
 </script>
 
 <style scoped>
-.apply-row .el-button {
-  margin-left: 0 !important;
-}
-
 .title-action-button {
   width: 32px !important;
   height: 32px !important;

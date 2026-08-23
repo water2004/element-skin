@@ -19,10 +19,10 @@ func (s Service) ClearProfileTexture(ctx context.Context, actor permission.Actor
 		return err
 	}
 	if p == nil {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "profile not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "profile", Operation: "resolve", Reason: "not_found"}
 	}
 	if p.UserID != actor.UserID {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "not allowed"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 	}
 	return s.setProfileTexture(ctx, profileID, textureType, nil)
 }
@@ -40,11 +40,11 @@ func (s Service) setProfileTexture(ctx context.Context, profileID, textureType s
 		return err
 	}
 	if p == nil {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "profile not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "profile", Operation: "resolve", Reason: "not_found"}
 	}
 	normalizedType := strings.ToLower(textureType)
 	if normalizedType != "skin" && normalizedType != "cape" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid texture_type"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "texture_type", Operation: "validate", Reason: "invalid"}
 	}
 	switch normalizedType {
 	case "skin":
@@ -80,7 +80,7 @@ func (s Service) requireLibraryTexture(ctx context.Context, hash *string, textur
 		return err
 	}
 	if !ok {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "Texture not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "texture", Operation: "resolve", Reason: "not_found"}
 	}
 	return nil
 }
@@ -94,7 +94,7 @@ func sameHash(a, b *string) bool {
 
 func profileUpdateError(err error) error {
 	if database.IsNoRows(err) {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "profile not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "profile", Operation: "resolve", Reason: "not_found"}
 	}
 	return err
 }

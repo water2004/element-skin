@@ -74,14 +74,7 @@
         <div class="section-header-small">
           <div class="text-[13px] font-semibold text-[var(--color-text-light)] mb-3 uppercase">
             端点白名单列表
-            <el-tag
-              v-if="hasWhitelistChanges(row)"
-              size="small"
-              type="warning"
-              effect="dark"
-              class="ml-2"
-              >有未保存更改</el-tag
-            >
+            <DirtyTag :visible="hasWhitelistChanges(row)" />
           </div>
           <div class="add-user-form-box">
             <el-input
@@ -126,6 +119,7 @@ import { Delete } from '@element-plus/icons-vue'
 
 import type { FallbackRow } from '@/components/admin/mojang/types'
 import { hasWhitelistChanges } from '@/components/admin/mojang/whitelist'
+import DirtyTag from '@/components/common/DirtyTag.vue'
 
 const row = defineModel<FallbackRow>('row', { required: true })
 

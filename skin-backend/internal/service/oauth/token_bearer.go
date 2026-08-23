@@ -27,14 +27,27 @@ func (s Service) Introspect(ctx context.Context, actor permission.Actor, token s
 	if access.ExpiresAt <= database.NowMS() {
 		return map[string]any{"active": false}, nil
 	}
-	tokenActor, active, err := s.actorForAccessToken(ctx, access)
+	tokenActor, permissionActive, err := s.actorForAccessToken(ctx, access)
 	if err != nil {
 		return nil, err
 	}
-	if !active {
+	oidcScopes := []string{}
+	oidcActive := false
+	if access.UserID != "" && hasOIDCScope(access.OIDCScopes, "openid") {
+		grantScopes, active, err := s.DB.OAuth.ActiveGrantOIDCScopes(ctx, access.GrantID, access.UserID, access.ClientID)
+		if err != nil {
+			return nil, err
+		}
+		oidcScopes = intersectOIDCScopes(access.OIDCScopes, grantScopes)
+		oidcActive = active && hasOIDCScope(oidcScopes, "openid")
+	}
+	if !permissionActive && !oidcActive {
 		return map[string]any{"active": false}, nil
 	}
-	codes := permissionCodesFromBitSet(tokenActor.Permissions)
+	codes := []string{}
+	if permissionActive {
+		codes = permissionCodesFromBitSet(tokenActor.Permissions)
+	}
 	if access.UserID == "" {
 		return map[string]any{
 			"active":      true,
@@ -51,7 +64,7 @@ func (s Service) Introspect(ctx context.Context, actor permission.Actor, token s
 		"user_id":     access.UserID,
 		"grant_id":    access.GrantID,
 		"exp":         access.ExpiresAt / 1000,
-		"scope":       strings.Join(codes, " "),
+		"scope":       strings.Join(combinedScopes(codes, oidcScopes), " "),
 		"permissions": codes,
 	}, nil
 }

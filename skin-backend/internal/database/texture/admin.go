@@ -149,7 +149,7 @@ func lockLibraryTexture(ctx context.Context, tx pgx.Tx, hash, textureType string
 
 func (s Store) AdminDelete(ctx context.Context, hash, textureType, userID string, force bool) error {
 	if !force && userID == "" {
-		return errors.New("per-user deletion requires user_id")
+		return ErrUserIDRequired
 	}
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {

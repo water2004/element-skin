@@ -1,4 +1,4 @@
-"""Synchronous Element Skin `/v1` API client."""
+"""Synchronous Element Skin `/v2` API client."""
 
 from __future__ import annotations
 
@@ -9,8 +9,16 @@ import httpx
 
 from ..http import HTTPClient
 from ..models import TokenSet
-from ..permissions import AccountScopes, MinecraftScopes, ProfileScopes, TextureScopes, WardrobeScopes
+from ..permissions import (
+    AccountScopes,
+    InviteScopes,
+    MinecraftScopes,
+    ProfileScopes,
+    TextureScopes,
+    WardrobeScopes,
+)
 from ..permissions.validator import PermissionValidator
+from .invites import encode_invite_code
 
 
 class ElementSkinAPI:
@@ -45,40 +53,40 @@ class ElementSkinAPI:
 
     def me(self) -> dict[str, Any]:
         self._require(AccountScopes.READ_SELF)
-        return self._http.get("/v1/users/me")
+        return self._http.get("/v2/users/me")
 
     def request_email_change_code(self, email: str) -> dict[str, Any]:
         self._require(AccountScopes.UPDATE_SELF)
         return self._http.post(
-            "/v1/users/me/email/verification-code",
+            "/v2/users/me/email/verification-code",
             json={"email": email},
         )
 
-    def change_email(self, email: str, code: str) -> dict[str, Any]:
+    def change_email(self, email: str, code: str) -> None:
         self._require(AccountScopes.UPDATE_SELF)
-        return self._http.put(
-            "/v1/users/me/email",
+        self._http.put(
+            "/v2/users/me/email",
             json={"email": email, "code": code},
         )
 
     def list_profiles(self, *, cursor: str | None = None, page_size: int | None = None) -> dict[str, Any]:
         self._require(ProfileScopes.READ_OWNED)
         return self._http.get(
-            "/v1/users/me/profiles",
+            "/v2/users/me/profiles",
             params=_clean_params({"cursor": cursor, "limit": page_size}),
         )
 
     def create_profile(self, name: str, *, model: str = "default") -> dict[str, Any]:
         self._require(ProfileScopes.CREATE_OWNED)
-        return self._http.post("/v1/users/me/profiles", json={"name": name, "model": model})
+        return self._http.post("/v2/users/me/profiles", json={"name": name, "model": model})
 
-    def update_profile(self, profile_id: str, **fields: Any) -> dict[str, Any]:
+    def update_profile(self, profile_id: str, **fields: Any) -> None:
         self._require(ProfileScopes.UPDATE_OWNED)
-        return self._http.patch(f"/v1/users/me/profiles/{profile_id}", json=fields)
+        self._http.patch(f"/v2/users/me/profiles/{profile_id}", json=fields)
 
     def delete_profile(self, profile_id: str) -> None:
         self._require(ProfileScopes.DELETE_OWNED)
-        self._http.delete(f"/v1/users/me/profiles/{profile_id}")
+        self._http.delete(f"/v2/users/me/profiles/{profile_id}")
 
     def list_textures(
         self,
@@ -89,7 +97,7 @@ class ElementSkinAPI:
     ) -> dict[str, Any]:
         self._require(TextureScopes.READ_OWNED)
         return self._http.get(
-            "/v1/users/me/textures",
+            "/v2/users/me/textures",
             params=_clean_params(
                 {"texture_type": texture_type, "cursor": cursor, "limit": page_size},
             ),
@@ -97,37 +105,42 @@ class ElementSkinAPI:
 
     def get_texture(self, texture_hash: str, texture_type: str) -> dict[str, Any]:
         self._require(TextureScopes.READ_OWNED)
-        return self._http.get(f"/v1/users/me/textures/{texture_hash}/{texture_type}")
+        return self._http.get(f"/v2/users/me/textures/{texture_hash}/{texture_type}")
 
     def update_texture(self, texture_hash: str, texture_type: str, **fields: Any) -> dict[str, Any]:
-        self._require(TextureScopes.UPDATE_OWNED)
-        return self._http.patch(f"/v1/users/me/textures/{texture_hash}/{texture_type}", json=fields)
+        required: list[str] = []
+        if any(field in fields for field in ("note", "model")):
+            required.append(TextureScopes.UPDATE_METADATA_OWNED)
+        if "is_public" in fields:
+            required.append(TextureScopes.UPDATE_VISIBILITY_OWNED)
+        self._require(*(required or [TextureScopes.UPDATE_METADATA_OWNED]))
+        return self._http.patch(f"/v2/users/me/textures/{texture_hash}/{texture_type}", json=fields)
 
     def delete_texture(self, texture_hash: str, texture_type: str) -> None:
         self._require(TextureScopes.DELETE_OWNED)
-        self._http.delete(f"/v1/users/me/textures/{texture_hash}/{texture_type}")
+        self._http.delete(f"/v2/users/me/textures/{texture_hash}/{texture_type}")
 
-    def add_texture_to_wardrobe(self, texture_hash: str, *, texture_type: str) -> dict[str, Any]:
+    def add_texture_to_wardrobe(self, texture_hash: str, *, texture_type: str) -> None:
         self._require(WardrobeScopes.ENTRY_ADD_OWNED)
-        return self._http.post(
-            f"/v1/users/me/textures/{texture_hash}/wardrobe",
+        self._http.post(
+            f"/v2/users/me/textures/{texture_hash}/wardrobe",
             params={"texture_type": texture_type},
         )
 
-    def apply_texture(self, texture_hash: str, *, profile_id: str, texture_type: str) -> dict[str, Any]:
+    def apply_texture(self, texture_hash: str, *, profile_id: str, texture_type: str) -> None:
         self._require(WardrobeScopes.ENTRY_APPLY_OWNED)
-        return self._http.post(
-            f"/v1/users/me/textures/{texture_hash}/apply",
+        self._http.post(
+            f"/v2/users/me/textures/{texture_hash}/apply",
             json={"profile_id": profile_id, "texture_type": texture_type},
         )
 
     def minecraft_profile(self, username: str) -> dict[str, Any]:
         self._require(MinecraftScopes.PROFILE_READ_PUBLIC)
-        return self._http.get(f"/v1/minecraft/profiles/by-name/{username}")
+        return self._http.get(f"/v2/minecraft/profiles/by-name/{username}")
 
     def minecraft_profiles(self, usernames: list[str]) -> dict[str, Any]:
         self._require(MinecraftScopes.PROFILE_READ_PUBLIC)
-        return self._http.post("/v1/minecraft/profiles/by-names", json={"names": usernames})
+        return self._http.post("/v2/minecraft/profiles/by-names", json={"names": usernames})
 
     def minecraft_has_joined(
         self,
@@ -138,9 +151,38 @@ class ElementSkinAPI:
     ) -> dict[str, Any]:
         self._require(MinecraftScopes.SESSION_HASJOINED_SERVER)
         return self._http.post(
-            "/v1/minecraft/session/has-joined",
+            "/v2/minecraft/session/has-joined",
             json=_clean_params({"username": username, "server_id": server_id, "ip": ip}),
         )
+
+    def list_invites(
+        self,
+        *,
+        cursor: str | None = None,
+        page_size: int | None = None,
+    ) -> dict[str, Any]:
+        self._require(InviteScopes.READ_ANY)
+        return self._http.get(
+            "/v2/admin/invites",
+            params=_clean_params({"cursor": cursor, "limit": page_size}),
+        )
+
+    def create_invite(
+        self,
+        code: str | None = None,
+        *,
+        total_uses: int | None = 1,
+        note: str = "",
+    ) -> dict[str, Any]:
+        self._require(InviteScopes.CREATE_ANY)
+        payload: dict[str, Any] = {"total_uses": total_uses, "note": note}
+        if code is not None:
+            payload["code_base64"] = encode_invite_code(code)
+        return self._http.post("/v2/admin/invites", json=payload)
+
+    def delete_invite(self, code: str) -> None:
+        self._require(InviteScopes.DELETE_ANY)
+        self._http.delete(f"/v2/admin/invites/{encode_invite_code(code)}")
 
     def _require(self, *permissions: str) -> None:
         PermissionValidator.require_token_permissions(self.permissions, permissions)

@@ -4,13 +4,13 @@ import type { ApiCase } from './types'
 export function authApiCases(): ApiCase[] {
   return [
     {
-      name: 'siteLogin posts credentials to /v1/auth/login',
+      name: 'siteLogin posts credentials to /v2/auth/login',
       method: 'post',
       call: () => siteLogin({ email: 'user@example.com', password: 'Password123' }),
-      args: ['/v1/auth/login', { email: 'user@example.com', password: 'Password123' }],
+      args: ['/v2/auth/login', { email: 'user@example.com', password: 'Password123' }],
     },
     {
-      name: 'register posts account payload to /v1/auth/register',
+      name: 'register posts account payload to /v2/auth/register',
       method: 'post',
       call: () =>
         register({
@@ -19,15 +19,17 @@ export function authApiCases(): ApiCase[] {
           username: 'NewUser',
           invite: 'INVITE',
           code: 'CODE1234',
+          identity_ticket: 'oidc-ticket',
         }),
       args: [
-        '/v1/auth/register',
+        '/v2/auth/register',
         {
           email: 'new@example.com',
           password: 'Password123',
           username: 'NewUser',
           invite: 'INVITE',
           code: 'CODE1234',
+          identity_ticket: 'oidc-ticket',
         },
       ],
     },
@@ -35,7 +37,7 @@ export function authApiCases(): ApiCase[] {
       name: 'sendVerificationCode posts verification request',
       method: 'post',
       call: () => sendVerificationCode({ email: 'user@example.com', type: 'reset' }),
-      args: ['/v1/auth/verification-code', { email: 'user@example.com', type: 'reset' }],
+      args: ['/v2/auth/verification-code', { email: 'user@example.com', type: 'reset' }],
     },
     {
       name: 'resetPassword posts reset payload',
@@ -43,15 +45,15 @@ export function authApiCases(): ApiCase[] {
       call: () =>
         resetPassword({ email: 'user@example.com', password: 'NewPassword123', code: 'RESET123' }),
       args: [
-        '/v1/auth/password/reset',
+        '/v2/auth/password/reset',
         { email: 'user@example.com', password: 'NewPassword123', code: 'RESET123' },
       ],
     },
     {
-      name: 'siteLogout posts to /v1/auth/logout',
+      name: 'siteLogout posts to /v2/auth/logout',
       method: 'post',
       call: siteLogout,
-      args: ['/v1/auth/logout'],
+      args: ['/v2/auth/logout'],
     },
   ]
 }

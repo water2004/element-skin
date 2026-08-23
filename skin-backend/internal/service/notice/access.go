@@ -12,7 +12,7 @@ func requirePermission(actor permission.Actor, def permission.Definition) error 
 	if actor.Has(def) {
 		return nil
 	}
-	return util.HTTPError{Status: 403, Detail: "permission denied"}
+	return util.HTTPError{Status: 403, Object: "permission", Operation: "check", Reason: "denied"}
 }
 
 func requireCreatePermission(actor permission.Actor, input CreateInput) error {
@@ -26,7 +26,7 @@ func requireCreatePermission(actor permission.Actor, input CreateInput) error {
 	if typ == TypeSystem && actor.Has(noticeCreateSystemPermission) {
 		return nil
 	}
-	return util.HTTPError{Status: 403, Detail: "permission denied"}
+	return util.HTTPError{Status: 403, Object: "permission", Operation: "check", Reason: "denied"}
 }
 
 func noticeUser(actor permission.Actor) currentUser {

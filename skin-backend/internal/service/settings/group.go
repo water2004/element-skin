@@ -34,7 +34,7 @@ func (s Settings) UpdateGroup(ctx context.Context, actor permission.Actor, group
 func (s Settings) GetGroup(ctx context.Context, group string) (map[string]any, error) {
 	keys, ok := settingsGroups[group]
 	if !ok {
-		return nil, util.HTTPError{Status: 400, Detail: "invalid settings group"}
+		return nil, util.HTTPError{Status: 400, Object: "settings_group", Operation: "validate", Reason: "invalid"}
 	}
 	if group == "easter_eggs" {
 		enabled, err := s.DB.EasterEggs.ListEnabled(ctx)
@@ -64,7 +64,7 @@ func (s Settings) GetGroup(ctx context.Context, group string) (map[string]any, e
 func (s Settings) SaveGroup(ctx context.Context, group string, body map[string]any) error {
 	keys, ok := settingsGroups[group]
 	if !ok {
-		return util.HTTPError{Status: 400, Detail: "invalid settings group"}
+		return util.HTTPError{Status: 400, Object: "settings_group", Operation: "validate", Reason: "invalid"}
 	}
 	if group == "easter_eggs" {
 		raw, ok := body["easter_eggs_enabled"]
@@ -89,13 +89,13 @@ func (s Settings) SaveGroup(ctx context.Context, group string, body map[string]a
 		if key == "profile_uuid_mode" {
 			mode := fmt.Sprint(value)
 			if mode != "random" && mode != "offline" {
-				return util.HTTPError{Status: 400, Detail: "invalid profile_uuid_mode"}
+				return util.HTTPError{Status: 400, Object: "profile_uuid_mode", Operation: "validate", Reason: "invalid"}
 			}
 		}
 		if key == "fallback_strategy" {
 			strategy := fmt.Sprint(value)
 			if strategy != "serial" && strategy != "parallel" {
-				return util.HTTPError{Status: 400, Detail: "fallback_strategy must be serial or parallel"}
+				return util.HTTPError{Status: 400, Object: "fallback_strategy", Operation: "validate", Reason: "invalid"}
 			}
 		}
 		if key == "smtp_password" && fmt.Sprint(value) == "" {
@@ -104,7 +104,7 @@ func (s Settings) SaveGroup(ctx context.Context, group string, body map[string]a
 		if key == "fallback_probe_interval" {
 			n, err := strconv.Atoi(fmt.Sprint(value))
 			if err != nil || n < 60 || n > 86400 {
-				return util.HTTPError{Status: 400, Detail: "fallback_probe_interval must be between 60 and 86400 seconds"}
+				return util.HTTPError{Status: 400, Object: "fallback_probe_interval", Operation: "validate", Reason: "invalid"}
 			}
 			value = strconv.Itoa(n)
 		}
@@ -132,10 +132,10 @@ func (s Settings) SaveGroup(ctx context.Context, group string, body map[string]a
 	}
 	err := s.DB.SaveSettingsGroup(ctx, updates, pendingFallbacks, saveFallbacks)
 	if errors.Is(err, fallback.ErrEndpointNotFound) {
-		return util.HTTPError{Status: 400, Detail: "fallback endpoint not found"}
+		return util.HTTPError{Status: 400, Object: "fallback_endpoint", Operation: "resolve", Reason: "not_found"}
 	}
 	if errors.Is(err, fallback.ErrDuplicateEndpoint) {
-		return util.HTTPError{Status: 400, Detail: "fallback endpoint id is duplicated"}
+		return util.HTTPError{Status: 400, Object: "fallback_endpoint", Operation: "configure", Reason: "conflict"}
 	}
 	return err
 }
@@ -165,5 +165,5 @@ func requirePermission(actor permission.Actor, def permission.Definition) error 
 	if actor.Has(def) {
 		return nil
 	}
-	return util.HTTPError{Status: 403, Detail: "permission denied"}
+	return util.HTTPError{Status: 403, Object: "permission", Operation: "check", Reason: "denied"}
 }

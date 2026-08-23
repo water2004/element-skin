@@ -19,14 +19,14 @@ func (h Handler) ClientPermissions(w http.ResponseWriter, req *http.Request) {
 func (h Handler) SetClientPermission(w http.ResponseWriter, req *http.Request) {
 	var body permissionOverrideBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.oauth.SetClientPermissionOverride(req.Context(), shared.CurrentActor(req), req.PathValue("client_id"), req.PathValue("permission_code"), body.Effect); err != nil {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, http.StatusOK, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) ClearClientPermission(w http.ResponseWriter, req *http.Request) {
@@ -34,7 +34,7 @@ func (h Handler) ClearClientPermission(w http.ResponseWriter, req *http.Request)
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, http.StatusOK, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 type permissionOverrideBody struct {

@@ -2,6 +2,8 @@ package auth_test
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -41,7 +43,7 @@ func TestAuthRegisterRejectsPolicyFailuresWithoutCreatingUser(t *testing.T) {
 	if err := db.Settings.Set(ctx, "allow_register", "false"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(ctx, "closed-register@test.com", "Password123", "ClosedRegister", "", ""); !httpError(err, 403, "registration is disabled") {
+	if _, err := svc.Register(ctx, "closed-register@test.com", "Password123", "ClosedRegister", "", ""); !httpError(err, 403, "registration.create.disabled") {
 		t.Fatalf("closed registration should reject exactly, got %#v", err)
 	}
 	if user, err := db.Users.GetByEmail(ctx, "closed-register@test.com"); err != nil || user != nil {
@@ -60,8 +62,13 @@ func TestAuthRegisterRejectsPolicyFailuresWithoutCreatingUser(t *testing.T) {
 	if err := svc.Settings.InvalidateCache(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.Register(ctx, "weak-register@test.com", "weak", "WeakRegister", "", ""); !httpError(err, 400, "密码长度至少 8 位；密码需包含大写字母；密码需包含数字") {
+	if _, err := svc.Register(ctx, "weak-register@test.com", "weak", "WeakRegister", "", ""); !httpError(err, 400, "password.validate.invalid") {
 		t.Fatalf("strong password policy should reject weak password with exact HTTP 400, got %#v", err)
+	} else {
+		var httpErr util.HTTPError
+		if !errors.As(err, &httpErr) || !reflect.DeepEqual(httpErr.Params, map[string]any{"rules": []string{"min_length", "uppercase", "number"}}) {
+			t.Fatalf("strong password rules mismatch: %#v", err)
+		}
 	}
 	if user, err := db.Users.GetByEmail(ctx, "weak-register@test.com"); err != nil || user != nil {
 		t.Fatalf("weak password registration must not create user: user=%#v err=%v", user, err)
@@ -84,7 +91,7 @@ func TestAuthRejectsInvalidCredentialsAndRegistrationIdentityConflicts(t *testin
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			res, err := svc.Login(ctx, tc.email, tc.password)
-			if !httpError(err, 401, "Invalid credentials") || res != nil {
+			if !httpError(err, 401, "credentials.verify.invalid") || res != nil {
 				t.Fatalf("Login(%s) should reject exactly: res=%#v err=%#v", tc.name, res, err)
 			}
 		})
@@ -96,10 +103,10 @@ func TestAuthRejectsInvalidCredentialsAndRegistrationIdentityConflicts(t *testin
 		username string
 		want     string
 	}{
-		{name: "missing username", email: "missing-name@test.com", username: "   ", want: "Username is required"},
-		{name: "invalid email", email: "not-an-email", username: "ValidName", want: "Invalid email format"},
-		{name: "duplicate username", email: "new-email@test.com", username: existing.DisplayName, want: "Username already exists"},
-		{name: "duplicate email", email: existing.Email, username: "DifferentName", want: "Email already registered"},
+		{name: "missing username", email: "missing-name@test.com", username: "   ", want: "username.validate.required"},
+		{name: "invalid email", email: "not-an-email", username: "ValidName", want: "email.validate.invalid"},
+		{name: "duplicate username", email: "new-email@test.com", username: existing.DisplayName, want: "username.reserve.conflict"},
+		{name: "duplicate email", email: existing.Email, username: "DifferentName", want: "email.register.already_exists"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			id, err := svc.Register(ctx, tc.email, "Password123", tc.username, "", "")
@@ -130,7 +137,7 @@ func TestRegisterStopsAfterGeneratedProfileNameCandidatesAreExhausted(t *testing
 	}
 
 	userID, err := svc.Register(ctx, "collision@new.test", "Password123", "ProfileNameExhaustNew", "", "")
-	if userID != "" || !httpError(err, 500, "无法生成唯一角色名") {
+	if userID != "" || !httpError(err, 500, "profile_name.allocate.failed") {
 		t.Fatalf("exhausted generated names: user_id=%q err=%#v, want empty id and exact 500", userID, err)
 	}
 	if user, err := db.Users.GetByEmail(ctx, "collision@new.test"); err != nil || user != nil {

@@ -17,11 +17,11 @@ func (s Service) authenticateClient(ctx context.Context, clientID, secret string
 		return nil, err
 	}
 	if client == nil || client.Status != StatusActive {
-		return nil, badRequest("invalid client_id")
+		return nil, badRequest("client_id", "verify", "invalid")
 	}
 	if client.ClientType == ClientTypeConfidential {
 		if secret == "" || subtle.ConstantTimeCompare([]byte(client.SecretHash), []byte(util.HashRefreshToken(secret))) != 1 {
-			return nil, badRequest("invalid client_secret")
+			return nil, badRequest("client_secret", "verify", "invalid")
 		}
 	}
 	return client, nil

@@ -13,14 +13,14 @@ import (
 func ValidateFallbackEndpoints(value any) ([]fallback.Endpoint, error) {
 	raw, ok := value.([]any)
 	if !ok {
-		return nil, util.HTTPError{Status: 400, Detail: "fallbacks must be a list"}
+		return nil, util.HTTPError{Status: 400, Object: "fallback", Operation: "configure", Reason: "invalid"}
 	}
 	out := make([]fallback.Endpoint, 0, len(raw))
 	seenIDs := make(map[int]struct{}, len(raw))
 	for i, item := range raw {
 		m, ok := item.(map[string]any)
 		if !ok {
-			return nil, util.HTTPError{Status: 400, Detail: "invalid fallback entry"}
+			return nil, util.HTTPError{Status: 400, Object: "fallback", Operation: "configure", Reason: "invalid"}
 		}
 		normalized, err := normalizeFallbackMap(i+1, m)
 		if err != nil {
@@ -32,7 +32,7 @@ func ValidateFallbackEndpoints(value any) ([]fallback.Endpoint, error) {
 		}
 		if id > 0 {
 			if _, exists := seenIDs[id]; exists {
-				return nil, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] id is duplicated", i+1)}
+				return nil, util.HTTPError{Status: 400, Object: "fallback_endpoint", Operation: "configure", Reason: "conflict", Params: map[string]any{"index": i + 1}}
 			}
 			seenIDs[id] = struct{}{}
 		}
@@ -65,14 +65,14 @@ func normalizeEndpointID(idx int, value any) (int, error) {
 		id = typed
 	case float64:
 		if typed != math.Trunc(typed) || typed > math.MaxInt32 {
-			return 0, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] id must be a positive integer", idx)}
+			return 0, util.HTTPError{Status: 400, Object: "fallback_endpoint", Operation: "configure", Reason: "invalid", Params: map[string]any{"index": idx}}
 		}
 		id = int64(typed)
 	default:
-		return 0, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] id must be a positive integer", idx)}
+		return 0, util.HTTPError{Status: 400, Object: "fallback_endpoint", Operation: "configure", Reason: "invalid", Params: map[string]any{"index": idx}}
 	}
 	if id <= 0 || id > math.MaxInt32 {
-		return 0, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] id must be a positive integer", idx)}
+		return 0, util.HTTPError{Status: 400, Object: "fallback_endpoint", Operation: "configure", Reason: "invalid", Params: map[string]any{"index": idx}}
 	}
 	return int(id), nil
 }
@@ -82,11 +82,11 @@ func normalizeFallbackMap(idx int, m map[string]any) (map[string]any, error) {
 	account := strings.TrimSpace(fmt.Sprint(m["account_url"]))
 	services := strings.TrimSpace(fmt.Sprint(m["services_url"]))
 	if session == "" || account == "" || services == "" {
-		return nil, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] urls are required", idx)}
+		return nil, util.HTTPError{Status: 400, Object: "fallback_url", Operation: "validate", Reason: "required", Params: map[string]any{"index": idx}}
 	}
 	ttl := intValue(m["cache_ttl"], 60)
 	if ttl < 0 {
-		return nil, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] cache_ttl must be non-negative", idx)}
+		return nil, util.HTTPError{Status: 400, Object: "fallback_cache_ttl", Operation: "validate", Reason: "invalid", Params: map[string]any{"index": idx}}
 	}
 	domains, err := normalizeDomains(idx, m["skin_domains"])
 	if err != nil {
@@ -148,14 +148,14 @@ func normalizeDomains(idx int, value any) ([]string, error) {
 		for _, item := range v {
 			part, ok := item.(string)
 			if !ok {
-				return nil, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] skin_domains must contain only strings", idx)}
+				return nil, util.HTTPError{Status: 400, Object: "fallback_skin_domain", Operation: "validate", Reason: "invalid", Params: map[string]any{"index": idx}}
 			}
 			parts = append(parts, part)
 		}
 	case []string:
 		parts = append(parts, v...)
 	default:
-		return nil, util.HTTPError{Status: 400, Detail: fmt.Sprintf("fallback[%d] skin_domains must be a list", idx)}
+		return nil, util.HTTPError{Status: 400, Object: "fallback_skin_domain", Operation: "validate", Reason: "invalid", Params: map[string]any{"index": idx}}
 	}
 	clean := make([]string, 0, len(parts))
 	seen := make(map[string]struct{}, len(parts))

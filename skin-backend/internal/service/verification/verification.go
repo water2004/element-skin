@@ -9,6 +9,7 @@ import (
 
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/redisstore"
+	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
 	mailsvc "element-skin/backend/internal/service/mail"
 	settingssvc "element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/util"
@@ -21,10 +22,11 @@ const (
 )
 
 type Service struct {
-	DB       *database.DB
-	Redis    redisstore.Store
-	Settings settingssvc.Settings
-	Sender   mailsvc.Sender
+	DB          *database.DB
+	Redis       redisstore.Store
+	Settings    settingssvc.Settings
+	Sender      mailsvc.Sender
+	EmailPolicy emailpolicysvc.Service
 }
 
 func (s Service) SendPublic(ctx context.Context, email, purpose string) (map[string]any, error) {
@@ -36,7 +38,7 @@ func (s Service) SendPublic(ctx context.Context, email, purpose string) (map[str
 		return nil, err
 	}
 	if !util.ValidEmail(email) {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid email format"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "validate", Reason: "invalid"}
 	}
 	existing, err := s.DB.Users.GetByEmail(ctx, email)
 	if err != nil {
@@ -44,15 +46,22 @@ func (s Service) SendPublic(ctx context.Context, email, purpose string) (map[str
 	}
 	switch purpose {
 	case PurposeRegister:
+		policy := s.EmailPolicy
+		if policy.DB == nil {
+			policy.DB = s.DB
+		}
+		if err := policy.RequireAllowed(ctx, email); err != nil {
+			return nil, err
+		}
 		if existing != nil {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Email already registered"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "email", Operation: "register", Reason: "already_exists"}
 		}
 	case PurposeReset:
 		if existing == nil {
-			return map[string]any{"ok": true, "ttl": 0}, nil
+			return map[string]any{"ttl": 0}, nil
 		}
 	default:
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid verification type"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "verification_type", Operation: "validate", Reason: "invalid"}
 	}
 	return s.issue(ctx, email, purpose)
 }
@@ -111,7 +120,7 @@ func (s Service) issue(ctx context.Context, email, purpose string) (map[string]a
 		_ = s.Redis.DeleteVerificationCode(ctx, email, purpose)
 		return nil, err
 	}
-	return map[string]any{"ok": true, "ttl": ttl}, nil
+	return map[string]any{"ttl": ttl}, nil
 }
 
 func (s Service) ensureEnabled(ctx context.Context) error {
@@ -120,7 +129,7 @@ func (s Service) ensureEnabled(ctx context.Context) error {
 		return err
 	}
 	if enabled != "true" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "Email verification is disabled"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "email_verification", Operation: "create", Reason: "disabled"}
 	}
 	return nil
 }

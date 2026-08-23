@@ -86,26 +86,42 @@ class HTTPClient:
         return self.request("DELETE", path, **kwargs)
 
     @staticmethod
-    def _error_from_response(response: httpx.Response, *, oauth_error: bool) -> APIError:
+    def _error_from_response(
+        response: httpx.Response, *, oauth_error: bool
+    ) -> APIError | OAuthError:
         body: object
         try:
             body = response.json()
         except ValueError:
             body = response.text
 
-        error_code: str | None = None
-        detail = response.reason_phrase
-        if isinstance(body, dict):
-            if "detail" in body:
-                detail = str(body["detail"])
-            if "error" in body:
-                error_code = str(body["error"])
-                detail = str(body.get("error_description") or body["error"])
+        if oauth_error:
+            error = body.get("error") if isinstance(body, dict) else None
+            return OAuthError(
+                response.status_code,
+                error if isinstance(error, str) else "invalid_response",
+                response_body=body,
+            )
+
+        descriptor = body.get("error") if isinstance(body, dict) else None
+        if isinstance(descriptor, dict):
+            object_name = descriptor.get("object")
+            operation = descriptor.get("operation")
+            reason = descriptor.get("reason")
+            params = descriptor.get("params")
+        else:
+            object_name = operation = reason = params = None
+
+        if not all(isinstance(value, str) and value for value in (object_name, operation, reason)):
+            object_name = "response"
+            operation = "decode"
+            reason = "invalid"
+            params = None
+        if not isinstance(params, dict):
+            params = None
 
         error_cls: type[APIError]
-        if oauth_error:
-            error_cls = OAuthError
-        elif response.status_code == 401:
+        if response.status_code == 401:
             error_cls = AuthenticationError
         elif response.status_code == 403:
             error_cls = PermissionDenied
@@ -116,7 +132,9 @@ class HTTPClient:
 
         return error_cls(
             response.status_code,
-            detail,
+            object_name,
+            operation,
+            reason,
+            params=params,
             response_body=body,
-            error=error_code,
         )

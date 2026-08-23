@@ -10,8 +10,10 @@ import (
 )
 
 type fakeMicrosoftClient struct {
-	calls  []string
-	failAt string
+	calls   []string
+	failAt  string
+	hasGame bool
+	profile *microsoft.MinecraftProfile
 }
 
 func (f *fakeMicrosoftClient) stage(name string) error {
@@ -20,13 +22,6 @@ func (f *fakeMicrosoftClient) stage(name string) error {
 		return errors.New(name + " failed")
 	}
 	return nil
-}
-
-func (f *fakeMicrosoftClient) ExchangeCodeForToken(context.Context, string) (map[string]any, error) {
-	if err := f.stage("exchange"); err != nil {
-		return nil, err
-	}
-	return map[string]any{"access_token": "ms_access_token"}, nil
 }
 
 func (f *fakeMicrosoftClient) AuthenticateXBL(context.Context, string) (string, string, error) {
@@ -54,58 +49,48 @@ func (f *fakeMicrosoftClient) CheckGameOwnership(context.Context, string) (bool,
 	if err := f.stage("ownership"); err != nil {
 		return false, err
 	}
-	return true, nil
+	return f.hasGame, nil
 }
 
-func (f *fakeMicrosoftClient) GetMinecraftProfile(context.Context, string) (map[string]any, error) {
+func (f *fakeMicrosoftClient) GetMinecraftProfile(context.Context, string) (*microsoft.MinecraftProfile, error) {
 	if err := f.stage("profile"); err != nil {
 		return nil, err
 	}
-	return map[string]any{"id": "uuid", "name": "McPlayer"}, nil
+	return f.profile, nil
 }
 
-type missingAccessMicrosoftClient struct {
-	fakeMicrosoftClient
-}
-
-func (m *missingAccessMicrosoftClient) ExchangeCodeForToken(context.Context, string) (map[string]any, error) {
-	return map[string]any{}, nil
-}
-
-func TestMicrosoftAuthFlowComplete(t *testing.T) {
-	client := &fakeMicrosoftClient{}
-	res, err := (microsoft.MicrosoftAuthFlow{Client: client}).Complete(context.Background(), "auth_code")
-	if err != nil {
-		t.Fatal(err)
+func TestMicrosoftProfileFlowResolvesOwnedProfileExactly(t *testing.T) {
+	client := &fakeMicrosoftClient{hasGame: true, profile: &microsoft.MinecraftProfile{ID: "uuid", Name: "McPlayer"}}
+	result, err := (microsoft.ProfileFlow{Client: client}).Resolve(context.Background(), "ms_access_token")
+	if err != nil || !result.HasGame || result.Profile == nil || result.Profile.ID != "uuid" || result.Profile.Name != "McPlayer" {
+		t.Fatalf("unexpected profile flow result=%#v err=%v", result, err)
 	}
-	if res["mc_access_token"] != "mc_access_token" || res["has_game"] != true {
-		t.Fatalf("unexpected auth flow result: %#v", res)
-	}
-	profile := res["profile"].(map[string]any)
-	if profile["name"] != "McPlayer" {
-		t.Fatalf("unexpected profile: %#v", profile)
-	}
-	want := []string{"exchange", "xbl", "xsts", "minecraft", "ownership", "profile"}
+	want := []string{"xbl", "xsts", "minecraft", "ownership", "profile"}
 	if strings.Join(client.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("unexpected call order: %#v", client.calls)
 	}
 }
 
-func TestMicrosoftAuthFlowRejectsMissingAccessToken(t *testing.T) {
-	_, err := (microsoft.MicrosoftAuthFlow{Client: &missingAccessMicrosoftClient{}}).Complete(context.Background(), "auth_code")
-	if err == nil || !strings.Contains(err.Error(), "access_token") {
-		t.Fatalf("expected missing access_token error, got %v", err)
+func TestMicrosoftProfileFlowStopsWithoutProfileWhenGameIsNotOwned(t *testing.T) {
+	client := &fakeMicrosoftClient{}
+	result, err := (microsoft.ProfileFlow{Client: client}).Resolve(context.Background(), "ms_access_token")
+	if err != nil || result.HasGame || result.Profile != nil {
+		t.Fatalf("unowned result=%#v err=%v; want empty non-error result", result, err)
+	}
+	want := []string{"xbl", "xsts", "minecraft", "ownership"}
+	if strings.Join(client.calls, ",") != strings.Join(want, ",") {
+		t.Fatalf("unowned call order=%#v; want %#v", client.calls, want)
 	}
 }
 
-func TestMicrosoftAuthFlowStopsExactlyAtEachFailedStage(t *testing.T) {
-	stages := []string{"exchange", "xbl", "xsts", "minecraft", "ownership", "profile"}
+func TestMicrosoftProfileFlowStopsExactlyAtEachFailedStage(t *testing.T) {
+	stages := []string{"xbl", "xsts", "minecraft", "ownership", "profile"}
 	for failedIndex, stage := range stages {
 		t.Run(stage, func(t *testing.T) {
-			client := &fakeMicrosoftClient{failAt: stage}
-			result, err := (microsoft.MicrosoftAuthFlow{Client: client}).Complete(context.Background(), "auth_code")
-			if result != nil || err == nil || err.Error() != stage+" failed" {
-				t.Fatalf("failed stage %q result=%#v err=%v; want nil and exact stage error", stage, result, err)
+			client := &fakeMicrosoftClient{failAt: stage, hasGame: true}
+			result, err := (microsoft.ProfileFlow{Client: client}).Resolve(context.Background(), "ms_access_token")
+			if result != (microsoft.ProfileResult{}) || err == nil || err.Error() != stage+" failed" {
+				t.Fatalf("failed stage %q result=%#v err=%v; want empty result and exact error", stage, result, err)
 			}
 			wantCalls := stages[:failedIndex+1]
 			if strings.Join(client.calls, ",") != strings.Join(wantCalls, ",") {

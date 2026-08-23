@@ -17,7 +17,7 @@ func TestValidateFallbackEndpointsRejectsMissingURLs(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected HTTPError, got %T %[1]v", err)
 	}
-	if httpErr.Status != 400 || httpErr.Detail != "fallback[1] urls are required" {
+	if httpErr.Status != 400 || httpErr.Error() != "fallback_url.validate.required" {
 		t.Fatalf("unexpected error: %#v", httpErr)
 	}
 }
@@ -59,7 +59,7 @@ func TestValidateFallbackInputsRejectInvalidShapesExactly(t *testing.T) {
 				_, err := ValidateFallbackEndpoints(map[string]any{})
 				return err
 			},
-			detail: "fallbacks must be a list",
+			detail: "fallback.configure.invalid",
 		},
 		{
 			name: "endpoint must be object",
@@ -67,7 +67,7 @@ func TestValidateFallbackInputsRejectInvalidShapesExactly(t *testing.T) {
 				_, err := ValidateFallbackEndpoints([]any{"not-an-object"})
 				return err
 			},
-			detail: "invalid fallback entry",
+			detail: "fallback.configure.invalid",
 		},
 		{
 			name: "endpoint id must be positive integer",
@@ -80,7 +80,7 @@ func TestValidateFallbackInputsRejectInvalidShapesExactly(t *testing.T) {
 				}})
 				return err
 			},
-			detail: "fallback[1] id must be a positive integer",
+			detail: "fallback_endpoint.configure.invalid",
 		},
 		{
 			name: "negative cache TTL",
@@ -93,7 +93,7 @@ func TestValidateFallbackInputsRejectInvalidShapesExactly(t *testing.T) {
 				}})
 				return err
 			},
-			detail: "fallback[1] cache_ttl must be non-negative",
+			detail: "fallback_cache_ttl.validate.invalid",
 		},
 		{
 			name: "skin domains must be list",
@@ -106,7 +106,7 @@ func TestValidateFallbackInputsRejectInvalidShapesExactly(t *testing.T) {
 				}})
 				return err
 			},
-			detail: "fallback[1] skin_domains must be a list",
+			detail: "fallback_skin_domain.validate.invalid",
 		},
 		{
 			name: "skin domains must contain strings",
@@ -119,13 +119,13 @@ func TestValidateFallbackInputsRejectInvalidShapesExactly(t *testing.T) {
 				}})
 				return err
 			},
-			detail: "fallback[1] skin_domains must contain only strings",
+			detail: "fallback_skin_domain.validate.invalid",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.call()
 			httpErr, ok := err.(util.HTTPError)
-			if !ok || httpErr.Status != 400 || httpErr.Detail != tc.detail {
+			if !ok || httpErr.Status != 400 || httpErr.Error() != tc.detail {
 				t.Fatalf("error=%#v; want exact HTTP 400 detail %q", err, tc.detail)
 			}
 		})
@@ -192,7 +192,7 @@ func TestValidateFallbackEndpointsRejectsDuplicateIDsExactly(t *testing.T) {
 	}
 	_, err := ValidateFallbackEndpoints([]any{entry(), entry()})
 	httpErr, ok := err.(util.HTTPError)
-	if !ok || httpErr.Status != 400 || httpErr.Detail != "fallback[2] id is duplicated" {
+	if !ok || httpErr.Status != 400 || httpErr.Error() != "fallback_endpoint.configure.conflict" {
 		t.Fatalf("duplicate endpoint ID error=%#v; want exact HTTP 400", err)
 	}
 }

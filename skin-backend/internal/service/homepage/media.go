@@ -76,7 +76,7 @@ func (s Service) Patch(ctx context.Context, actor permission.Actor, id string, i
 		return model.HomepageMedia{}, err
 	}
 	if input.DurationMS != nil && (*input.DurationMS < 1000 || *input.DurationMS > 60000) {
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Detail: "duration_ms out of range"}
+		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusBadRequest, Object: "homepage_duration", Operation: "validate", Reason: "out_of_range"}
 	}
 	if err := ValidateOpacity("overlay_opacity_light", input.OverlayOpacityLight); err != nil {
 		return model.HomepageMedia{}, err
@@ -86,7 +86,7 @@ func (s Service) Patch(ctx context.Context, actor permission.Actor, id string, i
 	}
 	item, err := s.DB.HomepageMedia.Get(ctx, id)
 	if err != nil {
-		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusNotFound, Detail: "homepage media not found"}
+		return model.HomepageMedia{}, util.HTTPError{Status: http.StatusNotFound, Object: "homepage_media", Operation: "resolve", Reason: "not_found"}
 	}
 	patch := dbhomepage.Patch{
 		Title:               input.Title,
@@ -120,17 +120,17 @@ func (s Service) Reorder(ctx context.Context, actor permission.Actor, ids []stri
 		return err
 	}
 	if len(ids) == 0 {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "ids is required"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "id_list", Operation: "validate", Reason: "required"}
 	}
 	seen := map[string]bool{}
 	for _, id := range ids {
 		if id == "" || seen[id] {
-			return util.HTTPError{Status: http.StatusBadRequest, Detail: "ids must be unique non-empty strings"}
+			return util.HTTPError{Status: http.StatusBadRequest, Object: "id_list", Operation: "validate", Reason: "invalid"}
 		}
 		seen[id] = true
 	}
 	if err := s.DB.HomepageMedia.Reorder(ctx, ids, database.NowMS()); err != nil {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "homepage media not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "homepage_media", Operation: "resolve", Reason: "not_found"}
 	}
 	return s.Redis.InvalidatePublicHomepageMedia(ctx)
 }
@@ -141,7 +141,7 @@ func (s Service) Delete(ctx context.Context, actor permission.Actor, id string) 
 	}
 	item, err := s.DB.HomepageMedia.Delete(ctx, id)
 	if err != nil {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "homepage media not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "homepage_media", Operation: "resolve", Reason: "not_found"}
 	}
 	path := filepath.Join(s.CarouselDir, item.StoragePath)
 	if item.Type == "panorama" || strings.Contains(item.StoragePath, "/") {
@@ -157,5 +157,5 @@ func requirePermission(actor permission.Actor, def permission.Definition) error 
 	if actor.Has(def) {
 		return nil
 	}
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }

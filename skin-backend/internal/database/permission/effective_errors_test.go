@@ -74,6 +74,9 @@ func TestEffectivePermissionsWithBanPolicyColumnTypeError(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user := testutil.CreateUser(t, db, "col-type-err@test.com", "pw", "ColTypeErr", false)
+	if _, err := db.Pool.Exec(ctx, `DROP TRIGGER users_webhook_event ON users`); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Pool.Exec(ctx, `ALTER TABLE users ALTER COLUMN banned_until TYPE TEXT USING COALESCE(banned_until::TEXT, '')`); err != nil {
 		t.Fatal(err)
 	}

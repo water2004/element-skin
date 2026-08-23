@@ -38,7 +38,7 @@ func TestAuthRoutesValidateMissingTokenAndMetadataExactly(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/authserver/validate", strings.NewReader(`{"accessToken":"missing"}`))
 	rec = httptest.NewRecorder()
 	h.Validate(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "Invalid token") {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":\"ForbiddenOperationException\",\"errorMessage\":\"Invalid token.\"}\n" {
 		t.Fatalf("validate missing token mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -181,7 +181,7 @@ func TestAuthRoutesProtocolStatusBodiesAndErrorsExactly(t *testing.T) {
 	badJSONReq := httptest.NewRequest(http.MethodPost, "/authserver/authenticate", strings.NewReader(`{"username":`))
 	badJSONRec := httptest.NewRecorder()
 	h.Authenticate(badJSONRec, badJSONReq)
-	assertDetailError(t, badJSONRec, http.StatusBadRequest, "invalid json")
+	assertDetailError(t, badJSONRec, http.StatusBadRequest, "request.decode.invalid")
 }
 
 func TestAuthRoutesRejectBadJSONOnEachProtocolEndpointExactly(t *testing.T) {
@@ -205,7 +205,7 @@ func TestAuthRoutesRejectBadJSONOnEachProtocolEndpointExactly(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/"+tc.name, strings.NewReader(`{`))
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			assertDetailError(t, rec, http.StatusBadRequest, "invalid json")
+			assertDetailError(t, rec, http.StatusBadRequest, "request.decode.invalid")
 		})
 	}
 }
@@ -376,13 +376,16 @@ func assertYggError(t *testing.T, rec *httptest.ResponseRecorder, status int, co
 	}
 }
 
-func assertDetailError(t *testing.T, rec *httptest.ResponseRecorder, status int, detail string) {
+func assertDetailError(t *testing.T, rec *httptest.ResponseRecorder, status int, classification string) {
 	t.Helper()
 	if rec.Code != status {
 		t.Fatalf("detail error status mismatch: got=%d want=%d body=%q", rec.Code, status, rec.Body.String())
 	}
 	body := decodeYggJSON(t, rec.Body.String())
-	if body["detail"] != detail {
-		t.Fatalf("detail error body mismatch: got=%#v want detail=%q", body, detail)
+	descriptor, ok := body["error"].(map[string]any)
+	parts := strings.Split(classification, ".")
+	if !ok || len(parts) != 3 || len(descriptor) != 3 ||
+		descriptor["object"] != parts[0] || descriptor["operation"] != parts[1] || descriptor["reason"] != parts[2] {
+		t.Fatalf("API error body mismatch: got=%#v want classification=%q", body, classification)
 	}
 }

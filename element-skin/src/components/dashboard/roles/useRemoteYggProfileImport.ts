@@ -74,7 +74,7 @@ export function useRemoteYggProfileImport(deps: RemoteYggImportDeps = {}) {
         password: yggPassword.value,
       })
 
-      yggProfiles.value = res.data.profiles
+      yggProfiles.value = res.data.items
       if (yggProfiles.value.length === 0) {
         notifyWarning('该账户下没有角色')
       } else {

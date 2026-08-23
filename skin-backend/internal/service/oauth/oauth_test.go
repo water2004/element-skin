@@ -96,7 +96,8 @@ func TestServiceOAuthClosedDatabasePropagatesExactDependencyErrors(t *testing.T)
 				RedirectURI:     "https://closed-db.example/update",
 				ClientType:      oauth.ClientTypePublic,
 				PermissionCodes: []string{"account.read.self"},
-			}, "")
+			})
+
 			return err
 		}},
 		{name: "submit client", call: func() error {

@@ -10,6 +10,8 @@ import (
 	"element-skin/backend/internal/redisstore"
 	accountsvc "element-skin/backend/internal/service/account"
 	authsvc "element-skin/backend/internal/service/auth"
+	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
+	identitysvc "element-skin/backend/internal/service/identity"
 	mailsvc "element-skin/backend/internal/service/mail"
 	profilesvc "element-skin/backend/internal/service/profile"
 	publicsitesvc "element-skin/backend/internal/service/publicsite"
@@ -43,17 +45,21 @@ func NewWithRedis(cfg config.Config, db *database.DB, redis redisstore.Store, au
 		sender = senders[0]
 	}
 	verification := verificationsvc.Service{DB: db, Redis: redis, Settings: settings, Sender: sender}
-	authService := authsvc.Service{DB: db, Cfg: cfg, Redis: redis, Settings: settings, Verification: verification}
-	accounts := accountsvc.AccountService{DB: db, Redis: redis, Verification: verification}
+	emailPolicy := emailpolicysvc.Service{DB: db, Redis: redis}
+	verification.EmailPolicy = emailPolicy
+	identityService := identitysvc.Service{DB: db, Config: cfg, Redis: redis}
+	authService := authsvc.Service{DB: db, Cfg: cfg, Redis: redis, Settings: settings, Verification: verification, Identity: identityService, EmailPolicy: emailPolicy}
+	accounts := accountsvc.AccountService{DB: db, Redis: redis, Verification: verification, EmailPolicy: emailPolicy}
 	profiles := profilesvc.Service{DB: db, Settings: settings}
 	textures := texturesvc.LibraryService{DB: db, Settings: settings}
 	public := publicsitesvc.Service{
-		DB:       db,
-		Redis:    redis,
-		Settings: settings,
-		SiteURL:  cfg.SiteURL,
-		APIURL:   cfg.APIURL,
-		CacheTTL: time.Duration(cfg.PublicCacheTTL) * time.Second,
+		DB:          db,
+		Redis:       redis,
+		Settings:    settings,
+		EmailPolicy: emailPolicy,
+		SiteURL:     cfg.SiteURL,
+		APIURL:      cfg.APIURL,
+		CacheTTL:    time.Duration(cfg.PublicCacheTTL) * time.Second,
 	}
 	uploads := texturesvc.UploadService{DB: db, TexturesDir: cfg.TexturesDir}
 	return Handler{cfg: cfg, redis: redis, authSvc: authService, accounts: accounts, profiles: profiles, textures: textures, public: public, uploads: uploads, settings: settings, auth: auth}

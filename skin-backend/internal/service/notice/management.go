@@ -17,18 +17,18 @@ func (s Service) ListForManagement(ctx context.Context, actor permission.Actor, 
 	}
 	cur, err := parseCursor(params.Cursor)
 	if err != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	status := strings.TrimSpace(params.Status)
 	if status == "" {
 		status = StatusAll
 	}
 	if !validStatus(status) {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid status"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "status", Operation: "validate", Reason: "invalid"}
 	}
 	typ := strings.TrimSpace(params.Type)
 	if typ != "" && !validType(typ) {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid type"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "type", Operation: "validate", Reason: "invalid"}
 	}
 	return s.DB.Notices.ListForAdmin(ctx, noticedb.AdminListOptions{
 		Type:        typ,

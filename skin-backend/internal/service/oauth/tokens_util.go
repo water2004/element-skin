@@ -32,7 +32,7 @@ func generateUserCode() (string, string, error) {
 	}
 	code := compact.String()
 	if len(code) < 8 {
-		return "", "", badRequest("could not generate user_code")
+		return "", "", badRequest("device_code", "generate", "failed")
 	}
 	formatted := code[:4] + "-" + code[4:]
 	return formatted, util.HashRefreshToken(formatted), nil
@@ -50,13 +50,14 @@ func tokenPair() (string, string, string, string, error) {
 	return accessRaw, accessHash, refreshRaw, refreshHash, nil
 }
 
-func tokenResponse(access, refresh string, codes []string) TokenResponse {
+func tokenResponse(access, refresh string, codes, oidcScopes []string, idToken string) TokenResponse {
 	return TokenResponse{
 		AccessToken:  access,
 		TokenType:    "Bearer",
 		ExpiresIn:    int64(accessTokenTTL / time.Second),
 		RefreshToken: refresh,
-		Scope:        strings.Join(codes, " "),
+		Scope:        strings.Join(combinedScopes(codes, oidcScopes), " "),
 		Permissions:  codes,
+		IDToken:      idToken,
 	}
 }

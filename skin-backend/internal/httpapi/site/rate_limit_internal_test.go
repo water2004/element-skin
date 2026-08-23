@@ -31,12 +31,12 @@ func TestCheckAuthRateLimitFailsClosedOnEachSettingsReadError(t *testing.T) {
 				settings: settings.Settings{Redis: store},
 			}
 			rec := httptest.NewRecorder()
-			req := httptest.NewRequest("POST", "/v1/auth/login", nil)
+			req := httptest.NewRequest("POST", "/v2/auth/login", nil)
 
 			if allowed := h.checkAuthRateLimit(rec, req, "login"); allowed {
 				t.Fatal("settings read failure must reject the authentication attempt")
 			}
-			if rec.Code != 500 || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+			if rec.Code != 500 || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 				t.Fatalf("response status=%d body=%q; want exact internal error", rec.Code, rec.Body.String())
 			}
 			if store.settingCalls != tc.calls || store.hitCalls != 0 {

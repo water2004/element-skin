@@ -14,7 +14,76 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
+  backend-quality:
+    name: Backend quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: '12345678'
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      ADMIN_DATABASE_DSN: postgresql://postgres:12345678@localhost:5432/postgres?sslmode=disable
+      REDIS_TEST_ADDR: localhost:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: skin-backend/go.mod
+          cache-dependency-path: skin-backend/go.sum
+
+      - name: Vet backend
+        working-directory: skin-backend
+        run: go vet ./...
+
+      - name: Test backend with global coverage
+        working-directory: skin-backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          coverage_profile="$RUNNER_TEMP/backend-coverage.out"
+          go test -p 2 -count=1 ./... \
+            -coverpkg=./... \
+            -covermode=atomic \
+            -coverprofile="$coverage_profile"
+
+          coverage_line="$(go tool cover -func="$coverage_profile" | tail -n 1)"
+          actual="$(awk '{ value=$3; gsub(/%/, "", value); print value }' <<< "$coverage_line")"
+          required='90.0'
+          echo "Backend coverage: ${actual}% (required: ${required}%)"
+          echo "### Backend coverage: ${actual}% / ${required}%" >> "$GITHUB_STEP_SUMMARY"
+          if ! awk -v actual="$actual" -v required="$required" 'BEGIN { exit !((actual + 0) >= (required + 0)) }'; then
+            echo "Backend coverage ${actual}% is below ${required}%" >&2
+            exit 1
+          fi
+
   build-and-push:
+    needs: backend-quality
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -94,6 +163,7 @@ jobs:
 
   release:
     name: Publish GitHub Release
+    needs: backend-quality
     if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
     permissions:

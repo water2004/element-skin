@@ -15,14 +15,14 @@ func (s AccountService) modifiableUser(ctx context.Context, actor permission.Act
 		return nil, err
 	}
 	if target == nil {
-		return nil, util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return nil, util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	isProtected, err := s.DB.Permissions.UserIsProtected(ctx, target.ID)
 	if err != nil {
 		return nil, err
 	}
 	if isProtected && !actor.Has(manageProtectedPermission) {
-		return nil, util.HTTPError{Status: http.StatusForbidden, Detail: "cannot modify protected subject"}
+		return nil, util.HTTPError{Status: http.StatusForbidden, Object: "protected_subject", Operation: "update", Reason: "denied"}
 	}
 	return target, nil
 }
@@ -33,7 +33,7 @@ func (s AccountService) ensureProtectedSubjectMutationAllowed(ctx context.Contex
 		return err
 	}
 	if isProtected && !actor.Has(manageProtectedPermission) {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "cannot modify protected subject"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "protected_subject", Operation: "update", Reason: "denied"}
 	}
 	return nil
 }
@@ -49,12 +49,12 @@ func (s AccountService) userExists(ctx context.Context, userID string) (bool, er
 func ensureRoleMutationAllowed(actor permission.Actor, roleID string) error {
 	if roleID == permission.RoleSystemMaintenance {
 		if !actor.Has(manageProtectedPermission) {
-			return util.HTTPError{Status: http.StatusForbidden, Detail: "protected role management required"}
+			return util.HTTPError{Status: http.StatusForbidden, Object: "protected_role", Operation: "manage", Reason: "required"}
 		}
 	}
 	return nil
 }
 
 func permissionDenied() error {
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }

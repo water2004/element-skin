@@ -15,7 +15,7 @@ func (h Handler) GetProfiles(w http.ResponseWriter, req *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	profiles, err := h.imports.PreviewProfiles(req.Context(), shared.CurrentActor(req), body.APIURL, body.Username, body.Password)
@@ -23,13 +23,13 @@ func (h Handler) GetProfiles(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"profiles": profiles})
+	util.JSON(w, http.StatusOK, map[string]any{"items": profiles})
 }
 
 func (h Handler) ImportProfiles(w http.ResponseWriter, req *http.Request) {
 	var body map[string]any
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	profiles, err := shared.ParseImportProfiles(body["profiles"])
@@ -48,13 +48,13 @@ func (h Handler) ImportProfiles(w http.ResponseWriter, req *http.Request) {
 func (h Handler) ImportProfile(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	profileID := strings.TrimSpace(body["profile_id"])
 	profileName := strings.TrimSpace(body["profile_name"])
 	if profileID == "" || profileName == "" {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "profile_id and profile_name are required"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "profile", Operation: "import", Reason: "required"})
 		return
 	}
 	res, err := h.imports.ImportProfile(req.Context(), shared.CurrentActor(req), body["api_url"], profileID, profileName)
@@ -63,5 +63,5 @@ func (h Handler) ImportProfile(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	profile := res["profile"].(map[string]any)
-	util.JSON(w, 200, map[string]any{"id": profile["id"], "name": profile["name"]})
+	util.JSON(w, http.StatusCreated, map[string]any{"id": profile["id"], "name": profile["name"]})
 }

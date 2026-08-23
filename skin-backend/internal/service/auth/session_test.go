@@ -36,6 +36,28 @@ func TestSessionRotateRefreshIsSingleUse(t *testing.T) {
 	}
 }
 
+func TestIssueSessionForUserSupportsOIDCLoginAndRejectsMissingUserExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	cfg := testutil.TestConfig()
+	svc := newAuthService(db, cfg)
+	user := testutil.CreateUser(t, db, "site-session-oidc@test.com", "Password123", "SiteSessionOIDC", false)
+
+	session, err := svc.IssueSessionForUser(ctx, "  "+user.ID+"  ")
+	if err != nil || session["user_id"] != user.ID || session["access_token"] == "" || session["refresh_token"] == "" ||
+		session["refresh_max_age_seconds"] != cfg.JWTExpireDays*24*3600 {
+		t.Fatalf("OIDC user session=%#v err=%v", session, err)
+	}
+	permissions, ok := session["permissions"].([]string)
+	if !ok || len(permissions) == 0 || !containsString(permissions, "account.read.self") {
+		t.Fatalf("OIDC user session permissions=%#v", session["permissions"])
+	}
+	missing, err := svc.IssueSessionForUser(ctx, "missing-user")
+	if missing != nil || !httpError(err, 404, "user.resolve.not_found") {
+		t.Fatalf("missing OIDC user session=%#v err=%v", missing, err)
+	}
+}
+
 func TestSessionRotateRefreshRejectsExpiredTokenAndConsumesIt(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
@@ -51,7 +73,7 @@ func TestSessionRotateRefreshRejectsExpiredTokenAndConsumesIt(t *testing.T) {
 	}
 
 	rotated, err := svc.RotateRefresh(ctx, raw)
-	if !httpError(err, 401, "refresh token expired") || rotated != nil {
+	if !httpError(err, 401, "refresh_token.verify.expired") || rotated != nil {
 		t.Fatalf("expired refresh should be rejected exactly: rotated=%#v err=%v", rotated, err)
 	}
 	if row, err := db.Tokens.GetRefresh(ctx, hash); err != nil || row != nil {
@@ -77,7 +99,7 @@ func TestSessionRotateRefreshRejectsTokenAfterUserDeletion(t *testing.T) {
 	}
 
 	rotated, err := svc.RotateRefresh(ctx, raw)
-	if !httpError(err, 401, "invalid refresh token") || rotated != nil {
+	if !httpError(err, 401, "refresh_token.verify.invalid") || rotated != nil {
 		t.Fatalf("refresh for deleted user should be rejected exactly: rotated=%#v err=%v", rotated, err)
 	}
 	if row, err := db.Tokens.GetRefresh(ctx, hash); err != nil || row != nil {
@@ -218,7 +240,7 @@ func TestSessionConcurrentRotationAllowsExactlyOneSuccess(t *testing.T) {
 		switch {
 		case err == nil:
 			successes++
-		case httpError(err, 401, "invalid refresh token"):
+		case httpError(err, 401, "refresh_token.verify.invalid"):
 			rejected++
 		default:
 			t.Fatalf("concurrent rotation returned unexpected error: %#v", err)

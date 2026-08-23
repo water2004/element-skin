@@ -49,7 +49,7 @@ func TestSendEmailChangeStoresExactPurposeAfterDelivery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result["ok"] != true || result["ttl"] != 90 {
+	if len(result) != 1 || result["ttl"] != 90 {
 		t.Fatalf("result=%#v; want ok=true ttl=90", result)
 	}
 	if sender.calls != 1 || sender.to != "new-email@test.com" || sender.purpose != verificationsvc.PurposeEmailChange || len(sender.code) != 8 {
@@ -91,7 +91,7 @@ func TestSendEmailChangeRejectsDisabledAndMissingSenderExactly(t *testing.T) {
 	settings := settingssvc.Settings{DB: db, Redis: cache}
 	svc := verificationsvc.Service{DB: db, Redis: cache, Settings: settings}
 
-	if result, err := svc.SendEmailChange(ctx, "disabled@test.com"); result != nil || !httpErrorIs(err, 400, "Email verification is disabled") {
+	if result, err := svc.SendEmailChange(ctx, "disabled@test.com"); result != nil || !httpErrorIs(err, 400, "email_verification.create.disabled") {
 		t.Fatalf("disabled result=%#v err=%#v", result, err)
 	}
 	if err := db.Settings.Set(ctx, "email_verify_enabled", "true"); err != nil {
@@ -105,10 +105,100 @@ func TestSendEmailChangeRejectsDisabledAndMissingSenderExactly(t *testing.T) {
 	}
 }
 
+func TestPublicVerificationLifecycleCoversRegisterResetVerifyConsumeAndRestoreExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	cache := redisstore.NewMemoryStore()
+	sender := &failingSender{}
+	settings := settingssvc.Settings{DB: db, Redis: cache}
+	svc := verificationsvc.Service{DB: db, Redis: cache, Settings: settings, Sender: sender}
+	if err := db.Settings.Set(ctx, "email_verify_enabled", "true"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Settings.Set(ctx, "email_verify_ttl", "75"); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.SendPublic(ctx, "  register@test.com  ", "")
+	if err != nil || len(result) != 1 || result["ttl"] != 75 || sender.calls != 1 ||
+		sender.to != "register@test.com" || sender.purpose != verificationsvc.PurposeRegister || len(sender.code) != 8 {
+		t.Fatalf("registration verification result=%#v sender=%#v err=%v", result, sender, err)
+	}
+	verified, err := svc.Verify(ctx, sender.to, "wrong-code", sender.purpose)
+	if err != nil || verified {
+		t.Fatalf("wrong verification result=%v err=%v", verified, err)
+	}
+	verified, err = svc.Verify(ctx, sender.to, "  "+sender.code+"  ", sender.purpose)
+	if err != nil || !verified {
+		t.Fatalf("correct verification result=%v err=%v", verified, err)
+	}
+	consumed, err := svc.Consume(ctx, sender.to, "wrong-code", sender.purpose)
+	if err != nil || consumed {
+		t.Fatalf("wrong consume result=%v err=%v", consumed, err)
+	}
+	consumed, err = svc.Consume(ctx, sender.to, "  "+sender.code+"  ", sender.purpose)
+	if err != nil || !consumed {
+		t.Fatalf("correct consume result=%v err=%v", consumed, err)
+	}
+	verified, err = svc.Verify(ctx, sender.to, sender.code, sender.purpose)
+	if err != nil || verified {
+		t.Fatalf("consumed code remains valid result=%v err=%v", verified, err)
+	}
+	if err := svc.Restore(ctx, sender.to, sender.code, sender.purpose); err != nil {
+		t.Fatal(err)
+	}
+	verified, err = svc.Verify(ctx, sender.to, sender.code, sender.purpose)
+	if err != nil || !verified {
+		t.Fatalf("restored verification result=%v err=%v", verified, err)
+	}
+	if ttl, err := svc.TTL(ctx); err != nil || ttl != 75 {
+		t.Fatalf("verification ttl=%d err=%v", ttl, err)
+	}
+
+	registered := testutil.CreateUser(t, db, "registered@test.com", "Password123", "Registered", false)
+	if registered.ID == "" {
+		t.Fatal("registered user has no id")
+	}
+	result, err = svc.SendPublic(ctx, registered.Email, verificationsvc.PurposeRegister)
+	if result != nil || !httpErrorIs(err, 400, "email.register.already_exists") || sender.calls != 1 {
+		t.Fatalf("registered email result=%#v calls=%d err=%#v", result, sender.calls, err)
+	}
+	result, err = svc.SendPublic(ctx, "missing@test.com", verificationsvc.PurposeReset)
+	if err != nil || len(result) != 1 || result["ttl"] != 0 || sender.calls != 1 {
+		t.Fatalf("missing reset result=%#v calls=%d err=%v", result, sender.calls, err)
+	}
+	result, err = svc.SendPublic(ctx, registered.Email, verificationsvc.PurposeReset)
+	if err != nil || result["ttl"] != 75 || sender.calls != 2 || sender.to != registered.Email ||
+		sender.purpose != verificationsvc.PurposeReset {
+		t.Fatalf("registered reset result=%#v sender=%#v err=%v", result, sender, err)
+	}
+}
+
+func TestPublicVerificationRejectsInvalidEmailAndPurposeBeforeDeliveryExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	cache := redisstore.NewMemoryStore()
+	sender := &failingSender{}
+	settings := settingssvc.Settings{DB: db, Redis: cache}
+	svc := verificationsvc.Service{DB: db, Redis: cache, Settings: settings, Sender: sender}
+	if err := db.Settings.Set(ctx, "email_verify_enabled", "true"); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.SendPublic(ctx, "not-an-email", verificationsvc.PurposeRegister)
+	if result != nil || !httpErrorIs(err, 400, "email.validate.invalid") {
+		t.Fatalf("invalid email result=%#v err=%#v", result, err)
+	}
+	result, err = svc.SendPublic(ctx, "valid@test.com", "unknown")
+	if result != nil || !httpErrorIs(err, 400, "verification_type.validate.invalid") || sender.calls != 0 {
+		t.Fatalf("invalid purpose result=%#v calls=%d err=%#v", result, sender.calls, err)
+	}
+}
+
 func httpErrorIs(err error, status int, detail string) bool {
 	var target util.HTTPError
 	if !errors.As(err, &target) {
 		return false
 	}
-	return target.Status == status && target.Detail == detail
+	return target.Status == status && target.Error() == detail
 }

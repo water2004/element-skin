@@ -1,4 +1,5 @@
 import axios, { AxiosError, type AxiosRequestConfig } from 'axios'
+import { loginRedirectLocation } from '@/utils/internalRedirect'
 
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || '',
@@ -6,7 +7,7 @@ const apiClient = axios.create({
 })
 
 // 不参与"401 自动刷新"的端点：刷新接口自身、登录、登出（避免死循环）。
-const NO_REFRESH_PATHS = ['/v1/auth/session/refresh', '/v1/auth/login', '/v1/auth/logout']
+const NO_REFRESH_PATHS = ['/v2/auth/session/refresh', '/v2/auth/login', '/v2/auth/logout']
 
 function isNoRefreshPath(url: string | undefined): boolean {
   if (!url) return false
@@ -15,7 +16,7 @@ function isNoRefreshPath(url: string | undefined): boolean {
 }
 
 // 需要登录的路由前缀。是否跳登录取决于**用户当前所在页面**，而非哪个接口 401——
-// /v1/users/me 这类探针在公共页（首页等）也会调用并 401，按接口判断会误伤公共页访客。
+// /v2/users/me 这类探针在公共页（首页等）也会调用并 401，按接口判断会误伤公共页访客。
 const PROTECTED_PREFIXES = ['/dashboard', '/admin', '/skin-library', '/notifications', '/oauth']
 
 function stripBase(pathname: string): string {
@@ -38,7 +39,7 @@ function redirectToLogin(): void {
   const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, '')
   const loginPath = base + '/login'
   if (window.location.pathname !== loginPath) {
-    window.location.assign(loginPath)
+    window.location.assign(loginRedirectLocation(window.location, import.meta.env.BASE_URL || '/'))
   }
 }
 
@@ -48,7 +49,7 @@ let refreshPromise: Promise<void> | null = null
 function runRefresh(): Promise<void> {
   if (!refreshPromise) {
     refreshPromise = apiClient
-      .post('/v1/auth/session/refresh')
+      .post('/v2/auth/session/refresh')
       .then(() => undefined)
       .finally(() => {
         refreshPromise = null

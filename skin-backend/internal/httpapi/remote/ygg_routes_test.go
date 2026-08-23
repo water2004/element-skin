@@ -26,51 +26,51 @@ func TestRemoteYggRoutesValidateAndReturnExactBodies(t *testing.T) {
 	h := remote.NewWithHTTPClient(cfg, db, nil, remoteYggTestClient(t))
 	user := testutil.CreateUser(t, db, "remote-direct@test.com", "Password123", "RemoteDirect", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/imports/remote-ygg/profiles/preview", strings.NewReader(`{"api_url":"https://93.184.216.34/ygg","username":"remote-user","password":"remote-password"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/imports/remote-ygg/profiles/preview", strings.NewReader(`{"api_url":"https://93.184.216.34/ygg","username":"remote-user","password":"remote-password"}`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.GetProfiles(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"profiles\":[{\"id\":\"remote_profile_one\",\"name\":\"RemoteOne\"},{\"id\":\"remote_profile_two\",\"name\":\"RemoteTwo\"}]}\n" {
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"items\":[{\"id\":\"remote_profile_one\",\"name\":\"RemoteOne\"},{\"id\":\"remote_profile_two\",\"name\":\"RemoteTwo\"}]}\n" {
 		t.Fatalf("get profiles exact body mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/remote-ygg/profiles/import", strings.NewReader(`{"profile_id":"","profile_name":"Missing"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/remote-ygg/profiles/import", strings.NewReader(`{"profile_id":"","profile_name":"Missing"}`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "profile_id and profile_name are required") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile\",\"operation\":\"import\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("import profile validation mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/remote-ygg/profiles/import-batch", strings.NewReader(`{"profiles":[]}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/remote-ygg/profiles/import-batch", strings.NewReader(`{"profiles":[]}`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfiles(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "profiles cannot be empty") {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile\",\"operation\":\"import\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("import profiles empty validation mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/remote-ygg/profiles/preview", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/remote-ygg/profiles/preview", strings.NewReader(`{`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.GetProfiles(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("preview bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/remote-ygg/profiles/import", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/remote-ygg/profiles/import", strings.NewReader(`{`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfile(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("single import bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/remote-ygg/profiles/import-batch", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/remote-ygg/profiles/import-batch", strings.NewReader(`{`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfiles(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("batch import bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -90,11 +90,11 @@ func TestRemoteYggRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T)
 		call       func(http.ResponseWriter, *http.Request)
 		wantStatus int
 	}{
-		{"preview requires profile create", "profile.create.owned", "/v1/imports/remote-ygg/profiles/preview", `{"api_url":"https://93.184.216.34/ygg","username":"u","password":"p"}`, h.GetProfiles, http.StatusForbidden},
-		{"single import requires profile create", "profile.create.owned", "/v1/imports/remote-ygg/profiles/import", `{"profile_id":"p","profile_name":"P"}`, h.ImportProfile, http.StatusForbidden},
-		{"single import requires texture create", "texture.create.owned", "/v1/imports/remote-ygg/profiles/import", `{"profile_id":"p","profile_name":"P"}`, h.ImportProfile, http.StatusForbidden},
-		{"batch import requires profile create", "profile.create.owned", "/v1/imports/remote-ygg/profiles/import-batch", `{"profiles":[{"profile_id":"p","profile_name":"P"}]}`, h.ImportProfiles, http.StatusForbidden},
-		{"batch import requires texture create", "texture.create.owned", "/v1/imports/remote-ygg/profiles/import-batch", `{"profiles":[{"profile_id":"p","profile_name":"P"}]}`, h.ImportProfiles, http.StatusForbidden},
+		{"preview requires profile create", "profile.create.owned", "/v2/imports/remote-ygg/profiles/preview", `{"api_url":"https://93.184.216.34/ygg","username":"u","password":"p"}`, h.GetProfiles, http.StatusForbidden},
+		{"single import requires profile create", "profile.create.owned", "/v2/imports/remote-ygg/profiles/import", `{"profile_id":"p","profile_name":"P"}`, h.ImportProfile, http.StatusForbidden},
+		{"single import requires texture create", "texture.create.owned", "/v2/imports/remote-ygg/profiles/import", `{"profile_id":"p","profile_name":"P"}`, h.ImportProfile, http.StatusForbidden},
+		{"batch import requires profile create", "profile.create.owned", "/v2/imports/remote-ygg/profiles/import-batch", `{"profiles":[{"profile_id":"p","profile_name":"P"}]}`, h.ImportProfiles, http.StatusForbidden},
+		{"batch import requires texture create", "texture.create.owned", "/v2/imports/remote-ygg/profiles/import-batch", `{"profiles":[{"profile_id":"p","profile_name":"P"}]}`, h.ImportProfiles, http.StatusForbidden},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -102,7 +102,7 @@ func TestRemoteYggRoutesRejectMissingFineGrainedPermissionsExactly(t *testing.T)
 			req = withUserActorWithoutPermission(req, user.ID, tc.exclude)
 			rec := httptest.NewRecorder()
 			tc.call(rec, req)
-			if rec.Code != tc.wantStatus || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if rec.Code != tc.wantStatus || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("permission denial mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 			}
 		})
@@ -116,11 +116,11 @@ func TestRemoteYggRoutesImportProfileAndBatchPersistExactProfiles(t *testing.T) 
 	h := remote.NewWithHTTPClient(cfg, db, nil, remoteYggTestClient(t))
 	user := testutil.CreateUser(t, db, "remote-import@test.com", "Password123", "RemoteImport", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/imports/remote-ygg/profiles/import", strings.NewReader(`{"api_url":"https://93.184.216.34/ygg","profile_id":"remote_profile_one","profile_name":"RemoteOne"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/imports/remote-ygg/profiles/import", strings.NewReader(`{"api_url":"https://93.184.216.34/ygg","profile_id":"remote_profile_one","profile_name":"RemoteOne"}`))
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.ImportProfile(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"id\":\"remote_profile_one\",\"name\":\"RemoteOne\"}\n" {
+	if rec.Code != http.StatusCreated || rec.Body.String() != "{\"id\":\"remote_profile_one\",\"name\":\"RemoteOne\"}\n" {
 		t.Fatalf("import profile exact body mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	profile, err := db.Profiles.GetByID(req.Context(), "remote_profile_one")
@@ -131,15 +131,29 @@ func TestRemoteYggRoutesImportProfileAndBatchPersistExactProfiles(t *testing.T) 
 	assertTextureFileExists(t, cfg.TexturesDir, profile.SkinHash)
 	assertTextureFileExists(t, cfg.TexturesDir, profile.CapeHash)
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/imports/remote-ygg/profiles/import-batch", strings.NewReader(`{"api_url":"https://93.184.216.34/ygg","profiles":[{"profile_id":"remote_batch_one","profile_name":"BatchOne"},{"profile_id":"","profile_name":"Broken"}]}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/imports/remote-ygg/profiles/import-batch", strings.NewReader(`{"api_url":"https://93.184.216.34/ygg","profiles":[{"profile_id":"remote_batch_one","profile_name":"BatchOne"},{"profile_id":"","profile_name":"Broken"}]}`))
 	req = withUserActor(req, user.ID)
 	rec = httptest.NewRecorder()
 	h.ImportProfiles(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"success_count":1`) ||
 		!strings.Contains(rec.Body.String(), `"failure_count":1`) ||
-		!strings.Contains(rec.Body.String(), `"id":"remote_batch_one"`) ||
-		!strings.Contains(rec.Body.String(), `"detail":"profile_id and profile_name are required"`) {
+		!strings.Contains(rec.Body.String(), `"id":"remote_batch_one"`) {
 		t.Fatalf("batch remote import response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	var batch map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &batch); err != nil {
+		t.Fatal(err)
+	}
+	failed, ok := batch["failed"].([]any)
+	if !ok || len(failed) != 1 {
+		t.Fatalf("batch failure list mismatch: %#v", batch)
+	}
+	failure, ok := failed[0].(map[string]any)
+	descriptor, descriptorOK := failure["error"].(map[string]any)
+	if !ok || !descriptorOK || len(failure) != 3 || len(descriptor) != 3 ||
+		failure["profile_id"] != "" || failure["profile_name"] != "Broken" ||
+		descriptor["object"] != "profile" || descriptor["operation"] != "import" || descriptor["reason"] != "required" {
+		t.Fatalf("batch failure descriptor mismatch: %#v", failed[0])
 	}
 	profile, err = db.Profiles.GetByID(req.Context(), "remote_batch_one")
 	if err != nil || profile == nil || profile.UserID != user.ID || profile.Name != "BatchOne" || profile.SkinHash == nil {

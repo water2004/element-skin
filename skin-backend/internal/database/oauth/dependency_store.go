@@ -3,15 +3,8 @@ package oauth
 import (
 	"context"
 
-	"github.com/jackc/pgx/v5"
+	webhookdb "element-skin/backend/internal/database/webhook"
 )
-
-type UserCleanupResult struct {
-	DeletedGrants      int64
-	DeletedDeviceCodes int64
-	DeletedClients     int64
-	DeletedSubjects    int64
-}
 
 type RevokedGrantDependency struct {
 	GrantID    string
@@ -29,7 +22,11 @@ type DisabledClientDependency struct {
 }
 
 func (s Store) RevokeInvalidGrantsForUser(ctx context.Context, userID string, allowedPermissionIDs []int64, revokedAt int64) ([]RevokedGrantDependency, error) {
-	rows, err := s.Pool.Query(ctx, `
+	return revokeInvalidGrantsForUser(ctx, s.Pool, userID, allowedPermissionIDs, revokedAt)
+}
+
+func revokeInvalidGrantsForUser(ctx context.Context, q transactionQueryer, userID string, allowedPermissionIDs []int64, revokedAt int64) ([]RevokedGrantDependency, error) {
+	rows, err := q.Query(ctx, `
 		WITH invalid AS (
 			SELECT DISTINCT g.id, c.name AS client_name
 			FROM delegated_permission_grants g
@@ -73,7 +70,11 @@ func (s Store) RevokeInvalidGrantsForUser(ctx context.Context, userID string, al
 }
 
 func (s Store) RevokeInvalidGrantsForClient(ctx context.Context, clientID string, revokedAt int64) ([]RevokedGrantDependency, error) {
-	rows, err := s.Pool.Query(ctx, `
+	return revokeInvalidGrantsForClient(ctx, s.Pool, clientID, revokedAt)
+}
+
+func revokeInvalidGrantsForClient(ctx context.Context, q transactionQueryer, clientID string, revokedAt int64) ([]RevokedGrantDependency, error) {
+	rows, err := q.Query(ctx, `
 		WITH invalid AS (
 			SELECT DISTINCT g.id, c.name AS client_name
 			FROM delegated_permission_grants g
@@ -115,7 +116,29 @@ func (s Store) RevokeInvalidGrantsForClient(ctx context.Context, clientID string
 }
 
 func (s Store) DisableInvalidClientsForOwner(ctx context.Context, ownerUserID string, allowedPermissionIDs []int64, exemptPermissionIDs []int64, updatedAt int64) ([]DisabledClientDependency, error) {
-	rows, err := s.Pool.Query(ctx, `
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return nil, err
+	}
+	disabled, err := disableInvalidClientsForOwner(ctx, tx, ownerUserID, allowedPermissionIDs, exemptPermissionIDs, updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return disabled, nil
+}
+
+func disableInvalidClientsForOwner(ctx context.Context, q transactionQueryer, ownerUserID string, allowedPermissionIDs []int64, exemptPermissionIDs []int64, updatedAt int64) ([]DisabledClientDependency, error) {
+	rows, err := q.Query(ctx, `
 		WITH invalid AS (
 			SELECT DISTINCT c.id
 			FROM delegated_clients c
@@ -158,67 +181,53 @@ func (s Store) DisableInvalidClientsForOwner(ctx context.Context, ownerUserID st
 	return items, rows.Err()
 }
 
-func (s Store) DeleteUserOAuthData(ctx context.Context, userID string) (UserCleanupResult, error) {
+func (s Store) RevokeInvalidGrantsForUserWithCredentials(ctx context.Context, userID string, allowedPermissionIDs []int64, revokedAt int64) ([]RevokedGrantDependency, error) {
 	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return UserCleanupResult{}, err
-	}
-	defer tx.Rollback(ctx)
-
-	clientIDs, err := userOAuthClientIDs(ctx, tx, userID)
-	if err != nil {
-		return UserCleanupResult{}, err
-	}
-	var result UserCleanupResult
-	tag, err := tx.Exec(ctx, `DELETE FROM delegated_permission_grants WHERE user_id=$1`, userID)
-	if err != nil {
-		return UserCleanupResult{}, err
-	}
-	result.DeletedGrants = tag.RowsAffected()
-
-	tag, err = tx.Exec(ctx, `DELETE FROM oauth_device_codes WHERE user_id=$1`, userID)
-	if err != nil {
-		return UserCleanupResult{}, err
-	}
-	result.DeletedDeviceCodes = tag.RowsAffected()
-
-	tag, err = tx.Exec(ctx, `DELETE FROM delegated_clients WHERE owner_user_id=$1`, userID)
-	if err != nil {
-		return UserCleanupResult{}, err
-	}
-	result.DeletedClients = tag.RowsAffected()
-
-	if len(clientIDs) > 0 {
-		subjectIDs := make([]string, 0, len(clientIDs))
-		for _, clientID := range clientIDs {
-			subjectIDs = append(subjectIDs, "client:"+clientID)
-		}
-		tag, err = tx.Exec(ctx, `DELETE FROM permission_subjects WHERE id = ANY($1::text[])`, subjectIDs)
-		if err != nil {
-			return UserCleanupResult{}, err
-		}
-		result.DeletedSubjects = tag.RowsAffected()
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return UserCleanupResult{}, err
-	}
-	return result, nil
-}
-
-func userOAuthClientIDs(ctx context.Context, tx pgx.Tx, userID string) ([]string, error) {
-	rows, err := tx.Query(ctx, `SELECT id FROM delegated_clients WHERE owner_user_id=$1 ORDER BY id`, userID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+	defer tx.Rollback(ctx)
+	revoked, err := revokeInvalidGrantsForUser(ctx, tx, userID, allowedPermissionIDs, revokedAt)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range revoked {
+		if _, err := revokeRefreshTokensByGrant(ctx, tx, item.GrantID, revokedAt); err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
+		if _, err := deleteAuthorizationCodesByGrant(ctx, tx, item.GrantID); err != nil {
+			return nil, err
+		}
 	}
-	return ids, rows.Err()
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return revoked, nil
+}
+
+func (s Store) DisableInvalidClientsForOwnerWithCredentials(ctx context.Context, ownerUserID string, allowedPermissionIDs []int64, exemptPermissionIDs []int64, updatedAt int64) ([]DisabledClientDependency, error) {
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return nil, err
+	}
+	disabled, err := disableInvalidClientsForOwner(ctx, tx, ownerUserID, allowedPermissionIDs, exemptPermissionIDs, updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
+		return nil, err
+	}
+	for _, item := range disabled {
+		if _, err := applyClientCredentialAction(ctx, tx, item.ClientID, updatedAt, ClientCredentialsRevokeAuthorizations); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return disabled, nil
 }

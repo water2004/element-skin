@@ -2,7 +2,6 @@ package util
 
 import (
 	"regexp"
-	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -19,20 +18,16 @@ func VerifyPassword(password, hash string) bool {
 func ValidateStrongPassword(password string) []string {
 	var errs []string
 	if len([]rune(password)) < 8 {
-		errs = append(errs, "密码长度至少 8 位")
+		errs = append(errs, "min_length")
 	}
 	if !regexp.MustCompile(`[a-z]`).MatchString(password) {
-		errs = append(errs, "密码需包含小写字母")
+		errs = append(errs, "lowercase")
 	}
 	if !regexp.MustCompile(`[A-Z]`).MatchString(password) {
-		errs = append(errs, "密码需包含大写字母")
+		errs = append(errs, "uppercase")
 	}
 	if !regexp.MustCompile(`[0-9]`).MatchString(password) {
-		errs = append(errs, "密码需包含数字")
+		errs = append(errs, "number")
 	}
 	return errs
-}
-
-func JoinPasswordErrors(errs []string) string {
-	return strings.Join(errs, "；")
 }

@@ -2,7 +2,6 @@ package oauth_test
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 
 	"element-skin/backend/internal/httpapi"
@@ -19,7 +18,7 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 	ownerSession := webCookie(t, cfg.JWTSecret, owner.ID)
 	adminSession := webCookie(t, cfg.JWTSecret, admin.ID)
 
-	createRes := doJSON(t, router, http.MethodPost, "/v1/oauth/apps", map[string]any{
+	createRes := doJSON(t, router, http.MethodPost, "/v2/oauth/apps", map[string]any{
 		"name":         "Route managed app",
 		"description":  "Route app description",
 		"redirect_uri": "https://route.example/callback",
@@ -37,7 +36,7 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 		t.Fatalf("created app mismatch: %#v", app)
 	}
 
-	listRes := doJSON(t, router, http.MethodGet, "/v1/oauth/apps?limit=5", nil, ownerSession, "")
+	listRes := doJSON(t, router, http.MethodGet, "/v2/oauth/apps?limit=5", nil, ownerSession, "")
 	if listRes.Code != http.StatusOK {
 		t.Fatalf("list apps status=%d body=%s", listRes.Code, listRes.Body.String())
 	}
@@ -45,7 +44,7 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 	if len(list) != 1 || list[0].(map[string]any)["client_id"] != clientID {
 		t.Fatalf("owned app list mismatch: %#v", list)
 	}
-	getRes := doJSON(t, router, http.MethodGet, "/v1/oauth/apps/"+clientID, nil, ownerSession, "")
+	getRes := doJSON(t, router, http.MethodGet, "/v2/oauth/apps/"+clientID, nil, ownerSession, "")
 	if getRes.Code != http.StatusOK {
 		t.Fatalf("get app status=%d body=%s", getRes.Code, getRes.Body.String())
 	}
@@ -53,7 +52,7 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 	if got["client_id"] != clientID || got["name"] != "Route managed app" {
 		t.Fatalf("get app mismatch: %#v", got)
 	}
-	updateRes := doJSON(t, router, http.MethodPatch, "/v1/oauth/apps/"+clientID, map[string]any{
+	updateRes := doJSON(t, router, http.MethodPatch, "/v2/oauth/apps/"+clientID, map[string]any{
 		"name":         "Route managed app updated",
 		"description":  "Updated route description",
 		"redirect_uri": "https://route.example/new-callback",
@@ -70,11 +69,11 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 		updated["redirect_uri"] != "https://route.example/new-callback" {
 		t.Fatalf("owner update app mismatch: %#v", updated)
 	}
-	submitRes := doJSON(t, router, http.MethodPost, "/v1/oauth/apps/"+clientID+"/review-submission", nil, ownerSession, "")
+	submitRes := doJSON(t, router, http.MethodPost, "/v2/oauth/apps/"+clientID+"/review-submission", nil, ownerSession, "")
 	if submitRes.Code != http.StatusOK || decodeMap(t, submitRes.Body.Bytes())["status"] != "pending" {
 		t.Fatalf("submit app mismatch: status=%d body=%s", submitRes.Code, submitRes.Body.String())
 	}
-	adminListRes := doJSON(t, router, http.MethodGet, "/v1/admin/oauth/apps?status=pending&limit=10", nil, adminSession, "")
+	adminListRes := doJSON(t, router, http.MethodGet, "/v2/admin/oauth/apps?status=pending&limit=10", nil, adminSession, "")
 	if adminListRes.Code != http.StatusOK {
 		t.Fatalf("admin list status=%d body=%s", adminListRes.Code, adminListRes.Body.String())
 	}
@@ -93,7 +92,7 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 		adminSummary["client_type"] != "confidential" {
 		t.Fatalf("admin summary fields mismatch: %#v", adminSummary)
 	}
-	adminDetailRes := doJSON(t, router, http.MethodGet, "/v1/admin/oauth/apps/"+clientID, nil, adminSession, "")
+	adminDetailRes := doJSON(t, router, http.MethodGet, "/v2/admin/oauth/apps/"+clientID, nil, adminSession, "")
 	if adminDetailRes.Code != http.StatusOK {
 		t.Fatalf("admin detail status=%d body=%s", adminDetailRes.Code, adminDetailRes.Body.String())
 	}
@@ -107,11 +106,11 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 	if len(adminPermissions) != 1 || adminPermissions[0] != "account.read.self" {
 		t.Fatalf("admin detail permissions mismatch: %#v", adminPermissions)
 	}
-	reviewRes := doJSON(t, router, http.MethodPatch, "/v1/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "active"}, adminSession, "")
+	reviewRes := doJSON(t, router, http.MethodPatch, "/v2/admin/oauth/apps/"+clientID+"/review", map[string]any{"status": "active"}, adminSession, "")
 	if reviewRes.Code != http.StatusOK || decodeMap(t, reviewRes.Body.Bytes())["status"] != "active" {
 		t.Fatalf("review app mismatch: status=%d body=%s", reviewRes.Code, reviewRes.Body.String())
 	}
-	secretRes := doJSON(t, router, http.MethodPost, "/v1/oauth/apps/"+clientID+"/secret", nil, ownerSession, "")
+	secretRes := doJSON(t, router, http.MethodPost, "/v2/oauth/apps/"+clientID+"/secret", nil, ownerSession, "")
 	if secretRes.Code != http.StatusOK {
 		t.Fatalf("rotate secret status=%d body=%s", secretRes.Code, secretRes.Body.String())
 	}
@@ -119,12 +118,12 @@ func TestOAuthAppManagementRoutesCoverReviewSecretListsAndDelete(t *testing.T) {
 	if rotated["client_secret"] == "" || rotated["client_secret"] == firstSecret || rotated["status"] != "active" {
 		t.Fatalf("rotated secret mismatch: %#v", rotated)
 	}
-	deleteRes := doJSON(t, router, http.MethodDelete, "/v1/oauth/apps/"+clientID, nil, ownerSession, "")
-	if deleteRes.Code != http.StatusOK || deleteRes.Body.String() != "{\"ok\":true}\n" {
+	deleteRes := doJSON(t, router, http.MethodDelete, "/v2/oauth/apps/"+clientID, nil, ownerSession, "")
+	if deleteRes.Code != http.StatusNoContent || deleteRes.Body.Len() != 0 {
 		t.Fatalf("delete app mismatch: status=%d body=%s", deleteRes.Code, deleteRes.Body.String())
 	}
-	missingRes := doJSON(t, router, http.MethodGet, "/v1/oauth/apps/"+clientID, nil, ownerSession, "")
-	if missingRes.Code != http.StatusNotFound || !strings.Contains(missingRes.Body.String(), "oauth client not found") {
+	missingRes := doJSON(t, router, http.MethodGet, "/v2/oauth/apps/"+clientID, nil, ownerSession, "")
+	if missingRes.Code != http.StatusNotFound || missingRes.Body.String() != "{\"error\":{\"object\":\"oauth_client\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("deleted get mismatch: status=%d body=%s", missingRes.Code, missingRes.Body.String())
 	}
 }
@@ -134,13 +133,13 @@ func TestOAuthCreateAppRejectsScopeMissingFromActor(t *testing.T) {
 	cfg := testutil.TestConfig()
 	user := testutil.CreateUser(t, db, "oauth-scope-deny@test.com", "Password123", "OAuthScopeDeny", false)
 	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
-	res := doJSON(t, router, http.MethodPost, "/v1/oauth/apps", map[string]any{
+	res := doJSON(t, router, http.MethodPost, "/v2/oauth/apps", map[string]any{
 		"name":         "Denied app",
 		"redirect_uri": "https://client.example/callback",
 		"client_type":  "confidential",
 		"permissions":  []string{"account.ban.any"},
 	}, webCookie(t, cfg.JWTSecret, user.ID), "")
-	if res.Code != http.StatusForbidden || !strings.Contains(res.Body.String(), "permission denied") {
+	if res.Code != http.StatusForbidden || res.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("scope deny mismatch: status=%d body=%s", res.Code, res.Body.String())
 	}
 }

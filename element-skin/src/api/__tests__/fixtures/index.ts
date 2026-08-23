@@ -4,7 +4,7 @@ import { adminApiCases } from './adminCases'
 import { authApiCases } from './authCases'
 import { createApiCaseContext } from './forms'
 import { meApiCases } from './meCases'
-import { microsoftApiCases } from './microsoftCases'
+import { identityApiCases } from './identityCases'
 import { noticeApiCases } from './noticeCases'
 import { oauthApiCases } from './oauthCases'
 import { profilesApiCases } from './profilesCases'
@@ -18,7 +18,7 @@ export function createApiCases(): ApiCase[] {
   return [
     ...authApiCases(),
     ...meApiCases(),
-    ...microsoftApiCases(),
+    ...identityApiCases(),
     ...noticeApiCases(),
     ...oauthApiCases(),
     ...profilesApiCases(),

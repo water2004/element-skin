@@ -3,8 +3,8 @@
     <PageHeader title="站点设置" subtitle="管理站点基础配置、安全策略及第三方集成">
       <template #icon><Setting /></template>
       <template #actions>
-        <el-button type="primary" :icon="Refresh" @click="loadAllSettings" class="hover-lift">
-          重新加载所有
+        <el-button :icon="Refresh" plain @click="loadAllSettings" class="hover-lift">
+          重新加载
         </el-button>
       </template>
     </PageHeader>
@@ -16,6 +16,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Monitor /></el-icon>
             <span>基础设置</span>
+            <DirtyTag :visible="hasGroupChanges('site')" />
           </div>
           <el-button
             type="primary"
@@ -136,6 +137,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Lock /></el-icon>
             <span>安全与速率限制</span>
+            <DirtyTag :visible="hasGroupChanges('security')" />
           </div>
           <el-button
             type="primary"
@@ -183,6 +185,7 @@
           <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
             <el-icon><Key /></el-icon>
             <span>令牌与认证 (JWT)</span>
+            <DirtyTag :visible="hasGroupChanges('auth')" />
           </div>
           <el-button
             type="primary"
@@ -203,58 +206,18 @@
         </el-form-item>
       </el-form>
     </UiCard>
-
-    <!-- Microsoft Config -->
-    <UiCard class="mb-6" shadow="never">
-      <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
-            <el-icon><Link /></el-icon>
-            <span>微软正版登录集成</span>
-          </div>
-          <el-button
-            type="primary"
-            size="small"
-            @click="saveGroup('microsoft')"
-            :loading="saving.microsoft"
-            class="hover-lift"
-            >保存</el-button
-          >
-        </div>
-      </template>
-      <el-form label-position="top" :model="settings.microsoft">
-        <el-form-item label="Azure Client ID">
-          <el-input
-            v-model="settings.microsoft.microsoft_client_id"
-            placeholder="Azure AD 应用 ID"
-          />
-        </el-form-item>
-        <el-form-item label="Azure Client Secret">
-          <el-input
-            v-model="settings.microsoft.microsoft_client_secret"
-            type="password"
-            show-password
-            placeholder="保持空白以不修改"
-          />
-        </el-form-item>
-        <el-form-item label="Redirect URI">
-          <el-input
-            v-model="settings.microsoft.microsoft_redirect_uri"
-            placeholder="https://your-skin-site.com/v1/imports/microsoft/callback"
-          />
-        </el-form-item>
-      </el-form>
-    </UiCard>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Refresh, Setting, Monitor, Lock, Key, Link } from '@element-plus/icons-vue'
+import { Refresh, Setting, Monitor, Lock, Key } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const settings = reactive({
   site: {
@@ -280,50 +243,54 @@ const settings = reactive({
   auth: {
     jwt_expire_days: 7,
   },
-  microsoft: {
-    microsoft_client_id: '',
-    microsoft_client_secret: '',
-    microsoft_redirect_uri: '',
-  },
 })
 
 const saving = reactive({
   site: false,
   security: false,
   auth: false,
-  microsoft: false,
 })
 
 const regulatoryCollapse = ref<string[]>([])
 
-type SettingsGroup = 'site' | 'security' | 'auth' | 'microsoft'
+type SettingsGroup = 'site' | 'security' | 'auth'
+
+const siteDirty = useDirtySnapshot(computed(() => settings.site))
+const securityDirty = useDirtySnapshot(computed(() => settings.security))
+const authDirty = useDirtySnapshot(computed(() => settings.auth))
+
+function hasGroupChanges(group: SettingsGroup) {
+  if (group === 'site') return siteDirty.hasChanges.value
+  if (group === 'security') return securityDirty.hasChanges.value
+  return authDirty.hasChanges.value
+}
+
+function captureGroup(group: SettingsGroup) {
+  if (group === 'site') siteDirty.capture()
+  else if (group === 'security') securityDirty.capture()
+  else authDirty.capture()
+}
 
 async function loadGroup(group: SettingsGroup) {
   try {
     const res = await getAdminSettingsGroup(group)
     Object.assign(settings[group], res.data)
+    captureGroup(group)
   } catch {
     ElMessage.error(`加载 ${group} 设置失败`)
   }
 }
 
 async function loadAllSettings() {
-  await Promise.all([
-    loadGroup('site'),
-    loadGroup('security'),
-    loadGroup('auth'),
-    loadGroup('microsoft'),
-  ])
+  await Promise.all([loadGroup('site'), loadGroup('security'), loadGroup('auth')])
 }
 
 async function saveGroup(group: SettingsGroup) {
   saving[group] = true
   try {
     await saveAdminSettingsGroup(group, settings[group])
+    captureGroup(group)
     ElMessage.success('设置已更新')
-    if (group === 'microsoft') {
-      settings.microsoft.microsoft_client_secret = '' // Clear local secret field
-    }
   } catch {
     ElMessage.error('保存失败')
   } finally {

@@ -14,17 +14,20 @@ func (r *Router) Capabilities(w http.ResponseWriter, req *http.Request) {
 		apiURL = strings.TrimRight(r.cfg.SiteURL, "/")
 	}
 	util.JSON(w, http.StatusOK, map[string]any{
-		"api_version": "v1",
+		"api_version": "v2",
 		"site_name":   "Element Skin",
 		"site_url":    strings.TrimRight(r.cfg.SiteURL, "/"),
 		"api_url":     apiURL,
 		"features": map[string]bool{
-			"skin_library":      true,
-			"oauth":             true,
-			"device_code":       true,
-			"minecraft_api":     true,
-			"microsoft_import":  true,
-			"remote_ygg_import": true,
+			"skin_library":        true,
+			"oauth":               true,
+			"device_code":         true,
+			"minecraft_api":       true,
+			"external_identities": true,
+			"oidc_client":         true,
+			"oidc_server":         true,
+			"official_profiles":   true,
+			"remote_ygg_import":   true,
 		},
 		"texture_types": []string{"skin", "cape"},
 		"skin_models":   []string{"default", "slim"},

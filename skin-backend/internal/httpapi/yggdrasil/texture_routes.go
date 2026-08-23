@@ -12,7 +12,7 @@ import (
 func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 	token, ok := shared.BearerToken(req)
 	if !ok {
-		util.Error(w, util.HTTPError{Status: 401, Detail: "Bearer token required"})
+		util.Error(w, util.HTTPError{Status: 401, Object: "authentication", Operation: "verify", Reason: "required"})
 		return
 	}
 	tok, err := h.ygg.Token(req.Context(), token)
@@ -21,7 +21,7 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if tok.ProfileID == nil || *tok.ProfileID != req.PathValue("uuid") {
-		util.Error(w, util.HTTPError{Status: 401, Detail: "Invalid token"})
+		util.Error(w, util.HTTPError{Status: 401, Object: "access_token", Operation: "verify", Reason: "invalid"})
 		return
 	}
 	actor, err := h.ygg.ActorForToken(req.Context(), tok, false)
@@ -31,7 +31,7 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 	}
 	textureType := strings.ToLower(req.PathValue("texture_type"))
 	if textureType != "skin" && textureType != "cape" {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "Invalid texture_type"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "texture_type", Operation: "validate", Reason: "invalid"})
 		return
 	}
 	upload, err := shared.ReadMultipartUpload(req, "file", 16<<20)
@@ -58,7 +58,7 @@ func (h Handler) UploadTexture(w http.ResponseWriter, req *http.Request) {
 func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 	token, ok := shared.BearerToken(req)
 	if !ok {
-		util.Error(w, util.HTTPError{Status: 401, Detail: "Bearer token required"})
+		util.Error(w, util.HTTPError{Status: 401, Object: "authentication", Operation: "verify", Reason: "required"})
 		return
 	}
 	tok, err := h.ygg.Token(req.Context(), token)
@@ -67,7 +67,7 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if tok.ProfileID == nil || *tok.ProfileID != req.PathValue("uuid") {
-		util.Error(w, util.HTTPError{Status: 401, Detail: "Invalid token"})
+		util.Error(w, util.HTTPError{Status: 401, Object: "access_token", Operation: "verify", Reason: "invalid"})
 		return
 	}
 	actor, err := h.ygg.ActorForToken(req.Context(), tok, false)
@@ -81,7 +81,7 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 	case "cape":
 		err = h.profiles.ClearProfileTexture(req.Context(), actor, *tok.ProfileID, "cape")
 	default:
-		err = util.HTTPError{Status: 400, Detail: "Invalid texture_type"}
+		err = util.HTTPError{Status: 400, Object: "texture_type", Operation: "validate", Reason: "invalid"}
 	}
 	if err != nil {
 		util.Error(w, err)

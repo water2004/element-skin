@@ -22,8 +22,8 @@ func TestValidateEasterEggsRejectsBadPayloadsExactly(t *testing.T) {
 		raw    any
 		detail string
 	}{
-		{name: "not a list", raw: "christmas", detail: "invalid easter_eggs_enabled"},
-		{name: "unknown id", raw: []any{"christmas", "missing"}, detail: "invalid easter egg: missing"},
+		{name: "not a list", raw: "christmas", detail: "easter_egg_setting.configure.invalid"},
+		{name: "unknown id", raw: []any{"christmas", "missing"}, detail: "easter_egg.validate.invalid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ValidateEasterEggs(tc.raw)
@@ -31,7 +31,7 @@ func TestValidateEasterEggsRejectsBadPayloadsExactly(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected HTTPError, got %T %[1]v", err)
 			}
-			if httpErr.Status != 400 || httpErr.Detail != tc.detail {
+			if httpErr.Status != 400 || httpErr.Error() != tc.detail {
 				t.Fatalf("unexpected error: %#v", httpErr)
 			}
 		})

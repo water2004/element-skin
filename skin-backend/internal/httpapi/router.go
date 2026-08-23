@@ -8,6 +8,7 @@ import (
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/redisstore"
 	mailsvc "element-skin/backend/internal/service/mail"
+	oauthsvc "element-skin/backend/internal/service/oauth"
 	settingssvc "element-skin/backend/internal/service/settings"
 	yggpkg "element-skin/backend/internal/service/yggdrasil"
 )
@@ -20,6 +21,7 @@ type Router struct {
 	ygg      yggpkg.Yggdrasil
 	mux      *http.ServeMux
 	mail     mailsvc.Sender
+	oidc     *oauthsvc.OIDCSigner
 }
 
 func NewRouter(cfg config.Config, db *database.DB, ygg yggpkg.Yggdrasil) http.Handler {
@@ -28,6 +30,14 @@ func NewRouter(cfg config.Config, db *database.DB, ygg yggpkg.Yggdrasil) http.Ha
 }
 
 func NewRouterWithRedis(cfg config.Config, db *database.DB, redis redisstore.Store, ygg yggpkg.Yggdrasil, senders ...mailsvc.Sender) http.Handler {
+	return newRouter(cfg, db, redis, ygg, nil, senders...)
+}
+
+func NewRouterWithOIDCSigner(cfg config.Config, db *database.DB, redis redisstore.Store, ygg yggpkg.Yggdrasil, signer *oauthsvc.OIDCSigner, senders ...mailsvc.Sender) http.Handler {
+	return newRouter(cfg, db, redis, ygg, signer, senders...)
+}
+
+func newRouter(cfg config.Config, db *database.DB, redis redisstore.Store, ygg yggpkg.Yggdrasil, signer *oauthsvc.OIDCSigner, senders ...mailsvc.Sender) http.Handler {
 	settings := settingssvc.Settings{DB: db, Redis: redis}
 	var sender mailsvc.Sender = mailsvc.SMTP{Settings: settings}
 	if len(senders) > 0 && senders[0] != nil {
@@ -35,7 +45,7 @@ func NewRouterWithRedis(cfg config.Config, db *database.DB, redis redisstore.Sto
 	}
 	ygg.Redis = redis
 	ygg.Settings = settings
-	r := &Router{cfg: cfg, db: db, redis: redis, settings: settings, ygg: ygg, mux: http.NewServeMux(), mail: sender}
+	r := &Router{cfg: cfg, db: db, redis: redis, settings: settings, ygg: ygg, mux: http.NewServeMux(), mail: sender, oidc: signer}
 	r.routes()
 	return r
 }

@@ -3,7 +3,45 @@ package microsoft
 import (
 	"context"
 	"fmt"
+	"strings"
 )
+
+type MinecraftTexture struct {
+	ID      string `json:"id"`
+	State   string `json:"state"`
+	URL     string `json:"url"`
+	Variant string `json:"variant"`
+	Alias   string `json:"alias"`
+}
+
+type MinecraftProfile struct {
+	ID    string             `json:"id"`
+	Name  string             `json:"name"`
+	Skins []MinecraftTexture `json:"skins"`
+	Capes []MinecraftTexture `json:"capes"`
+}
+
+func (p MinecraftProfile) ActiveSkin() *MinecraftTexture {
+	return activeTexture(p.Skins)
+}
+
+func (p MinecraftProfile) ActiveCape() *MinecraftTexture {
+	return activeTexture(p.Capes)
+}
+
+func activeTexture(items []MinecraftTexture) *MinecraftTexture {
+	for i := range items {
+		if strings.EqualFold(items[i].State, "active") && strings.TrimSpace(items[i].URL) != "" {
+			return &items[i]
+		}
+	}
+	for i := range items {
+		if strings.TrimSpace(items[i].URL) != "" {
+			return &items[i]
+		}
+	}
+	return nil
+}
 
 func (c MicrosoftHTTPClient) AuthenticateMinecraft(ctx context.Context, userHash, xstsToken string) (string, error) {
 	var out map[string]any
@@ -20,16 +58,19 @@ func (c MicrosoftHTTPClient) AuthenticateMinecraft(ctx context.Context, userHash
 }
 
 func (c MicrosoftHTTPClient) CheckGameOwnership(ctx context.Context, mcAccessToken string) (bool, error) {
-	var out map[string]any
+	var out struct {
+		Items []struct {
+			Name string `json:"name"`
+		} `json:"items"`
+	}
 	if err := c.do(ctx, "GET", "https://api.minecraftservices.com/entitlements/mcstore", nil, "", "Bearer "+mcAccessToken, &out); err != nil {
 		return false, err
 	}
-	items, _ := out["items"].([]any)
-	return len(items) > 0, nil
+	return len(out.Items) > 0, nil
 }
 
-func (c MicrosoftHTTPClient) GetMinecraftProfile(ctx context.Context, mcAccessToken string) (map[string]any, error) {
-	var out map[string]any
+func (c MicrosoftHTTPClient) GetMinecraftProfile(ctx context.Context, mcAccessToken string) (*MinecraftProfile, error) {
+	var out *MinecraftProfile
 	if err := c.do(ctx, "GET", "https://api.minecraftservices.com/minecraft/profile", nil, "", "Bearer "+mcAccessToken, &out); err != nil {
 		return nil, err
 	}

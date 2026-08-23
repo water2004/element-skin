@@ -35,7 +35,7 @@ func TestAdminTextureUpdateListDeleteAndMissingSentinel(t *testing.T) {
 	if len(items) != 1 || items[0]["name"] != "Domain Admin Updated" || items[0]["model"] != "default" || items[0]["is_public"] != false {
 		t.Fatalf("admin list mismatch: %#v", page)
 	}
-	if err := store.AdminDelete(ctx, "domain_texture_admin_hash", "skin", "", false); err == nil || err.Error() != "per-user deletion requires user_id" {
+	if err := store.AdminDelete(ctx, "domain_texture_admin_hash", "skin", "", false); !errors.Is(err, texture.ErrUserIDRequired) {
 		t.Fatalf("expected per-user deletion validation, got %v", err)
 	}
 	if err := store.AdminDelete(ctx, "missing_domain_texture", "skin", user.ID, false); !errors.Is(err, texture.ErrNotFound) {

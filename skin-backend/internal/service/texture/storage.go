@@ -5,7 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
-	"fmt"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -15,6 +15,11 @@ import (
 )
 
 const MaxTextureDimension = 1024
+
+var (
+	ErrInvalidPNG               = errors.New("invalid PNG")
+	ErrInvalidTextureDimensions = errors.New("invalid texture dimensions")
+)
 
 type TextureStorage struct {
 	Dir string
@@ -30,12 +35,12 @@ func NewTextureStorage(dir string) (*TextureStorage, error) {
 func (s *TextureStorage) ProcessAndSaveTracked(data []byte, textureType string) (string, bool, error) {
 	img, err := png.Decode(bytes.NewReader(data))
 	if err != nil {
-		return "", false, fmt.Errorf("image must be PNG format")
+		return "", false, ErrInvalidPNG
 	}
 	bounds := img.Bounds()
 	w, h := bounds.Dx(), bounds.Dy()
 	if !validTextureDimensions(w, h, strings.EqualFold(textureType, "cape")) {
-		return "", false, fmt.Errorf("invalid texture dimensions")
+		return "", false, ErrInvalidTextureDimensions
 	}
 	hash := TexturePixelHash(img)
 	var out bytes.Buffer

@@ -19,11 +19,11 @@ func TestSettingsRoutesSaveSiteSettingsPersistsValue(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/settings/site", strings.NewReader(`{"site_name":"Route Site"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/settings/site", strings.NewReader(`{"site_name":"Route Site"}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("save settings response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	got, err := db.Settings.Get(req.Context(), "site_name", "")
@@ -41,7 +41,7 @@ func TestSettingsRoutesGetAndSaveSiteSettingsInvalidateCaches(t *testing.T) {
 	if err := db.Settings.Set(ctx, "site_name", "Cached Site"); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/admin/settings/site", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/admin/settings/site", nil)
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.GetSiteSettings(rec, req)
@@ -57,11 +57,11 @@ func TestSettingsRoutesGetAndSaveSiteSettingsInvalidateCaches(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/site", strings.NewReader(`{"site_name":"Fresh Site","profile_uuid_mode":"offline","unknown_key":"ignored"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/site", strings.NewReader(`{"site_name":"Fresh Site","profile_uuid_mode":"offline","unknown_key":"ignored"}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("save site settings response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if _, err := redis.GetSetting(ctx, "site_name"); !errors.Is(err, redisstore.ErrCacheMiss) {
@@ -88,16 +88,16 @@ func TestSettingsRoutesGetAndSaveNamedGroupExactState(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/settings/security", strings.NewReader(`{"rate_limit_enabled":true,"rate_limit_auth_attempts":9}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/settings/security", strings.NewReader(`{"rate_limit_enabled":true,"rate_limit_auth_attempts":9}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("group", "security")
 	rec := httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("save security settings response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/settings/security", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/settings/security", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("group", "security")
 	rec = httptest.NewRecorder()
@@ -124,12 +124,12 @@ func TestSettingsRoutesNamedGroupsInvalidateOnlyRelevantPublicCaches(t *testing.
 			if err := redis.SetPublicSettings(t.Context(), map[string]any{"site_name": "stale"}, time.Minute); err != nil {
 				t.Fatal(err)
 			}
-			req := httptest.NewRequest(http.MethodPost, "/v1/admin/settings/"+tc.group, strings.NewReader(tc.body))
+			req := httptest.NewRequest(http.MethodPost, "/v2/admin/settings/"+tc.group, strings.NewReader(tc.body))
 			req = withAdminActor(req, "admin-test-user")
 			req.SetPathValue("group", tc.group)
 			rec := httptest.NewRecorder()
 			h.SaveSettingsGroup(rec, req)
-			if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+			if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 				t.Fatalf("save %s group response mismatch: status=%d body=%q", tc.group, rec.Code, rec.Body.String())
 			}
 			if _, err := redis.GetPublicSettings(t.Context()); !errors.Is(err, redisstore.ErrCacheMiss) {
@@ -141,12 +141,12 @@ func TestSettingsRoutesNamedGroupsInvalidateOnlyRelevantPublicCaches(t *testing.
 	if err := redis.SetPublicSettings(t.Context(), map[string]any{"site_name": "still-fresh"}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/settings/security", strings.NewReader(`{"rate_limit_auth_attempts":7}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/settings/security", strings.NewReader(`{"rate_limit_auth_attempts":7}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("group", "security")
 	rec := httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("save security group response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	cached, err := redis.GetPublicSettings(t.Context())
@@ -159,76 +159,76 @@ func TestSettingsRoutesRejectInvalidGroupAndBadJSONExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	h := admin.New(testutil.TestConfig(), db, nil)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/admin/settings/nope", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/admin/settings/nope", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("group", "nope")
 	rec := httptest.NewRecorder()
 	h.GetSettingsGroup(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid settings group"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"settings_group\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid group get mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/site", strings.NewReader(`{"site_name":`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/site", strings.NewReader(`{"site_name":`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid json"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad site settings json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/site", strings.NewReader(`{"profile_uuid_mode":"bad"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/site", strings.NewReader(`{"profile_uuid_mode":"bad"}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid profile_uuid_mode"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"profile_uuid_mode\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid profile uuid mode mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/security", strings.NewReader(`{`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/security", strings.NewReader(`{`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("group", "security")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad named settings json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/nope", strings.NewReader(`{"x":1}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/nope", strings.NewReader(`{"x":1}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("group", "nope")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid settings group"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"settings_group\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid group save mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/settings/site", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/settings/site", nil)
 	rec = httptest.NewRecorder()
 	h.GetSiteSettings(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("get site settings permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/site", strings.NewReader(`{"site_name":"Denied"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/site", strings.NewReader(`{"site_name":"Denied"}`))
 	rec = httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("save site settings permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/settings/security", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/settings/security", nil)
 	req.SetPathValue("group", "security")
 	rec = httptest.NewRecorder()
 	h.GetSettingsGroup(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("get named settings permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/security", strings.NewReader(`{"rate_limit_auth_attempts":4}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/security", strings.NewReader(`{"rate_limit_auth_attempts":4}`))
 	req.SetPathValue("group", "security")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("save named settings permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -238,11 +238,11 @@ func TestSettingsRoutesReturnErrorWhenCacheInvalidationFailsAfterPersist(t *test
 	redis := &invalidateFailRedis{Store: testutil.NewMemoryRedis(), failSettings: true}
 	h := admin.NewWithRedis(testutil.TestConfig(), db, redis, nil)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/settings/site", strings.NewReader(`{"site_name":"Persisted Despite Cache Failure"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/settings/site", strings.NewReader(`{"site_name":"Persisted Despite Cache Failure"}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec := httptest.NewRecorder()
 	h.SaveSiteSettings(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("site save should expose generic error when settings cache invalidation fails: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	got, err := db.Settings.Get(req.Context(), "site_name", "")
@@ -252,12 +252,12 @@ func TestSettingsRoutesReturnErrorWhenCacheInvalidationFailsAfterPersist(t *test
 
 	redis.failSettings = false
 	redis.failPublic = true
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/easter_eggs", strings.NewReader(`{"easter_eggs_enabled":["christmas"]}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/easter_eggs", strings.NewReader(`{"easter_eggs_enabled":["christmas"]}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("group", "easter_eggs")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("named public group save should fail when public cache invalidation fails: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	enabled, err := db.EasterEggs.ListEnabled(req.Context())
@@ -269,12 +269,12 @@ func TestSettingsRoutesReturnErrorWhenCacheInvalidationFailsAfterPersist(t *test
 	if err := redis.SetPublicSettings(req.Context(), map[string]any{"site_name": "still-fresh"}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/settings/security", strings.NewReader(`{"rate_limit_auth_attempts":11}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/settings/security", strings.NewReader(`{"rate_limit_auth_attempts":11}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("group", "security")
 	rec = httptest.NewRecorder()
 	h.SaveSettingsGroup(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("non-public settings group should not invalidate public cache: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	cached, err := redis.GetPublicSettings(req.Context())

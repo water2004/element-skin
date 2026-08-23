@@ -10,7 +10,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 import { isPathInside, resolveStaticAssetRequest } from './vite/staticAssets'
 
 const isLowMemory = process.env.BUILD_MODE === 'low-memory'
-const appVersion = 'v3.0.2'
+const appVersion = 'v4.0.0'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -55,7 +55,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '^/v1': {
+      '^/.well-known': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
+      '^/v2': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true,
       },

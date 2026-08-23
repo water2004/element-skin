@@ -45,6 +45,21 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT
 );
 
+CREATE TABLE IF NOT EXISTS email_suffix_policy (
+    singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
+    mode TEXT NOT NULL CHECK (mode IN ('disabled', 'allowlist', 'denylist'))
+);
+
+INSERT INTO email_suffix_policy (singleton, mode)
+VALUES (TRUE, 'disabled')
+ON CONFLICT (singleton) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS email_suffix_rules (
+    list_type TEXT NOT NULL CHECK (list_type IN ('allowlist', 'denylist')),
+    suffix TEXT NOT NULL CHECK (suffix LIKE '@%'),
+    PRIMARY KEY(list_type, suffix)
+);
+
 CREATE TABLE IF NOT EXISTS user_textures (
     user_id TEXT NOT NULL,
     hash TEXT NOT NULL,
@@ -172,6 +187,74 @@ CREATE TABLE IF NOT EXISTS notice_targets (
     PRIMARY KEY(notice_id, user_id),
     FOREIGN KEY(notice_id) REFERENCES notices(id) ON DELETE CASCADE,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS identity_providers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    issuer_url TEXT NOT NULL,
+    authorization_endpoint TEXT NOT NULL,
+    token_endpoint TEXT NOT NULL,
+    userinfo_endpoint TEXT NOT NULL DEFAULT '',
+    jwks_uri TEXT NOT NULL,
+    client_id TEXT NOT NULL,
+    client_secret_ciphertext TEXT NOT NULL DEFAULT '',
+    scopes TEXT[] NOT NULL DEFAULT ARRAY['openid', 'profile', 'email']::TEXT[],
+    adapter TEXT NOT NULL DEFAULT 'generic_oidc' CHECK(adapter IN ('generic_oidc', 'microsoft')),
+    icon_url TEXT NOT NULL DEFAULT '',
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    login_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    link_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    display_order INTEGER NOT NULL DEFAULT 0,
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE(issuer_url, client_id)
+);
+
+CREATE TABLE IF NOT EXISTS external_identities (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    provider_id TEXT NOT NULL,
+    subject TEXT NOT NULL CHECK(subject <> ''),
+    label TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '',
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,
+    display_name TEXT NOT NULL DEFAULT '',
+    avatar_url TEXT NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    last_login_at BIGINT,
+    UNIQUE(provider_id, subject),
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(provider_id) REFERENCES identity_providers(id) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS external_identity_credentials (
+    identity_id TEXT PRIMARY KEY,
+    refresh_token_ciphertext TEXT NOT NULL DEFAULT '',
+    granted_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+    authorization_status TEXT NOT NULL DEFAULT 'active'
+        CHECK(authorization_status IN ('active', 'reauthorization_required')),
+    last_refresh_at BIGINT,
+    last_refresh_error_at BIGINT,
+    updated_at BIGINT NOT NULL,
+    FOREIGN KEY(identity_id) REFERENCES external_identities(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS official_profile_bindings (
+    id TEXT PRIMARY KEY,
+    identity_id TEXT NOT NULL,
+    profile_id TEXT NOT NULL UNIQUE,
+    remote_uuid TEXT NOT NULL,
+    remote_name TEXT NOT NULL,
+    remote_skin_url TEXT NOT NULL DEFAULT '',
+    remote_cape_url TEXT NOT NULL DEFAULT '',
+    remote_skin_model TEXT NOT NULL DEFAULT 'default',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    last_synced_at BIGINT,
+    FOREIGN KEY(identity_id) REFERENCES external_identities(id) ON DELETE RESTRICT,
+    FOREIGN KEY(profile_id) REFERENCES profiles(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS permission_subjects (
@@ -302,6 +385,7 @@ CREATE TABLE IF NOT EXISTS delegated_permission_grants (
     user_id TEXT NOT NULL,
     subject_id TEXT NOT NULL,
     client_id TEXT NOT NULL,
+	 oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     status TEXT NOT NULL CHECK(status IN ('active', 'revoked')),
     created_at BIGINT NOT NULL,
     revoked_at BIGINT,
@@ -327,6 +411,8 @@ CREATE TABLE IF NOT EXISTS oauth_authorization_codes (
     redirect_uri TEXT NOT NULL,
     code_challenge TEXT NOT NULL,
     code_challenge_method TEXT NOT NULL CHECK(code_challenge_method IN ('S256')),
+	 oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+	 nonce TEXT NOT NULL DEFAULT '',
     expires_at BIGINT NOT NULL,
     created_at BIGINT NOT NULL,
     consumed_at BIGINT,
@@ -349,12 +435,23 @@ CREATE TABLE IF NOT EXISTS oauth_refresh_tokens (
     client_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
     grant_id TEXT NOT NULL,
+	 oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
     expires_at BIGINT NOT NULL,
     created_at BIGINT NOT NULL,
     revoked_at BIGINT,
     FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE,
     FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY(grant_id) REFERENCES delegated_permission_grants(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS oidc_pairwise_subjects (
+	client_id TEXT NOT NULL,
+	user_id TEXT NOT NULL,
+	subject TEXT NOT NULL UNIQUE,
+	created_at BIGINT NOT NULL,
+	PRIMARY KEY(client_id, user_id),
+	FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE,
+	FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS oauth_device_codes (
@@ -384,6 +481,62 @@ CREATE TABLE IF NOT EXISTS oauth_device_code_permissions (
     FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS webhook_endpoints (
+    id TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL,
+    url TEXT NOT NULL,
+    secret_ciphertext TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('active', 'disabled')),
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE(client_id, url),
+    FOREIGN KEY(client_id) REFERENCES delegated_clients(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS webhook_endpoint_events (
+    endpoint_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    created_at BIGINT NOT NULL,
+    PRIMARY KEY(endpoint_id, event_type),
+    FOREIGN KEY(endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS webhook_active_event_types (
+    event_type TEXT PRIMARY KEY,
+    subscriber_count BIGINT NOT NULL CHECK(subscriber_count > 0)
+);
+
+CREATE TABLE IF NOT EXISTS webhook_events (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL,
+    target_client_id TEXT,
+    subject_user_id TEXT,
+    data JSONB NOT NULL CHECK(jsonb_typeof(data) = 'object'),
+    created_at BIGINT NOT NULL,
+    expanded_at BIGINT,
+    expansion_lease_until BIGINT,
+    expansion_lease_token TEXT
+);
+
+CREATE TABLE IF NOT EXISTS webhook_deliveries (
+    id TEXT PRIMARY KEY,
+    event_id TEXT NOT NULL,
+    endpoint_id TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('pending', 'processing', 'succeeded', 'dead')),
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at BIGINT NOT NULL,
+    lease_until BIGINT,
+    lease_token TEXT,
+    delivered_at BIGINT,
+    last_http_status INTEGER,
+    last_error TEXT NOT NULL DEFAULT '',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    UNIQUE(event_id, endpoint_id),
+    FOREIGN KEY(event_id) REFERENCES webhook_events(id) ON DELETE CASCADE,
+    FOREIGN KEY(endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS permission_audit_logs (
     id TEXT PRIMARY KEY,
     actor_subject_id TEXT,
@@ -401,38 +554,6 @@ CREATE TABLE IF NOT EXISTS permission_audit_logs (
     FOREIGN KEY(target_client_id) REFERENCES delegated_clients(id) ON DELETE SET NULL,
     FOREIGN KEY(target_grant_id) REFERENCES delegated_permission_grants(id) ON DELETE SET NULL
 );
-
--- Migrations from the Python 2.4.1 schema only.
-ALTER TABLE skin_library DROP CONSTRAINT IF EXISTS skin_library_pkey;
-ALTER TABLE skin_library ADD CONSTRAINT skin_library_pkey PRIMARY KEY (skin_hash, texture_type);
-ALTER TABLE skin_library ADD COLUMN IF NOT EXISTS usage_count BIGINT NOT NULL DEFAULT 0;
-DROP TABLE IF EXISTS sessions;
-DROP TABLE IF EXISTS tokens;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at BIGINT NOT NULL DEFAULT 0;
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='fallback_endpoints' AND column_name='skin_domains'
-    ) THEN
-        INSERT INTO fallback_skin_domains (endpoint_id,domain,sort_order)
-        SELECT endpoint.id, btrim(item.domain), item.ordinality
-        FROM fallback_endpoints endpoint
-        CROSS JOIN LATERAL unnest(string_to_array(endpoint.skin_domains, ','))
-            WITH ORDINALITY AS item(domain, ordinality)
-        WHERE btrim(item.domain) <> ''
-        ON CONFLICT (endpoint_id,domain) DO NOTHING;
-        ALTER TABLE fallback_endpoints DROP COLUMN skin_domains;
-    END IF;
-END $$;
-
-UPDATE users SET created_at = 0 WHERE created_at IS NULL;
-UPDATE skin_library sl SET usage_count = CASE sl.texture_type
-    WHEN 'skin' THEN (SELECT COUNT(*) FROM user_textures ut WHERE ut.hash = sl.skin_hash AND ut.texture_type = 'skin')
-    WHEN 'cape' THEN (SELECT COUNT(*) FROM user_textures ut WHERE ut.hash = sl.skin_hash AND ut.texture_type = 'cape')
-    ELSE (SELECT COUNT(*) FROM user_textures ut WHERE ut.hash = sl.skin_hash AND ut.texture_type = sl.texture_type)
-END;
 
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles (user_id, id);
 CREATE INDEX IF NOT EXISTS idx_site_refresh_user ON site_refresh_tokens (user_id);
@@ -458,18 +579,389 @@ CREATE INDEX IF NOT EXISTS idx_subject_roles_role ON subject_roles (role_id, sub
 CREATE INDEX IF NOT EXISTS idx_subject_permission_overrides_permission ON subject_permission_overrides (permission_id, subject_id);
 CREATE INDEX IF NOT EXISTS idx_session_permission_policies_permission ON session_permission_policies (permission_id, session_kind, entrypoint);
 CREATE INDEX IF NOT EXISTS idx_delegated_clients_owner ON delegated_clients (owner_user_id);
+
+-- A user and an OAuth client share one logical active authorization. Keep the
+-- newest legacy row before installing the constraint, and invalidate database
+-- credentials that still point at the superseded grants.
+WITH ranked_active_grants AS (
+    SELECT id,
+           ROW_NUMBER() OVER (
+               PARTITION BY user_id, client_id
+               ORDER BY created_at DESC, id DESC
+           ) AS position
+    FROM delegated_permission_grants
+    WHERE status = 'active'
+)
+UPDATE delegated_permission_grants AS g
+SET status = 'revoked',
+    revoked_at = COALESCE(
+        g.revoked_at,
+        (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+    )
+FROM ranked_active_grants AS ranked
+WHERE g.id = ranked.id AND ranked.position > 1;
+
+UPDATE oauth_refresh_tokens AS token
+SET revoked_at = g.revoked_at
+FROM delegated_permission_grants AS g
+WHERE token.grant_id = g.id
+  AND g.status = 'revoked'
+  AND token.revoked_at IS NULL;
+
+DELETE FROM oauth_authorization_codes AS code
+USING delegated_permission_grants AS g
+WHERE code.grant_id = g.id AND g.status = 'revoked';
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_delegated_permission_grants_active_user_client
+    ON delegated_permission_grants (user_id, client_id)
+    WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_delegated_permission_grants_user_client ON delegated_permission_grants (user_id, client_id, status);
 CREATE INDEX IF NOT EXISTS idx_delegated_permission_grants_active_created ON delegated_permission_grants (created_at, id) WHERE status = 'active';
 CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_client_user ON oauth_authorization_codes (client_id, user_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_oauth_authorization_codes_grant_expiry ON oauth_authorization_codes (grant_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_user_client ON oauth_refresh_tokens (user_id, client_id, expires_at);
 CREATE INDEX IF NOT EXISTS idx_oauth_refresh_tokens_grant_active_expiry ON oauth_refresh_tokens (grant_id, expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_oidc_pairwise_subjects_user ON oidc_pairwise_subjects (user_id, client_id);
 CREATE INDEX IF NOT EXISTS idx_oauth_device_codes_client_status ON oauth_device_codes (client_id, status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_endpoint_events_type ON webhook_endpoint_events (event_type, endpoint_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_unexpanded ON webhook_events (created_at, id) WHERE expanded_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_due ON webhook_deliveries (next_attempt_at, id) WHERE status IN ('pending', 'processing');
+CREATE INDEX IF NOT EXISTS idx_identity_providers_public ON identity_providers (display_order, created_at, id) WHERE enabled=TRUE;
+CREATE INDEX IF NOT EXISTS idx_external_identities_user ON external_identities (user_id, created_at, id);
+CREATE INDEX IF NOT EXISTS idx_official_profile_bindings_identity ON official_profile_bindings (identity_id, created_at, id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_official_profile_bindings_remote_uuid ON official_profile_bindings (remote_uuid);
+
+-- Published v3.0.2 to v4 migrations.
+-- Legacy Microsoft settings remain available for the identity service to migrate after
+-- configuration and OIDC discovery are available.
+ALTER TABLE delegated_permission_grants ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
+ALTER TABLE oauth_refresh_tokens ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
+DELETE FROM permissions WHERE code LIKE 'microsoft_import.%';
+
+-- Keep startup rebuilds serialized with runtime OAuth/Webhook configuration mutations.
+-- This value matches subscriptionSnapshotLockID in internal/database/webhook.
+SELECT pg_advisory_xact_lock(4995432366660407119);
+TRUNCATE webhook_active_event_types;
+INSERT INTO webhook_active_event_types (event_type, subscriber_count)
+SELECT subscription.event_type, COUNT(*)
+FROM webhook_endpoint_events AS subscription
+JOIN webhook_endpoints AS endpoint ON endpoint.id = subscription.endpoint_id
+JOIN delegated_clients AS client ON client.id = endpoint.client_id
+WHERE endpoint.status = 'active' AND client.status = 'active'
+GROUP BY subscription.event_type;
+
+CREATE OR REPLACE FUNCTION webhook_event_has_subscribers(wanted_event_type TEXT)
+RETURNS BOOLEAN
+LANGUAGE SQL
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+        FROM webhook_active_event_types
+        WHERE event_type = wanted_event_type
+    );
+$$;
+
+CREATE OR REPLACE FUNCTION enqueue_account_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_user_id TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        next_type := 'account.created';
+        next_user_id := NEW.id;
+    ELSIF TG_OP = 'UPDATE' THEN
+        IF ROW(OLD.email, OLD.preferred_language, OLD.display_name, OLD.avatar_hash, OLD.banned_until)
+            IS NOT DISTINCT FROM
+           ROW(NEW.email, NEW.preferred_language, NEW.display_name, NEW.avatar_hash, NEW.banned_until) THEN
+            RETURN NEW;
+        END IF;
+        next_type := 'account.updated';
+        next_user_id := NEW.id;
+    ELSE
+        next_type := 'account.deleted';
+        next_user_id := OLD.id;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            next_user_id,
+            jsonb_build_object('user_id', next_user_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS users_webhook_event ON users;
+CREATE TRIGGER users_webhook_event
+AFTER INSERT OR UPDATE OF email, preferred_language, display_name, avatar_hash, banned_until OR DELETE ON users
+FOR EACH ROW EXECUTE FUNCTION enqueue_account_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_permission_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_subject_id TEXT;
+    next_user_id TEXT;
+BEGIN
+    IF NOT webhook_event_has_subscribers('permission.updated') THEN
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        next_subject_id := OLD.subject_id;
+    ELSE
+        next_subject_id := NEW.subject_id;
+    END IF;
+    SELECT subject.user_id
+    INTO next_user_id
+    FROM permission_subjects AS subject
+    JOIN users AS site_user ON site_user.id=subject.user_id
+    WHERE subject.id=next_subject_id AND subject.kind='user';
+    IF next_user_id IS NOT NULL THEN
+        INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            'permission.updated',
+            next_user_id,
+            jsonb_build_object('user_id', next_user_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS subject_roles_webhook_event ON subject_roles;
+CREATE TRIGGER subject_roles_webhook_event
+AFTER INSERT OR DELETE ON subject_roles
+FOR EACH ROW EXECUTE FUNCTION enqueue_permission_webhook_event();
+
+DROP TRIGGER IF EXISTS subject_permission_overrides_webhook_event ON subject_permission_overrides;
+CREATE TRIGGER subject_permission_overrides_webhook_event
+AFTER INSERT OR DELETE ON subject_permission_overrides
+FOR EACH ROW EXECUTE FUNCTION enqueue_permission_webhook_event();
+
+DROP TRIGGER IF EXISTS subject_permission_overrides_update_webhook_event ON subject_permission_overrides;
+CREATE TRIGGER subject_permission_overrides_update_webhook_event
+AFTER UPDATE OF effect ON subject_permission_overrides
+FOR EACH ROW
+WHEN (OLD.effect IS DISTINCT FROM NEW.effect)
+EXECUTE FUNCTION enqueue_permission_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_official_whitelist_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_username TEXT;
+    next_endpoint_id INTEGER;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        next_type := 'official_whitelist.added';
+        next_username := NEW.username;
+        next_endpoint_id := NEW.endpoint_id;
+    ELSE
+        next_type := 'official_whitelist.removed';
+        next_username := OLD.username;
+        next_endpoint_id := OLD.endpoint_id;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            jsonb_build_object('username', next_username, 'endpoint_id', next_endpoint_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS official_whitelist_webhook_event ON whitelisted_users;
+CREATE TRIGGER official_whitelist_webhook_event
+AFTER INSERT OR DELETE ON whitelisted_users
+FOR EACH ROW EXECUTE FUNCTION enqueue_official_whitelist_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_profile_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_user_id TEXT;
+    next_profile_id TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        next_type := 'profile.created';
+        next_user_id := NEW.user_id;
+        next_profile_id := NEW.id;
+    ELSIF TG_OP = 'UPDATE' THEN
+        next_type := 'profile.updated';
+        next_user_id := NEW.user_id;
+        next_profile_id := NEW.id;
+    ELSE
+        next_type := 'profile.deleted';
+        next_user_id := OLD.user_id;
+        next_profile_id := OLD.id;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            next_user_id,
+            jsonb_build_object('user_id', next_user_id, 'profile_id', next_profile_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS profiles_webhook_event ON profiles;
+CREATE TRIGGER profiles_webhook_event
+AFTER INSERT OR UPDATE OF name, texture_model, skin_hash, cape_hash OR DELETE ON profiles
+FOR EACH ROW EXECUTE FUNCTION enqueue_profile_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_texture_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_user_id TEXT;
+    next_hash TEXT;
+    next_texture_type TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        next_type := 'texture.created';
+        next_user_id := NEW.user_id;
+        next_hash := NEW.hash;
+        next_texture_type := NEW.texture_type;
+    ELSIF TG_OP = 'UPDATE' THEN
+        next_type := 'texture.updated';
+        next_user_id := NEW.user_id;
+        next_hash := NEW.hash;
+        next_texture_type := NEW.texture_type;
+    ELSE
+        next_type := 'texture.deleted';
+        next_user_id := OLD.user_id;
+        next_hash := OLD.hash;
+        next_texture_type := OLD.texture_type;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            next_user_id,
+            jsonb_build_object(
+                'user_id', next_user_id,
+                'texture_hash', next_hash,
+                'texture_type', next_texture_type
+            ),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS user_textures_webhook_event ON user_textures;
+CREATE TRIGGER user_textures_webhook_event
+AFTER INSERT OR UPDATE OF note, model, is_public OR DELETE ON user_textures
+FOR EACH ROW EXECUTE FUNCTION enqueue_texture_webhook_event();
+
+CREATE OR REPLACE FUNCTION enqueue_oauth_grant_webhook_event()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_type TEXT;
+    next_grant_id TEXT;
+    next_client_id TEXT;
+    next_user_id TEXT;
+BEGIN
+    IF TG_OP = 'INSERT' AND NEW.status = 'active' THEN
+        next_type := 'oauth_grant.created';
+        next_grant_id := NEW.id;
+        next_client_id := NEW.client_id;
+        next_user_id := NEW.user_id;
+    ELSIF TG_OP = 'UPDATE' AND OLD.status = 'active' AND NEW.status = 'revoked' THEN
+        next_type := 'oauth_grant.revoked';
+        next_grant_id := NEW.id;
+        next_client_id := NEW.client_id;
+        next_user_id := NEW.user_id;
+    ELSIF TG_OP = 'UPDATE' AND NEW.status = 'active' THEN
+        next_type := 'oauth_grant.updated';
+        next_grant_id := NEW.id;
+        next_client_id := NEW.client_id;
+        next_user_id := NEW.user_id;
+    ELSIF TG_OP = 'DELETE' AND OLD.status = 'active' THEN
+        next_type := 'oauth_grant.revoked';
+        next_grant_id := OLD.id;
+        next_client_id := OLD.client_id;
+        next_user_id := OLD.user_id;
+    ELSE
+        IF TG_OP = 'DELETE' THEN
+            RETURN OLD;
+        END IF;
+        RETURN NEW;
+    END IF;
+    IF webhook_event_has_subscribers(next_type) THEN
+        INSERT INTO webhook_events (id,event_type,target_client_id,subject_user_id,data,created_at)
+        VALUES (
+            'evt_' || replace(gen_random_uuid()::TEXT, '-', ''),
+            next_type,
+            next_client_id,
+            next_user_id,
+            jsonb_build_object('user_id', next_user_id, 'grant_id', next_grant_id),
+            (EXTRACT(EPOCH FROM clock_timestamp()) * 1000)::BIGINT
+        );
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS delegated_permission_grants_webhook_event ON delegated_permission_grants;
+CREATE TRIGGER delegated_permission_grants_webhook_event
+AFTER INSERT OR UPDATE OF oidc_scopes, status OR DELETE ON delegated_permission_grants
+FOR EACH ROW EXECUTE FUNCTION enqueue_oauth_grant_webhook_event();
 
 INSERT INTO settings (key, value) VALUES
-('microsoft_client_id', ''),
-('microsoft_client_secret', ''),
-('microsoft_redirect_uri', 'http://localhost:8000/v1/imports/microsoft/callback'),
 ('fallback_strategy', 'serial'),
 ('profile_uuid_mode', 'random'),
 ('enable_skin_library', 'true'),

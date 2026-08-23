@@ -138,31 +138,35 @@ func TestInviteServiceRejectsInvalidInputsAndPermissionsExactly(t *testing.T) {
 	svc := invitesvc.Service{DB: db}
 	actor := inviteActor("invite.read.any", "invite.create.any", "invite.delete.any")
 
-	if _, err := svc.List(ctx, permission.Actor{}, "", 10); !inviteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.List(ctx, permission.Actor{}, "", 10); !inviteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("List without permission mismatch: %#v", err)
 	}
-	if _, err := svc.Create(ctx, permission.Actor{}, invitesvc.CreateInput{Code: "denied"}); !inviteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.Create(ctx, permission.Actor{}, invitesvc.CreateInput{Code: "denied"}); !inviteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("Create without permission mismatch: %#v", err)
 	}
-	if err := svc.Delete(ctx, permission.Actor{}, "denied"); !inviteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if err := svc.Delete(ctx, permission.Actor{}, "denied"); !inviteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("Delete without permission mismatch: %#v", err)
 	}
-	if _, err := svc.List(ctx, actor, "not-a-cursor", 10); !inviteHTTPError(err, http.StatusBadRequest, "Invalid cursor") {
+	if _, err := svc.List(ctx, actor, "not-a-cursor", 10); !inviteHTTPError(err, http.StatusBadRequest, "pagination_cursor.decode.invalid") {
 		t.Fatalf("invalid cursor mismatch: %#v", err)
 	}
-	if _, err := svc.List(ctx, actor, util.EncodeCursor(map[string]any{"last_created_at": database.NowMS()}), 10); !inviteHTTPError(err, http.StatusBadRequest, "Invalid cursor") {
+	if _, err := svc.List(ctx, actor, util.EncodeCursor(map[string]any{"last_created_at": database.NowMS()}), 10); !inviteHTTPError(err, http.StatusBadRequest, "pagination_cursor.decode.invalid") {
 		t.Fatalf("incomplete cursor mismatch: %#v", err)
 	}
-	if _, err := svc.Create(ctx, actor, invitesvc.CreateInput{Code: "abc"}); !inviteHTTPError(err, http.StatusBadRequest, "invite code too short") {
-		t.Fatalf("short code mismatch: %#v", err)
+	if _, err := svc.Create(ctx, actor, invitesvc.CreateInput{CodeSet: true}); !inviteHTTPError(err, http.StatusBadRequest, "invite.validate.required") {
+		t.Fatalf("explicit empty code mismatch: %#v", err)
+	}
+	oneCharacter, err := svc.Create(ctx, actor, invitesvc.CreateInput{Code: "引", CodeSet: true})
+	if err != nil || oneCharacter["code"] != "引" || oneCharacter["total_uses"] != 1 {
+		t.Fatalf("single-character Unicode code mismatch: created=%#v err=%v", oneCharacter, err)
 	}
 	for _, totalUses := range []any{"2", float64(0), float64(1.5), float64(2147483648)} {
-		if _, err := svc.Create(ctx, actor, invitesvc.CreateInput{Code: "bad_total_" + util.StripUUIDDashes("00000000-0000-0000-0000-000000000000"), TotalUses: totalUses}); !inviteHTTPError(err, http.StatusBadRequest, "total_uses must be a positive integer") {
+		if _, err := svc.Create(ctx, actor, invitesvc.CreateInput{Code: "bad_total_" + util.StripUUIDDashes("00000000-0000-0000-0000-000000000000"), TotalUses: totalUses}); !inviteHTTPError(err, http.StatusBadRequest, "invite_usage_limit.validate.invalid") {
 			t.Fatalf("invalid total_uses=%#v mismatch: %#v", totalUses, err)
 		}
 	}
-	if row, err := db.Invites.Get(ctx, "abc"); err != nil || row != nil {
-		t.Fatalf("rejected invite must not be persisted: row=%#v err=%v", row, err)
+	if row, err := db.Invites.Get(ctx, "引"); err != nil || row == nil || row.Code != "引" {
+		t.Fatalf("arbitrary non-empty invite must be persisted: row=%#v err=%v", row, err)
 	}
 
 	db.Close()
@@ -187,5 +191,5 @@ func inviteActor(codes ...string) permission.Actor {
 
 func inviteHTTPError(err error, status int, detail string) bool {
 	httpErr, ok := err.(util.HTTPError)
-	return ok && httpErr.Status == status && httpErr.Detail == detail
+	return ok && httpErr.Status == status && httpErr.Error() == detail
 }

@@ -24,48 +24,22 @@ func (s Service) ReconcileUserPermissionDependents(ctx context.Context, userID s
 	}
 	allowedIDs := permissionIDsFromBitSet(bits)
 	now := database.NowMS()
-	revoked, err := s.DB.OAuth.RevokeInvalidGrantsForUser(ctx, userID, allowedIDs, now)
+	revoked, err := s.DB.OAuth.RevokeInvalidGrantsForUserWithCredentials(ctx, userID, allowedIDs, now)
 	if err != nil {
 		return PermissionDependencyResult{}, err
 	}
 	for _, item := range revoked {
-		if err := s.invalidateGrantCredentials(ctx, item.GrantID, now); err != nil {
-			return PermissionDependencyResult{}, err
-		}
+		reportPostCommitError("remove permission-revoked grant access tokens", s.Redis.DeleteOAuthAccessTokensByGrant(ctx, item.GrantID))
 	}
-	disabled, err := s.DB.OAuth.DisableInvalidClientsForOwner(ctx, userID, allowedIDs, serverPermissionIDs(), now)
+	disabled, err := s.DB.OAuth.DisableInvalidClientsForOwnerWithCredentials(ctx, userID, allowedIDs, serverPermissionIDs(), now)
 	if err != nil {
 		return PermissionDependencyResult{}, err
 	}
 	for _, item := range disabled {
-		if err := s.revokeClientAuthorizations(ctx, item.ClientID, now); err != nil {
-			return PermissionDependencyResult{}, err
-		}
+		reportPostCommitError("remove permission-disabled client access tokens", s.Redis.DeleteOAuthAccessTokensByClient(ctx, item.ClientID))
 	}
 	result := PermissionDependencyResult{RevokedGrants: revoked, DisabledClients: disabled}
-	if err := s.notifyPermissionDependencyChanges(ctx, result); err != nil {
-		return PermissionDependencyResult{}, err
-	}
-	return result, nil
-}
-
-func (s Service) DeleteUserOAuthData(ctx context.Context, userID string) (dboauth.UserCleanupResult, error) {
-	clientIDs, err := s.DB.OAuth.ClientIDsByOwner(ctx, userID)
-	if err != nil {
-		return dboauth.UserCleanupResult{}, err
-	}
-	result, err := s.DB.OAuth.DeleteUserOAuthData(ctx, userID)
-	if err != nil {
-		return dboauth.UserCleanupResult{}, err
-	}
-	if err := s.Redis.DeleteOAuthAccessTokensByUser(ctx, userID); err != nil {
-		return dboauth.UserCleanupResult{}, err
-	}
-	for _, clientID := range clientIDs {
-		if err := s.Redis.DeleteOAuthAccessTokensByClient(ctx, clientID); err != nil {
-			return dboauth.UserCleanupResult{}, err
-		}
-	}
+	reportPostCommitError("notify permission dependency changes", s.notifyPermissionDependencyChanges(ctx, result))
 	return result, nil
 }
 

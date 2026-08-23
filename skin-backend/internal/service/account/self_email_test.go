@@ -61,7 +61,7 @@ func TestEmailChangeSendsToNewAddressAndConsumesCodeExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result["ok"] != true || result["ttl"] != 180 {
+	if len(result) != 1 || result["ttl"] != 180 {
 		t.Fatalf("email verification response mismatch: %#v", result)
 	}
 	if len(sender.messages) != 1 {
@@ -105,9 +105,9 @@ func TestEmailChangeRejectsInvalidTargetsAndCodesWithoutMutation(t *testing.T) {
 		status int
 		detail string
 	}{
-		{name: "invalid", email: "not-an-email", status: http.StatusBadRequest, detail: "Invalid email format"},
-		{name: "current", email: strings.ToUpper(user.Email), status: http.StatusBadRequest, detail: "New email must be different from current email"},
-		{name: "used", email: other.Email, status: http.StatusBadRequest, detail: "Email already in use"},
+		{name: "invalid", email: "not-an-email", status: http.StatusBadRequest, detail: "email.validate.invalid"},
+		{name: "current", email: strings.ToUpper(user.Email), status: http.StatusBadRequest, detail: "email.update.conflict"},
+		{name: "used", email: other.Email, status: http.StatusBadRequest, detail: "email.register.already_exists"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := svc.SendEmailChangeCode(ctx, actor, tc.email); !httpErrorIs(err, tc.status, tc.detail) {
@@ -124,7 +124,7 @@ func TestEmailChangeRejectsInvalidTargetsAndCodesWithoutMutation(t *testing.T) {
 	if err := cache.SetVerificationCode(ctx, target, verificationsvc.PurposeEmailChange, code, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ChangeEmailSelf(ctx, actor, target, "WRONG123"); !httpErrorIs(err, http.StatusBadRequest, "Invalid or expired verification code") {
+	if err := svc.ChangeEmailSelf(ctx, actor, target, "WRONG123"); !httpErrorIs(err, http.StatusBadRequest, "verification_code.verify.invalid") {
 		t.Fatalf("wrong code error=%#v", err)
 	}
 	if stored, err := cache.GetVerificationCode(ctx, target, verificationsvc.PurposeEmailChange); err != nil || stored != code {

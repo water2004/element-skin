@@ -57,13 +57,13 @@ func (h Handler) Profiles(w http.ResponseWriter, req *http.Request) {
 		h.TexturesProperty(w, req)
 		return
 	}
-	util.Error(w, util.HTTPError{Status: http.StatusNotFound, Detail: "minecraft route not found"})
+	util.Error(w, util.HTTPError{Status: http.StatusNotFound, Object: "minecraft_route", Operation: "resolve", Reason: "not_found"})
 }
 
 func (h Handler) ProfilesByNames(w http.ResponseWriter, req *http.Request) {
 	var body namesBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.minecraft.ProfilesByNames(req.Context(), shared.CurrentActor(req), body.Names)
@@ -95,7 +95,7 @@ func (h Handler) TexturesProperty(w http.ResponseWriter, req *http.Request) {
 func (h Handler) HasJoined(w http.ResponseWriter, req *http.Request) {
 	var body hasJoinedBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: http.StatusBadRequest, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.minecraft.HasJoined(req.Context(), shared.CurrentActor(req), minecraftsvc.HasJoinedRequest{

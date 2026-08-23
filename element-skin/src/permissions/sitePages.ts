@@ -3,6 +3,8 @@ import { hasAnyPermission } from './adminPages'
 export interface SitePageAccess {
   path: string
   permissions: string[]
+  requiredPermissions?: string[]
+  exact?: boolean
 }
 
 export const sitePageAccess: SitePageAccess[] = [
@@ -47,9 +49,22 @@ export const sitePageAccess: SitePageAccess[] = [
       'profile.update.bound_profile',
       'texture.apply.bound_profile',
       'texture.clear.bound_profile',
-      'microsoft_import.start.owned',
-      'microsoft_import.read_profile.owned',
-      'microsoft_import.create_profile.owned',
+      'official_profile.read.owned',
+      'official_profile.create.owned',
+      'official_profile.refresh.owned',
+      'official_profile.delete.owned',
+    ],
+  },
+  {
+    path: '/dashboard/identities',
+    permissions: [
+      'external_identity.read.owned',
+      'external_identity.create.owned',
+      'external_identity.update.owned',
+      'external_identity.delete.owned',
+      'official_profile.read.owned',
+      'official_profile.refresh.owned',
+      'official_profile.delete.owned',
     ],
   },
   {
@@ -73,6 +88,17 @@ export const sitePageAccess: SitePageAccess[] = [
     ],
   },
   {
+    path: '/dashboard/oauth/apps/new',
+    permissions: ['oauth_app.create.owned'],
+    exact: true,
+  },
+  {
+    path: '/dashboard/oauth/apps/:client_id/edit',
+    permissions: ['oauth_app.update.owned', 'oauth_app.delete.owned'],
+    requiredPermissions: ['oauth_app.read.owned'],
+    exact: true,
+  },
+  {
     path: '/oauth/authorize',
     permissions: ['account.read.self'],
   },
@@ -91,17 +117,43 @@ export function isProtectedSitePath(path: string) {
 export function sitePageForPath(path: string) {
   const normalized = path.replace(/\/+$/, '') || '/'
   return (
-    sitePageAccess.find(
-      (page) => normalized === page.path || normalized.startsWith(`${page.path}/`),
-    ) ?? null
+    sitePageAccess
+      .filter((page) => matchesSitePagePath(normalized, page))
+      .sort((left, right) => pathSegmentCount(right.path) - pathSegmentCount(left.path))[0] ?? null
   )
 }
 
 export function canAccessSitePath(path: string, userPermissions: readonly string[]) {
   const page = sitePageForPath(path)
-  return !!page && hasAnyPermission(userPermissions, page.permissions)
+  return !!page && canAccessSitePage(page, userPermissions)
 }
 
 export function firstAccessibleSitePath(userPermissions: readonly string[]) {
-  return sitePageAccess.find((page) => hasAnyPermission(userPermissions, page.permissions))?.path
+  return sitePageAccess.find((page) => !page.exact && canAccessSitePage(page, userPermissions))
+    ?.path
+}
+
+function canAccessSitePage(page: SitePageAccess, userPermissions: readonly string[]) {
+  return (
+    hasAnyPermission(userPermissions, page.permissions) &&
+    (page.requiredPermissions ?? []).every((permission) => userPermissions.includes(permission))
+  )
+}
+
+function matchesSitePagePath(path: string, page: SitePageAccess) {
+  const pathSegments = splitPath(path)
+  const pageSegments = splitPath(page.path)
+  if (pathSegments.length < pageSegments.length) return false
+  if (page.exact && pathSegments.length !== pageSegments.length) return false
+  return pageSegments.every(
+    (segment, index) => segment.startsWith(':') || segment === pathSegments[index],
+  )
+}
+
+function pathSegmentCount(path: string) {
+  return splitPath(path).length
+}
+
+function splitPath(path: string) {
+  return path.split('/').filter(Boolean)
 }

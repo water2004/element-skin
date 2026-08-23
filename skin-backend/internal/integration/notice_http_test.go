@@ -21,16 +21,16 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 	adminCookie := &http.Cookie{Name: "access_token", Value: adminToken}
 	userCookie := &http.Cookie{Name: "access_token", Value: userToken}
 
-	forbiddenAdmin := doJSON(t, h, "GET", "/v1/admin/notifications", nil, userCookie)
-	if forbiddenAdmin.Code != http.StatusForbidden || forbiddenAdmin.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	forbiddenAdmin := doJSON(t, h, "GET", "/v2/admin/notifications", nil, userCookie)
+	if forbiddenAdmin.Code != http.StatusForbidden || forbiddenAdmin.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("non-admin notice list mismatch: status=%d body=%s", forbiddenAdmin.Code, forbiddenAdmin.Body.String())
 	}
-	unauthenticated := doJSON(t, h, "GET", "/v1/notifications", nil)
-	if unauthenticated.Code != http.StatusUnauthorized || unauthenticated.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+	unauthenticated := doJSON(t, h, "GET", "/v2/notifications", nil)
+	if unauthenticated.Code != http.StatusUnauthorized || unauthenticated.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("unauthenticated notice list mismatch: status=%d body=%s", unauthenticated.Code, unauthenticated.Body.String())
 	}
 
-	create := doJSON(t, h, "POST", "/v1/admin/notifications", map[string]any{
+	create := doJSON(t, h, "POST", "/v2/admin/notifications", map[string]any{
 		"type":             "announcement",
 		"title":            "Developer center",
 		"summary":          "OAuth application registration is coming.",
@@ -44,7 +44,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		"pinned":           true,
 		"dismissible":      true,
 	}, adminCookie)
-	if create.Code != http.StatusOK {
+	if create.Code != http.StatusCreated {
 		t.Fatalf("create notice status=%d body=%s", create.Code, create.Body.String())
 	}
 	created := parseJSON(t, create)
@@ -64,13 +64,13 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("created notice body mismatch: %#v", created)
 	}
 
-	inlineCreate := doJSON(t, h, "POST", "/v1/admin/notifications", map[string]any{
+	inlineCreate := doJSON(t, h, "POST", "/v2/admin/notifications", map[string]any{
 		"title":        "Inline only",
 		"summary":      "Short dashboard text.",
 		"display_mode": "inline",
 		"enabled":      false,
 	}, adminCookie)
-	if inlineCreate.Code != http.StatusOK {
+	if inlineCreate.Code != http.StatusCreated {
 		t.Fatalf("create inline notice status=%d body=%s", inlineCreate.Code, inlineCreate.Body.String())
 	}
 	inlineBody := parseJSON(t, inlineCreate)
@@ -78,12 +78,12 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("inline notice without content mismatch: %#v", inlineBody)
 	}
 
-	badCreate := doJSON(t, h, "POST", "/v1/admin/notifications", map[string]any{
+	badCreate := doJSON(t, h, "POST", "/v2/admin/notifications", map[string]any{
 		"title":            "Broken",
 		"content_markdown": "Body",
 		"display_mode":     "detail",
 	}, adminCookie)
-	if badCreate.Code != http.StatusBadRequest || badCreate.Body.String() != "{\"detail\":\"summary is required for detail notices\"}\n" {
+	if badCreate.Code != http.StatusBadRequest || badCreate.Body.String() != "{\"error\":{\"object\":\"notice_summary\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("bad notice create mismatch: status=%d body=%s", badCreate.Code, badCreate.Body.String())
 	}
 	var brokenCount int
@@ -94,7 +94,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("invalid create should persist 0 rows, got %d", brokenCount)
 	}
 
-	list := doJSON(t, h, "GET", "/v1/notifications?type=announcement&dashboard=true&limit=5", nil, userCookie)
+	list := doJSON(t, h, "GET", "/v2/notifications?type=announcement&dashboard=true&limit=5", nil, userCookie)
 	if list.Code != http.StatusOK {
 		t.Fatalf("user notice list status=%d body=%s", list.Code, list.Body.String())
 	}
@@ -108,7 +108,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("user notice list item mismatch: %#v", item)
 	}
 
-	detail := doJSON(t, h, "GET", "/v1/notifications/"+noticeID, nil, userCookie)
+	detail := doJSON(t, h, "GET", "/v2/notifications/"+noticeID, nil, userCookie)
 	if detail.Code != http.StatusOK {
 		t.Fatalf("notice detail status=%d body=%s", detail.Code, detail.Body.String())
 	}
@@ -124,15 +124,15 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("detail should create exactly one read receipt, got %d", readCount)
 	}
 
-	read := doJSON(t, h, "POST", "/v1/notifications/"+noticeID+"/read", nil, userCookie)
+	read := doJSON(t, h, "POST", "/v2/notifications/"+noticeID+"/read", nil, userCookie)
 	if read.Code != http.StatusNoContent || read.Body.String() != "" {
 		t.Fatalf("mark read mismatch: status=%d body=%s", read.Code, read.Body.String())
 	}
-	dismiss := doJSON(t, h, "POST", "/v1/notifications/"+noticeID+"/dismiss", nil, userCookie)
+	dismiss := doJSON(t, h, "POST", "/v2/notifications/"+noticeID+"/dismiss", nil, userCookie)
 	if dismiss.Code != http.StatusNoContent || dismiss.Body.String() != "" {
 		t.Fatalf("dismiss mismatch: status=%d body=%s", dismiss.Code, dismiss.Body.String())
 	}
-	afterDismiss := doJSON(t, h, "GET", "/v1/notifications?type=announcement&dashboard=true", nil, userCookie)
+	afterDismiss := doJSON(t, h, "GET", "/v2/notifications?type=announcement&dashboard=true", nil, userCookie)
 	if afterDismiss.Code != http.StatusOK {
 		t.Fatalf("after dismiss list status=%d body=%s", afterDismiss.Code, afterDismiss.Body.String())
 	}
@@ -140,7 +140,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("dismissed notice should be hidden from dashboard list: %#v", dismissedItems)
 	}
 
-	patch := doRawJSON(t, h, "PATCH", "/v1/admin/notifications/"+noticeID, `{"title":"Updated notice","summary":"Updated summary","content_markdown":"Updated body","ends_at":null}`, adminCookie)
+	patch := doRawJSON(t, h, "PATCH", "/v2/admin/notifications/"+noticeID, `{"title":"Updated notice","summary":"Updated summary","content_markdown":"Updated body","ends_at":null}`, adminCookie)
 	if patch.Code != http.StatusOK {
 		t.Fatalf("patch notice status=%d body=%s", patch.Code, patch.Body.String())
 	}
@@ -163,7 +163,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 	if replacedReceipts != 0 {
 		t.Fatalf("replace should cascade old receipts, got %d", replacedReceipts)
 	}
-	replacementList := doJSON(t, h, "GET", "/v1/notifications?type=announcement&dashboard=true&limit=5", nil, userCookie)
+	replacementList := doJSON(t, h, "GET", "/v2/notifications?type=announcement&dashboard=true&limit=5", nil, userCookie)
 	if replacementList.Code != http.StatusOK {
 		t.Fatalf("replacement notice list status=%d body=%s", replacementList.Code, replacementList.Body.String())
 	}
@@ -175,7 +175,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("replacement should publish a fresh unread notice: %#v", replacementItems)
 	}
 
-	inlinePatch := doRawJSON(t, h, "PATCH", "/v1/admin/notifications/"+replacementID, `{"title":"Updated short notice","summary":"Updated short summary","display_mode":"inline","content_markdown":""}`, adminCookie)
+	inlinePatch := doRawJSON(t, h, "PATCH", "/v2/admin/notifications/"+replacementID, `{"title":"Updated short notice","summary":"Updated short summary","display_mode":"inline","content_markdown":""}`, adminCookie)
 	if inlinePatch.Code != http.StatusOK {
 		t.Fatalf("patch detail notice to inline status=%d body=%s", inlinePatch.Code, inlinePatch.Body.String())
 	}
@@ -189,7 +189,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("patched inline notice body mismatch: %#v", inlinePatchBody)
 	}
 
-	adminList := doJSON(t, h, "GET", "/v1/admin/notifications?status=enabled", nil, adminCookie)
+	adminList := doJSON(t, h, "GET", "/v2/admin/notifications?status=enabled", nil, adminCookie)
 	if adminList.Code != http.StatusOK {
 		t.Fatalf("admin notice list status=%d body=%s", adminList.Code, adminList.Body.String())
 	}
@@ -198,26 +198,26 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("admin notice list mismatch: %#v", adminItems)
 	}
 
-	inlineDismiss := doJSON(t, h, "POST", "/v1/notifications/"+inlineID+"/dismiss", nil, userCookie)
+	inlineDismiss := doJSON(t, h, "POST", "/v2/notifications/"+inlineID+"/dismiss", nil, userCookie)
 	if inlineDismiss.Code != http.StatusNoContent || inlineDismiss.Body.String() != "" {
 		t.Fatalf("dismiss replacement mismatch: status=%d body=%s", inlineDismiss.Code, inlineDismiss.Body.String())
 	}
 
-	systemCreate := doJSON(t, h, "POST", "/v1/admin/notifications", map[string]any{
+	systemCreate := doJSON(t, h, "POST", "/v2/admin/notifications", map[string]any{
 		"type":         "system",
 		"title":        "System message",
 		"summary":      "System message summary.",
 		"display_mode": "inline",
 		"enabled":      true,
 	}, adminCookie)
-	if systemCreate.Code != http.StatusOK {
+	if systemCreate.Code != http.StatusCreated {
 		t.Fatalf("create system notice status=%d body=%s", systemCreate.Code, systemCreate.Body.String())
 	}
 	systemBody := parseJSON(t, systemCreate)
 	if systemBody["type"] != "system" || systemBody["title"] != "System message" || systemBody["summary"] != "System message summary." {
 		t.Fatalf("system notice body mismatch: %#v", systemBody)
 	}
-	allUserNotices := doJSON(t, h, "GET", "/v1/notifications?limit=5&include_read=true", nil, userCookie)
+	allUserNotices := doJSON(t, h, "GET", "/v2/notifications?limit=5&include_read=true", nil, userCookie)
 	if allUserNotices.Code != http.StatusOK {
 		t.Fatalf("all user notices status=%d body=%s", allUserNotices.Code, allUserNotices.Body.String())
 	}
@@ -226,7 +226,7 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 		t.Fatalf("generic user notice list should include system notice only after announcement dismissal: %#v", allItems)
 	}
 
-	del := doJSON(t, h, "DELETE", "/v1/admin/notifications/"+inlineID, nil, adminCookie)
+	del := doJSON(t, h, "DELETE", "/v2/admin/notifications/"+inlineID, nil, adminCookie)
 	if del.Code != http.StatusNoContent || del.Body.String() != "" {
 		t.Fatalf("delete notice mismatch: status=%d body=%s", del.Code, del.Body.String())
 	}
@@ -240,8 +240,8 @@ func TestNoticeHTTPUserAndAdminFlowsExactly(t *testing.T) {
 	if receipts != 0 {
 		t.Fatalf("delete should cascade receipts, got %d", receipts)
 	}
-	deletedDetail := doJSON(t, h, "GET", "/v1/notifications/"+inlineID, nil, userCookie)
-	if deletedDetail.Code != http.StatusNotFound || deletedDetail.Body.String() != "{\"detail\":\"notice not found\"}\n" {
+	deletedDetail := doJSON(t, h, "GET", "/v2/notifications/"+inlineID, nil, userCookie)
+	if deletedDetail.Code != http.StatusNotFound || deletedDetail.Body.String() != "{\"error\":{\"object\":\"notice\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("deleted detail mismatch: status=%d body=%s", deletedDetail.Code, deletedDetail.Body.String())
 	}
 }
@@ -256,64 +256,64 @@ func TestNoticeHTTPAudienceStatusAndPatchValidationExactly(t *testing.T) {
 	userCookie := &http.Cookie{Name: "access_token", Value: userToken}
 	now := database.NowMS()
 
-	adminOnly := doJSON(t, h, "POST", "/v1/admin/notifications", map[string]any{
+	adminOnly := doJSON(t, h, "POST", "/v2/admin/notifications", map[string]any{
 		"title":            "Admin only",
 		"content_markdown": "Admin body",
 		"audience":         "admins",
 	}, adminCookie)
-	if adminOnly.Code != http.StatusOK {
+	if adminOnly.Code != http.StatusCreated {
 		t.Fatalf("admin-only create status=%d body=%s", adminOnly.Code, adminOnly.Body.String())
 	}
 	adminOnlyID := parseJSON(t, adminOnly)["id"].(string)
-	normalDetail := doJSON(t, h, "GET", "/v1/notifications/"+adminOnlyID, nil, userCookie)
-	if normalDetail.Code != http.StatusNotFound || normalDetail.Body.String() != "{\"detail\":\"notice not found\"}\n" {
+	normalDetail := doJSON(t, h, "GET", "/v2/notifications/"+adminOnlyID, nil, userCookie)
+	if normalDetail.Code != http.StatusNotFound || normalDetail.Body.String() != "{\"error\":{\"object\":\"notice\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("normal user should not see admin notice: status=%d body=%s", normalDetail.Code, normalDetail.Body.String())
 	}
-	adminDetail := doJSON(t, h, "GET", "/v1/notifications/"+adminOnlyID, nil, adminCookie)
+	adminDetail := doJSON(t, h, "GET", "/v2/notifications/"+adminOnlyID, nil, adminCookie)
 	if adminDetail.Code != http.StatusOK || parseJSON(t, adminDetail)["id"] != adminOnlyID {
 		t.Fatalf("admin should see admin notice: status=%d body=%s", adminDetail.Code, adminDetail.Body.String())
 	}
 
-	disabled := doJSON(t, h, "POST", "/v1/admin/notifications", map[string]any{
+	disabled := doJSON(t, h, "POST", "/v2/admin/notifications", map[string]any{
 		"title":            "Disabled notice",
 		"content_markdown": "Disabled body",
 		"enabled":          false,
 	}, adminCookie)
-	if disabled.Code != http.StatusOK {
+	if disabled.Code != http.StatusCreated {
 		t.Fatalf("disabled create status=%d body=%s", disabled.Code, disabled.Body.String())
 	}
-	expired := doJSON(t, h, "POST", "/v1/admin/notifications", map[string]any{
+	expired := doJSON(t, h, "POST", "/v2/admin/notifications", map[string]any{
 		"title":            "Expired notice",
 		"content_markdown": "Expired body",
 		"ends_at":          now - 1,
 	}, adminCookie)
-	if expired.Code != http.StatusOK {
+	if expired.Code != http.StatusCreated {
 		t.Fatalf("expired create status=%d body=%s", expired.Code, expired.Body.String())
 	}
-	scheduled := doJSON(t, h, "POST", "/v1/admin/notifications", map[string]any{
+	scheduled := doJSON(t, h, "POST", "/v2/admin/notifications", map[string]any{
 		"title":            "Scheduled notice",
 		"content_markdown": "Scheduled body",
 		"starts_at":        now + 3_600_000,
 	}, adminCookie)
-	if scheduled.Code != http.StatusOK {
+	if scheduled.Code != http.StatusCreated {
 		t.Fatalf("scheduled create status=%d body=%s", scheduled.Code, scheduled.Body.String())
 	}
-	if items := parseJSON(t, doJSON(t, h, "GET", "/v1/admin/notifications?status=disabled", nil, adminCookie))["items"].([]any); len(items) != 1 || items[0].(map[string]any)["title"] != "Disabled notice" {
+	if items := parseJSON(t, doJSON(t, h, "GET", "/v2/admin/notifications?status=disabled", nil, adminCookie))["items"].([]any); len(items) != 1 || items[0].(map[string]any)["title"] != "Disabled notice" {
 		t.Fatalf("disabled status list mismatch: %#v", items)
 	}
-	if items := parseJSON(t, doJSON(t, h, "GET", "/v1/admin/notifications?status=expired", nil, adminCookie))["items"].([]any); len(items) != 1 || items[0].(map[string]any)["title"] != "Expired notice" {
+	if items := parseJSON(t, doJSON(t, h, "GET", "/v2/admin/notifications?status=expired", nil, adminCookie))["items"].([]any); len(items) != 1 || items[0].(map[string]any)["title"] != "Expired notice" {
 		t.Fatalf("expired status list mismatch: %#v", items)
 	}
-	if items := parseJSON(t, doJSON(t, h, "GET", "/v1/admin/notifications?status=scheduled", nil, adminCookie))["items"].([]any); len(items) != 1 || items[0].(map[string]any)["title"] != "Scheduled notice" {
+	if items := parseJSON(t, doJSON(t, h, "GET", "/v2/admin/notifications?status=scheduled", nil, adminCookie))["items"].([]any); len(items) != 1 || items[0].(map[string]any)["title"] != "Scheduled notice" {
 		t.Fatalf("scheduled status list mismatch: %#v", items)
 	}
 
-	badStatus := doJSON(t, h, "GET", "/v1/admin/notifications?status=bogus", nil, adminCookie)
-	if badStatus.Code != http.StatusBadRequest || badStatus.Body.String() != "{\"detail\":\"invalid status\"}\n" {
+	badStatus := doJSON(t, h, "GET", "/v2/admin/notifications?status=bogus", nil, adminCookie)
+	if badStatus.Code != http.StatusBadRequest || badStatus.Body.String() != "{\"error\":{\"object\":\"status\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad status mismatch: status=%d body=%s", badStatus.Code, badStatus.Body.String())
 	}
-	badPatch := doRawJSON(t, h, "PATCH", "/v1/admin/notifications/"+adminOnlyID, `{"link_url":"javascript:alert(1)","link_text":"Bad"}`, adminCookie)
-	if badPatch.Code != http.StatusBadRequest || badPatch.Body.String() != "{\"detail\":\"invalid link_url\"}\n" {
+	badPatch := doRawJSON(t, h, "PATCH", "/v2/admin/notifications/"+adminOnlyID, `{"link_url":"javascript:alert(1)","link_text":"Bad"}`, adminCookie)
+	if badPatch.Code != http.StatusBadRequest || badPatch.Body.String() != "{\"error\":{\"object\":\"notice_link\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("bad patch mismatch: status=%d body=%s", badPatch.Code, badPatch.Body.String())
 	}
 	row, err := db.Notices.Get(context.Background(), adminOnlyID)

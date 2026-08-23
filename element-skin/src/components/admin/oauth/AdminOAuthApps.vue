@@ -3,13 +3,13 @@
     <PageHeader title="第三方应用" subtitle="查看、审核和停用全站已注册的第三方应用">
       <template #icon><Link /></template>
       <template #actions>
-        <el-button :icon="Refresh" plain class="hover-lift" :loading="loading" @click="loadApps">
+        <el-button :icon="Refresh" plain class="hover-lift" :loading="loading" @click="loadData">
           刷新
         </el-button>
       </template>
     </PageHeader>
 
-    <UiCard shadow="never">
+    <UiCard v-if="canReadApps" shadow="never">
       <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
         <UiSegmented v-model="status" @change="loadApps">
           <el-radio-button
@@ -74,45 +74,145 @@
       <el-empty v-if="!loading && apps.length === 0" description="暂无第三方应用" />
     </UiCard>
 
+    <UiCard v-if="canReadGrants" shadow="never" class="mt-6">
+      <template #header>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div class="font-semibold text-[var(--color-heading)]">用户授权</div>
+            <div class="mt-1 text-xs text-[var(--color-text-light)]">
+              撤销后，该授权关联的访问令牌、刷新令牌和未使用授权码立即失效。
+            </div>
+          </div>
+          <el-tag effect="plain">{{ grants.length }} 条</el-tag>
+        </div>
+      </template>
+
+      <el-table :data="grants" class="modern-table w-full" v-loading="grantsLoading">
+        <el-table-column label="应用" min-width="220">
+          <template #default="{ row }">
+            <div class="flex min-w-0 flex-col">
+              <span class="font-medium text-[var(--color-heading)]">
+                {{ appName(row.client_id) }}
+              </span>
+              <span class="truncate font-mono text-xs text-[var(--color-text-light)]">
+                {{ row.client_id }}
+              </span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="用户" min-width="190">
+          <template #default="{ row }">
+            <span class="font-mono text-xs text-[var(--color-text-light)]">{{ row.user_id }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="授权范围" min-width="280">
+          <template #default="{ row }">
+            <div class="flex flex-wrap gap-1.5">
+              <el-tag v-for="scope in grantScopes(row)" :key="scope" size="small" effect="plain">
+                {{ scope }}
+              </el-tag>
+              <span
+                v-if="grantScopes(row).length === 0"
+                class="text-xs text-[var(--color-text-light)]"
+                >-</span
+              >
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" :type="row.status === 'active' ? 'success' : 'info'">
+              {{ row.status === 'active' ? '有效' : '已撤销' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="授权时间" width="160">
+          <template #default="{ row }">
+            <span class="text-xs text-[var(--color-text-light)]">{{
+              formatDate(row.created_at)
+            }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column
+          v-if="canRevokeGrants"
+          label="操作"
+          width="100"
+          fixed="right"
+          align="center"
+        >
+          <template #default="{ row }">
+            <el-button
+              v-if="row.status === 'active'"
+              link
+              type="danger"
+              :loading="revokingGrantId === row.id"
+              @click="revokeGrant(row)"
+            >
+              撤销
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+      <el-empty v-if="!grantsLoading && grants.length === 0" description="暂无用户授权" />
+    </UiCard>
+
     <AdminOAuthAppDetailDialog
       v-model:visible="detailVisible"
       :app="selectedApp"
       :catalog="catalog"
       :loading="detailLoading"
       :reviewing="reviewingId === selectedApp?.client_id"
+      :can-review="canReviewApps"
       @review="review"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, inject, onMounted, ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Link, Refresh } from '@element-plus/icons-vue'
 import {
   getAdminOAuthApp,
   getPermissionCatalog,
   listAdminOAuthApps,
+  listAdminOAuthGrants,
+  revokeAdminOAuthGrant,
   reviewAdminOAuthApp,
   type OAuthClient,
   type OAuthClientSummary,
   type OAuthClientStatus,
+  type OAuthGrant,
 } from '@/api/oauth'
-import type { PermissionDefinition } from '@/api/types'
+import type { PermissionDefinition, User } from '@/api/types'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import AdminOAuthAppDetailDialog from '@/components/admin/oauth/AdminOAuthAppDetailDialog.vue'
 import { getErrorMessage } from '@/utils/error'
 
 const status = ref<OAuthClientStatus | 'all'>('all')
+const user = inject<Ref<User | null>>('user', ref(null))
+const permissionSet = computed(() => new Set(user.value?.permissions || []))
+const canReadApps = computed(() => permissionSet.value.has('oauth_app.read.any'))
+const canReviewApps = computed(() => permissionSet.value.has('oauth_app.review.any'))
+const canReadGrants = computed(() => permissionSet.value.has('oauth_grant.read.any'))
+const canRevokeGrants = computed(() => permissionSet.value.has('oauth_grant.revoke.any'))
+const canReadPermissionCatalog = computed(() => permissionSet.value.has('permission.read.any'))
 const apps = ref<OAuthClientSummary[]>([])
+const grants = ref<OAuthGrant[]>([])
 const catalog = ref<PermissionDefinition[]>([])
 const loading = ref(false)
 const detailLoading = ref(false)
 const reviewingId = ref('')
 const detailVisible = ref(false)
+const grantsLoading = ref(false)
+const revokingGrantId = ref('')
 const selectedApp = ref<OAuthClient | null>(null)
-const statusOptions: Array<{ label: string; value: OAuthClientStatus | 'all' }> = [
+const statusOptions: Array<{
+  label: string
+  value: OAuthClientStatus | 'all'
+}> = [
   { label: '全部应用', value: 'all' },
   { label: '待审核', value: 'pending' },
   { label: '已通过', value: 'active' },
@@ -121,8 +221,16 @@ const statusOptions: Array<{ label: string; value: OAuthClientStatus | 'all' }> 
 ]
 
 onMounted(async () => {
-  await Promise.all([loadCatalog(), loadApps()])
+  await loadData()
 })
+
+async function loadData() {
+  await Promise.all([
+    canReadPermissionCatalog.value ? loadCatalog() : Promise.resolve(),
+    canReadApps.value ? loadApps() : Promise.resolve(),
+    canReadGrants.value ? loadGrants() : Promise.resolve(),
+  ])
+}
 
 async function loadCatalog() {
   const res = await getPermissionCatalog()
@@ -130,6 +238,7 @@ async function loadCatalog() {
 }
 
 async function loadApps() {
+  if (!canReadApps.value) return
   loading.value = true
   try {
     const res = await listAdminOAuthApps(status.value)
@@ -142,6 +251,7 @@ async function loadApps() {
 }
 
 async function review(clientId: string, nextStatus: Exclude<OAuthClientStatus, 'pending'>) {
+  if (!canReviewApps.value) return
   const reason = await reviewReason(nextStatus)
   if (reason === null) return
   reviewingId.value = clientId
@@ -158,6 +268,42 @@ async function review(clientId: string, nextStatus: Exclude<OAuthClientStatus, '
     ElMessage.error(getErrorMessage(error, '更新应用状态失败'))
   } finally {
     reviewingId.value = ''
+  }
+}
+
+async function loadGrants() {
+  if (!canReadGrants.value) return
+  grantsLoading.value = true
+  try {
+    const response = await listAdminOAuthGrants()
+    grants.value = response.data.items
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '加载用户授权失败'))
+  } finally {
+    grantsLoading.value = false
+  }
+}
+
+async function revokeGrant(grant: OAuthGrant) {
+  if (!canRevokeGrants.value) return
+  try {
+    await ElMessageBox.confirm(
+      '撤销后，该授权下的访问令牌、刷新令牌和未使用授权码都会立即失效。',
+      '撤销用户授权',
+      { type: 'warning', confirmButtonText: '撤销', cancelButtonText: '取消' },
+    )
+    revokingGrantId.value = grant.id
+    await revokeAdminOAuthGrant(grant.id)
+    grants.value = grants.value.map((item) =>
+      item.id === grant.id ? { ...item, status: 'revoked' as const, revoked_at: Date.now() } : item,
+    )
+    ElMessage.success('用户授权已撤销')
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(getErrorMessage(error, '撤销用户授权失败'))
+    }
+  } finally {
+    revokingGrantId.value = ''
   }
 }
 
@@ -220,6 +366,14 @@ function statusType(appStatus: OAuthClientStatus) {
 
 function clientTypeLabel(clientType: OAuthClient['client_type']) {
   return clientType === 'confidential' ? '机密应用' : '公开应用'
+}
+
+function appName(clientId: string) {
+  return apps.value.find((app) => app.client_id === clientId)?.name || '未知应用'
+}
+
+function grantScopes(grant: OAuthGrant) {
+  return [...grant.oidc_scopes, ...grant.permissions]
 }
 
 function summaryFromClient(app: OAuthClient): OAuthClientSummary {

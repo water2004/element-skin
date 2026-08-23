@@ -13,6 +13,15 @@ keys:
   private_key: "private.pem"  # 开发环境使用本地路径
   public_key: "public.pem"
 
+# 本站 OIDC Server 使用独立于 Yggdrasil 的签名密钥
+oidc:
+  private_key: "oidc-private.pem"
+  public_key: "oidc-public.pem"
+
+# OIDC client secret 与外部 refresh token 的 AES-256-GCM 主密钥（Base64）
+identity:
+  encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="  # 仅开发环境，生产必须替换
+
 # 数据库配置
 database:
   host: "localhost"
@@ -22,6 +31,11 @@ database:
   name: "elementskin"
   sslmode: "disable"
   max_connections: 20
+
+# Webhook Worker 使用独立进程和连接池；默认预算优先保护主站请求
+webhook_worker:
+  max_database_connections: 2
+  active_interval_ms: 3000
 
 # Redis 配置
 # Redis 是验证码、限流、公开设置/首页媒体缓存和短期鉴权缓存的必需依赖

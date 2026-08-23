@@ -150,30 +150,30 @@ func TestMinecraftServiceRejectsInvalidInputsExactly(t *testing.T) {
 	profile := testutil.CreateProfile(t, db, user.ID, "minecraft_errors_profile", "MinecraftErrors")
 	svc := minecraftService(db)
 	_, err := svc.ProfileByName(ctx, permission.Actor{}, profile.Name)
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 	_, err = svc.TexturesProperty(ctx, permission.Actor{}, profile.ID)
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 
 	_, err = svc.ProfileByName(ctx, permission.GuestActor(), "missing-name")
-	assertHTTPError(t, err, 404, "minecraft profile not found")
+	assertHTTPError(t, err, 404, "minecraft_profile.resolve.not_found")
 	_, err = svc.ProfileByID(ctx, permission.GuestActor(), "missing-id")
-	assertHTTPError(t, err, 404, "minecraft profile not found")
+	assertHTTPError(t, err, 404, "minecraft_profile.resolve.not_found")
 	_, err = svc.TexturesProperty(ctx, permission.GuestActor(), "missing-id")
-	assertHTTPError(t, err, 404, "minecraft profile not found")
+	assertHTTPError(t, err, 404, "minecraft_profile.resolve.not_found")
 
 	names := make([]string, 101)
 	for i := range names {
 		names[i] = "Player"
 	}
 	_, err = svc.ProfilesByNames(ctx, permission.GuestActor(), names)
-	assertHTTPError(t, err, 400, "too many names")
+	assertHTTPError(t, err, 400, "minecraft_profile.read.exceeded")
 
 	_, err = svc.HasJoined(ctx, clientActorWith("minecraft_session.hasjoined.server"), minecraftsvc.HasJoinedRequest{Username: profile.Name})
-	assertHTTPError(t, err, 400, "username and server_id are required")
+	assertHTTPError(t, err, 400, "minecraft_session.join.required")
 	_, err = svc.HasJoined(ctx, clientActorWith(), minecraftsvc.HasJoinedRequest{Username: profile.Name, ServerID: "server"})
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 	_, err = svc.HasJoined(ctx, permission.Actor{SessionKind: permission.SessionKindClient, Entrypoint: permission.EntrypointAPI, UserID: user.ID, Permissions: clientActorWith("minecraft_session.hasjoined.server").Permissions}, minecraftsvc.HasJoinedRequest{Username: profile.Name, ServerID: "server"})
-	assertHTTPError(t, err, 403, "permission denied")
+	assertHTTPError(t, err, 403, "permission.check.denied")
 }
 
 func minecraftService(db *database.DB) minecraftsvc.Service {
@@ -202,7 +202,7 @@ func clientActorWith(codes ...string) permission.Actor {
 func assertHTTPError(t *testing.T, err error, status int, detail string) {
 	t.Helper()
 	var httpErr util.HTTPError
-	if !errors.As(err, &httpErr) || httpErr.Status != status || httpErr.Detail != detail {
+	if !errors.As(err, &httpErr) || httpErr.Status != status || httpErr.Error() != detail {
 		t.Fatalf("HTTP error mismatch: err=%#v want status=%d detail=%q", err, status, detail)
 	}
 }

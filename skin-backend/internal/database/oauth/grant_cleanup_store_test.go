@@ -2,12 +2,107 @@ package oauth_test
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
+	oauthdb "element-skin/backend/internal/database/oauth"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/testutil"
 )
+
+func TestDependencyRevocationStoresReturnExactDependencies(t *testing.T) {
+	t.Run("user permission change", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user := testutil.CreateUser(t, db, "oauth-user-dependency@test.com", "pw", "OAuthUserDependency", false)
+		permissionSet := permissionIDs("profile.read.owned")
+		client := model.OAuthClient{
+			ID:          "client-user-dependency",
+			OwnerUserID: user.ID,
+			Name:        "User dependency client",
+			ClientType:  "public",
+			Status:      "active",
+			CreatedAt:   1000,
+			UpdatedAt:   1000,
+		}
+		if err := db.OAuth.CreateClient(ctx, client, permissionSet, nil); err != nil {
+			t.Fatal(err)
+		}
+		grant := model.OAuthGrant{
+			ID:        "grant-user-dependency",
+			UserID:    user.ID,
+			SubjectID: permissiondb.SubjectIDForUser(user.ID),
+			ClientID:  client.ID,
+			Status:    "active",
+			CreatedAt: 1100,
+		}
+		if err := db.OAuth.CreateGrant(ctx, grant, permissionSet); err != nil {
+			t.Fatal(err)
+		}
+
+		const revokedAt = int64(1200)
+		got, err := db.OAuth.RevokeInvalidGrantsForUser(ctx, user.ID, []int64{}, revokedAt)
+		want := []oauthdb.RevokedGrantDependency{{
+			GrantID:    grant.ID,
+			UserID:     user.ID,
+			ClientID:   client.ID,
+			ClientName: client.Name,
+			RevokedAt:  revokedAt,
+		}}
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("user dependencies=%#v err=%v want=%#v", got, err, want)
+		}
+		assertOAuthGrantStatus(t, db, grant.ID, "revoked", revokedAt)
+	})
+
+	t.Run("client permission change", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user := testutil.CreateUser(t, db, "oauth-client-dependency@test.com", "pw", "OAuthClientDependency", false)
+		permissionSet := permissionIDs("profile.read.owned")
+		client := model.OAuthClient{
+			ID:          "client-permission-dependency",
+			OwnerUserID: user.ID,
+			Name:        "Client permission dependency",
+			ClientType:  "public",
+			Status:      "active",
+			CreatedAt:   2000,
+			UpdatedAt:   2000,
+		}
+		if err := db.OAuth.CreateClient(ctx, client, permissionSet, nil); err != nil {
+			t.Fatal(err)
+		}
+		grant := model.OAuthGrant{
+			ID:        "grant-client-dependency",
+			UserID:    user.ID,
+			SubjectID: permissiondb.SubjectIDForUser(user.ID),
+			ClientID:  client.ID,
+			Status:    "active",
+			CreatedAt: 2100,
+		}
+		if err := db.OAuth.CreateGrant(ctx, grant, permissionSet); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Pool.Exec(ctx, `DELETE FROM delegated_client_permissions WHERE client_id=$1`, client.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		const revokedAt = int64(2200)
+		got, err := db.OAuth.RevokeInvalidGrantsForClient(ctx, client.ID, revokedAt)
+		want := []oauthdb.RevokedGrantDependency{{
+			GrantID:    grant.ID,
+			UserID:     user.ID,
+			ClientID:   client.ID,
+			ClientName: client.Name,
+			RevokedAt:  revokedAt,
+		}}
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("client dependencies=%#v err=%v want=%#v", got, err, want)
+		}
+		assertOAuthGrantStatus(t, db, grant.ID, "revoked", revokedAt)
+	})
+}
 
 func TestDeleteRevokedGrantsDeletesOnlyExpiredRevokedRowsAndDependenciesExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
@@ -24,7 +119,7 @@ func TestDeleteRevokedGrantsDeletesOnlyExpiredRevokedRowsAndDependenciesExactly(
 		UpdatedAt:   1000,
 	}
 	permissions := permissionIDs("profile.read.owned", "notice.read.owned")
-	if err := db.OAuth.CreateClient(ctx, client, permissions); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, permissions, nil); err != nil {
 		t.Fatal(err)
 	}
 	oldRevokedAt := int64(1000)
@@ -90,20 +185,7 @@ func TestRevokeInactiveGrantsUsesRefreshCodeAndIssuanceBoundariesExactly(t *test
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user := testutil.CreateUser(t, db, "oauth-inactive-grant-cleanup@test.com", "pw", "OAuthInactiveGrantCleanup", false)
-	client := model.OAuthClient{
-		ID:          "client-inactive-grant-cleanup",
-		OwnerUserID: user.ID,
-		Name:        "Inactive grant cleanup client",
-		RedirectURI: "https://inactive-cleanup.example/callback",
-		ClientType:  "public",
-		Status:      "active",
-		CreatedAt:   100,
-		UpdatedAt:   100,
-	}
 	permissions := permissionIDs("profile.read.owned")
-	if err := db.OAuth.CreateClient(ctx, client, permissions); err != nil {
-		t.Fatal(err)
-	}
 
 	const (
 		now           = int64(10_000)
@@ -111,14 +193,33 @@ func TestRevokeInactiveGrantsUsesRefreshCodeAndIssuanceBoundariesExactly(t *test
 	)
 	alreadyRevokedAt := int64(500)
 	grants := []model.OAuthGrant{
-		{ID: "grant-expired-refresh", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1000},
-		{ID: "grant-revoked-refresh", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1100},
-		{ID: "grant-without-credentials", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1200},
-		{ID: "grant-expired-code", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1300},
-		{ID: "grant-active-refresh", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1400},
-		{ID: "grant-live-consumed-code", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: 1500},
-		{ID: "grant-issuance-grace", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "active", CreatedAt: createdBefore + 1},
-		{ID: "grant-already-revoked", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), ClientID: client.ID, Status: "revoked", CreatedAt: 1600, RevokedAt: &alreadyRevokedAt},
+		{ID: "grant-expired-refresh", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), Status: "active", CreatedAt: 1000},
+		{ID: "grant-revoked-refresh", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), Status: "active", CreatedAt: 1100},
+		{ID: "grant-without-credentials", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), Status: "active", CreatedAt: 1200},
+		{ID: "grant-expired-code", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), Status: "active", CreatedAt: 1300},
+		{ID: "grant-active-refresh", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), Status: "active", CreatedAt: 1400},
+		{ID: "grant-live-consumed-code", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), Status: "active", CreatedAt: 1500},
+		{ID: "grant-issuance-grace", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), Status: "active", CreatedAt: createdBefore + 1},
+		{ID: "grant-already-revoked", UserID: user.ID, SubjectID: permissiondb.SubjectIDForUser(user.ID), Status: "revoked", CreatedAt: 1600, RevokedAt: &alreadyRevokedAt},
+	}
+	clientByGrant := make(map[string]model.OAuthClient, len(grants))
+	for i := range grants {
+		grant := &grants[i]
+		client := model.OAuthClient{
+			ID:          "client-" + grant.ID,
+			OwnerUserID: user.ID,
+			Name:        "Inactive grant cleanup client " + grant.ID,
+			RedirectURI: "https://inactive-cleanup.example/callback/" + grant.ID,
+			ClientType:  "public",
+			Status:      "active",
+			CreatedAt:   100,
+			UpdatedAt:   100,
+		}
+		if err := db.OAuth.CreateClient(ctx, client, permissions, nil); err != nil {
+			t.Fatal(err)
+		}
+		grant.ClientID = client.ID
+		clientByGrant[grant.ID] = client
 	}
 	for _, grant := range grants {
 		if err := db.OAuth.CreateGrant(ctx, grant, permissions); err != nil {
@@ -128,9 +229,9 @@ func TestRevokeInactiveGrantsUsesRefreshCodeAndIssuanceBoundariesExactly(t *test
 
 	revokedRefreshAt := int64(9000)
 	refreshTokens := []model.OAuthToken{
-		{TokenHash: "refresh-expired", ClientID: client.ID, UserID: user.ID, GrantID: "grant-expired-refresh", ExpiresAt: now, CreatedAt: 2000},
-		{TokenHash: "refresh-revoked", ClientID: client.ID, UserID: user.ID, GrantID: "grant-revoked-refresh", ExpiresAt: now + 1, CreatedAt: 2100, RevokedAt: &revokedRefreshAt},
-		{TokenHash: "refresh-active", ClientID: client.ID, UserID: user.ID, GrantID: "grant-active-refresh", ExpiresAt: now + 1, CreatedAt: 2200},
+		{TokenHash: "refresh-expired", ClientID: clientByGrant["grant-expired-refresh"].ID, UserID: user.ID, GrantID: "grant-expired-refresh", ExpiresAt: now, CreatedAt: 2000},
+		{TokenHash: "refresh-revoked", ClientID: clientByGrant["grant-revoked-refresh"].ID, UserID: user.ID, GrantID: "grant-revoked-refresh", ExpiresAt: now + 1, CreatedAt: 2100, RevokedAt: &revokedRefreshAt},
+		{TokenHash: "refresh-active", ClientID: clientByGrant["grant-active-refresh"].ID, UserID: user.ID, GrantID: "grant-active-refresh", ExpiresAt: now + 1, CreatedAt: 2200},
 	}
 	for _, refresh := range refreshTokens {
 		if err := db.OAuth.CreateRefreshToken(ctx, refresh); err != nil {
@@ -140,8 +241,8 @@ func TestRevokeInactiveGrantsUsesRefreshCodeAndIssuanceBoundariesExactly(t *test
 
 	consumedAt := int64(9500)
 	codes := []model.OAuthAuthorizationCode{
-		{CodeHash: "code-expired", ClientID: client.ID, UserID: user.ID, GrantID: "grant-expired-code", RedirectURI: client.RedirectURI, CodeChallenge: "challenge", CodeChallengeMethod: "S256", ExpiresAt: now, CreatedAt: 3000},
-		{CodeHash: "code-live-consumed", ClientID: client.ID, UserID: user.ID, GrantID: "grant-live-consumed-code", RedirectURI: client.RedirectURI, CodeChallenge: "challenge", CodeChallengeMethod: "S256", ExpiresAt: now + 1, CreatedAt: 3100, ConsumedAt: &consumedAt},
+		{CodeHash: "code-expired", ClientID: clientByGrant["grant-expired-code"].ID, UserID: user.ID, GrantID: "grant-expired-code", RedirectURI: clientByGrant["grant-expired-code"].RedirectURI, CodeChallenge: "challenge", CodeChallengeMethod: "S256", ExpiresAt: now, CreatedAt: 3000},
+		{CodeHash: "code-live-consumed", ClientID: clientByGrant["grant-live-consumed-code"].ID, UserID: user.ID, GrantID: "grant-live-consumed-code", RedirectURI: clientByGrant["grant-live-consumed-code"].RedirectURI, CodeChallenge: "challenge", CodeChallengeMethod: "S256", ExpiresAt: now + 1, CreatedAt: 3100, ConsumedAt: &consumedAt},
 	}
 	for _, code := range codes {
 		if err := db.OAuth.CreateAuthorizationCode(ctx, code, permissions); err != nil {

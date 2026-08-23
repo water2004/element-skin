@@ -71,7 +71,7 @@ func (y Yggdrasil) cachedFallbackPublicKeys(ctx context.Context) ([]model.Yggdra
 
 func requirePublicPermission(actor permission.Actor) error {
 	if err := actor.Require(sitePublicReadPermission); err != nil {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 	}
 	return nil
 }

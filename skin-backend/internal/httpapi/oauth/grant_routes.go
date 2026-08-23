@@ -21,5 +21,22 @@ func (h Handler) RevokeGrant(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, http.StatusOK, map[string]any{"ok": true})
+	util.NoContent(w)
+}
+
+func (h Handler) ListAdminGrants(w http.ResponseWriter, req *http.Request) {
+	res, err := h.oauth.ListGrantsForAdmin(req.Context(), shared.CurrentActor(req), util.ClampLimit(req.URL.Query().Get("limit")))
+	if err != nil {
+		util.Error(w, err)
+		return
+	}
+	util.JSON(w, http.StatusOK, map[string]any{"items": res})
+}
+
+func (h Handler) RevokeAdminGrant(w http.ResponseWriter, req *http.Request) {
+	if err := h.oauth.RevokeGrantForAdmin(req.Context(), shared.CurrentActor(req), req.PathValue("grant_id")); err != nil {
+		util.Error(w, err)
+		return
+	}
+	util.NoContent(w)
 }

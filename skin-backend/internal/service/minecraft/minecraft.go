@@ -40,7 +40,7 @@ func (s Service) ProfileByName(ctx context.Context, actor permission.Actor, name
 		return nil, err
 	}
 	if profile == nil {
-		return nil, notFound("minecraft profile not found")
+		return nil, notFound("minecraft_profile", "resolve", "not_found")
 	}
 	return publicProfile(*profile, true), nil
 }
@@ -50,7 +50,7 @@ func (s Service) ProfilesByNames(ctx context.Context, actor permission.Actor, na
 		return nil, err
 	}
 	if len(names) > maxBulkNames {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "too many names"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "minecraft_profile", Operation: "read", Reason: "exceeded"}
 	}
 	profiles, err := s.DB.Profiles.SearchByNames(ctx, names, maxBulkNames)
 	if err != nil {
@@ -72,7 +72,7 @@ func (s Service) ProfileByID(ctx context.Context, actor permission.Actor, profil
 		return nil, err
 	}
 	if profile == nil {
-		return nil, notFound("minecraft profile not found")
+		return nil, notFound("minecraft_profile", "resolve", "not_found")
 	}
 	return publicProfile(*profile, false), nil
 }
@@ -86,7 +86,7 @@ func (s Service) TexturesProperty(ctx context.Context, actor permission.Actor, p
 		return nil, err
 	}
 	if profile == nil {
-		return nil, notFound("minecraft profile not found")
+		return nil, notFound("minecraft_profile", "resolve", "not_found")
 	}
 	property, err := s.texturesProperty(*profile)
 	if err != nil {
@@ -109,7 +109,7 @@ func (s Service) HasJoined(ctx context.Context, actor permission.Actor, req HasJ
 	username := strings.TrimSpace(req.Username)
 	serverID := strings.TrimSpace(req.ServerID)
 	if username == "" || serverID == "" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "username and server_id are required"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "minecraft_session", Operation: "join", Reason: "required"}
 	}
 	body, status, err := s.Ygg.HasJoined(ctx, username, serverID)
 	if err != nil {
@@ -134,7 +134,7 @@ func (s Service) texturesProperty(profile model.Profile) (map[string]any, error)
 	}
 	property := firstTexturesProperty(body)
 	if property == nil {
-		return nil, util.HTTPError{Status: http.StatusInternalServerError, Detail: "textures property missing"}
+		return nil, util.HTTPError{Status: http.StatusInternalServerError, Object: "minecraft_profile", Operation: "read", Reason: "incomplete"}
 	}
 	return property, nil
 }
@@ -166,7 +166,7 @@ func firstTexturesProperty(body map[string]any) map[string]any {
 }
 
 func forbidden() error {
-	return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+	return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 }
 
 func requirePermission(actor permission.Actor, def permission.Definition) error {
@@ -176,6 +176,6 @@ func requirePermission(actor permission.Actor, def permission.Definition) error 
 	return nil
 }
 
-func notFound(detail string) error {
-	return util.HTTPError{Status: http.StatusNotFound, Detail: detail}
+func notFound(object, operation, reason string) error {
+	return util.HTTPError{Status: http.StatusNotFound, Object: object, Operation: operation, Reason: reason}
 }

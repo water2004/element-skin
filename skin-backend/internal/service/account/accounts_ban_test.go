@@ -91,16 +91,16 @@ func TestAccountServiceBanUserRejectsInvalidInputsWithoutMutation(t *testing.T) 
 	actor := actorWithPermissions(adminUser.ID, "account.ban.any")
 	future := database.NowMS() + int64(time.Hour/time.Millisecond)
 
-	if _, err := svc.BanUser(ctx, permission.Actor{}, target.ID, accountsvc.BanUserInput{BannedUntil: future, Reason: "reason"}); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.BanUser(ctx, permission.Actor{}, target.ID, accountsvc.BanUserInput{BannedUntil: future, Reason: "reason"}); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("ban without permission error mismatch: %#v", err)
 	}
-	if _, err := svc.BanUser(ctx, actor, target.ID, accountsvc.BanUserInput{BannedUntil: 1, Reason: "reason"}); !httpErrorIs(err, http.StatusBadRequest, "banned_until is required") {
+	if _, err := svc.BanUser(ctx, actor, target.ID, accountsvc.BanUserInput{BannedUntil: 1, Reason: "reason"}); !httpErrorIs(err, http.StatusBadRequest, "user_ban.configure.required") {
 		t.Fatalf("expired ban timestamp error mismatch: %#v", err)
 	}
-	if _, err := svc.BanUser(ctx, actor, target.ID, accountsvc.BanUserInput{BannedUntil: future, Reason: " \t\n "}); !httpErrorIs(err, http.StatusBadRequest, "reason is required") {
+	if _, err := svc.BanUser(ctx, actor, target.ID, accountsvc.BanUserInput{BannedUntil: future, Reason: " \t\n "}); !httpErrorIs(err, http.StatusBadRequest, "audit_reason.validate.required") {
 		t.Fatalf("missing ban reason error mismatch: %#v", err)
 	}
-	if _, err := svc.BanUser(ctx, actor, target.ID, accountsvc.BanUserInput{BannedUntil: future, Reason: strings.Repeat("中", 501)}); !httpErrorIs(err, http.StatusBadRequest, "reason too long") {
+	if _, err := svc.BanUser(ctx, actor, target.ID, accountsvc.BanUserInput{BannedUntil: future, Reason: strings.Repeat("中", 501)}); !httpErrorIs(err, http.StatusBadRequest, "audit_reason.validate.too_long") {
 		t.Fatalf("long ban reason error mismatch: %#v", err)
 	}
 	if banned, err := db.Users.IsBanned(ctx, target.ID); err != nil || banned {
@@ -126,7 +126,7 @@ func TestAccountServiceProtectsProtectedSubjectAndUnbansExactly(t *testing.T) {
 
 	plainActor := actorWithPermissions(plainAdmin.ID, "account.ban.any")
 	future := database.NowMS() + int64(time.Hour/time.Millisecond)
-	if _, err := svc.BanUser(ctx, plainActor, protectedAdmin.ID, accountsvc.BanUserInput{BannedUntil: future, Reason: "protected"}); !httpErrorIs(err, http.StatusForbidden, "cannot modify protected subject") {
+	if _, err := svc.BanUser(ctx, plainActor, protectedAdmin.ID, accountsvc.BanUserInput{BannedUntil: future, Reason: "protected"}); !httpErrorIs(err, http.StatusForbidden, "protected_subject.update.denied") {
 		t.Fatalf("protected admin ban error mismatch: %#v", err)
 	}
 	if banned, err := db.Users.IsBanned(ctx, protectedAdmin.ID); err != nil || banned {
@@ -151,10 +151,10 @@ func TestAccountServiceProtectsProtectedSubjectAndUnbansExactly(t *testing.T) {
 		t.Fatalf("unban should invalidate auth cache exactly, got %v", err)
 	}
 
-	if err := svc.UnbanUser(ctx, permission.Actor{}, target.ID); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.UnbanUser(ctx, permission.Actor{}, target.ID); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("unban without permission error mismatch: %#v", err)
 	}
-	if err := svc.UnbanUser(ctx, unbanActor, "missing-account-unban"); !httpErrorIs(err, http.StatusNotFound, "user not found") {
+	if err := svc.UnbanUser(ctx, unbanActor, "missing-account-unban"); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("missing unban user error mismatch: %#v", err)
 	}
 }

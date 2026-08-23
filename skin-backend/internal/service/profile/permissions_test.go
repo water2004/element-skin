@@ -33,7 +33,7 @@ func TestProfilePermissionDenials(t *testing.T) {
 				return err
 			},
 			status: 403,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "ListMyProfiles without profile.read.owned",
@@ -43,7 +43,7 @@ func TestProfilePermissionDenials(t *testing.T) {
 				return err
 			},
 			status: 403,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "UpdateProfile without profile.update.owned",
@@ -52,7 +52,7 @@ func TestProfilePermissionDenials(t *testing.T) {
 				return svc.UpdateProfile(ctx, a, profile.ID, "RenamedPerm")
 			},
 			status: 403,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "DeleteProfile without profile.delete.owned",
@@ -61,7 +61,7 @@ func TestProfilePermissionDenials(t *testing.T) {
 				return svc.DeleteProfile(ctx, a, profile.ID)
 			},
 			status: 403,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 		{
 			name:      "DeleteProfileByID without profile.delete.any",
@@ -70,7 +70,7 @@ func TestProfilePermissionDenials(t *testing.T) {
 				return svc.DeleteProfileByID(ctx, a, profile.ID)
 			},
 			status: 403,
-			detail: "permission denied",
+			detail: "permission.check.denied",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -92,7 +92,7 @@ func TestSetProfileTexturePermissionDenial(t *testing.T) {
 
 	actor := testActorWithCodes(user.ID, "profile.update.owned")
 	err := svc.SetProfileTexture(ctx, actor, profile.ID, "skin", &hash)
-	if !httpError(err, 403, "permission denied") {
+	if !httpError(err, 403, "permission.check.denied") {
 		t.Fatalf("SetProfileTexture with owned scope should be denied, got %#v", err)
 	}
 }
@@ -106,7 +106,7 @@ func TestClearProfileTexturePermissionDenial(t *testing.T) {
 
 	actor := testActorWithCodes(user.ID, "texture.read.owned")
 	err := svc.ClearProfileTexture(ctx, actor, profile.ID, "skin")
-	if !httpError(err, 403, "permission denied") {
+	if !httpError(err, 403, "permission.check.denied") {
 		t.Fatalf("ClearProfileTexture without clear permission should be denied, got %#v", err)
 	}
 }
@@ -142,7 +142,7 @@ func TestProfilePermissionDenialDoesNotMutateState(t *testing.T) {
 	actor := testActorWithCodes(user.ID, "profile.read.owned")
 
 	err := svc.UpdateProfile(ctx, actor, profile.ID, "StolenName")
-	if !httpError(err, 403, "permission denied") {
+	if !httpError(err, 403, "permission.check.denied") {
 		t.Fatalf("expected permission denied, got %#v", err)
 	}
 	unchanged, err := db.Profiles.GetByID(ctx, profile.ID)
@@ -153,5 +153,5 @@ func TestProfilePermissionDenialDoesNotMutateState(t *testing.T) {
 
 func httpError(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }

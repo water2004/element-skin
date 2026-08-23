@@ -18,7 +18,7 @@
             </el-text>
           </div>
 
-          <div class="flex flex-wrap justify-end gap-2">
+          <div v-if="canReview" class="flex flex-wrap justify-end gap-2">
             <el-button
               v-if="app.status !== 'active'"
               type="success"
@@ -121,7 +121,7 @@ import type { PermissionDefinition } from '@/api/types'
 import type { OAuthClient, OAuthClientStatus } from '@/api/oauth'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
-import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
+import PermissionToneTag from '@/components/permissions/PermissionToneTag.vue'
 
 const visible = defineModel<boolean>('visible', { required: true })
 
@@ -130,6 +130,7 @@ const props = defineProps<{
   catalog: PermissionDefinition[]
   loading: boolean
   reviewing: boolean
+  canReview: boolean
 }>()
 
 defineEmits<{
@@ -159,7 +160,9 @@ function permissionGroupLabel(code: string) {
     invite: '邀请码',
     material: '材质',
     minecraft_session: 'Minecraft 会话',
-    microsoft_import: 'Microsoft 正版角色导入',
+    external_identity: '外部身份',
+    identity_provider: 'OIDC 身份提供方',
+    official_profile: '正版角色绑定',
     notice: '通知',
     oauth_app: '第三方应用',
     oauth_grant: '应用授权',

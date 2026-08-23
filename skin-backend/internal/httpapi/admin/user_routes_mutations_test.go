@@ -41,39 +41,39 @@ func TestUserRoutesMutationsInvalidateAuthCacheExactly(t *testing.T) {
 	}
 
 	cacheTarget(t)
-	req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/roles/admin", nil)
+	req := httptest.NewRequest(http.MethodPut, "/v2/admin/users/"+target.ID+"/roles/admin", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req.SetPathValue("role_id", permission.RoleAdmin)
 	req = withProtectedActor(req, superAdmin.ID)
 	rec := httptest.NewRecorder()
 	h.GrantUserRole(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("grant admin role response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	assertTargetCacheMiss(t, "grant admin role")
 
 	cacheTarget(t)
 	banUntil := time.Now().Add(time.Hour).UnixMilli()
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(banUntil)+`,"reason":"mutation route ban"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(banUntil)+`,"reason":"mutation route ban"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"banned_until\":"+strconvI64(banUntil)+"}\n" {
 		t.Fatalf("ban user response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	assertTargetCacheMiss(t, "ban user")
 
 	cacheTarget(t)
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/unban", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/unban", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.UnbanUser(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("unban user response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	assertTargetCacheMiss(t, "unban user")
@@ -82,12 +82,12 @@ func TestUserRoutesMutationsInvalidateAuthCacheExactly(t *testing.T) {
 	if err := redis.SetYggToken(t.Context(), model.Token{AccessToken: "admin_reset_ygg", UserID: target.ID, CreatedAt: time.Now().UnixMilli()}, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminCachePassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminCachePassword123"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("reset user password response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	assertTargetCacheMiss(t, "reset user password")
@@ -103,67 +103,67 @@ func TestUserRoutesRejectInvalidBanUnbanAndResetPayloadsExactly(t *testing.T) {
 	adminUser := testutil.CreateUser(t, db, "admin-user-errors@test.com", "Password123", "AdminUserErrors", true)
 	target := testutil.CreateUser(t, db, "target-user-errors@test.com", "Password123", "TargetUserErrors", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/ban", strings.NewReader(`{`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec := httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("ban bad json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":1}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":1}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"banned_until is required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"user_ban\",\"operation\":\"configure\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("ban expired timestamp mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if banned, err := db.Users.IsBanned(req.Context(), target.ID); err != nil || banned {
 		t.Fatalf("invalid ban should not change user state: banned=%v err=%v", banned, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(time.Now().Add(time.Hour).UnixMilli())+`}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.BanUser(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"reason is required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"audit_reason\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("ban missing reason mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if banned, err := db.Users.IsBanned(req.Context(), target.ID); err != nil || banned {
 		t.Fatalf("missing reason ban should not change user state: banned=%v err=%v", banned, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/missing-user/unban", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/missing-user/unban", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", "missing-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.UnbanUser(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("unban missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"user_id and new_password required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"password_reset\",\"operation\":\"validate\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("reset missing password mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"missing-user","new_password":"AdminNewPassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"missing-user","new_password":"AdminNewPassword123"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("reset missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -187,7 +187,7 @@ func TestUnbanReturnsNotFoundWhenUserIsDeletedAfterAuthorizationCheck(t *testing
 
 	result := make(chan *httptest.ResponseRecorder, 1)
 	go func() {
-		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/unban", nil)
+		req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/unban", nil)
 		req = withAdminActor(req, "admin-test-user")
 		req.SetPathValue("user_id", target.ID)
 		req = withAdminActor(req, adminUser.ID)
@@ -203,7 +203,7 @@ func TestUnbanReturnsNotFoundWhenUserIsDeletedAfterAuthorizationCheck(t *testing
 		t.Fatal(err)
 	}
 	rec := <-result
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"user not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("user deleted before unban should return exact not found: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -223,13 +223,13 @@ func TestUserRoutesDeleteUserAndInvalidateAuthCacheExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID, nil)
+	req := httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+target.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec := httptest.NewRecorder()
 	h.DeleteUser(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("delete user response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if user, err := db.Users.GetByID(req.Context(), target.ID); err != nil || user != nil {
@@ -245,18 +245,18 @@ func TestUserRoutesDeleteUserAndInvalidateAuthCacheExactly(t *testing.T) {
 		t.Fatalf("delete user should revoke existing ygg tokens, got %v", err)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+target.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteUser(rec, req)
-	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), `"detail":"user not found"`) {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("delete missing user mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
 
-func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t *testing.T) {
+func TestUserMutationRoutesHandleAuthInvalidationFailuresExactly(t *testing.T) {
 	t.Run("grant role", func(t *testing.T) {
 		db, _ := testutil.NewTestApp(t)
 		cfg := testutil.TestConfig()
@@ -265,13 +265,13 @@ func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t 
 		adminUser := testutil.CreateUser(t, db, "admin-grant-invalidate@test.com", "Password123", "AdminGrantInvalidate", true)
 		target := testutil.CreateUser(t, db, "target-grant-invalidate@test.com", "Password123", "TargetGrantInvalidate", false)
 
-		req := httptest.NewRequest(http.MethodPut, "/v1/admin/users/"+target.ID+"/roles/admin", nil)
+		req := httptest.NewRequest(http.MethodPut, "/v2/admin/users/"+target.ID+"/roles/admin", nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		req.SetPathValue("role_id", permission.RoleAdmin)
 		rec := httptest.NewRecorder()
 		h.GrantUserRole(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("grant role cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if hasRole, err := db.Permissions.UserHasRole(t.Context(), target.ID, permission.RoleAdmin); err != nil || !hasRole {
@@ -293,13 +293,13 @@ func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t 
 			t.Fatal(err)
 		}
 
-		req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID+"/roles/admin", nil)
+		req := httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+target.ID+"/roles/admin", nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		req.SetPathValue("role_id", permission.RoleAdmin)
 		rec := httptest.NewRecorder()
 		h.RevokeUserRole(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("revoke role cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if hasRole, err := db.Permissions.UserHasRole(t.Context(), target.ID, permission.RoleAdmin); err != nil || hasRole {
@@ -319,12 +319,12 @@ func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t 
 		target := testutil.CreateUser(t, db, "target-ban-invalidate@test.com", "Password123", "TargetBanInvalidate", false)
 		bannedUntil := time.Now().Add(2 * time.Hour).UnixMilli()
 
-		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(bannedUntil)+`,"reason":"cache failure ban"}`))
+		req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(bannedUntil)+`,"reason":"cache failure ban"}`))
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		rec := httptest.NewRecorder()
 		h.BanUser(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("ban user cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		updated, err := db.Users.GetByID(t.Context(), target.ID)
@@ -347,12 +347,12 @@ func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t 
 			t.Fatal(err)
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/unban", nil)
+		req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/unban", nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		rec := httptest.NewRecorder()
 		h.UnbanUser(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("unban user cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		updated, err := db.Users.GetByID(t.Context(), target.ID)
@@ -372,16 +372,16 @@ func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t 
 		adminUser := testutil.CreateUser(t, db, "admin-delete-invalidate@test.com", "Password123", "AdminDeleteInvalidate", true)
 		target := testutil.CreateUser(t, db, "target-delete-invalidate@test.com", "Password123", "TargetDeleteInvalidate", false)
 
-		req := httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+target.ID, nil)
+		req := httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+target.ID, nil)
 		req = withAdminActor(req, adminUser.ID)
 		req.SetPathValue("user_id", target.ID)
 		rec := httptest.NewRecorder()
 		h.DeleteUser(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("delete user cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
-		if user, err := db.Users.GetByID(t.Context(), target.ID); err != nil || user != nil {
-			t.Fatalf("delete should remove user before cache failure: user=%#v err=%v", user, err)
+		if user, err := db.Users.GetByID(t.Context(), target.ID); err != nil || user == nil || user.Email != target.Email || user.DisplayName != target.DisplayName {
+			t.Fatalf("delete cache failure must preserve exact user: user=%#v err=%v", user, err)
 		}
 		if len(cache.userIDs) != 1 || cache.userIDs[0] != target.ID {
 			t.Fatalf("delete user cache invalidation targets mismatch: %#v", cache.userIDs)
@@ -400,11 +400,11 @@ func TestUserMutationRoutesPersistChangesBeforeAuthInvalidationFailureExactly(t 
 			t.Fatal(err)
 		}
 
-		req := httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"ChangedPassword123"}`))
+		req := httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"ChangedPassword123"}`))
 		req = withAdminActor(req, adminUser.ID)
 		rec := httptest.NewRecorder()
 		h.ResetUserPassword(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("reset password cache failure response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		updated, err := db.Users.GetByID(t.Context(), target.ID)

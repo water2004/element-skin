@@ -1,0 +1,464 @@
+package identity
+
+import (
+	"context"
+	"errors"
+	"net"
+	"net/url"
+	"sort"
+	"strings"
+
+	"element-skin/backend/internal/config"
+	"element-skin/backend/internal/database"
+	"element-skin/backend/internal/model"
+	"element-skin/backend/internal/permission"
+	"element-skin/backend/internal/redisstore"
+	"element-skin/backend/internal/util"
+
+	"github.com/jackc/pgx/v5/pgconn"
+)
+
+const (
+	AdapterGenericOIDC = "generic_oidc"
+	AdapterMicrosoft   = "microsoft"
+)
+
+type Service struct {
+	DB             *database.DB
+	Config         config.Config
+	Discovery      Discovery
+	Redis          redisstore.Store
+	OIDCClient     OIDCClient
+	TokenRefresher TokenRefresher
+}
+
+type ProviderInput struct {
+	Name         string
+	IssuerURL    string
+	ClientID     string
+	ClientSecret *string
+	Scopes       []string
+	Adapter      string
+	IconURL      string
+	Enabled      bool
+	LoginEnabled bool
+	LinkEnabled  bool
+	DisplayOrder int
+}
+
+func (s Service) ListPublicProviders(ctx context.Context, actor permission.Actor) ([]map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("identity_provider.read.public")); err != nil {
+		return nil, forbidden()
+	}
+	items, err := s.DB.Identities.ListProviders(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, publicProviderResponse(item))
+	}
+	return out, nil
+}
+
+func (s Service) ListProviders(ctx context.Context, actor permission.Actor) ([]map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("identity_provider.read.any")); err != nil {
+		return nil, forbidden()
+	}
+	items, err := s.DB.Identities.ListProviders(ctx, false)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, adminProviderResponse(item))
+	}
+	return out, nil
+}
+
+func (s Service) GetProvider(ctx context.Context, actor permission.Actor, id string) (map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("identity_provider.read.any")); err != nil {
+		return nil, forbidden()
+	}
+	item, err := s.DB.Identities.GetProvider(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	if item == nil {
+		return nil, notFound("identity_provider", "resolve", "not_found")
+	}
+	return adminProviderResponse(*item), nil
+}
+
+func (s Service) CreateProvider(ctx context.Context, actor permission.Actor, input ProviderInput) (map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("identity_provider.create.any")); err != nil {
+		return nil, forbidden()
+	}
+	item, err := s.providerFromInput(ctx, input, nil)
+	if err != nil {
+		return nil, err
+	}
+	item.ID, err = util.GenerateUUIDNoDash()
+	if err != nil {
+		return nil, err
+	}
+	item.CreatedAt = database.NowMS()
+	item.UpdatedAt = item.CreatedAt
+	if err := s.DB.Identities.CreateProvider(ctx, item); err != nil {
+		if isUniqueViolation(err) {
+			return nil, conflict("identity_provider", "create", "conflict")
+		}
+		return nil, err
+	}
+	return adminProviderResponse(item), nil
+}
+
+func (s Service) UpdateProvider(ctx context.Context, actor permission.Actor, id string, input ProviderInput) (map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("identity_provider.update.any")); err != nil {
+		return nil, forbidden()
+	}
+	current, err := s.DB.Identities.GetProvider(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return nil, err
+	}
+	if current == nil {
+		return nil, notFound("identity_provider", "resolve", "not_found")
+	}
+	item, err := s.providerFromInput(ctx, input, current)
+	if err != nil {
+		return nil, err
+	}
+	item.ID = current.ID
+	item.CreatedAt = current.CreatedAt
+	item.UpdatedAt = database.NowMS()
+	updated, err := s.DB.Identities.UpdateProvider(ctx, item)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, conflict("identity_provider", "create", "conflict")
+		}
+		return nil, err
+	}
+	if !updated {
+		return nil, notFound("identity_provider", "resolve", "not_found")
+	}
+	return adminProviderResponse(item), nil
+}
+
+func (s Service) DeleteProvider(ctx context.Context, actor permission.Actor, id string) error {
+	if err := actor.Require(permission.MustDefinitionByCode("identity_provider.delete.any")); err != nil {
+		return forbidden()
+	}
+	id = strings.TrimSpace(id)
+	provider, err := s.DB.Identities.GetProvider(ctx, id)
+	if err != nil {
+		return err
+	}
+	if provider == nil {
+		return notFound("identity_provider", "resolve", "not_found")
+	}
+	if s.Redis == nil {
+		return errors.New("identity cache store is not configured")
+	}
+	identityIDs, err := s.DB.Identities.ListIdentityIDsByProvider(ctx, id)
+	if err != nil {
+		return err
+	}
+	for _, identityID := range identityIDs {
+		if err := s.Redis.DeleteExternalAccessToken(ctx, identityID); err != nil {
+			return err
+		}
+	}
+	deletedIdentityIDs, deleted, err := s.DB.Identities.DeleteProvider(ctx, id)
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return notFound("identity_provider", "resolve", "not_found")
+	}
+	for _, identityID := range deletedIdentityIDs {
+		// The database deletion is already committed. Cached tokens cannot be used
+		// without the deleted identity record and will expire naturally if this
+		// best-effort race cleanup fails.
+		reportPostCommitError("remove deleted provider identity token race", s.Redis.DeleteExternalAccessToken(ctx, identityID))
+	}
+	return nil
+}
+
+func (s Service) ListIdentities(ctx context.Context, actor permission.Actor) ([]map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("external_identity.read.owned")); err != nil {
+		return nil, forbidden()
+	}
+	items, err := s.DB.Identities.ListIdentityViewsByUser(ctx, actor.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		out = append(out, identityResponse(item.Identity, item.Provider, item.Credential))
+	}
+	return out, nil
+}
+
+func (s Service) UpdateIdentityLabel(ctx context.Context, actor permission.Actor, id, label string) error {
+	if err := actor.Require(permission.MustDefinitionByCode("external_identity.update.owned")); err != nil {
+		return forbidden()
+	}
+	label = strings.TrimSpace(label)
+	if len([]rune(label)) > 80 {
+		return badRequest("identity_label", "validate", "too_long")
+	}
+	updated, err := s.DB.Identities.UpdateIdentityLabel(ctx, strings.TrimSpace(id), actor.UserID, label, database.NowMS())
+	if err != nil {
+		return err
+	}
+	if !updated {
+		return notFound("identity", "resolve", "not_found")
+	}
+	return nil
+}
+
+func (s Service) DeleteIdentity(ctx context.Context, actor permission.Actor, id string) error {
+	if err := actor.Require(permission.MustDefinitionByCode("external_identity.delete.owned")); err != nil {
+		return forbidden()
+	}
+	id = strings.TrimSpace(id)
+	item, err := s.DB.Identities.GetIdentity(ctx, id)
+	if err != nil {
+		return err
+	}
+	if item == nil || item.UserID != actor.UserID {
+		return notFound("identity", "resolve", "not_found")
+	}
+	if s.Redis != nil {
+		if err := s.Redis.DeleteExternalAccessToken(ctx, id); err != nil {
+			return err
+		}
+	}
+	deleted, err := s.DB.Identities.DeleteIdentity(ctx, id, actor.UserID)
+	if err != nil {
+		return err
+	}
+	if !deleted {
+		return notFound("identity", "resolve", "not_found")
+	}
+	if s.Redis != nil {
+		reportPostCommitError("remove deleted identity token race", s.Redis.DeleteExternalAccessToken(ctx, id))
+	}
+	return nil
+}
+
+func (s Service) providerFromInput(ctx context.Context, input ProviderInput, current *model.IdentityProvider) (model.IdentityProvider, error) {
+	input.Name = strings.TrimSpace(input.Name)
+	input.IssuerURL = strings.TrimSpace(input.IssuerURL)
+	input.ClientID = strings.TrimSpace(input.ClientID)
+	input.IconURL = strings.TrimSpace(input.IconURL)
+	input.Adapter = strings.TrimSpace(input.Adapter)
+	if input.Name == "" || len([]rune(input.Name)) > 80 {
+		return model.IdentityProvider{}, badRequest("identity_provider_name", "validate", "invalid")
+	}
+	if input.ClientID == "" || len(input.ClientID) > 512 {
+		return model.IdentityProvider{}, badRequest("client_id", "validate", "invalid")
+	}
+	if input.Adapter == "" {
+		input.Adapter = AdapterGenericOIDC
+	}
+	if input.Adapter != AdapterGenericOIDC && input.Adapter != AdapterMicrosoft {
+		return model.IdentityProvider{}, badRequest("identity_provider_adapter", "validate", "invalid")
+	}
+	if err := validateEndpointURL(input.IssuerURL); err != nil {
+		return model.IdentityProvider{}, badRequest("issuer_url", "validate", "invalid")
+	}
+	if input.IconURL != "" {
+		if err := validateEndpointURL(input.IconURL); err != nil {
+			return model.IdentityProvider{}, badRequest("icon_url", "validate", "invalid")
+		}
+	}
+	scopes, err := normalizeScopes(input.Scopes)
+	if err != nil {
+		return model.IdentityProvider{}, err
+	}
+	if input.Adapter == AdapterMicrosoft && (!hasScope(scopes, "XboxLive.signin") || !hasScope(scopes, "offline_access")) {
+		return model.IdentityProvider{}, badRequest("identity_provider_scope", "configure", "required")
+	}
+	discovery := s.Discovery
+	if discovery == nil {
+		discovery = HTTPDiscovery{}
+	}
+	metadata, err := discovery.Discover(ctx, input.IssuerURL)
+	if err != nil {
+		object, operation, reason, params := util.ErrorClassification(err)
+		if object == util.InternalErrorObject {
+			object, operation, reason = "identity_provider", "discover", "failed"
+		}
+		return model.IdentityProvider{}, badRequest(object, operation, reason, params)
+	}
+	if metadata.Issuer != input.IssuerURL {
+		return model.IdentityProvider{}, badRequest("identity_provider", "discover", "mismatch")
+	}
+	for _, endpoint := range []string{metadata.AuthorizationEndpoint, metadata.TokenEndpoint, metadata.JWKSURI} {
+		if err := validateEndpointURL(endpoint); err != nil {
+			return model.IdentityProvider{}, badRequest("identity_provider", "discover", "invalid")
+		}
+	}
+	if metadata.UserInfoEndpoint != "" {
+		if err := validateEndpointURL(metadata.UserInfoEndpoint); err != nil {
+			return model.IdentityProvider{}, badRequest("identity_provider", "discover", "invalid")
+		}
+	}
+	secretCiphertext := ""
+	if current != nil {
+		secretCiphertext = current.ClientSecretCiphertext
+	}
+	if input.ClientSecret != nil {
+		box, err := util.NewSecretBox(s.Config.IdentityEncryptionKey)
+		if err != nil {
+			return model.IdentityProvider{}, err
+		}
+		secretCiphertext, err = box.Encrypt(strings.TrimSpace(*input.ClientSecret))
+		if err != nil {
+			return model.IdentityProvider{}, err
+		}
+	}
+	return model.IdentityProvider{
+		Name:                   input.Name,
+		IssuerURL:              input.IssuerURL,
+		AuthorizationEndpoint:  metadata.AuthorizationEndpoint,
+		TokenEndpoint:          metadata.TokenEndpoint,
+		UserInfoEndpoint:       metadata.UserInfoEndpoint,
+		JWKSURI:                metadata.JWKSURI,
+		ClientID:               input.ClientID,
+		ClientSecretCiphertext: secretCiphertext,
+		Scopes:                 scopes,
+		Adapter:                input.Adapter,
+		IconURL:                input.IconURL,
+		Enabled:                input.Enabled,
+		LoginEnabled:           input.LoginEnabled,
+		LinkEnabled:            input.LinkEnabled,
+		DisplayOrder:           input.DisplayOrder,
+	}, nil
+}
+
+func hasScope(scopes []string, expected string) bool {
+	for _, scope := range scopes {
+		if scope == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeScopes(scopes []string) ([]string, error) {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(scopes)+1)
+	for _, scope := range scopes {
+		for _, item := range strings.Fields(scope) {
+			if len(item) > 128 || strings.ContainsAny(item, `"\\`) {
+				return nil, badRequest("oidc_scope", "validate", "invalid")
+			}
+			if !seen[item] {
+				seen[item] = true
+				out = append(out, item)
+			}
+		}
+	}
+	if !seen["openid"] {
+		out = append(out, "openid")
+	}
+	if len(out) > 32 {
+		return nil, badRequest("oidc_scope", "validate", "exceeded")
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func validateEndpointURL(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || u.User != nil || u.Fragment != "" || u.RawQuery != "" {
+		return errors.New("invalid URL")
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	host := u.Hostname()
+	if u.Scheme == "http" && (host == "localhost" || net.ParseIP(host).IsLoopback()) {
+		return nil
+	}
+	return errors.New("URL must use HTTPS except on loopback")
+}
+
+func publicProviderResponse(item model.IdentityProvider) map[string]any {
+	return map[string]any{
+		"id":            item.ID,
+		"name":          item.Name,
+		"adapter":       item.Adapter,
+		"icon_url":      item.IconURL,
+		"login_enabled": item.LoginEnabled,
+		"link_enabled":  item.LinkEnabled,
+	}
+}
+
+func adminProviderResponse(item model.IdentityProvider) map[string]any {
+	response := publicProviderResponse(item)
+	response["issuer_url"] = item.IssuerURL
+	response["authorization_endpoint"] = item.AuthorizationEndpoint
+	response["token_endpoint"] = item.TokenEndpoint
+	response["userinfo_endpoint"] = item.UserInfoEndpoint
+	response["jwks_uri"] = item.JWKSURI
+	response["client_id"] = item.ClientID
+	response["has_client_secret"] = item.ClientSecretCiphertext != ""
+	response["scopes"] = item.Scopes
+	response["enabled"] = item.Enabled
+	response["display_order"] = item.DisplayOrder
+	response["created_at"] = item.CreatedAt
+	response["updated_at"] = item.UpdatedAt
+	return response
+}
+
+func identityResponse(item model.ExternalIdentity, provider model.IdentityProvider, credential model.ExternalIdentityCredential) map[string]any {
+	return map[string]any{
+		"id":                    item.ID,
+		"provider_id":           item.ProviderID,
+		"provider_name":         provider.Name,
+		"provider_adapter":      provider.Adapter,
+		"provider_icon_url":     provider.IconURL,
+		"provider_enabled":      provider.Enabled,
+		"provider_link_enabled": provider.LinkEnabled,
+		"subject":               item.Subject,
+		"label":                 item.Label,
+		"email":                 item.Email,
+		"email_verified":        item.EmailVerified,
+		"display_name":          item.DisplayName,
+		"avatar_url":            item.AvatarURL,
+		"created_at":            item.CreatedAt,
+		"updated_at":            item.UpdatedAt,
+		"last_login_at":         item.LastLoginAt,
+		"authorization_status":  credential.AuthorizationStatus,
+		"last_refresh_at":       credential.LastRefreshAt,
+		"last_refresh_error_at": credential.LastRefreshErrorAt,
+	}
+}
+
+func isUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+func badRequest(object, operation, reason string, params ...map[string]any) util.HTTPError {
+	return util.HTTPError{Status: 400, Object: object, Operation: operation, Reason: reason, Params: errorParams(params)}
+}
+func forbidden() util.HTTPError {
+	return util.HTTPError{Status: 403, Object: "permission", Operation: "check", Reason: "denied"}
+}
+func notFound(object, operation, reason string) util.HTTPError {
+	return util.HTTPError{Status: 404, Object: object, Operation: operation, Reason: reason}
+}
+func conflict(object, operation, reason string) util.HTTPError {
+	return util.HTTPError{Status: 409, Object: object, Operation: operation, Reason: reason}
+}
+
+func errorParams(values []map[string]any) map[string]any {
+	if len(values) == 0 {
+		return nil
+	}
+	return values[0]
+}

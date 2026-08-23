@@ -50,7 +50,7 @@ func TestServiceDeviceCodeFlowIssuesDelegatedTokenExactly(t *testing.T) {
 		ClientID:   clientID,
 		DeviceCode: started.DeviceCode,
 	})
-	assertHTTPError(t, err, 400, "authorization_pending")
+	assertHTTPError(t, err, 400, "oauth_authorization.grant.incomplete")
 
 	details, err := svc.DeviceAuthorizationDetails(ctx, actor, started.UserCode)
 	if err != nil {
@@ -86,7 +86,7 @@ func TestServiceDeviceCodeFlowIssuesDelegatedTokenExactly(t *testing.T) {
 		ClientID:   clientID,
 		DeviceCode: started.DeviceCode,
 	})
-	assertHTTPError(t, err, 400, "invalid_grant")
+	assertHTTPError(t, err, 400, "oauth_grant.exchange.invalid")
 }
 
 func TestServiceDeviceCodeFlowRejectsDeniedAndUnauthorizedScopesExactly(t *testing.T) {
@@ -124,7 +124,7 @@ func TestServiceDeviceCodeFlowRejectsDeniedAndUnauthorizedScopesExactly(t *testi
 		ClientID: clientID,
 		Scope:    "account.update.self",
 	})
-	assertHTTPError(t, err, 400, "scope exceeds client permission limit")
+	assertHTTPError(t, err, 400, "oauth_scope.authorize.denied")
 	serverClient, err := svc.CreateClient(ctx, actor, oauth.ClientInput{
 		Name:            "Device server denied",
 		RedirectURI:     "https://device-server.example/callback",
@@ -142,7 +142,7 @@ func TestServiceDeviceCodeFlowRejectsDeniedAndUnauthorizedScopesExactly(t *testi
 		ClientSecret: serverClientSecret,
 		Scope:        "minecraft_session.hasjoined.server",
 	})
-	assertHTTPError(t, err, 400, "invalid scope")
+	assertHTTPError(t, err, 400, "oauth_scope.validate.invalid")
 	started, err := svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{
 		ClientID: clientID,
 		Scope:    "account.read.self",
@@ -155,7 +155,7 @@ func TestServiceDeviceCodeFlowRejectsDeniedAndUnauthorizedScopesExactly(t *testi
 		ClientID:   otherClientID,
 		DeviceCode: started.DeviceCode,
 	})
-	assertHTTPError(t, err, 400, "invalid device_code")
+	assertHTTPError(t, err, 400, "device_code.verify.invalid")
 	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: started.UserCode, Approve: false}); err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestServiceDeviceCodeFlowRejectsDeniedAndUnauthorizedScopesExactly(t *testi
 		ClientID:   clientID,
 		DeviceCode: started.DeviceCode,
 	})
-	assertHTTPError(t, err, 400, "access_denied")
+	assertHTTPError(t, err, 400, "oauth_authorization.grant.denied")
 }
 
 func TestServiceDeviceAuthorizationRejectsMissingExpiredAndRepeatedDecisionsExactly(t *testing.T) {
@@ -192,27 +192,27 @@ func TestServiceDeviceAuthorizationRejectsMissingExpiredAndRepeatedDecisionsExac
 		t.Fatal(err)
 	}
 
-	if _, err := svc.DeviceAuthorizationDetails(ctx, permission.Actor{}, started.UserCode); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.DeviceAuthorizationDetails(ctx, permission.Actor{}, started.UserCode); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("anonymous device detail error mismatch: %#v", err)
 	}
-	if _, err := svc.DeviceAuthorizationDetails(ctx, actor, "missing-code"); !isHTTPError(err, 404, "device code not found") {
+	if _, err := svc.DeviceAuthorizationDetails(ctx, actor, "missing-code"); !isHTTPError(err, 404, "device_code.resolve.not_found") {
 		t.Fatalf("missing device detail error mismatch: %#v", err)
 	}
-	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: "missing-code", Approve: true}); !isHTTPError(err, 404, "device code not found") {
+	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: "missing-code", Approve: true}); !isHTTPError(err, 404, "device_code.resolve.not_found") {
 		t.Fatalf("missing device decision error mismatch: %#v", err)
 	}
 	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: started.UserCode, Approve: true}); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: started.UserCode, Approve: false}); !isHTTPError(err, 400, "device code is not pending") {
+	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: started.UserCode, Approve: false}); !isHTTPError(err, 400, "device_code.authorize.conflict") {
 		t.Fatalf("repeated device decision error mismatch: %#v", err)
 	}
 
 	expired := modelDeviceCode(t, db, clientID, "expired-device-hash", "expired-user-code", []string{"account.read.self"}, -time.Minute)
-	if _, err := svc.DeviceAuthorizationDetails(ctx, actor, expired); !isHTTPError(err, 404, "device code not found") {
+	if _, err := svc.DeviceAuthorizationDetails(ctx, actor, expired); !isHTTPError(err, 404, "device_code.resolve.not_found") {
 		t.Fatalf("expired device detail error mismatch: %#v", err)
 	}
-	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: expired, Approve: true}); !isHTTPError(err, 404, "device code not found") {
+	if err := svc.DecideDeviceAuthorization(ctx, actor, oauth.DeviceDecisionRequest{UserCode: expired, Approve: true}); !isHTTPError(err, 404, "device_code.resolve.not_found") {
 		t.Fatalf("expired device decision error mismatch: %#v", err)
 	}
 
@@ -223,7 +223,7 @@ func TestServiceDeviceAuthorizationRejectsMissingExpiredAndRepeatedDecisionsExac
 		ClientID:   clientID,
 		DeviceCode: expiredDeviceToken,
 	})
-	assertHTTPError(t, err, 400, "expired_token")
+	assertHTTPError(t, err, 400, "device_code.verify.expired")
 
 }
 
@@ -254,14 +254,14 @@ func TestServiceOAuthAdditionalTokenAndDeviceEdgesExactly(t *testing.T) {
 		clientID := created["client_id"].(string)
 		activateOAuthClient(t, db, clientID)
 
-		if _, err := svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{ClientID: clientID}); !isHTTPError(err, 400, "scope is required") {
+		if _, err := svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{ClientID: clientID}); !isHTTPError(err, 400, "oauth_scope.validate.required") {
 			t.Fatalf("empty device scope error mismatch: %#v", err)
 		}
 		scopeDenied, err := svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{ClientID: clientID, Scope: "account.ban.any"})
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := svc.DecideDeviceAuthorization(ctx, userActor, oauth.DeviceDecisionRequest{UserCode: scopeDenied.UserCode, Approve: true}); !isHTTPError(err, 403, "permission denied") {
+		if err := svc.DecideDeviceAuthorization(ctx, userActor, oauth.DeviceDecisionRequest{UserCode: scopeDenied.UserCode, Approve: true}); !isHTTPError(err, 403, "permission.check.denied") {
 			t.Fatalf("device decision missing scope mismatch: %#v", err)
 		}
 
@@ -271,7 +271,7 @@ func TestServiceOAuthAdditionalTokenAndDeviceEdgesExactly(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "urn:ietf:params:oauth:grant-type:device_code", ClientID: clientID, DeviceCode: consumedRaw})
-		assertHTTPError(t, err, 400, "invalid_grant")
+		assertHTTPError(t, err, 400, "oauth_grant.exchange.invalid")
 
 		unboundRaw := "approved-without-user-device-token"
 		unboundUserCode := modelDeviceCode(t, db, clientID, util.HashRefreshToken(unboundRaw), "approved-unbound-code", []string{"account.ban.any"}, time.Minute)
@@ -279,7 +279,7 @@ func TestServiceOAuthAdditionalTokenAndDeviceEdgesExactly(t *testing.T) {
 			t.Fatal(err)
 		}
 		_, err = svc.IssueToken(ctx, oauth.TokenRequest{GrantType: "urn:ietf:params:oauth:grant-type:device_code", ClientID: clientID, DeviceCode: unboundRaw})
-		assertHTTPError(t, err, 400, "invalid_grant")
+		assertHTTPError(t, err, 400, "oauth_grant.exchange.invalid")
 
 		detail, err := svc.StartDeviceAuthorization(ctx, oauth.DeviceAuthorizationRequest{ClientID: clientID, Scope: "account.ban.any"})
 		if err != nil {
@@ -288,7 +288,7 @@ func TestServiceOAuthAdditionalTokenAndDeviceEdgesExactly(t *testing.T) {
 		if ok, err := db.OAuth.UpdateClientStatus(ctx, clientID, oauth.StatusDisabled, database.NowMS()); err != nil || !ok {
 			t.Fatalf("disable client for device details: ok=%v err=%v", ok, err)
 		}
-		if _, err := svc.DeviceAuthorizationDetails(ctx, adminActor, detail.UserCode); !isHTTPError(err, 404, "oauth client not found") {
+		if _, err := svc.DeviceAuthorizationDetails(ctx, adminActor, detail.UserCode); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 			t.Fatalf("disabled client device details mismatch: %#v", err)
 		}
 	})

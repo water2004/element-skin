@@ -6,8 +6,12 @@
   >
     <div class="card-clip">
       <div
-        class="role-preview"
-        :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
+        class="role-preview relative"
+        :style="{
+          background: isDark
+            ? 'var(--color-background-hero-dark)'
+            : 'var(--color-background-hero-light)',
+        }"
       >
         <SkinViewer
           v-if="profile.skin_hash"
@@ -19,6 +23,13 @@
           is-static
         />
         <el-empty v-else description="未设置皮肤" :image-size="120" />
+        <div
+          v-if="officialBinding"
+          class="absolute right-2 top-2 z-10 rounded-md bg-gradient-to-br from-[#67c23a] to-[#3aa675] px-2.5 py-1 text-xs font-semibold text-white shadow-[0_2px_6px_rgba(58,166,117,0.28)] backdrop-blur"
+          :title="`正版角色：${officialBinding.remote_name}`"
+        >
+          正版
+        </div>
       </div>
 
       <div class="role-info">
@@ -31,7 +42,7 @@
           variant="gradient-danger"
           icon-swap
           size="default"
-          @click="$emit('delete', profile.id)"
+          @click.stop="$emit('delete', profile.id)"
         >
           删除
           <template #icon>
@@ -44,7 +55,7 @@
           variant="soft-warning"
           icon-swap
           size="default"
-          @click="$emit('clear-skin', profile.id)"
+          @click.stop="$emit('clear-skin', profile.id)"
         >
           皮肤
           <template #icon>
@@ -57,7 +68,7 @@
           variant="soft-warning"
           icon-swap
           size="default"
-          @click="$emit('clear-cape', profile.id)"
+          @click.stop="$emit('clear-cape', profile.id)"
         >
           披风
           <template #icon>
@@ -71,7 +82,7 @@
 
 <script setup lang="ts">
 import { Close, Delete } from '@element-plus/icons-vue'
-import type { Profile } from '@/api/types'
+import type { OfficialProfileBinding, Profile } from '@/api/types'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CardActions from '@/components/common/CardActions.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -81,6 +92,7 @@ defineProps<{
   delayIndex: number
   isDark: boolean
   texturesUrl: (hash: string | null | undefined) => string
+  officialBinding?: OfficialProfileBinding | null
 }>()
 
 defineEmits<{

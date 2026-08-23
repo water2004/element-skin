@@ -19,7 +19,7 @@ func TestTextureRoutesListAndDetailExactResponses(t *testing.T) {
 	if err := db.Textures.AddToLibrary(context.Background(), user.ID, "site_route_hash", "skin", "Site Route Texture", true, "default"); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/me/textures?texture_type=skin", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/users/me/textures?texture_type=skin", nil)
 	req = withUserActor(req, user.ID)
 	rec := httptest.NewRecorder()
 	h.ListMyTextures(rec, req)
@@ -27,7 +27,7 @@ func TestTextureRoutesListAndDetailExactResponses(t *testing.T) {
 		t.Fatalf("list textures response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/users/me/textures/site_route_hash/skin", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/users/me/textures/site_route_hash/skin", nil)
 	req.SetPathValue("hash", "site_route_hash")
 	req.SetPathValue("texture_type", "skin")
 	req = withUserActor(req, user.ID)

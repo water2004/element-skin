@@ -100,8 +100,8 @@ func TestUserRoleDoesNotIncludeAdminScopedPermissions(t *testing.T) {
 	if userRole == nil {
 		t.Fatal("user role not found")
 	}
-	if len(userRole.Permissions) != 49 {
-		t.Fatalf("user role has %d permissions, want 49", len(userRole.Permissions))
+	if len(userRole.Permissions) != 55 {
+		t.Fatalf("user role has %d permissions, want 55", len(userRole.Permissions))
 	}
 	expectedCodes := []string{
 		"account.read.self",
@@ -143,9 +143,15 @@ func TestUserRoleDoesNotIncludeAdminScopedPermissions(t *testing.T) {
 		"yggdrasil_session.signout.owned",
 		"yggdrasil_server.join.bound_profile",
 		"yggdrasil_server.hasjoined.bound_profile",
-		"microsoft_import.start.owned",
-		"microsoft_import.read_profile.owned",
-		"microsoft_import.create_profile.owned",
+		"official_profile.read.owned",
+		"official_profile.create.owned",
+		"official_profile.refresh.owned",
+		"official_profile.delete.owned",
+		"external_identity.read.owned",
+		"external_identity.create.owned",
+		"external_identity.update.owned",
+		"external_identity.delete.owned",
+		"identity_provider.read.public",
 		"oauth_app.read.owned",
 		"oauth_app.create.owned",
 		"oauth_app.update.owned",
@@ -240,8 +246,8 @@ func TestAdminRoleDoesNotIncludeProtectedManagementOrSystemPermissions(t *testin
 	if adminRole == nil {
 		t.Fatal("admin role not found")
 	}
-	if len(adminRole.Permissions) != 44 {
-		t.Fatalf("admin role has %d permissions, want 44", len(adminRole.Permissions))
+	if len(adminRole.Permissions) != 49 {
+		t.Fatalf("admin role has %d permissions, want 49", len(adminRole.Permissions))
 	}
 	expectedCodes := []string{
 		"account.ban.any",
@@ -284,10 +290,15 @@ func TestAdminRoleDoesNotIncludeProtectedManagementOrSystemPermissions(t *testin
 		"cache.invalidate.any",
 		"oauth_app.read.any",
 		"oauth_app.update.any",
+		"oauth_app.review.any",
 		"oauth_app.delete.any",
 		"oauth_grant.read.any",
 		"oauth_grant.revoke.any",
 		"oauth_token.introspect.any",
+		"identity_provider.read.any",
+		"identity_provider.create.any",
+		"identity_provider.update.any",
+		"identity_provider.delete.any",
 	}
 	roleCodes := make(map[string]bool, len(adminRole.Permissions))
 	for _, def := range adminRole.Permissions {

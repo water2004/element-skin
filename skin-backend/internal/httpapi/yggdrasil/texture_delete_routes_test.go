@@ -28,7 +28,7 @@ func TestTextureRoutesRequireBearerAndDeleteClearsProfileSkinExactly(t *testing.
 	req.SetPathValue("texture_type", "skin")
 	rec := httptest.NewRecorder()
 	h.UploadTexture(rec, req)
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "Bearer token required") {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("upload without bearer mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	req = httptest.NewRequest(http.MethodDelete, "/api/user/profile/"+profile.ID+"/skin", nil)
@@ -36,7 +36,7 @@ func TestTextureRoutesRequireBearerAndDeleteClearsProfileSkinExactly(t *testing.
 	req.SetPathValue("texture_type", "skin")
 	rec = httptest.NewRecorder()
 	h.DeleteTexture(rec, req)
-	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"detail\":\"Bearer token required\"}\n" {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("delete without bearer mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 

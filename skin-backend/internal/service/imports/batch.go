@@ -14,21 +14,21 @@ func (s ImportService) ImportProfiles(ctx context.Context, actor permission.Acto
 		id := p["profile_id"]
 		name := p["profile_name"]
 		if id == "" || name == "" {
-			failed = append(failed, map[string]any{"profile_id": id, "profile_name": name, "detail": "profile_id and profile_name are required"})
+			failed = append(failed, batchFailure(id, name, util.ErrorBody{Object: "profile", Operation: "import", Reason: "required"}))
 			continue
 		}
 		assets, err := fetch(ctx, id)
 		if err != nil {
-			failed = append(failed, map[string]any{"profile_id": id, "profile_name": name, "detail": "导入失败"})
+			failed = append(failed, batchFailure(id, name, util.ErrorBody{Object: "remote_profile", Operation: "fetch", Reason: "unavailable"}))
 			continue
 		}
 		res, err := s.ImportProfile(ctx, actor, id, name, assets)
 		if err != nil {
-			detail := "导入失败"
+			failure := util.ErrorBody{Object: "profile", Operation: "import", Reason: "failed"}
 			if he, ok := err.(util.HTTPError); ok {
-				detail = he.Detail
+				failure = util.ErrorBody{Object: he.Object, Operation: he.Operation, Reason: he.Reason, Params: he.Params}
 			}
-			failed = append(failed, map[string]any{"profile_id": id, "profile_name": name, "detail": detail})
+			failed = append(failed, batchFailure(id, name, failure))
 			continue
 		}
 		items = append(items, res["profile"].(map[string]any))
@@ -38,5 +38,13 @@ func (s ImportService) ImportProfiles(ctx context.Context, actor permission.Acto
 		"failure_count": len(failed),
 		"items":         items,
 		"failed":        failed,
+	}
+}
+
+func batchFailure(profileID, profileName string, failure util.ErrorBody) map[string]any {
+	return map[string]any{
+		"profile_id":   profileID,
+		"profile_name": profileName,
+		"error":        failure,
 	}
 }

@@ -34,13 +34,13 @@ func TestServiceClientPermissionAndGrantManagementExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 	clientID := created["client_id"].(string)
-	if _, err := svc.ClientPermissions(ctx, userActor, clientID); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.ClientPermissions(ctx, userActor, clientID); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("client permissions without admin read error mismatch: %#v", err)
 	}
-	if err := svc.SetClientPermissionOverride(ctx, userActor, clientID, "minecraft_session.hasjoined.server", "allow"); !isHTTPError(err, 403, "permission denied") {
+	if err := svc.SetClientPermissionOverride(ctx, userActor, clientID, "minecraft_session.hasjoined.server", "allow"); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("client permission set without grant error mismatch: %#v", err)
 	}
-	if err := svc.SetClientPermissionOverride(ctx, adminActor, clientID, "permission.catalog.system", "allow"); !isHTTPError(err, 400, "invalid permission") {
+	if err := svc.SetClientPermissionOverride(ctx, adminActor, clientID, "permission.catalog.system", "allow"); !isHTTPError(err, 400, "permission.validate.invalid") {
 		t.Fatalf("client system permission set error mismatch: %#v", err)
 	}
 	if err := svc.SetClientPermissionOverride(ctx, adminActor, clientID, "minecraft_session.hasjoined.server", "allow"); err != nil {
@@ -61,13 +61,13 @@ func TestServiceClientPermissionAndGrantManagementExactly(t *testing.T) {
 	if len(overrides) != 1 || overrides[0]["permission_code"] != "minecraft_session.hasjoined.server" || overrides[0]["effect"] != "allow" {
 		t.Fatalf("client overrides mismatch: %#v", overrides)
 	}
-	if err := svc.ClearClientPermissionOverride(ctx, userActor, clientID, "minecraft_session.hasjoined.server"); !isHTTPError(err, 403, "permission denied") {
+	if err := svc.ClearClientPermissionOverride(ctx, userActor, clientID, "minecraft_session.hasjoined.server"); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("client permission clear without revoke error mismatch: %#v", err)
 	}
 	if err := svc.ClearClientPermissionOverride(ctx, adminActor, clientID, "minecraft_session.hasjoined.server"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ClearClientPermissionOverride(ctx, adminActor, clientID, "minecraft_session.hasjoined.server"); !isHTTPError(err, 404, "permission override not found") {
+	if err := svc.ClearClientPermissionOverride(ctx, adminActor, clientID, "minecraft_session.hasjoined.server"); !isHTTPError(err, 404, "permission_override.resolve.not_found") {
 		t.Fatalf("client permission clear missing error mismatch: %#v", err)
 	}
 
@@ -109,16 +109,72 @@ func TestServiceClientPermissionAndGrantManagementExactly(t *testing.T) {
 	if len(grantPermissions) != 1 || grantPermissions[0] != "account.read.self" {
 		t.Fatalf("grant permissions mismatch: %#v", grantPermissions)
 	}
+	adminGrants, err := svc.ListGrantsForAdmin(ctx, adminActor, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(adminGrants) != 1 || adminGrants[0]["id"] != grants[0]["id"] || adminGrants[0]["user_id"] != user.ID {
+		t.Fatalf("admin grant list mismatch: %#v", adminGrants)
+	}
+	if _, err := svc.ListGrantsForAdmin(ctx, permission.Actor{}, 10); !isHTTPError(err, 403, "permission.check.denied") {
+		t.Fatalf("admin grant list without permission mismatch: %#v", err)
+	}
+	if err := svc.RevokeGrantForAdmin(ctx, permission.Actor{}, grants[0]["id"].(string)); !isHTTPError(err, 403, "permission.check.denied") {
+		t.Fatalf("admin grant revoke without permission mismatch: %#v", err)
+	}
 	if err := svc.RevokeGrant(ctx, userActor, grants[0]["id"].(string)); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.RevokeGrant(ctx, userActor, grants[0]["id"].(string)); !isHTTPError(err, 404, "oauth grant not found") {
+	if err := svc.RevokeGrant(ctx, userActor, grants[0]["id"].(string)); !isHTTPError(err, 404, "oauth_grant.resolve.not_found") {
 		t.Fatalf("second grant revoke error mismatch: %#v", err)
 	}
-	if _, err := svc.ListGrants(ctx, permission.Actor{}, 10); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.ListGrants(ctx, permission.Actor{}, 10); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("list grants without permission mismatch: %#v", err)
 	}
-	if err := svc.RevokeGrant(ctx, permission.Actor{}, grants[0]["id"].(string)); !isHTTPError(err, 403, "permission denied") {
+	if err := svc.RevokeGrant(ctx, permission.Actor{}, grants[0]["id"].(string)); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("revoke grant without permission mismatch: %#v", err)
+	}
+
+	adminVerifier := "admin-grant-revoke-verifier-abcdefghijklmnopqrstuvwxyz"
+	adminApproved, err := svc.ApproveAuthorization(ctx, userActor, oauth.AuthorizationRequest{
+		ResponseType:        "code",
+		ClientID:            clientID,
+		RedirectURI:         "https://perms.example/callback",
+		Scope:               "account.read.self",
+		CodeChallenge:       pkceChallenge(adminVerifier),
+		CodeChallengeMethod: "S256",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminToken, err := svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:    "authorization_code",
+		ClientID:     clientID,
+		ClientSecret: created["client_secret"].(string),
+		Code:         adminApproved["code"].(string),
+		RedirectURI:  "https://perms.example/callback",
+		CodeVerifier: adminVerifier,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adminGrants, err = svc.ListGrantsForAdmin(ctx, adminActor, 10)
+	if err != nil || len(adminGrants) != 2 || adminGrants[0]["status"] != oauth.StatusActive {
+		t.Fatalf("admin active grant list mismatch: grants=%#v err=%v", adminGrants, err)
+	}
+	adminGrantID := adminGrants[0]["id"].(string)
+	if err := svc.RevokeGrantForAdmin(ctx, adminActor, adminGrantID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.RevokeGrantForAdmin(ctx, adminActor, adminGrantID); !isHTTPError(err, 404, "oauth_grant.resolve.not_found") {
+		t.Fatalf("second admin grant revoke mismatch: %#v", err)
+	}
+	if _, err := svc.IssueToken(ctx, oauth.TokenRequest{
+		GrantType:    "refresh_token",
+		ClientID:     clientID,
+		ClientSecret: created["client_secret"].(string),
+		RefreshToken: adminToken.RefreshToken,
+	}); !isHTTPError(err, 400, "refresh_token.verify.invalid") {
+		t.Fatalf("administratively revoked refresh token mismatch: %#v", err)
 	}
 }

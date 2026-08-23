@@ -10,6 +10,15 @@ keys:
   private_key: "/app/data/private.pem"
   public_key: "/app/data/public.pem"
 
+# 本站 OIDC Server 的独立 RSA 签名密钥；文件不存在时自动创建
+oidc:
+  private_key: "/app/data/oidc-private.pem"
+  public_key: "/app/data/oidc-public.pem"
+
+# 使用 `openssl rand -base64 32` 生成一次，配置身份后不得更换
+identity:
+  encryption_key: ""
+
 database:
   host: "db"
   port: "5432"

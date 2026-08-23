@@ -60,19 +60,19 @@ func TestApplyTextureRejectsMissingForeignAndInvalidTypeWithoutMutatingProfile(t
 	}{
 		{"missing texture ownership", func() error {
 			return svc.ApplyTextureToProfile(ctx, textureUserActor(owner.ID), profile.ID, "missing_apply_texture", "skin")
-		}, 403, "Texture not found in your library"},
+		}, 403, "texture.authorize.denied"},
 		{"foreign profile", func() error {
 			return svc.ApplyTextureToProfile(ctx, textureUserActor(owner.ID), foreign.ID, "texture_service_apply_skin", "skin")
-		}, 403, "Profile not yours"},
-		{"invalid type", func() error {
+		}, 403, "profile.authorize.denied"},
+		{"type.validate.invalid", func() error {
 			return svc.ApplyTextureToProfile(ctx, textureUserActor(owner.ID), profile.ID, "texture_service_apply_skin", "elytra")
-		}, 403, "Texture not found in your library"},
+		}, 403, "texture.authorize.denied"},
 		{"set invalid type", func() error {
 			return profileSvc.SetProfileTexture(ctx, textureActor("texture-service-admin", "profile.update.any"), profile.ID, "elytra", ptrString("texture_service_apply_skin"))
-		}, 400, "Invalid texture_type"},
+		}, 400, "texture_type.validate.invalid"},
 		{"set missing profile", func() error {
 			return profileSvc.SetProfileTexture(ctx, textureActor("texture-service-admin", "profile.update.any"), "missing-profile", "skin", ptrString("texture_service_apply_skin"))
-		}, 404, "profile not found"},
+		}, 404, "profile.resolve.not_found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := tc.call(); !httpErrorIs(err, tc.code, tc.want) {

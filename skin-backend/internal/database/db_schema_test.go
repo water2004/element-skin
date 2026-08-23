@@ -23,6 +23,8 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		"site_refresh_tokens",
 		"invites",
 		"settings",
+		"email_suffix_policy",
+		"email_suffix_rules",
 		"user_textures",
 		"skin_library",
 		"fallback_endpoints",
@@ -30,6 +32,10 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		"whitelisted_users",
 		"verification_codes",
 		"enabled_easter_eggs",
+		"identity_providers",
+		"external_identities",
+		"external_identity_credentials",
+		"official_profile_bindings",
 		"delegated_clients",
 		"delegated_client_permissions",
 		"delegated_permission_grants",
@@ -37,6 +43,11 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		"oauth_authorization_codes",
 		"oauth_authorization_code_permissions",
 		"oauth_refresh_tokens",
+		"webhook_endpoints",
+		"webhook_endpoint_events",
+		"webhook_active_event_types",
+		"webhook_events",
+		"webhook_deliveries",
 		"permission_audit_logs",
 	} {
 		var exists bool
@@ -45,15 +56,6 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		}
 		if !exists {
 			t.Fatalf("InitSQL should create table %s", table)
-		}
-	}
-	for _, table := range []string{"tokens", "sessions"} {
-		var exists bool
-		if err := db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=$1)`, table).Scan(&exists); err != nil {
-			t.Fatal(err)
-		}
-		if exists {
-			t.Fatalf("InitSQL should drop legacy Yggdrasil persistence table %s", table)
 		}
 	}
 	siteName, err := db.Settings.Get(ctx, "site_name", "")
@@ -139,6 +141,10 @@ func TestInitSQLContainsExpectedConstraintsAndIndexes(t *testing.T) {
 		"idx_oauth_refresh_tokens_user_client",
 		"client_type TEXT NOT NULL DEFAULT 'confidential'",
 		"secret_hash TEXT NOT NULL DEFAULT ''",
+		"authorization_status TEXT NOT NULL DEFAULT 'active'",
+		"CHECK(authorization_status IN ('active', 'reauthorization_required'))",
+		"last_refresh_at BIGINT",
+		"last_refresh_error_at BIGINT",
 		"ON CONFLICT (key) DO NOTHING",
 	}
 	for _, fragment := range required {

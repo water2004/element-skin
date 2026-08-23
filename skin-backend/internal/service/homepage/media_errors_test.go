@@ -33,13 +33,13 @@ func TestHomepageServiceClosedDatabaseReturnsDependencyErrors(t *testing.T) {
 		t.Fatalf("UploadPanorama closed database = item=%#v err=%v; want empty closed pool", item, err)
 	}
 	title := "Closed"
-	if item, err := svc.Patch(ctx, writeActor, "missing", homepagesvc.PatchInput{Title: &title}); item != (model.HomepageMedia{}) || !homepageHTTPError(err, http.StatusNotFound, "homepage media not found") {
+	if item, err := svc.Patch(ctx, writeActor, "missing", homepagesvc.PatchInput{Title: &title}); item != (model.HomepageMedia{}) || !homepageHTTPError(err, http.StatusNotFound, "homepage_media.resolve.not_found") {
 		t.Fatalf("Patch closed database = item=%#v err=%#v; want exact not found mapping", item, err)
 	}
-	if err := svc.Reorder(ctx, writeActor, []string{"closed"}); !homepageHTTPError(err, http.StatusNotFound, "homepage media not found") {
+	if err := svc.Reorder(ctx, writeActor, []string{"closed"}); !homepageHTTPError(err, http.StatusNotFound, "homepage_media.resolve.not_found") {
 		t.Fatalf("Reorder closed database err=%#v; want exact not found mapping", err)
 	}
-	if err := svc.Delete(ctx, writeActor, "closed"); !homepageHTTPError(err, http.StatusNotFound, "homepage media not found") {
+	if err := svc.Delete(ctx, writeActor, "closed"); !homepageHTTPError(err, http.StatusNotFound, "homepage_media.resolve.not_found") {
 		t.Fatalf("Delete closed database err=%#v; want exact not found mapping", err)
 	}
 }

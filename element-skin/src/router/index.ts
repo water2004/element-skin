@@ -16,6 +16,8 @@ import DashboardRoles from '@/components/dashboard/roles/DashboardRoles.vue'
 import DashboardProfile from '@/components/dashboard/profile/DashboardProfile.vue'
 import DashboardHome from '@/components/dashboard/home/DashboardHome.vue'
 import DashboardOAuthApps from '@/components/dashboard/oauth/DashboardOAuthApps.vue'
+import DashboardOAuthAppForm from '@/components/dashboard/oauth/DashboardOAuthAppForm.vue'
+import DashboardIdentities from '@/components/dashboard/identities/DashboardIdentities.vue'
 
 // Admin Components
 import AdminSettings from '@/components/admin/settings/AdminSettings.vue'
@@ -29,6 +31,8 @@ import AdminTexturesList from '@/components/admin/textures/AdminTexturesList.vue
 import AdminRolesList from '@/components/admin/roles/AdminRolesList.vue'
 import AdminNotices from '@/components/admin/notices/AdminNotices.vue'
 import AdminOAuthApps from '@/components/admin/oauth/AdminOAuthApps.vue'
+import AdminIdentityProviders from '@/components/admin/identity/AdminIdentityProviders.vue'
+import AdminIdentityProviderForm from '@/components/admin/identity/AdminIdentityProviderForm.vue'
 import { getMe } from '@/api/me'
 import { installEasterEggRouterHooks } from '@/easter-eggs'
 import { canAccessAdminPath, firstAccessibleAdminPath } from '@/permissions/adminPages'
@@ -120,6 +124,21 @@ const router = createRouter({
           name: 'admin-oauth-apps',
           component: AdminOAuthApps,
         },
+        {
+          path: 'identity-providers',
+          name: 'admin-identity-providers',
+          component: AdminIdentityProviders,
+        },
+        {
+          path: 'identity-providers/new',
+          name: 'admin-identity-provider-create',
+          component: AdminIdentityProviderForm,
+        },
+        {
+          path: 'identity-providers/:provider_id/edit',
+          name: 'admin-identity-provider-edit',
+          component: AdminIdentityProviderForm,
+        },
       ],
     },
     {
@@ -151,6 +170,21 @@ const router = createRouter({
           path: 'oauth',
           name: 'dashboard-oauth',
           component: DashboardOAuthApps,
+        },
+        {
+          path: 'oauth/apps/new',
+          name: 'dashboard-oauth-app-create',
+          component: DashboardOAuthAppForm,
+        },
+        {
+          path: 'oauth/apps/:client_id/edit',
+          name: 'dashboard-oauth-app-edit',
+          component: DashboardOAuthAppForm,
+        },
+        {
+          path: 'identities',
+          name: 'dashboard-identities',
+          component: DashboardIdentities,
         },
       ],
     },
@@ -193,7 +227,7 @@ router.beforeEach(async (to) => {
       if (canAccessAdminPath(to.path, permissions)) return true
       return { path: firstAdminPath }
     } catch {
-      return { path: '/login' }
+      return loginRedirect(to.fullPath)
     }
   }
 
@@ -208,9 +242,13 @@ router.beforeEach(async (to) => {
     if (canAccessSitePath(to.path, permissions)) return true
     return { path: firstSitePath }
   } catch {
-    return { path: '/login' }
+    return loginRedirect(to.fullPath)
   }
 })
+
+function loginRedirect(returnTo: string) {
+  return { path: '/login', query: { redirect: returnTo } }
+}
 
 installEasterEggRouterHooks(router)
 

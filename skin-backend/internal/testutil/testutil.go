@@ -31,31 +31,33 @@ func Pointer[T any](value T) *T {
 
 func TestConfig() config.Config {
 	cfg := config.Config{
-		DatabaseHost:     "localhost",
-		DatabasePort:     "5432",
-		DatabaseUser:     "postgres",
-		DatabasePassword: "12345678",
-		DatabaseName:     testDBName,
-		DatabaseSSLMode:  "disable",
-		MaxConnections:   10,
-		JWTSecret:        "abcdefghijklmnopqrstuvwxyz123456",
-		JWTExpireDays:    7,
-		AccessMinutes:    30,
-		SiteURL:          "http://test",
-		APIURL:           "http://localhost:8000",
-		ServerHost:       "127.0.0.1",
-		ServerPort:       "8000",
-		TexturesDir:      "textures",
-		CarouselDir:      "carousel",
-		RedisHost:        "127.0.0.1",
-		RedisPort:        "6379",
-		RedisAddr:        "127.0.0.1:6379",
-		RedisDB:          0,
-		RedisKeyPrefix:   "elementskin:test:",
-		PublicCacheTTL:   60,
-		AuthCacheTTL:     30,
-		CORSOrigins:      []string{"http://test"},
-		CORSCredentials:  true,
+		DatabaseHost:                  "localhost",
+		DatabasePort:                  "5432",
+		DatabaseUser:                  "postgres",
+		DatabasePassword:              "12345678",
+		DatabaseName:                  testDBName,
+		DatabaseSSLMode:               "disable",
+		MaxConnections:                10,
+		WebhookWorkerMaxConnections:   2,
+		WebhookWorkerActiveIntervalMS: 3000,
+		JWTSecret:                     "abcdefghijklmnopqrstuvwxyz123456",
+		JWTExpireDays:                 7,
+		AccessMinutes:                 30,
+		SiteURL:                       "http://test",
+		APIURL:                        "http://localhost:8000",
+		ServerHost:                    "127.0.0.1",
+		ServerPort:                    "8000",
+		TexturesDir:                   "textures",
+		CarouselDir:                   "carousel",
+		RedisHost:                     "127.0.0.1",
+		RedisPort:                     "6379",
+		RedisAddr:                     "127.0.0.1:6379",
+		RedisDB:                       0,
+		RedisKeyPrefix:                "elementskin:test:",
+		PublicCacheTTL:                60,
+		AuthCacheTTL:                  30,
+		CORSOrigins:                   []string{"http://test"},
+		CORSCredentials:               true,
 	}
 	cfg.DatabaseDSN = os.Getenv("TEST_DATABASE_DSN")
 	if cfg.DatabaseDSN == "" {
@@ -63,6 +65,9 @@ func TestConfig() config.Config {
 	}
 	cfg.PrivateKeyPath = filepath.Join(repoRoot(), "private.pem")
 	cfg.PublicKeyPath = filepath.Join(repoRoot(), "public.pem")
+	cfg.OIDCPrivateKeyPath = cfg.PrivateKeyPath
+	cfg.OIDCPublicKeyPath = cfg.PublicKeyPath
+	cfg.IdentityEncryptionKey = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 	cfg.RedisAddr = os.Getenv("REDIS_TEST_ADDR")
 	if cfg.RedisAddr == "" {
 		cfg.RedisAddr = "127.0.0.1:6379"
@@ -120,6 +125,9 @@ func newTestAppTB(t testing.TB, configure func(*config.Config)) (*database.DB, h
 	cfg := TestConfig()
 	cfg.TexturesDir = t.TempDir()
 	cfg.CarouselDir = t.TempDir()
+	oidcKeyDir := t.TempDir()
+	cfg.OIDCPrivateKeyPath = filepath.Join(oidcKeyDir, "private.pem")
+	cfg.OIDCPublicKeyPath = filepath.Join(oidcKeyDir, "public.pem")
 	dbName := fmt.Sprintf("%s_%d_%d", testDBName, os.Getpid(), atomic.AddUint64(&dbCounter, 1))
 	cfg.DatabaseDSN = "postgresql://postgres:12345678@localhost:5432/" + dbName + "?sslmode=disable"
 	if configure != nil {

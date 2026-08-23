@@ -93,5 +93,9 @@ defineProps<{
     width: 100%;
     justify-content: flex-start;
   }
+
+  .page-header-content {
+    width: 100%;
+  }
 }
 </style>

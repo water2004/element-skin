@@ -19,8 +19,12 @@ type Handler struct {
 	oauth oauthsvc.Service
 }
 
-func New(cfg config.Config, db *database.DB, redis redisstore.Store, auth shared.AuthFunc) Handler {
-	return Handler{cfg: cfg, auth: auth, oauth: oauthsvc.Service{DB: db, Redis: redis}}
+func New(cfg config.Config, db *database.DB, redis redisstore.Store, auth shared.AuthFunc, signers ...*oauthsvc.OIDCSigner) Handler {
+	var signer *oauthsvc.OIDCSigner
+	if len(signers) > 0 {
+		signer = signers[0]
+	}
+	return Handler{cfg: cfg, auth: auth, oauth: oauthsvc.Service{DB: db, Redis: redis, Config: cfg, OIDCSigner: signer}}
 }
 
 func (h Handler) Auth(next http.HandlerFunc) http.HandlerFunc {
@@ -31,7 +35,7 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 	base := h.baseURL()
 	metadata := map[string]any{
 		"issuer":                                     base,
-		"authorization_endpoint":                     base + "/oauth/authorize",
+		"authorization_endpoint":                     h.authorizationEndpointURL(),
 		"device_authorization_endpoint":              base + "/oauth/device/code",
 		"token_endpoint":                             base + "/oauth/token",
 		"revocation_endpoint":                        base + "/oauth/revoke",
@@ -41,8 +45,8 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 		"code_challenge_methods_supported":           []string{"S256"},
 		"token_endpoint_auth_methods_supported":      []string{"client_secret_basic", "client_secret_post", "none"},
 		"revocation_endpoint_auth_methods_supported": []string{"client_secret_basic", "client_secret_post", "none"},
-		"scopes_supported":                           h.scopeCodes(),
-		"protected_resources":                        []string{base + "/v1"},
+		"scopes_supported":                           h.authorizationScopeCodes(),
+		"protected_resources":                        []string{base + "/v2"},
 	}
 	if docs := strings.TrimRight(h.cfg.SiteURL, "/"); docs != "" {
 		metadata["service_documentation"] = docs
@@ -53,7 +57,7 @@ func (h Handler) AuthorizationServerMetadata(w http.ResponseWriter, req *http.Re
 func (h Handler) ProtectedResourceMetadata(w http.ResponseWriter, req *http.Request) {
 	base := h.baseURL()
 	util.JSON(w, http.StatusOK, map[string]any{
-		"resource":                 base + "/v1",
+		"resource":                 base + "/v2",
 		"authorization_servers":    []string{base},
 		"bearer_methods_supported": []string{"header"},
 		"scopes_supported":         h.scopeCodes(),
@@ -67,6 +71,13 @@ func (h Handler) baseURL() string {
 	return strings.TrimRight(h.cfg.SiteURL, "/")
 }
 
+func (h Handler) authorizationEndpointURL() string {
+	if base := strings.TrimRight(strings.TrimSpace(h.cfg.SiteURL), "/"); base != "" {
+		return base + "/oauth/authorize"
+	}
+	return h.baseURL() + "/oauth/authorize"
+}
+
 func (h Handler) scopeCodes() []string {
 	codes := make([]string, 0)
 	for _, def := range permission.Definitions {
@@ -75,4 +86,8 @@ func (h Handler) scopeCodes() []string {
 		}
 	}
 	return codes
+}
+
+func (h Handler) authorizationScopeCodes() []string {
+	return append([]string{"openid", "profile", "email", "offline_access"}, h.scopeCodes()...)
 }

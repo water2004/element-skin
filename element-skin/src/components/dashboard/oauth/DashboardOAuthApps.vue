@@ -7,7 +7,7 @@
       </div>
     </div>
 
-    <UiCard class="p-6">
+    <UiCard v-if="showAppSection" class="p-6">
       <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">作为应用开发者</h2>
@@ -15,19 +15,29 @@
             提交应用审核，通过后才能开始 OAuth 授权流程。
           </p>
         </div>
-        <div class="flex flex-wrap gap-2">
-          <el-button :loading="loading" @click="loadApps">
+        <ActionBar>
+          <el-button v-if="canReadApps" :loading="loading" @click="loadApps">
             <el-icon><Refresh /></el-icon>
             刷新
           </el-button>
-          <el-button type="primary" @click="openCreateDialog">
+          <el-button
+            v-if="canCreateApps"
+            type="primary"
+            @click="router.push({ name: 'dashboard-oauth-app-create' })"
+          >
             <el-icon><Plus /></el-icon>
             申请新应用
           </el-button>
-        </div>
+        </ActionBar>
       </div>
 
-      <el-empty v-if="!loading && apps.length === 0" description="还没有申请应用" />
+      <el-alert
+        v-if="!canReadApps"
+        type="info"
+        :closable="false"
+        title="当前权限不能读取已申请应用"
+      />
+      <el-empty v-else-if="!loading && apps.length === 0" description="还没有申请应用" />
       <div v-else v-loading="loading" class="divide-y divide-[var(--color-border)]">
         <div
           v-for="app in apps"
@@ -69,9 +79,19 @@
               </el-text>
             </div>
             <div class="flex justify-end">
-              <el-button type="primary" plain @click="openEditDialog(app)">
+              <el-button
+                v-if="canManageApps"
+                type="primary"
+                plain
+                @click="
+                  router.push({
+                    name: 'dashboard-oauth-app-edit',
+                    params: { client_id: app.client_id },
+                  })
+                "
+              >
                 <el-icon><Edit /></el-icon>
-                编辑
+                管理
               </el-button>
             </div>
           </div>
@@ -79,7 +99,7 @@
       </div>
     </UiCard>
 
-    <UiCard class="p-6">
+    <UiCard v-if="showGrantSection" class="p-6">
       <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
           <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">作为用户已授权</h2>
@@ -87,13 +107,19 @@
             管理外部应用已经获得的用户委托权限。
           </p>
         </div>
-        <el-button :loading="grantsLoading" @click="loadGrants">
+        <el-button v-if="canReadGrants" :loading="grantsLoading" @click="loadGrants">
           <el-icon><Refresh /></el-icon>
           刷新
         </el-button>
       </div>
 
-      <el-empty v-if="!grantsLoading && grants.length === 0" description="暂无已授权应用" />
+      <el-alert
+        v-if="!canReadGrants"
+        type="info"
+        :closable="false"
+        title="当前权限不能读取已授权应用"
+      />
+      <el-empty v-else-if="!grantsLoading && grants.length === 0" description="暂无已授权应用" />
       <div v-else v-loading="grantsLoading" class="grid gap-3">
         <div
           v-for="grant in grants"
@@ -130,7 +156,7 @@
           </p>
           <div class="mt-3 flex justify-end">
             <el-button
-              v-if="grant.status === 'active'"
+              v-if="grant.status === 'active' && canRevokeGrants"
               type="danger"
               link
               :loading="revokingGrantId === grant.id"
@@ -142,48 +168,30 @@
         </div>
       </div>
     </UiCard>
-
-    <DashboardOAuthAppDialog
-      v-model:visible="appDialogVisible"
-      :app="editingApp"
-      :catalog="catalog"
-      :user-permissions="user?.permissions ?? []"
-      :new-secret="newSecret"
-      :saving="saving"
-      :rotating="rotating"
-      :deleting="deleting"
-      @save="saveApp"
-      @rotate="rotateSecret"
-      @delete="deleteApp"
-    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, type Ref } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { computed, inject, ref, watch, type Ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Edit, Plus, Refresh } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
 import {
-  createOAuthApp,
-  deleteOAuthApp,
   getPermissionCatalog,
   listOAuthApps,
   listOAuthGrants,
   revokeOAuthGrant,
-  rotateOAuthSecret,
-  submitOAuthAppReview,
-  updateOAuthApp,
   type OAuthClient,
-  type OAuthClientInput,
   type OAuthClientStatus,
   type OAuthGrant,
 } from '@/api/oauth'
 import type { PermissionDefinition, User } from '@/api/types'
+import ActionBar from '@/components/common/ActionBar.vue'
 import UiCard from '@/components/ui/UiCard.vue'
-import PermissionToneTag from '@/components/admin/users/PermissionToneTag.vue'
-import DashboardOAuthAppDialog from '@/components/dashboard/oauth/DashboardOAuthAppDialog.vue'
+import PermissionToneTag from '@/components/permissions/PermissionToneTag.vue'
 import { getErrorMessage } from '@/utils/error'
 
+const router = useRouter()
 const user = inject<Ref<User | null>>('user', ref(null))
 
 const apps = ref<OAuthClient[]>([])
@@ -191,15 +199,23 @@ const grants = ref<OAuthGrant[]>([])
 const catalog = ref<PermissionDefinition[]>([])
 const loading = ref(false)
 const grantsLoading = ref(false)
-const saving = ref(false)
-const rotating = ref(false)
-const deleting = ref(false)
 const revokingGrantId = ref('')
-const appDialogVisible = ref(false)
-const editingApp = ref<OAuthClient | null>(null)
-const newSecret = ref('')
 
 const revokedGrantRetentionMs = 30 * 24 * 60 * 60 * 1000
+const userPermissions = computed(() => new Set(user.value?.permissions ?? []))
+const canReadApps = computed(() => userPermissions.value.has('oauth_app.read.owned'))
+const canCreateApps = computed(() => userPermissions.value.has('oauth_app.create.owned'))
+const canUpdateApps = computed(() => userPermissions.value.has('oauth_app.update.owned'))
+const canDeleteApps = computed(() => userPermissions.value.has('oauth_app.delete.owned'))
+const canManageApps = computed(
+  () => canReadApps.value && (canUpdateApps.value || canDeleteApps.value),
+)
+const showAppSection = computed(
+  () => canReadApps.value || canCreateApps.value || canUpdateApps.value || canDeleteApps.value,
+)
+const canReadGrants = computed(() => userPermissions.value.has('oauth_grant.read.owned'))
+const canRevokeGrants = computed(() => userPermissions.value.has('oauth_grant.revoke.owned'))
+const showGrantSection = computed(() => canReadGrants.value || canRevokeGrants.value)
 
 const permissionByCode = computed(() => {
   const out = new Map<string, PermissionDefinition>()
@@ -207,16 +223,31 @@ const permissionByCode = computed(() => {
   return out
 })
 
-onMounted(async () => {
-  await Promise.all([loadCatalog(), loadApps(), loadGrants()])
-})
+watch(
+  () => user.value?.permissions,
+  (permissions, previousPermissions) => {
+    if (!permissions) return
+    const previous = new Set(previousPermissions ?? [])
+    const requests: Promise<void>[] = []
+    if (!previousPermissions) requests.push(loadCatalog())
+    if (canReadApps.value && !previous.has('oauth_app.read.owned')) requests.push(loadApps())
+    if (canReadGrants.value && !previous.has('oauth_grant.read.owned')) requests.push(loadGrants())
+    void Promise.all(requests)
+  },
+  { immediate: true },
+)
 
 async function loadCatalog() {
-  const res = await getPermissionCatalog()
-  catalog.value = res.data.permissions
+  try {
+    const res = await getPermissionCatalog()
+    catalog.value = res.data.permissions
+  } catch (error) {
+    ElMessage.error(getErrorMessage(error, '加载权限目录失败'))
+  }
 }
 
 async function loadApps() {
+  if (!canReadApps.value) return
   loading.value = true
   try {
     const res = await listOAuthApps()
@@ -229,6 +260,7 @@ async function loadApps() {
 }
 
 async function loadGrants() {
+  if (!canReadGrants.value) return
   grantsLoading.value = true
   try {
     const res = await listOAuthGrants()
@@ -240,87 +272,8 @@ async function loadGrants() {
   }
 }
 
-function openCreateDialog() {
-  editingApp.value = null
-  newSecret.value = ''
-  appDialogVisible.value = true
-}
-
-function openEditDialog(app: OAuthClient) {
-  editingApp.value = app
-  newSecret.value = ''
-  appDialogVisible.value = true
-}
-
-async function saveApp(payload: OAuthClientInput, options: { resubmit: boolean }) {
-  if (!payload.name || !payload.redirect_uri || payload.permissions.length === 0) {
-    ElMessage.warning('请填写名称、回调地址并选择至少一个权限')
-    return
-  }
-
-  saving.value = true
-  try {
-    if (!editingApp.value) {
-      const res = await createOAuthApp(payload)
-      apps.value.unshift(res.data)
-      editingApp.value = res.data
-      newSecret.value = res.data.client_secret ?? ''
-      ElMessage.success('应用已提交审核')
-      return
-    }
-
-    const clientId = editingApp.value.client_id
-    const updated = await updateOAuthApp(clientId, payload)
-    let next = updated.data
-    if (options.resubmit && next.status !== 'pending') {
-      const submitted = await submitOAuthAppReview(clientId)
-      next = submitted.data
-    }
-    replaceApp(next)
-    editingApp.value = next
-    ElMessage.success(
-      options.resubmit && next.status === 'pending' ? '应用已重新提交审核' : '应用已保存',
-    )
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, editingApp.value ? '保存应用失败' : '提交应用失败'))
-  } finally {
-    saving.value = false
-  }
-}
-
-async function rotateSecret(clientId: string) {
-  rotating.value = true
-  try {
-    const res = await rotateOAuthSecret(clientId)
-    replaceApp(res.data)
-    editingApp.value = res.data
-    newSecret.value = res.data.client_secret ?? ''
-    ElMessage.success('密钥已轮换')
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, '轮换失败'))
-  } finally {
-    rotating.value = false
-  }
-}
-
-async function deleteApp(clientId: string) {
-  await ElMessageBox.confirm('删除后应用将无法继续完成 OAuth 授权，确认删除？', '删除应用')
-  deleting.value = true
-  try {
-    await deleteOAuthApp(clientId)
-    apps.value = apps.value.filter((app) => app.client_id !== clientId)
-    if (editingApp.value?.client_id === clientId) editingApp.value = null
-    appDialogVisible.value = false
-    newSecret.value = ''
-    ElMessage.success('应用已删除')
-  } catch (error) {
-    ElMessage.error(getErrorMessage(error, '删除失败'))
-  } finally {
-    deleting.value = false
-  }
-}
-
 async function revokeGrant(grantId: string) {
+  if (!canRevokeGrants.value) return
   revokingGrantId.value = grantId
   try {
     await revokeOAuthGrant(grantId)
@@ -331,10 +284,6 @@ async function revokeGrant(grantId: string) {
   } finally {
     revokingGrantId.value = ''
   }
-}
-
-function replaceApp(next: OAuthClient) {
-  apps.value = apps.value.map((app) => (app.client_id === next.client_id ? next : app))
 }
 
 function clientName(clientId: string) {

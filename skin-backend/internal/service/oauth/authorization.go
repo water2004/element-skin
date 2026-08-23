@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	GrantIssuanceGrace    = authorizationCodeTTL
+	GrantIssuanceGrace    = authorizationCodeTTL + accessTokenTTL
 	RevokedGrantRetention = 30 * 24 * time.Hour
 )
 
@@ -52,14 +52,50 @@ func (s Service) RevokeGrant(ctx context.Context, actor permission.Actor, grantI
 		return forbidden()
 	}
 	revokedAt := database.NowMS()
-	ok, err := s.DB.OAuth.RevokeGrant(ctx, grantID, actor.UserID, revokedAt)
+	ok, err := s.DB.OAuth.RevokeGrantAndCredentials(ctx, grantID, actor.UserID, revokedAt)
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return notFound("oauth grant not found")
+		return notFound("oauth_grant", "resolve", "not_found")
 	}
-	return s.invalidateGrantCredentials(ctx, grantID, revokedAt)
+	reportPostCommitError("remove revoked grant access tokens", s.Redis.DeleteOAuthAccessTokensByGrant(ctx, grantID))
+	return nil
+}
+
+func (s Service) ListGrantsForAdmin(ctx context.Context, actor permission.Actor, limit int) ([]map[string]any, error) {
+	if err := actor.Require(permission.MustDefinitionByCode("oauth_grant.read.any")); err != nil {
+		return nil, forbidden()
+	}
+	grants, err := s.DB.OAuth.ListGrantsForAdmin(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]map[string]any, 0, len(grants))
+	for _, grant := range grants {
+		codes, err := s.grantPermissionCodes(ctx, grant.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, grantResponse(grant, codes))
+	}
+	return out, nil
+}
+
+func (s Service) RevokeGrantForAdmin(ctx context.Context, actor permission.Actor, grantID string) error {
+	if err := actor.Require(permission.MustDefinitionByCode("oauth_grant.revoke.any")); err != nil {
+		return forbidden()
+	}
+	revokedAt := database.NowMS()
+	ok, err := s.DB.OAuth.RevokeGrantAndCredentials(ctx, grantID, "", revokedAt)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return notFound("oauth_grant", "resolve", "not_found")
+	}
+	reportPostCommitError("remove administratively revoked grant access tokens", s.Redis.DeleteOAuthAccessTokensByGrant(ctx, grantID))
+	return nil
 }
 
 func (s Service) CleanupGrants(ctx context.Context, actor permission.Actor, now int64) (GrantCleanupResult, error) {
@@ -83,43 +119,42 @@ func (s Service) CleanupGrants(ctx context.Context, actor permission.Actor, now 
 }
 
 func (s Service) AuthorizationDetails(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (AuthorizationDetails, error) {
-	client, codes, err := s.validAuthorizationRequest(ctx, actor, req)
+	client, scopes, err := s.validAuthorizationRequest(ctx, actor, req)
 	if err != nil {
 		return AuthorizationDetails{}, err
 	}
 	return AuthorizationDetails{
 		Client:      publicClient(client),
-		Scopes:      permissionDetails(codes),
+		Scopes:      permissionDetails(scopes.Permissions),
+		OIDCScopes:  scopes.OIDC,
 		RedirectURI: req.RedirectURI,
 		State:       req.State,
 	}, nil
 }
 
 func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (map[string]any, error) {
-	client, codes, err := s.validAuthorizationRequest(ctx, actor, req)
+	client, scopes, err := s.validAuthorizationRequest(ctx, actor, req)
 	if err != nil {
 		return nil, err
 	}
-	permissionIDs := permissionIDsFromCodes(codes)
+	permissionIDs := permissionIDsFromCodes(scopes.Permissions)
 	now := database.NowMS()
+	rawCode, codeHash, err := generateToken()
+	if err != nil {
+		return nil, err
+	}
 	grantID, err := util.GenerateUUIDNoDash()
 	if err != nil {
 		return nil, err
 	}
 	grant := model.OAuthGrant{
-		ID:        grantID,
-		UserID:    actor.UserID,
-		SubjectID: permissiondb.SubjectIDForUser(actor.UserID),
-		ClientID:  client.ID,
-		Status:    StatusActive,
-		CreatedAt: now,
-	}
-	if err := s.DB.OAuth.CreateGrant(ctx, grant, permissionIDs); err != nil {
-		return nil, err
-	}
-	rawCode, codeHash, err := generateToken()
-	if err != nil {
-		return nil, err
+		ID:         grantID,
+		UserID:     actor.UserID,
+		SubjectID:  permissiondb.SubjectIDForUser(actor.UserID),
+		ClientID:   client.ID,
+		OIDCScopes: scopes.OIDC,
+		Status:     StatusActive,
+		CreatedAt:  now,
 	}
 	code := model.OAuthAuthorizationCode{
 		CodeHash:            codeHash,
@@ -129,10 +164,12 @@ func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Acto
 		RedirectURI:         req.RedirectURI,
 		CodeChallenge:       req.CodeChallenge,
 		CodeChallengeMethod: "S256",
+		OIDCScopes:          scopes.OIDC,
+		Nonce:               strings.TrimSpace(req.Nonce),
 		ExpiresAt:           now + int64(authorizationCodeTTL/time.Millisecond),
 		CreatedAt:           now,
 	}
-	if err := s.DB.OAuth.CreateAuthorizationCode(ctx, code, permissionIDs); err != nil {
+	if _, err := s.DB.OAuth.UpsertActiveGrantAndCreateAuthorizationCode(ctx, grant, permissionIDs, code); err != nil {
 		return nil, err
 	}
 	redirectURL, err := authorizationRedirect(req.RedirectURI, rawCode, req.State)
@@ -146,45 +183,48 @@ func (s Service) ApproveAuthorization(ctx context.Context, actor permission.Acto
 	}, nil
 }
 
-func (s Service) validAuthorizationRequest(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (model.OAuthClient, []string, error) {
+func (s Service) validAuthorizationRequest(ctx context.Context, actor permission.Actor, req AuthorizationRequest) (model.OAuthClient, authorizationScopes, error) {
 	if req.ResponseType != "code" {
-		return model.OAuthClient{}, nil, badRequest("response_type must be code")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("response_type", "validate", "unsupported")
 	}
 	client, err := s.DB.OAuth.GetClient(ctx, strings.TrimSpace(req.ClientID))
 	if err != nil {
-		return model.OAuthClient{}, nil, err
+		return model.OAuthClient{}, authorizationScopes{}, err
 	}
 	if client == nil || client.Status != StatusActive {
-		return model.OAuthClient{}, nil, badRequest("invalid client_id")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("client_id", "verify", "invalid")
 	}
 	if req.RedirectURI != client.RedirectURI {
-		return model.OAuthClient{}, nil, badRequest("invalid redirect_uri")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("redirect_uri", "validate", "invalid")
 	}
 	if req.CodeChallengeMethod != "S256" || strings.TrimSpace(req.CodeChallenge) == "" {
-		return model.OAuthClient{}, nil, badRequest("PKCE S256 is required")
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("pkce", "authorize", "required")
 	}
-	codes, err := parseScope(req.Scope)
+	if len(req.Nonce) > 512 {
+		return model.OAuthClient{}, authorizationScopes{}, badRequest("oidc_nonce", "validate", "too_long")
+	}
+	scopes, err := parseAuthorizationScopes(req.Scope)
 	if err != nil {
-		return model.OAuthClient{}, nil, err
+		return model.OAuthClient{}, authorizationScopes{}, err
 	}
 	clientIDs, err := s.DB.OAuth.ClientPermissionIDs(ctx, client.ID)
 	if err != nil {
-		return model.OAuthClient{}, nil, err
+		return model.OAuthClient{}, authorizationScopes{}, err
 	}
 	clientAllowed := idSet(clientIDs)
-	for _, code := range codes {
+	for _, code := range scopes.Permissions {
 		def := permission.MustDefinitionByCode(code)
 		if def.Scope.ID == permission.ScopeServer {
-			return model.OAuthClient{}, nil, badRequest("invalid scope")
+			return model.OAuthClient{}, authorizationScopes{}, badRequest("oauth_scope", "validate", "invalid")
 		}
 		if !actor.Has(def) {
-			return model.OAuthClient{}, nil, forbidden()
+			return model.OAuthClient{}, authorizationScopes{}, forbidden()
 		}
 		if !clientAllowed[int64(def.ID)] {
-			return model.OAuthClient{}, nil, badRequest("scope exceeds client permission limit")
+			return model.OAuthClient{}, authorizationScopes{}, badRequest("oauth_scope", "authorize", "denied")
 		}
 	}
-	return *client, codes, nil
+	return *client, scopes, nil
 }
 
 func (s Service) grantPermissionCodes(ctx context.Context, grantID string) ([]string, error) {
@@ -206,7 +246,7 @@ func (s Service) activeGrantPermissionCodes(ctx context.Context, grantID, userID
 func authorizationRedirect(rawURL, code, state string) (string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return "", badRequest("invalid redirect_uri")
+		return "", badRequest("redirect_uri", "validate", "invalid")
 	}
 	q := u.Query()
 	q.Set("code", code)

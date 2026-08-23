@@ -7,7 +7,17 @@
           <p>创建并管理您的 Minecraft 角色身份</p>
         </div>
       </div>
-      <ActionBar full>
+      <ActionBar>
+        <UiButton
+          v-if="canCreateOfficialBinding"
+          size="large"
+          variant="gradient-success"
+          class="role-header-button"
+          @click="openOfficialBindingDialog"
+        >
+          <el-icon><Link /></el-icon>
+          <span class="ml-2">绑定正版</span>
+        </UiButton>
         <UiButton
           size="large"
           @click="showYggImportDialog = true"
@@ -16,15 +26,6 @@
         >
           <el-icon><Download /></el-icon>
           <span class="ml-2">导入皮肤站角色</span>
-        </UiButton>
-        <UiButton
-          size="large"
-          @click="startMicrosoftAuth"
-          variant="gradient-success"
-          class="role-header-button"
-        >
-          <el-icon><Connection /></el-icon>
-          <span class="ml-2">绑定正版角色</span>
         </UiButton>
         <UiButton
           size="large"
@@ -50,6 +51,7 @@
           :delay-index="index % limit"
           :is-dark="isDark"
           :textures-url="texturesUrl"
+          :official-binding="officialBindingFor(profile.id)"
           @preview="openPreviewDialog"
           @delete="deleteRole"
           @clear-skin="clearRoleSkin"
@@ -75,10 +77,15 @@
       v-model:visible="showPreviewDialog"
       :profile="selectedProfile"
       :textures-url="texturesUrl"
+      :official-binding="selectedProfile ? officialBindingFor(selectedProfile.id) : null"
+      :can-sync-official-binding="canSyncOfficialBinding"
+      :can-delete-official-binding="canDeleteOfficialBinding"
       @rename="updateRoleName"
       @set-avatar="setAsAvatar"
       @clear-skin="clearRoleSkin"
       @clear-cape="clearRoleCape"
+      @sync-official="syncOfficialBinding"
+      @unbind-official="unbindOfficialBinding"
       @delete="deleteRole"
     />
 
@@ -88,12 +95,13 @@
       @create="createRole"
     />
 
-    <MicrosoftImportDialog
-      v-model:visible="showMicrosoftLoginDialog"
-      :profile="microsoftProfile"
-      :importing="importing"
-      @cancel="cancelMicrosoftLogin"
-      @confirm="importMicrosoftProfile"
+    <OfficialBindingDialog
+      v-model:visible="showOfficialBindingDialog"
+      :identities="externalIdentities"
+      :bindings="officialBindings"
+      :loading="bindingLoading"
+      @confirm="bindOfficialProfile"
+      @manage-identities="goToIdentities"
     />
 
     <RemoteYggImportDialog
@@ -113,21 +121,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue'
+import { computed, ref, onMounted, inject } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Ref } from 'vue'
-import { Connection, Plus, Download } from '@element-plus/icons-vue'
+import { Plus, Download, Link } from '@element-plus/icons-vue'
 import ActionBar from '@/components/common/ActionBar.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import RoleCard from '@/components/dashboard/roles/RoleCard.vue'
 import RolePreviewDialog from '@/components/dashboard/roles/RolePreviewDialog.vue'
 import CreateRoleDialog from '@/components/dashboard/roles/CreateRoleDialog.vue'
-import MicrosoftImportDialog from '@/components/dashboard/roles/MicrosoftImportDialog.vue'
+import OfficialBindingDialog from '@/components/dashboard/roles/OfficialBindingDialog.vue'
 import RemoteYggImportDialog from '@/components/dashboard/roles/RemoteYggImportDialog.vue'
 import { textureAssetUrl as texturesUrl } from '@/components/textures/textureAssets'
-import { useMicrosoftProfileImport } from '@/components/dashboard/roles/useMicrosoftProfileImport'
 import { useRemoteYggProfileImport } from '@/components/dashboard/roles/useRemoteYggProfileImport'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { useAvatar } from '@/composables/useAvatar'
@@ -139,14 +146,22 @@ import {
   clearProfileSkin,
   clearProfileCape,
 } from '@/api/profiles'
-import type { Profile } from '@/api/types'
-import { getErrorMessage } from '@/utils/error'
+import type { ExternalIdentity, OfficialProfileBinding, Profile, User } from '@/api/types'
+import { getExternalIdentities } from '@/api/identity'
+import {
+  createOfficialProfileBinding,
+  deleteOfficialProfileBinding,
+  getOfficialProfileBindings,
+  syncOfficialProfileBinding,
+} from '@/api/official-profiles'
+import { getErrorMessage, isExternalIdentityReauthorizationRequired } from '@/utils/error'
 
 const { setAvatar } = useAvatar()
 
 // Inject shared state from AppLayout
 const fetchMe = inject<() => Promise<void>>('fetchMe')
 const isDark = inject<Ref<boolean>>('isDark', ref(false))
+const user = inject<Ref<User | null>>('user', ref(null))
 
 const router = useRouter()
 
@@ -162,24 +177,23 @@ const newRoleName = ref('')
 
 const showPreviewDialog = ref(false)
 const selectedProfile = ref<Profile | null>(null)
+const externalIdentities = ref<ExternalIdentity[]>([])
+const officialBindings = ref<OfficialProfileBinding[]>([])
+const showOfficialBindingDialog = ref(false)
+const bindingLoading = ref(false)
 
-const {
-  showMicrosoftLoginDialog,
-  microsoftProfile,
-  importing,
-  startMicrosoftAuth,
-  handleMicrosoftCallback,
-  importMicrosoftProfile,
-  cancelMicrosoftLogin,
-} = useMicrosoftProfileImport({
-  async clearQuery() {
-    await router.replace({ query: {} })
-  },
-  async onImported() {
-    await fetchProfiles()
-    if (fetchMe) await fetchMe()
-  },
-})
+const permissionSet = computed(() => new Set(user.value?.permissions || []))
+const canCreateOfficialBinding = computed(
+  () =>
+    permissionSet.value.has('official_profile.create.owned') &&
+    permissionSet.value.has('external_identity.read.owned'),
+)
+const canSyncOfficialBinding = computed(() =>
+  permissionSet.value.has('official_profile.refresh.owned'),
+)
+const canDeleteOfficialBinding = computed(() =>
+  permissionSet.value.has('official_profile.delete.owned'),
+)
 
 const {
   showYggImportDialog,
@@ -203,6 +217,99 @@ const {
 function openPreviewDialog(profile: Profile) {
   selectedProfile.value = profile
   showPreviewDialog.value = true
+}
+
+function officialBindingFor(profileId: string) {
+  return officialBindings.value.find((binding) => binding.profile_id === profileId) || null
+}
+
+function openOfficialBindingDialog() {
+  showOfficialBindingDialog.value = true
+}
+
+function goToIdentities() {
+  showOfficialBindingDialog.value = false
+  void router.push('/dashboard/identities')
+}
+
+async function fetchOfficialResources() {
+  try {
+    const [identityResponse, bindingResponse] = await Promise.all([
+      permissionSet.value.has('external_identity.read.owned')
+        ? getExternalIdentities()
+        : Promise.resolve(null),
+      permissionSet.value.has('official_profile.read.owned')
+        ? getOfficialProfileBindings()
+        : Promise.resolve(null),
+    ])
+    externalIdentities.value = identityResponse?.data.items || []
+    officialBindings.value = bindingResponse?.data.items || []
+  } catch (e: unknown) {
+    ElMessage.error('加载正版绑定失败: ' + getErrorMessage(e, '加载失败'))
+  }
+}
+
+async function bindOfficialProfile(payload: { identity_id: string }) {
+  try {
+    bindingLoading.value = true
+    await createOfficialProfileBinding(payload)
+    showOfficialBindingDialog.value = false
+    ElMessage.success('正版角色已绑定；可在角色详情中同步正版数据')
+    await Promise.all([refreshFirstPage(), fetchOfficialResources()])
+    if (fetchMe) await fetchMe()
+  } catch (e: unknown) {
+    if (isExternalIdentityReauthorizationRequired(e)) {
+      ElMessage.error('该 Microsoft 身份授权已失效，请前往身份管理页重新登录')
+      await fetchOfficialResources()
+    } else {
+      ElMessage.error('绑定失败: ' + getErrorMessage(e, '绑定失败'))
+    }
+  } finally {
+    bindingLoading.value = false
+  }
+}
+
+async function syncOfficialBinding(binding: OfficialProfileBinding) {
+  try {
+    await ElMessageBox.confirm(
+      `将用远端正版角色 ${binding.remote_name} 覆盖本站角色的名称、皮肤和披风，是否继续？`,
+      '同步正版角色',
+      { type: 'warning', confirmButtonText: '开始同步', cancelButtonText: '取消' },
+    )
+    const response = await syncOfficialProfileBinding(binding.id)
+    if (selectedProfile.value?.id === response.data.profile.id) {
+      selectedProfile.value = response.data.profile
+    }
+    ElMessage.success('正版角色同步完成')
+    await Promise.all([fetchProfiles(), fetchOfficialResources()])
+    if (fetchMe) await fetchMe()
+  } catch (e: unknown) {
+    if (e !== 'cancel' && e !== 'close') {
+      if (isExternalIdentityReauthorizationRequired(e)) {
+        ElMessage.error('该 Microsoft 身份授权已失效，请前往身份管理页重新登录')
+        await fetchOfficialResources()
+      } else {
+        ElMessage.error('同步失败: ' + getErrorMessage(e, '同步失败'))
+      }
+    }
+  }
+}
+
+async function unbindOfficialBinding(binding: OfficialProfileBinding) {
+  try {
+    await ElMessageBox.confirm('解除绑定不会删除本站角色、皮肤或外部身份。', '解除正版绑定', {
+      type: 'warning',
+      confirmButtonText: '解除绑定',
+      cancelButtonText: '取消',
+    })
+    await deleteOfficialProfileBinding(binding.id)
+    ElMessage.success('已解除正版绑定')
+    await fetchOfficialResources()
+  } catch (e: unknown) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error('解除失败: ' + getErrorMessage(e, '解除失败'))
+    }
+  }
 }
 
 async function fetchProfiles() {
@@ -267,7 +374,7 @@ async function deleteRole(pid: string) {
     await deleteProfile(pid)
     ElMessage.success('已删除')
     showPreviewDialog.value = false
-    await refreshFirstPage()
+    await Promise.all([refreshFirstPage(), fetchOfficialResources()])
     if (fetchMe) fetchMe()
   } catch {
     ElMessage.error('删除失败')
@@ -354,8 +461,7 @@ async function setAsAvatar(profile: Profile) {
 }
 
 onMounted(async () => {
-  await refreshFirstPage()
-  await handleMicrosoftCallback(window.location.search)
+  await Promise.all([refreshFirstPage(), fetchOfficialResources()])
 })
 </script>
 

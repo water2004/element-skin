@@ -16,14 +16,14 @@ func (s AccountService) ListUsers(ctx context.Context, actor permission.Actor, c
 	}
 	m, err := util.DecodeCursor(cursor)
 	if err != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	last := ""
 	if m != nil {
 		last, _ = m["last_id"].(string)
 	}
 	if cursor != "" && last == "" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	res, err := s.DB.Users.List(ctx, limit, last, strings.TrimSpace(query))
 	if err != nil {
@@ -46,7 +46,7 @@ func (s AccountService) UserDetail(ctx context.Context, actor permission.Actor, 
 		return nil, err
 	}
 	if user == nil {
-		return nil, util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return nil, util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	out := userstore.PublicUser(*user)
 	roles, err := s.DB.Permissions.RoleIDsForUser(ctx, user.ID)

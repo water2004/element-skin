@@ -15,36 +15,36 @@
 
 | Area | Scenario | Method | Path |
 | --- | --- | --- | --- |
-| Public home | `public-settings` | `GET` | `/v1/public/settings` |
-| Public home | `public-homepage-media` | `GET` | `/v1/public/homepage-media` |
-| Public library | `public-library-search` | `GET` | `/v1/public/skin-library?limit=20&q=Load` |
-| Authentication | `site-login` | `POST` | `/v1/auth/login` |
+| Public home | `public-settings` | `GET` | `/v2/public/settings` |
+| Public home | `public-homepage-media` | `GET` | `/v2/public/homepage-media` |
+| Public library | `public-library-search` | `GET` | `/v2/public/skin-library?limit=20&q=Load` |
+| Authentication | `site-login` | `POST` | `/v2/auth/login` |
 | Yggdrasil | `ygg-metadata` | `GET` | `/` |
 | Yggdrasil | `ygg-authenticate` | `POST` | `/authserver/authenticate` |
 | Yggdrasil | `ygg-validate` | `POST` | `/authserver/validate` |
 | Yggdrasil | `ygg-profile` | `GET` | `/sessionserver/session/minecraft/profile/7fea891c429f497f880af20f6a864557` |
 | Yggdrasil | `ygg-lookup-name` | `GET` | `/api/users/profiles/minecraft/LoadProfile002_0` |
 | Yggdrasil | `ygg-has-joined` | `GET` | `/sessionserver/session/minecraft/hasJoined?username=LoadProfile002_0&serverId=load_ygg_server` |
-| User center | `me` | `GET` | `/v1/users/me` |
-| OAuth delegated | `oauth-me` | `GET` | `/v1/users/me` |
-| User center | `my-profiles` | `GET` | `/v1/users/me/profiles?limit=20` |
-| OAuth delegated | `oauth-my-profiles` | `GET` | `/v1/users/me/profiles?limit=20` |
-| User center | `my-textures` | `GET` | `/v1/users/me/textures?limit=20` |
-| OAuth delegated | `oauth-my-textures` | `GET` | `/v1/users/me/textures?limit=20` |
-| User center | `texture-detail` | `GET` | `/v1/users/me/textures/load_texture_001_000/skin` |
-| OAuth delegated | `oauth-texture-detail` | `GET` | `/v1/users/me/textures/load_texture_001_000/skin` |
-| Admin console | `admin-users` | `GET` | `/v1/admin/users?limit=20&q=Load` |
-| OAuth delegated admin | `oauth-admin-users` | `GET` | `/v1/admin/users?limit=20&q=Load` |
-| Admin console | `admin-user-detail` | `GET` | `/v1/admin/users/cef8247ac917451bad64a9d08f530f82` |
-| OAuth delegated admin | `oauth-admin-user-detail` | `GET` | `/v1/admin/users/cef8247ac917451bad64a9d08f530f82` |
-| Admin console | `admin-user-profiles` | `GET` | `/v1/admin/users/cef8247ac917451bad64a9d08f530f82/profiles?limit=20` |
-| Admin console | `admin-profiles` | `GET` | `/v1/admin/profiles?limit=20` |
-| Admin console | `admin-textures` | `GET` | `/v1/admin/textures?limit=20` |
-| Admin console | `admin-invites` | `GET` | `/v1/admin/invites?limit=20` |
-| OAuth delegated admin | `oauth-admin-invites` | `GET` | `/v1/admin/invites?limit=20` |
-| OAuth client credentials | `oauth-client-invites` | `GET` | `/v1/admin/invites?limit=20` |
-| Admin console | `admin-settings-site` | `GET` | `/v1/admin/settings/site` |
-| OAuth delegated admin | `oauth-admin-settings-site` | `GET` | `/v1/admin/settings/site` |
+| User center | `me` | `GET` | `/v2/users/me` |
+| OAuth delegated | `oauth-me` | `GET` | `/v2/users/me` |
+| User center | `my-profiles` | `GET` | `/v2/users/me/profiles?limit=20` |
+| OAuth delegated | `oauth-my-profiles` | `GET` | `/v2/users/me/profiles?limit=20` |
+| User center | `my-textures` | `GET` | `/v2/users/me/textures?limit=20` |
+| OAuth delegated | `oauth-my-textures` | `GET` | `/v2/users/me/textures?limit=20` |
+| User center | `texture-detail` | `GET` | `/v2/users/me/textures/load_texture_001_000/skin` |
+| OAuth delegated | `oauth-texture-detail` | `GET` | `/v2/users/me/textures/load_texture_001_000/skin` |
+| Admin console | `admin-users` | `GET` | `/v2/admin/users?limit=20&q=Load` |
+| OAuth delegated admin | `oauth-admin-users` | `GET` | `/v2/admin/users?limit=20&q=Load` |
+| Admin console | `admin-user-detail` | `GET` | `/v2/admin/users/cef8247ac917451bad64a9d08f530f82` |
+| OAuth delegated admin | `oauth-admin-user-detail` | `GET` | `/v2/admin/users/cef8247ac917451bad64a9d08f530f82` |
+| Admin console | `admin-user-profiles` | `GET` | `/v2/admin/users/cef8247ac917451bad64a9d08f530f82/profiles?limit=20` |
+| Admin console | `admin-profiles` | `GET` | `/v2/admin/profiles?limit=20` |
+| Admin console | `admin-textures` | `GET` | `/v2/admin/textures?limit=20` |
+| Admin console | `admin-invites` | `GET` | `/v2/admin/invites?limit=20` |
+| OAuth delegated admin | `oauth-admin-invites` | `GET` | `/v2/admin/invites?limit=20` |
+| OAuth client credentials | `oauth-client-invites` | `GET` | `/v2/admin/invites?limit=20` |
+| Admin console | `admin-settings-site` | `GET` | `/v2/admin/settings/site` |
+| OAuth delegated admin | `oauth-admin-settings-site` | `GET` | `/v2/admin/settings/site` |
 
 ## Fixed-200 One-Second Results
 
@@ -93,14 +93,14 @@
 
 | Pair | Cookie req/s | OAuth req/s | OAuth / Cookie | Cookie P95 | OAuth P95 |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| `/v1/users/me` | 12779.5 | 9299.1 | 72.8% | 18.7ms | 27.9ms |
-| `/v1/users/me/profiles` | 15059.7 | 12230.6 | 81.2% | 15.0ms | 20.1ms |
-| `/v1/users/me/textures` | 15562.5 | 11424.7 | 73.4% | 14.8ms | 21.3ms |
-| `/v1/users/me/textures/{hash}/skin` | 13539.0 | 11258.2 | 83.2% | 17.9ms | 22.0ms |
-| `/v1/admin/users?q=Load` | 3057.9 | 2730.3 | 89.3% | 86.9ms | 98.2ms |
-| `/v1/admin/users/{id}` | 12048.3 | 9782.4 | 81.2% | 20.5ms | 27.2ms |
-| `/v1/admin/invites` | 12855.8 | 10136.6 | 78.8% | 20.0ms | 25.8ms |
-| `/v1/admin/settings/site` | 2290.4 | 2228.1 | 97.3% | 95.1ms | 94.4ms |
+| `/v2/users/me` | 12779.5 | 9299.1 | 72.8% | 18.7ms | 27.9ms |
+| `/v2/users/me/profiles` | 15059.7 | 12230.6 | 81.2% | 15.0ms | 20.1ms |
+| `/v2/users/me/textures` | 15562.5 | 11424.7 | 73.4% | 14.8ms | 21.3ms |
+| `/v2/users/me/textures/{hash}/skin` | 13539.0 | 11258.2 | 83.2% | 17.9ms | 22.0ms |
+| `/v2/admin/users?q=Load` | 3057.9 | 2730.3 | 89.3% | 86.9ms | 98.2ms |
+| `/v2/admin/users/{id}` | 12048.3 | 9782.4 | 81.2% | 20.5ms | 27.2ms |
+| `/v2/admin/invites` | 12855.8 | 10136.6 | 78.8% | 20.0ms | 25.8ms |
+| `/v2/admin/settings/site` | 2290.4 | 2228.1 | 97.3% | 95.1ms | 94.4ms |
 
 OAuth delegated bearer paths have zero failures at concurrency 200. The added cost is visible but bounded: most user/admin read paths retain roughly 73-89% of cookie throughput, with P95 increases around 4-11ms. The settings endpoint is dominated by its own service work and shows almost no OAuth-specific loss.
 

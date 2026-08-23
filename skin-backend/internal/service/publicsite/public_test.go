@@ -31,6 +31,13 @@ func TestPublicSettingsUsesCacheAndFallbackPrimaryEndpointExactly(t *testing.T) 
 	if err := db.Settings.Set(ctx, "require_invite", true); err != nil {
 		t.Fatal(err)
 	}
+	if err := db.EmailPolicies.Replace(ctx, model.EmailSuffixPolicy{
+		Mode:      model.EmailSuffixModeAllowlist,
+		Allowlist: []string{"@example.com", "@qq.com"},
+		Denylist:  []string{"@blocked.test"},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := db.Fallbacks.SaveEndpoints(ctx, []dbfallback.Endpoint{{
 		Priority: 1, SessionURL: "https://session.example", AccountURL: "https://account.example",
 		ServicesURL: "https://services.example", CacheTTL: 60, Note: "primary",
@@ -42,7 +49,7 @@ func TestPublicSettingsUsesCacheAndFallbackPrimaryEndpointExactly(t *testing.T) 
 		Redis:    redis,
 		Settings: settingssvc.Settings{DB: db, Redis: redis},
 		SiteURL:  "https://config.example/root/",
-		APIURL:   "https://api.example/v1/",
+		APIURL:   "https://api.example/v2/",
 		CacheTTL: time.Minute,
 	}
 
@@ -51,9 +58,12 @@ func TestPublicSettingsUsesCacheAndFallbackPrimaryEndpointExactly(t *testing.T) 
 		t.Fatal(err)
 	}
 	status := first["mojang_status_urls"].(map[string]any)
+	emailPolicy := first["email_suffix_policy"].(map[string]any)
+	suffixes := emailPolicy["suffixes"].([]string)
 	if first["site_name"] != "Cached Site" || first["allow_register"] != false ||
 		first["require_invite"] != true ||
-		first["site_url"] != "https://config.example/root" || first["api_url"] != "https://api.example/v1" ||
+		emailPolicy["mode"] != model.EmailSuffixModeAllowlist || len(suffixes) != 2 || suffixes[0] != "@example.com" || suffixes[1] != "@qq.com" ||
+		first["site_url"] != "https://config.example/root" || first["api_url"] != "https://api.example/v2" ||
 		status["session"] != "https://session.example" || status["account"] != "https://account.example" || status["services"] != "https://services.example" {
 		t.Fatalf("public settings mismatch: %#v", first)
 	}
@@ -175,7 +185,7 @@ func TestFallbackStatusBuildsEndpointHistoryAndLatestExactly(t *testing.T) {
 	db, _, redis := testutil.NewTestAppWithRedisTB(t)
 	ctx := context.Background()
 	if err := db.Fallbacks.SaveEndpoints(ctx, []dbfallback.Endpoint{
-		{Priority: 1, SessionURL: "https://s1.example", AccountURL: "https://a1.example", ServicesURL: "https://v1.example", CacheTTL: 60, Note: "one"},
+		{Priority: 1, SessionURL: "https://s1.example", AccountURL: "https://a1.example", ServicesURL: "https://v2.example", CacheTTL: 60, Note: "one"},
 		{Priority: 2, SessionURL: "https://s2.example", AccountURL: "https://a2.example", ServicesURL: "https://v2.example", CacheTTL: 60, Note: "two"},
 	}); err != nil {
 		t.Fatal(err)
@@ -204,7 +214,7 @@ func TestFallbackStatusBuildsEndpointHistoryAndLatestExactly(t *testing.T) {
 		t.Fatalf("fallback status envelope mismatch: %#v", status)
 	}
 	if decoded.Endpoints[0].ID != firstID || decoded.Endpoints[0].Priority != 1 || decoded.Endpoints[0].Note != "one" ||
-		decoded.Endpoints[0].SessionURL != "https://s1.example" || decoded.Endpoints[0].AccountURL != "https://a1.example" || decoded.Endpoints[0].ServicesURL != "https://v1.example" {
+		decoded.Endpoints[0].SessionURL != "https://s1.example" || decoded.Endpoints[0].AccountURL != "https://a1.example" || decoded.Endpoints[0].ServicesURL != "https://v2.example" {
 		t.Fatalf("first endpoint metadata mismatch: %#v", decoded.Endpoints[0])
 	}
 	if len(decoded.Endpoints[0].History) != 2 || decoded.Endpoints[0].History[0].CheckedAt != now.Add(-2*time.Minute).UnixMilli() ||
@@ -245,20 +255,20 @@ func TestPublicSiteServiceRequiresPublicPermissionExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	redis := testutil.NewMemoryRedis()
 	svc := publicsitesvc.Service{DB: db, Redis: redis, Settings: settingssvc.Settings{DB: db, Redis: redis}}
-	if got, err := svc.PublicSettings(t.Context(), permission.Actor{}); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if got, err := svc.PublicSettings(t.Context(), permission.Actor{}); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("PublicSettings result=%#v err=%#v", got, err)
 	}
-	if got, err := svc.HomepageMedia(t.Context(), permission.Actor{}); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if got, err := svc.HomepageMedia(t.Context(), permission.Actor{}); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("HomepageMedia result=%#v err=%#v", got, err)
 	}
-	if got, err := svc.FallbackStatus(t.Context(), permission.Actor{}, time.Unix(1, 0)); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission denied") {
+	if got, err := svc.FallbackStatus(t.Context(), permission.Actor{}, time.Unix(1, 0)); got != nil || !publicSiteHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("FallbackStatus result=%#v err=%#v", got, err)
 	}
 }
 
 func publicSiteHTTPError(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }
 
 type fallbackStatusForTest struct {

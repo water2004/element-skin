@@ -3,8 +3,8 @@ package imports_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sort"
-	"strings"
 	"sync"
 	"testing"
 
@@ -100,7 +100,7 @@ func TestImportProfileUUIDConflictAndDownloadTolerance(t *testing.T) {
 	user := testutil.CreateUser(t, db, "conflict@test.com", "Password123", "Importer", false)
 	testutil.CreateProfile(t, db, user.ID, "dup_uuid", "AlreadyHere")
 	importer := imports.ImportService{DB: db}
-	if _, err := importer.ImportProfile(ctx, importUserActor(user.ID), "dup_uuid", "Whatever", nil); err == nil || !strings.Contains(err.Error(), "UUID") {
+	if _, err := importer.ImportProfile(ctx, importUserActor(user.ID), "dup_uuid", "Whatever", nil); err == nil || err.Error() != "profile_uuid.reserve.conflict" {
 		t.Fatalf("expected UUID conflict, got %v", err)
 	}
 
@@ -126,7 +126,7 @@ func TestImportProfileRejectsInvalidNamesWithoutPersisting(t *testing.T) {
 	importer := imports.ImportService{DB: db}
 
 	result, err := importer.ImportProfile(ctx, importUserActor(user.ID), "invalid_import_name_id", "Bad Name!", nil)
-	if result != nil || err != (util.HTTPError{Status: 400, Detail: "invalid profile name"}) {
+	if result != nil || !exactHTTPError(err, 400, "profile_name.validate.invalid") {
 		t.Fatalf("invalid import name result=%#v err=%#v; want nil and exact 400", result, err)
 	}
 	if stored, err := db.Profiles.GetByID(ctx, "invalid_import_name_id"); err != nil || stored != nil {
@@ -144,8 +144,10 @@ func TestImportProfileRejectsInvalidNamesWithoutPersisting(t *testing.T) {
 	}
 	items := batch["items"].([]map[string]any)
 	failed := batch["failed"].([]map[string]any)
+	failure, ok := failed[0]["error"].(util.ErrorBody)
 	if len(items) != 1 || items[0]["id"] != "valid_import_batch" || items[0]["name"] != "ValidImport" ||
-		len(failed) != 1 || failed[0]["profile_id"] != "invalid_import_batch" || failed[0]["detail"] != "invalid profile name" {
+		len(failed) != 1 || failed[0]["profile_id"] != "invalid_import_batch" || !ok ||
+		failure.Object != "profile_name" || failure.Operation != "validate" || failure.Reason != "invalid" {
 		t.Fatalf("invalid-name batch result mismatch: %#v", batch)
 	}
 	if stored, err := db.Profiles.GetByID(ctx, "invalid_import_batch"); err != nil || stored != nil {
@@ -164,12 +166,12 @@ func TestImportProfileRequiresTexturePermissionOnlyWhenAssetsExist(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if profileOnly["ok"] != true || profileOnly["profile"].(map[string]any)["id"] != "profile_only_import" {
+	if len(profileOnly) != 1 || profileOnly["profile"].(map[string]any)["id"] != "profile_only_import" {
 		t.Fatalf("profile-only import should succeed with profile permission: %#v", profileOnly)
 	}
 
 	withAsset, err := importer.ImportProfile(ctx, profileOnlyActor, "asset_import_denied", "AssetDenied", []imports.TextureAsset{{URL: "skin-url", Kind: "skin"}})
-	if withAsset != nil || err != (util.HTTPError{Status: 403, Detail: "permission denied"}) {
+	if withAsset != nil || !exactHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("asset import without texture permission result=%#v err=%#v; want exact 403", withAsset, err)
 	}
 	if stored, err := db.Profiles.GetByID(ctx, "asset_import_denied"); err != nil || stored != nil {
@@ -185,7 +187,7 @@ func TestImportProfileDeniesActorWithoutProfilePermission(t *testing.T) {
 	noProfileActor := importActor(user.ID, "texture.create.owned")
 
 	result, err := importer.ImportProfile(ctx, noProfileActor, "no_perm_import", "NoPermImport", nil)
-	if result != nil || err != (util.HTTPError{Status: 403, Detail: "permission denied"}) {
+	if result != nil || !exactHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("import without profile.create.owned result=%#v err=%#v; want exact 403", result, err)
 	}
 	if stored, err := db.Profiles.GetByID(ctx, "no_perm_import"); err != nil || stored != nil {
@@ -330,7 +332,7 @@ func TestConcurrentImportsReturnExactUUIDConflict(t *testing.T) {
 		switch {
 		case err == nil:
 			successes++
-		case err == (util.HTTPError{Status: 400, Detail: "UUID already exists"}):
+		case exactHTTPError(err, 400, "profile_uuid.reserve.conflict"):
 			conflicts++
 		default:
 			t.Fatalf("unexpected concurrent UUID import error: %#v", err)
@@ -351,6 +353,11 @@ func TestConcurrentImportsReturnExactUUIDConflict(t *testing.T) {
 	if count != 1 {
 		t.Fatalf("concurrent UUID import persisted %d exact profiles; want 1", count)
 	}
+}
+
+func exactHTTPError(err error, status int, classification string) bool {
+	var target util.HTTPError
+	return errors.As(err, &target) && target.Status == status && target.Error() == classification
 }
 
 func TestImportProfilesBatchKeepsBusinessErrorsAndConvergesInternal(t *testing.T) {
@@ -376,14 +383,14 @@ func TestImportProfilesBatchKeepsBusinessErrorsAndConvergesInternal(t *testing.T
 		t.Fatalf("unexpected batch result: %#v", result)
 	}
 	failed := result["failed"].([]map[string]any)
-	byID := map[string]string{}
+	byID := map[string]util.ErrorBody{}
 	for _, f := range failed {
-		byID[f["profile_id"].(string)] = f["detail"].(string)
+		byID[f["profile_id"].(string)] = f["error"].(util.ErrorBody)
 	}
-	if byID["batch_internal"] != "导入失败" {
+	if !reflect.DeepEqual(byID["batch_internal"], util.ErrorBody{Object: "remote_profile", Operation: "fetch", Reason: "unavailable"}) {
 		t.Fatalf("internal error should be converged: %#v", byID)
 	}
-	if !strings.Contains(byID["batch_biz_pid"], "UUID") {
+	if !reflect.DeepEqual(byID["batch_biz_pid"], util.ErrorBody{Object: "profile_uuid", Operation: "reserve", Reason: "conflict"}) {
 		t.Fatalf("business UUID error should pass through: %#v", byID)
 	}
 }

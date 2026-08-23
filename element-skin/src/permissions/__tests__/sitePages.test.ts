@@ -32,6 +32,34 @@ describe('site page permission access', () => {
     expect(sitePageForPath('/dashboardish')).toBeNull()
   })
 
+  it('requires exact fine-grained permissions for OAuth application routes', () => {
+    expect(sitePageForPath('/dashboard/oauth/apps/new')?.path).toBe('/dashboard/oauth/apps/new')
+    expect(sitePageForPath('/dashboard/oauth/apps/client-1/edit')?.path).toBe(
+      '/dashboard/oauth/apps/:client_id/edit',
+    )
+    expect(canAccessSitePath('/dashboard/oauth/apps/new', ['oauth_app.create.owned'])).toBe(true)
+    expect(canAccessSitePath('/dashboard/oauth/apps/new', ['oauth_grant.read.owned'])).toBe(false)
+    expect(canAccessSitePath('/dashboard/oauth/apps/client-1/edit', ['oauth_app.read.owned'])).toBe(
+      false,
+    )
+    expect(
+      canAccessSitePath('/dashboard/oauth/apps/client-1/edit', ['oauth_app.update.owned']),
+    ).toBe(false)
+    expect(
+      canAccessSitePath('/dashboard/oauth/apps/client-1/edit', [
+        'oauth_app.read.owned',
+        'oauth_app.update.owned',
+      ]),
+    ).toBe(true)
+    expect(
+      canAccessSitePath('/dashboard/oauth/apps/client-1/edit', [
+        'oauth_app.read.owned',
+        'oauth_app.delete.owned',
+      ]),
+    ).toBe(true)
+    expect(firstAccessibleSitePath(['oauth_app.create.owned'])).toBe('/dashboard/oauth')
+  })
+
   it('identifies protected site paths exactly', () => {
     expect(isProtectedSitePath('/dashboard')).toBe(true)
     expect(isProtectedSitePath('/dashboard/home')).toBe(true)
@@ -40,5 +68,12 @@ describe('site page permission access', () => {
     expect(isProtectedSitePath('/reset-email')).toBe(false)
     expect(isProtectedSitePath('/')).toBe(false)
     expect(isProtectedSitePath('/admin/users')).toBe(false)
+  })
+
+  it('exposes identity and official binding pages through fine-grained permissions', () => {
+    expect(canAccessSitePath('/dashboard/identities', ['external_identity.read.owned'])).toBe(true)
+    expect(canAccessSitePath('/dashboard/identities', ['official_profile.read.owned'])).toBe(true)
+    expect(canAccessSitePath('/dashboard/roles', ['official_profile.refresh.owned'])).toBe(true)
+    expect(canAccessSitePath('/dashboard/identities', ['profile.read.owned'])).toBe(false)
   })
 })

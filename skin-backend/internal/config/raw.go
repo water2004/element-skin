@@ -47,6 +47,8 @@ func writeConfigFile(path string, raw rawConfig) error {
 func (c *Config) resolveKeyPaths(baseDir string) {
 	c.PrivateKeyPath = resolveRelativePath(baseDir, c.PrivateKeyPath)
 	c.PublicKeyPath = resolveRelativePath(baseDir, c.PublicKeyPath)
+	c.OIDCPrivateKeyPath = resolveRelativePath(baseDir, c.OIDCPrivateKeyPath)
+	c.OIDCPublicKeyPath = resolveRelativePath(baseDir, c.OIDCPublicKeyPath)
 }
 
 func resolveRelativePath(baseDir, path string) string {

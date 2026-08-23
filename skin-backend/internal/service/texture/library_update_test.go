@@ -24,8 +24,8 @@ func TestUpdateTextureRejectsInvalidFieldsBeforeMutation(t *testing.T) {
 		body   map[string]any
 		detail string
 	}{
-		{"invalid model", map[string]any{"note": "Changed", "model": "wide"}, "invalid model"},
-		{"invalid public", map[string]any{"note": "Changed", "is_public": "yes"}, "invalid is_public"},
+		{"texture_model.validate.invalid", map[string]any{"note": "Changed", "model": "wide"}, "texture_model.validate.invalid"},
+		{"invalid public", map[string]any{"note": "Changed", "is_public": "yes"}, "texture_visibility.validate.invalid"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			result, err := svc.UpdateTexture(ctx, textureUserActor(user.ID), "site_texture_validate", "skin", test.body)
@@ -104,7 +104,7 @@ func TestTextureServiceMapsMissingUpdatesAndDetailToExactNotFound(t *testing.T) 
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.call()
-			if !httpErrorIs(err, 404, "Texture not found") {
+			if !httpErrorIs(err, 404, "texture.resolve.not_found") {
 				t.Fatalf("%s should map to exact not-found error, got %#v", tc.name, err)
 			}
 		})

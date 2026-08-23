@@ -56,7 +56,7 @@ func TestServiceOAuthReviewFlowCreatesExactNotifications(t *testing.T) {
 		t.Fatalf("owner must not see admin review request notice: %#v", items)
 	}
 
-	if _, err := svc.ReviewClient(ctx, adminActor, clientID, oauth.StatusRejected, ""); !isHTTPError(err, 400, "reason is required") {
+	if _, err := svc.ReviewClient(ctx, adminActor, clientID, oauth.StatusRejected, ""); !isHTTPError(err, 400, "audit_reason.validate.required") {
 		t.Fatalf("reject without reason mismatch: %#v", err)
 	}
 	stillPending, err := svc.GetClient(ctx, ownerActor, clientID)

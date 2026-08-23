@@ -27,7 +27,7 @@ func ValidateEasterEggs(raw any) ([]string, error) {
 				items = append(items, item)
 			}
 		} else {
-			return nil, util.HTTPError{Status: 400, Detail: "invalid easter_eggs_enabled"}
+			return nil, util.HTTPError{Status: 400, Object: "easter_egg_setting", Operation: "configure", Reason: "invalid"}
 		}
 	}
 
@@ -36,7 +36,7 @@ func ValidateEasterEggs(raw any) ([]string, error) {
 	for _, item := range items {
 		id := fmt.Sprint(item)
 		if !allowedEasterEggs[id] {
-			return nil, util.HTTPError{Status: 400, Detail: "invalid easter egg: " + id}
+			return nil, util.HTTPError{Status: 400, Object: "easter_egg", Operation: "validate", Reason: "invalid", Params: map[string]any{"id": id}}
 		}
 		if seen[id] {
 			continue

@@ -34,6 +34,9 @@ func validateRequiredConfig(cfg Config, raw rawConfig) error {
 		"redis.auth_cache_ttl_seconds",
 		"keys.private_key",
 		"keys.public_key",
+		"oidc.private_key",
+		"oidc.public_key",
+		"identity.encryption_key",
 		"cors.allow_origins",
 		"cors.allow_credentials",
 	}
@@ -45,6 +48,12 @@ func validateRequiredConfig(cfg Config, raw rawConfig) error {
 	}
 	if len(missing) > 0 {
 		return fmt.Errorf("missing required config fields: %s", strings.Join(missing, ", "))
+	}
+	if _, configured := lookup(raw, "webhook_worker.max_database_connections"); configured && cfg.WebhookWorkerMaxConnections <= 0 {
+		return fmt.Errorf("invalid config webhook_worker.max_database_connections")
+	}
+	if _, configured := lookup(raw, "webhook_worker.active_interval_ms"); configured && cfg.WebhookWorkerActiveIntervalMS <= 0 {
+		return fmt.Errorf("invalid config webhook_worker.active_interval_ms")
 	}
 	if cfg.CORSCredentials && containsString(cfg.CORSOrigins, "*") {
 		return fmt.Errorf("invalid config cors.allow_origins: wildcard is not allowed when credentials are enabled")
@@ -87,6 +96,9 @@ func validateRequiredConfig(cfg Config, raw rawConfig) error {
 		{field: "redis.auth_cache_ttl_seconds", ok: cfg.AuthCacheTTL > 0},
 		{field: "keys.private_key", ok: cfg.PrivateKeyPath != ""},
 		{field: "keys.public_key", ok: cfg.PublicKeyPath != ""},
+		{field: "oidc.private_key", ok: cfg.OIDCPrivateKeyPath != ""},
+		{field: "oidc.public_key", ok: cfg.OIDCPublicKeyPath != ""},
+		{field: "identity.encryption_key", ok: cfg.IdentityEncryptionKey != ""},
 		{field: "cors.allow_origins", ok: len(cfg.CORSOrigins) > 0},
 	} {
 		if !check.ok {

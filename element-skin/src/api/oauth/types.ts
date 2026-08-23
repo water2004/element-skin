@@ -2,6 +2,32 @@ import type { PermissionDefinition, PermissionOverrideEffect } from '../types'
 
 export type OAuthClientStatus = 'pending' | 'active' | 'rejected' | 'disabled'
 
+export interface OAuthWebhookEndpoint {
+  id: string
+  url: string
+  status: 'active' | 'disabled'
+  enabled: boolean
+  events: string[]
+  created_at: number
+  updated_at: number
+  signing_secret?: string
+}
+
+export interface OAuthWebhookEndpointInput {
+  id?: string
+  url: string
+  enabled: boolean
+  events: string[]
+}
+
+export interface OAuthWebhookEventDefinition {
+  type: string
+  description: string
+  required_permissions: string[]
+  delegated_permission?: string
+  application_permission?: string
+}
+
 export interface OAuthClient {
   client_id: string
   owner_user_id: string
@@ -14,12 +40,13 @@ export interface OAuthClient {
   created_at: number
   updated_at: number
   permissions: string[]
+  webhook_endpoints: OAuthWebhookEndpoint[]
   client_secret?: string
 }
 
 export type OAuthClientSummary = Omit<
   OAuthClient,
-  'redirect_uri' | 'website_url' | 'permissions' | 'client_secret'
+  'redirect_uri' | 'website_url' | 'permissions' | 'webhook_endpoints' | 'client_secret'
 >
 
 export interface OAuthGrant {
@@ -31,6 +58,7 @@ export interface OAuthGrant {
   created_at: number
   revoked_at?: number | null
   permissions: string[]
+  oidc_scopes: string[]
 }
 
 export interface OAuthClientInput {
@@ -40,6 +68,7 @@ export interface OAuthClientInput {
   website_url?: string
   client_type: 'public' | 'confidential'
   permissions: string[]
+  webhook_endpoints: OAuthWebhookEndpointInput[]
 }
 
 export interface OAuthClientPermissions {
@@ -72,6 +101,7 @@ export interface OAuthAuthorizationRequest {
   redirect_uri: string
   scope: string
   state?: string
+  nonce?: string
   code_challenge: string
   code_challenge_method: string
 }
@@ -79,6 +109,7 @@ export interface OAuthAuthorizationRequest {
 export interface OAuthAuthorizationDetails {
   client: OAuthClient
   scopes: OAuthPermissionScope[]
+  oidc_scopes: string[]
   redirect_uri: string
   state?: string
 }
@@ -98,4 +129,21 @@ export interface DeviceAuthorizationDetails {
 
 export interface PermissionCatalogResponse {
   permissions: PermissionDefinition[]
+}
+
+export interface OAuthWebhookEventCatalogResponse {
+  events: OAuthWebhookEventDefinition[]
+}
+
+export interface OpenIDConfiguration {
+  issuer: string
+  authorization_endpoint: string
+  token_endpoint: string
+  userinfo_endpoint: string
+  jwks_uri: string
+  revocation_endpoint: string
+  response_types_supported: string[]
+  grant_types_supported: string[]
+  subject_types_supported: string[]
+  scopes_supported: string[]
 }

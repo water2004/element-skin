@@ -10,17 +10,19 @@ import (
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/redisstore"
+	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
 	settingssvc "element-skin/backend/internal/service/settings"
 	"element-skin/backend/internal/util"
 )
 
 type Service struct {
-	DB       *database.DB
-	Redis    redisstore.Store
-	Settings settingssvc.Settings
-	SiteURL  string
-	APIURL   string
-	CacheTTL time.Duration
+	DB          *database.DB
+	Redis       redisstore.Store
+	Settings    settingssvc.Settings
+	EmailPolicy emailpolicysvc.Service
+	SiteURL     string
+	APIURL      string
+	CacheTTL    time.Duration
 }
 
 var sitePublicReadPermission = permission.MustDefinitionByCode("site_public.read.public")
@@ -43,6 +45,15 @@ func (s Service) PublicSettings(ctx context.Context, actor permission.Actor) (ma
 	if err != nil {
 		return nil, err
 	}
+	policy := s.EmailPolicy
+	if policy.DB == nil {
+		policy.DB = s.DB
+	}
+	publicPolicy, err := policy.Public(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res["email_suffix_policy"] = publicPolicy
 	if err := s.Redis.SetPublicSettings(ctx, res, s.CacheTTL); err != nil {
 		return nil, err
 	}
@@ -50,8 +61,9 @@ func (s Service) PublicSettings(ctx context.Context, actor permission.Actor) (ma
 }
 
 func currentPublicSettingsCache(cached map[string]any) bool {
-	_, ok := cached["require_invite"]
-	return ok
+	_, hasInvite := cached["require_invite"]
+	_, hasEmailSuffixPolicy := cached["email_suffix_policy"]
+	return hasInvite && hasEmailSuffixPolicy
 }
 
 func (s Service) HomepageMedia(ctx context.Context, actor permission.Actor) ([]model.HomepageMedia, error) {
@@ -94,7 +106,7 @@ func (s Service) FallbackStatus(ctx context.Context, actor permission.Actor, now
 
 func requirePublicPermission(actor permission.Actor) error {
 	if err := actor.Require(sitePublicReadPermission); err != nil {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "permission denied"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
 	}
 	return nil
 }

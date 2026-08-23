@@ -58,19 +58,19 @@ func TestAccountServiceListAndDetailRejectInvalidAccessExactly(t *testing.T) {
 	svc := accountsvc.AccountService{DB: db, Redis: redisstore.NewMemoryStore()}
 	actor := actorWithPermissions(adminUser.ID, "user.read.any", "account.read.any")
 
-	if _, err := svc.ListUsers(ctx, permission.Actor{}, "", 10, ""); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.ListUsers(ctx, permission.Actor{}, "", 10, ""); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("ListUsers without permission mismatch: %#v", err)
 	}
-	if _, err := svc.ListUsers(ctx, actor, "bad-cursor", 10, ""); !httpErrorIs(err, http.StatusBadRequest, "Invalid cursor") {
+	if _, err := svc.ListUsers(ctx, actor, "bad-cursor", 10, ""); !httpErrorIs(err, http.StatusBadRequest, "pagination_cursor.decode.invalid") {
 		t.Fatalf("ListUsers bad cursor mismatch: %#v", err)
 	}
-	if _, err := svc.ListUsers(ctx, actor, util.EncodeCursor(map[string]any{"wrong": "field"}), 10, ""); !httpErrorIs(err, http.StatusBadRequest, "Invalid cursor") {
+	if _, err := svc.ListUsers(ctx, actor, util.EncodeCursor(map[string]any{"wrong": "field"}), 10, ""); !httpErrorIs(err, http.StatusBadRequest, "pagination_cursor.decode.invalid") {
 		t.Fatalf("ListUsers cursor missing last_id mismatch: %#v", err)
 	}
-	if _, err := svc.UserDetail(ctx, permission.Actor{}, adminUser.ID); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.UserDetail(ctx, permission.Actor{}, adminUser.ID); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("UserDetail without permission mismatch: %#v", err)
 	}
-	if _, err := svc.UserDetail(ctx, actor, "missing-account-detail"); !httpErrorIs(err, http.StatusNotFound, "user not found") {
+	if _, err := svc.UserDetail(ctx, actor, "missing-account-detail"); !httpErrorIs(err, http.StatusNotFound, "user.resolve.not_found") {
 		t.Fatalf("UserDetail missing user mismatch: %#v", err)
 	}
 }

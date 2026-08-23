@@ -75,19 +75,27 @@ func runConcurrentSelfUpdates(actors []permission.Actor, update func(permission.
 	return out
 }
 
-func assertOneSelfUpdateConflict(t *testing.T, results []error, detail string) {
+func assertOneSelfUpdateConflict(t *testing.T, results []error, details ...string) {
 	t.Helper()
 	successes := 0
 	conflicts := 0
 	for _, err := range results {
-		switch {
-		case err == nil:
+		if err == nil {
 			successes++
-		case httpErrorIs(err, http.StatusBadRequest, detail):
-			conflicts++
-		default:
-			t.Fatalf("unexpected concurrent account result: %#v", err)
+			continue
 		}
+		matched := false
+		for _, detail := range details {
+			if httpErrorIs(err, http.StatusBadRequest, detail) {
+				matched = true
+				break
+			}
+		}
+		if matched {
+			conflicts++
+			continue
+		}
+		t.Fatalf("unexpected concurrent account result: %#v", err)
 	}
 	if successes != 1 || conflicts != 1 {
 		t.Fatalf("concurrent account updates: successes=%d conflicts=%d; want 1 and 1", successes, conflicts)

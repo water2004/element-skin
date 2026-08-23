@@ -30,7 +30,7 @@ func TestVerificationSendAndVerifyExactStoredCode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res["ok"] != true || res["ttl"] != 180 {
+	if len(res) != 1 || res["ttl"] != 180 {
 		t.Fatalf("verification response mismatch: %#v", res)
 	}
 	code, err := svc.Redis.GetVerificationCode(ctx, "verify-service@test.com", "register")
@@ -49,7 +49,7 @@ func TestVerificationRejectsInvalidRequestsAndHidesMissingResetAccount(t *testin
 	svc := newAuthService(db, testutil.TestConfig())
 	testutil.CreateUser(t, db, "verify-existing@test.com", "Password123", "VerifyExisting", false)
 
-	if _, err := svc.SendVerificationCode(ctx, "verify-new@test.com", "register"); !httpError(err, 400, "Email verification is disabled") {
+	if _, err := svc.SendVerificationCode(ctx, "verify-new@test.com", "register"); !httpError(err, 400, "email_verification.create.disabled") {
 		t.Fatalf("disabled verification should reject exactly, got %#v", err)
 	}
 	if err := db.Settings.Set(ctx, "email_verify_enabled", "true"); err != nil {
@@ -60,7 +60,7 @@ func TestVerificationRejectsInvalidRequestsAndHidesMissingResetAccount(t *testin
 	}
 
 	res, err := svc.SendVerificationCode(ctx, "missing-reset@test.com", "reset")
-	if err != nil || res["ok"] != true || res["ttl"] != 0 {
+	if err != nil || len(res) != 1 || res["ttl"] != 0 {
 		t.Fatalf("missing reset account should return generic ok without code: res=%#v err=%v", res, err)
 	}
 	if _, err := svc.Redis.GetVerificationCode(ctx, "missing-reset@test.com", "reset"); !errors.Is(err, redisstore.ErrCacheMiss) {
@@ -73,9 +73,9 @@ func TestVerificationRejectsInvalidRequestsAndHidesMissingResetAccount(t *testin
 		typ   string
 		want  string
 	}{
-		{"bad email", "not-an-email", "register", "Invalid email format"},
-		{"registered email", "verify-existing@test.com", "register", "Email already registered"},
-		{"bad type", "verify-new@test.com", "bad", "invalid verification type"},
+		{"bad email", "not-an-email", "register", "email.validate.invalid"},
+		{"registered email", "verify-existing@test.com", "register", "email.register.already_exists"},
+		{"bad type", "verify-new@test.com", "bad", "verification_type.validate.invalid"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if _, err := svc.SendVerificationCode(ctx, tc.email, tc.typ); !httpError(err, 400, tc.want) {
@@ -165,7 +165,7 @@ func TestResetPasswordRejectsDisabledWeakAndBadCodesExactly(t *testing.T) {
 	svc := newAuthService(db, testutil.TestConfig())
 	user := testutil.CreateUser(t, db, "verify-reset@test.com", "Password123", "VerifyReset", false)
 
-	if err := svc.ResetPassword(ctx, user.Email, "NewPassword123", "NO_CODE"); !httpError(err, 403, "Password reset via email is disabled") {
+	if err := svc.ResetPassword(ctx, user.Email, "NewPassword123", "NO_CODE"); !httpError(err, 403, "password_reset.create.disabled") {
 		t.Fatalf("disabled reset should reject exactly, got %#v", err)
 	}
 	if err := db.Settings.Set(ctx, "email_verify_enabled", "true"); err != nil {
@@ -193,7 +193,7 @@ func TestResetPasswordRejectsDisabledWeakAndBadCodesExactly(t *testing.T) {
 	if err := svc.Settings.InvalidateCache(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ResetPassword(ctx, user.Email, "NewPassword123", "WRONG"); !httpError(err, 400, "Invalid or expired verification code") {
+	if err := svc.ResetPassword(ctx, user.Email, "NewPassword123", "WRONG"); !httpError(err, 400, "verification_code.verify.invalid") {
 		t.Fatalf("bad reset code should reject exactly, got %#v", err)
 	}
 }
@@ -215,7 +215,7 @@ func TestResetPasswordMissingAccountPreservesVerificationCode(t *testing.T) {
 	}
 
 	err := svc.ResetPassword(ctx, email, "NewPassword123", code)
-	if !httpError(err, 404, "User not found") {
+	if !httpError(err, 404, "user.resolve.not_found") {
 		t.Fatalf("missing reset account should reject exactly, got %#v", err)
 	}
 	stored, err := svc.Redis.GetVerificationCode(ctx, email, "reset")
@@ -303,7 +303,7 @@ func TestResetPasswordConcurrentCodeAllowsExactlyOneSuccess(t *testing.T) {
 			winner = result.password
 			continue
 		}
-		if !httpError(result.err, 400, "Invalid or expired verification code") {
+		if !httpError(result.err, 400, "verification_code.verify.invalid") {
 			t.Fatalf("losing reset returned unexpected error: %#v", result.err)
 		}
 		failures++

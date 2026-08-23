@@ -39,16 +39,16 @@ func TestAuthRejectsMissingInvalidAndNonAdminExactly(t *testing.T) {
 	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/users/me", nil))
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "not authenticated") {
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v2/users/me", nil))
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing cookie auth mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: "not-a-jwt"})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "not authenticated") {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("invalid jwt auth mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -56,11 +56,11 @@ func TestAuthRejectsMissingInvalidAndNonAdminExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/users", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "permission denied") {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("non-admin auth mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -100,7 +100,7 @@ func TestPublicAuthUsesGuestAndRejectsInvalidOrDeniedAuthenticatedActorsExactly(
 		req.Header.Set("Authorization", "Bearer invalid-public-token")
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+		if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 			t.Fatalf("invalid public bearer mismatch for %s: status=%d body=%q", path, rec.Code, rec.Body.String())
 		}
 	}
@@ -118,7 +118,7 @@ func TestPublicAuthUsesGuestAndRejectsInvalidOrDeniedAuthenticatedActorsExactly(
 		req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 		rec = httptest.NewRecorder()
 		router.ServeHTTP(rec, req)
-		if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+		if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 			t.Fatalf("denied authenticated public actor mismatch for %s: status=%d body=%q", path, rec.Code, rec.Body.String())
 		}
 	}
@@ -138,10 +138,10 @@ func TestPublicAuthUsesGuestAndRejectsInvalidOrDeniedAuthenticatedActorsExactly(
 	}
 }
 
-func TestPublicV1ResourcesUseGuestAndRejectInvalidOrDeniedCredentialsExactly(t *testing.T) {
+func TestPublicV2ResourcesUseGuestAndRejectInvalidOrDeniedCredentialsExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
-	user := testutil.CreateUser(t, db, "public-v1-denied@test.com", "Password123", "PublicV1Denied", false)
+	user := testutil.CreateUser(t, db, "public-v2-denied@test.com", "Password123", "PublicV2Denied", false)
 	for _, code := range []string{
 		"site_public.read.public",
 		"texture.read.public",
@@ -158,7 +158,7 @@ func TestPublicV1ResourcesUseGuestAndRejectInvalidOrDeniedCredentialsExactly(t *
 	}
 	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 
-	for _, tc := range publicV1ResourceCases {
+	for _, tc := range publicV2ResourceCases {
 		t.Run(tc.name, func(t *testing.T) {
 			guestReq := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 			guestRec := httptest.NewRecorder()
@@ -169,10 +169,10 @@ func TestPublicV1ResourcesUseGuestAndRejectInvalidOrDeniedCredentialsExactly(t *
 			}
 
 			invalidReq := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
-			invalidReq.Header.Set("Authorization", "Bearer invalid-public-v1-token")
+			invalidReq.Header.Set("Authorization", "Bearer invalid-public-v2-token")
 			invalidRec := httptest.NewRecorder()
 			router.ServeHTTP(invalidRec, invalidReq)
-			if invalidRec.Code != http.StatusUnauthorized || invalidRec.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+			if invalidRec.Code != http.StatusUnauthorized || invalidRec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 				t.Fatalf("invalid credential response mismatch: status=%d body=%q", invalidRec.Code, invalidRec.Body.String())
 			}
 
@@ -180,7 +180,7 @@ func TestPublicV1ResourcesUseGuestAndRejectInvalidOrDeniedCredentialsExactly(t *
 			deniedReq.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 			deniedRec := httptest.NewRecorder()
 			router.ServeHTTP(deniedRec, deniedReq)
-			if deniedRec.Code != http.StatusForbidden || deniedRec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+			if deniedRec.Code != http.StatusForbidden || deniedRec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 				t.Fatalf("denied actor response mismatch: status=%d body=%q", deniedRec.Code, deniedRec.Body.String())
 			}
 		})
@@ -198,7 +198,7 @@ func TestAuthRedisErrorDoesNotFallBackToDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/admin/users", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -221,7 +221,7 @@ func TestAuthUsesRedisCachedSubjectIDButRecomputesPermissions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/admin/users", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -241,11 +241,11 @@ func TestAuthFailsClosedWhenColdCacheCannotBePopulated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("cold-cache write failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if cache.setCalls != 1 {
@@ -271,7 +271,7 @@ func TestAuthCachesBanStateWithoutBlockingWebDashboard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/users/me", nil)
 	req.AddCookie(&http.Cookie{Name: "access_token", Value: token})
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -318,7 +318,7 @@ func TestAuthAcceptsDelegatedBearerAndNarrowsPermissionsExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/users/me", nil)
 	req.Header.Set("Authorization", "Bearer "+rawToken)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -339,11 +339,11 @@ func TestAuthAcceptsDelegatedBearerAndNarrowsPermissionsExactly(t *testing.T) {
 		t.Fatalf("delegated bearer permissions should be narrowed to token scope: %#v", body.Permissions)
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/v1/users/me", strings.NewReader(`{"display_name":"ShouldFail"}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v2/users/me", strings.NewReader(`{"display_name":"ShouldFail"}`))
 	req.Header.Set("Authorization", "Bearer "+rawToken)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("delegated bearer update denial mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -359,7 +359,7 @@ func TestEmailChangeAcceptsCookieAndDelegatedBearerThroughSamePermissionPath(t *
 	updatePermission := permission.MustDefinitionByCode("account.update.self")
 
 	cookieUser := testutil.CreateUser(t, db, "email-cookie-old@test.com", "Password123", "EmailCookie", false)
-	loginReq := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"email-cookie-old@test.com","password":"Password123"}`))
+	loginReq := httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"email-cookie-old@test.com","password":"Password123"}`))
 	loginRec := httptest.NewRecorder()
 	router.ServeHTTP(loginRec, loginReq)
 	if loginRec.Code != http.StatusOK {
@@ -374,7 +374,7 @@ func TestEmailChangeAcceptsCookieAndDelegatedBearerThroughSamePermissionPath(t *
 	if accessCookie == nil {
 		t.Fatal("cookie login did not return access_token")
 	}
-	cookieSend := httptest.NewRequest(http.MethodPost, "/v1/users/me/email/verification-code", strings.NewReader(`{"email":"email-cookie-new@test.com"}`))
+	cookieSend := httptest.NewRequest(http.MethodPost, "/v2/users/me/email/verification-code", strings.NewReader(`{"email":"email-cookie-new@test.com"}`))
 	cookieSend.AddCookie(accessCookie)
 	cookieSendRec := httptest.NewRecorder()
 	router.ServeHTTP(cookieSendRec, cookieSend)
@@ -385,11 +385,11 @@ func TestEmailChangeAcceptsCookieAndDelegatedBearerThroughSamePermissionPath(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	cookieChange := httptest.NewRequest(http.MethodPut, "/v1/users/me/email", strings.NewReader(`{"email":"email-cookie-new@test.com","code":"`+cookieCode+`"}`))
+	cookieChange := httptest.NewRequest(http.MethodPut, "/v2/users/me/email", strings.NewReader(`{"email":"email-cookie-new@test.com","code":"`+cookieCode+`"}`))
 	cookieChange.AddCookie(accessCookie)
 	cookieChangeRec := httptest.NewRecorder()
 	router.ServeHTTP(cookieChangeRec, cookieChange)
-	if cookieChangeRec.Code != http.StatusOK || cookieChangeRec.Body.String() != "{\"ok\":true}\n" {
+	if cookieChangeRec.Code != http.StatusNoContent || cookieChangeRec.Body.Len() != 0 {
 		t.Fatalf("cookie change status=%d body=%q", cookieChangeRec.Code, cookieChangeRec.Body.String())
 	}
 
@@ -410,7 +410,7 @@ func TestEmailChangeAcceptsCookieAndDelegatedBearerThroughSamePermissionPath(t *
 	}, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	bearerSend := httptest.NewRequest(http.MethodPost, "/v1/users/me/email/verification-code", strings.NewReader(`{"email":"email-bearer-new@test.com"}`))
+	bearerSend := httptest.NewRequest(http.MethodPost, "/v2/users/me/email/verification-code", strings.NewReader(`{"email":"email-bearer-new@test.com"}`))
 	bearerSend.Header.Set("Authorization", "Bearer "+rawToken)
 	bearerSendRec := httptest.NewRecorder()
 	router.ServeHTTP(bearerSendRec, bearerSend)
@@ -421,11 +421,11 @@ func TestEmailChangeAcceptsCookieAndDelegatedBearerThroughSamePermissionPath(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	bearerChange := httptest.NewRequest(http.MethodPut, "/v1/users/me/email", strings.NewReader(`{"email":"email-bearer-new@test.com","code":"`+bearerCode+`"}`))
+	bearerChange := httptest.NewRequest(http.MethodPut, "/v2/users/me/email", strings.NewReader(`{"email":"email-bearer-new@test.com","code":"`+bearerCode+`"}`))
 	bearerChange.Header.Set("Authorization", "Bearer "+rawToken)
 	bearerChangeRec := httptest.NewRecorder()
 	router.ServeHTTP(bearerChangeRec, bearerChange)
-	if bearerChangeRec.Code != http.StatusOK || bearerChangeRec.Body.String() != "{\"ok\":true}\n" {
+	if bearerChangeRec.Code != http.StatusNoContent || bearerChangeRec.Body.Len() != 0 {
 		t.Fatalf("bearer change status=%d body=%q", bearerChangeRec.Code, bearerChangeRec.Body.String())
 	}
 
@@ -465,7 +465,7 @@ func TestAuthAcceptsClientBearerAndRejectsInactiveOrMissingBearerExactly(t *test
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/minecraft/session/has-joined", strings.NewReader(`{"username":"`+profile.Name+`","server_id":"route-server"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/minecraft/session/has-joined", strings.NewReader(`{"username":"`+profile.Name+`","server_id":"route-server"}`))
 	req.Header.Set("Authorization", "Bearer "+rawToken)
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
@@ -473,11 +473,11 @@ func TestAuthAcceptsClientBearerAndRejectsInactiveOrMissingBearerExactly(t *test
 		t.Fatalf("client bearer has-joined mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/users/me", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/users/me", nil)
 	req.Header.Set("Authorization", "Bearer missing-token")
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("missing bearer mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -491,11 +491,11 @@ func TestAuthAcceptsClientBearerAndRejectsInactiveOrMissingBearerExactly(t *test
 	}, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/minecraft/session/has-joined", strings.NewReader(`{"username":"`+profile.Name+`","server_id":"route-server"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/minecraft/session/has-joined", strings.NewReader(`{"username":"`+profile.Name+`","server_id":"route-server"}`))
 	req.Header.Set("Authorization", "Bearer "+expired)
 	rec = httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
-	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"detail\":\"not authenticated\"}\n" {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("expired bearer mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -514,7 +514,7 @@ func createActiveOAuthClientForAuthTest(t *testing.T, db *database.DB, ownerUser
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	}
-	if err := db.OAuth.CreateClient(t.Context(), client, permissionIDs); err != nil {
+	if err := db.OAuth.CreateClient(t.Context(), client, permissionIDs, nil); err != nil {
 		t.Fatal(err)
 	}
 	return id
@@ -534,7 +534,7 @@ type authCacheWriteFailStore struct {
 	setCalls int
 }
 
-type publicV1ResourceCase struct {
+type publicV2ResourceCase struct {
 	name          string
 	method        string
 	path          string
@@ -544,17 +544,17 @@ type publicV1ResourceCase struct {
 	guestContains string
 }
 
-var publicV1ResourceCases = []publicV1ResourceCase{
-	{name: "capabilities", method: http.MethodGet, path: "/v1/capabilities", guestStatus: http.StatusOK, guestContains: `"api_version":"v1"`},
-	{name: "permission catalog", method: http.MethodGet, path: "/v1/permissions/catalog", guestStatus: http.StatusOK, guestContains: `"permissions":[`},
-	{name: "skin library", method: http.MethodGet, path: "/v1/public/skin-library", guestStatus: http.StatusOK, guestContains: `"items":[]`},
-	{name: "public settings", method: http.MethodGet, path: "/v1/public/settings", guestStatus: http.StatusOK, guestContains: `"site_name"`},
-	{name: "homepage media", method: http.MethodGet, path: "/v1/public/homepage-media", guestStatus: http.StatusOK, guestBody: "[]\n"},
-	{name: "fallback status", method: http.MethodGet, path: "/v1/public/fallback-status", guestStatus: http.StatusOK, guestContains: `"endpoints":[]`},
-	{name: "profile by name", method: http.MethodGet, path: "/v1/minecraft/profiles/by-name/Missing", guestStatus: http.StatusNotFound, guestBody: "{\"detail\":\"minecraft profile not found\"}\n"},
-	{name: "profile by id", method: http.MethodGet, path: "/v1/minecraft/profiles/missing", guestStatus: http.StatusNotFound, guestBody: "{\"detail\":\"minecraft profile not found\"}\n"},
-	{name: "textures property", method: http.MethodGet, path: "/v1/minecraft/profiles/missing/textures-property", guestStatus: http.StatusNotFound, guestBody: "{\"detail\":\"minecraft profile not found\"}\n"},
-	{name: "profiles by names", method: http.MethodPost, path: "/v1/minecraft/profiles/by-names", body: `{"names":[]}`, guestStatus: http.StatusOK, guestBody: "{\"items\":[]}\n"},
+var publicV2ResourceCases = []publicV2ResourceCase{
+	{name: "capabilities", method: http.MethodGet, path: "/v2/capabilities", guestStatus: http.StatusOK, guestContains: `"api_version":"v2"`},
+	{name: "permission catalog", method: http.MethodGet, path: "/v2/permissions/catalog", guestStatus: http.StatusOK, guestContains: `"permissions":[`},
+	{name: "skin library", method: http.MethodGet, path: "/v2/public/skin-library", guestStatus: http.StatusOK, guestContains: `"items":[]`},
+	{name: "public settings", method: http.MethodGet, path: "/v2/public/settings", guestStatus: http.StatusOK, guestContains: `"site_name"`},
+	{name: "homepage media", method: http.MethodGet, path: "/v2/public/homepage-media", guestStatus: http.StatusOK, guestBody: "{\"items\":[]}\n"},
+	{name: "fallback status", method: http.MethodGet, path: "/v2/public/fallback-status", guestStatus: http.StatusOK, guestContains: `"endpoints":[]`},
+	{name: "profile by name", method: http.MethodGet, path: "/v2/minecraft/profiles/by-name/Missing", guestStatus: http.StatusNotFound, guestBody: "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n"},
+	{name: "profile by id", method: http.MethodGet, path: "/v2/minecraft/profiles/missing", guestStatus: http.StatusNotFound, guestBody: "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n"},
+	{name: "textures property", method: http.MethodGet, path: "/v2/minecraft/profiles/missing/textures-property", guestStatus: http.StatusNotFound, guestBody: "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n"},
+	{name: "profiles by names", method: http.MethodPost, path: "/v2/minecraft/profiles/by-names", body: `{"names":[]}`, guestStatus: http.StatusOK, guestBody: "{\"items\":[]}\n"},
 }
 
 var publicSiteAuthPaths = []string{"/", "/api/publickeys", "/api/publickeys/"}

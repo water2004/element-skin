@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"element-skin/backend/internal/httpapi"
 	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/redisstore"
+	identitysvc "element-skin/backend/internal/service/identity"
 	mailsvc "element-skin/backend/internal/service/mail"
 	noticesvc "element-skin/backend/internal/service/notice"
 	oauthsvc "element-skin/backend/internal/service/oauth"
@@ -47,6 +49,17 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	if err != nil {
 		return nil, err
 	}
+	identityService := identitysvc.Service{DB: db, Config: cfg}
+	identityMigration, err := identityService.MigrateLegacyMicrosoftProvider(ctx)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if identityMigration.ProviderCreated {
+		log.Printf("migrated legacy Microsoft configuration to an OIDC identity provider")
+	} else if identityMigration.LegacySettingsRemoved {
+		log.Printf("removed unused legacy Microsoft configuration")
+	}
 	if err := db.Tokens.DeleteExpiredRefresh(ctx, database.NowMS()); err != nil {
 		db.Close()
 		return nil, err
@@ -76,6 +89,12 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 		db.Close()
 		return nil, err
 	}
+	oidcSigner, err := oauthsvc.NewOIDCSigner(cfg)
+	if err != nil {
+		_ = redis.Close()
+		db.Close()
+		return nil, err
+	}
 	cleanupCtx, cancel := context.WithCancel(context.Background())
 	probeService := probesvc.New(db, redis)
 	StartScheduler(cleanupCtx,
@@ -87,7 +106,7 @@ func New(ctx context.Context, cfg config.Config) (*App, error) {
 	return &App{
 		db:       db,
 		redis:    redis,
-		handler:  httpapi.NewRouterWithRedis(cfg, db, redis, ygg),
+		handler:  httpapi.NewRouterWithOIDCSigner(cfg, db, redis, ygg, oidcSigner),
 		cancelFn: cancel,
 	}, nil
 }
@@ -110,7 +129,12 @@ func NewWithDBAndRedis(cfg config.Config, db *database.DB, redis redisstore.Stor
 		_ = redis.Close()
 		return nil, err
 	}
-	return &App{db: db, redis: redis, handler: httpapi.NewRouterWithRedis(cfg, db, redis, ygg, senders...)}, nil
+	oidcSigner, err := oauthsvc.NewOIDCSigner(cfg)
+	if err != nil {
+		_ = redis.Close()
+		return nil, err
+	}
+	return &App{db: db, redis: redis, handler: httpapi.NewRouterWithOIDCSigner(cfg, db, redis, ygg, oidcSigner, senders...)}, nil
 }
 
 func (a *App) Handler() http.Handler {

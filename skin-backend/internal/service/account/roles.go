@@ -11,7 +11,7 @@ import (
 
 func (s AccountService) GrantUserRole(ctx context.Context, actor permission.Actor, targetID, roleID string) error {
 	if roleID == "" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "role_id required"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "role_id", Operation: "validate", Reason: "required"}
 	}
 	if err := actor.Require(permissionGrantAny); err != nil {
 		return permissionDenied()
@@ -22,7 +22,7 @@ func (s AccountService) GrantUserRole(ctx context.Context, actor permission.Acto
 	if ok, err := s.userExists(ctx, targetID); err != nil {
 		return err
 	} else if !ok {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	if err := s.ensureProtectedSubjectMutationAllowed(ctx, actor, targetID); err != nil {
 		return err
@@ -48,7 +48,7 @@ func (s AccountService) GrantUserRole(ctx context.Context, actor permission.Acto
 
 func (s AccountService) RevokeUserRole(ctx context.Context, actor permission.Actor, targetID, roleID string) error {
 	if roleID == "" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "role_id required"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "role_id", Operation: "validate", Reason: "required"}
 	}
 	if err := actor.Require(permissionRevokeAny); err != nil {
 		return permissionDenied()
@@ -59,7 +59,7 @@ func (s AccountService) RevokeUserRole(ctx context.Context, actor permission.Act
 	if ok, err := s.userExists(ctx, targetID); err != nil {
 		return err
 	} else if !ok {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	if err := s.ensureProtectedSubjectMutationAllowed(ctx, actor, targetID); err != nil {
 		return err
@@ -69,7 +69,7 @@ func (s AccountService) RevokeUserRole(ctx context.Context, actor permission.Act
 		return err
 	}
 	if !ok {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "role assignment not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "role_assignment", Operation: "resolve", Reason: "not_found"}
 	}
 	if err := s.reconcileOAuthAfterUserPermissionChange(ctx, targetID); err != nil {
 		return err
@@ -82,25 +82,25 @@ func (s AccountService) RevokeUserRole(ctx context.Context, actor permission.Act
 
 func (s AccountService) TransferProtectedSubject(ctx context.Context, actor permission.Actor, targetID string) error {
 	if targetID == "" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "user_id required"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "user_id", Operation: "validate", Reason: "required"}
 	}
 	if targetID == actor.UserID {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "cannot transfer protected subject to yourself"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "protected_subject", Operation: "transfer", Reason: "denied"}
 	}
 	if err := actor.Require(manageProtectedPermission); err != nil {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "protected subject management required"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "protected_subject", Operation: "manage", Reason: "required"}
 	}
 	isProtected, err := s.DB.Permissions.UserIsProtected(ctx, actor.UserID)
 	if err != nil {
 		return err
 	}
 	if !isProtected {
-		return util.HTTPError{Status: http.StatusForbidden, Detail: "protected subject ownership required"}
+		return util.HTTPError{Status: http.StatusForbidden, Object: "protected_subject", Operation: "manage", Reason: "required"}
 	}
 	if ok, err := s.userExists(ctx, targetID); err != nil {
 		return err
 	} else if !ok {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "user not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	affectedUserIDs, err := s.DB.Permissions.TransferProtectedSubject(ctx, actor.UserID, targetID, actor.SubjectID)
 	if err != nil {

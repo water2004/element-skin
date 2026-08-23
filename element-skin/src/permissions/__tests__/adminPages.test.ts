@@ -38,4 +38,35 @@ describe('admin page permission access', () => {
     )
     expect(firstAccessibleAdminPath(['site_settings.read.any'])).toBe('/admin/settings')
   })
+
+  it('gates OIDC provider administration with provider permissions only', () => {
+    expect(canAccessAdminPath('/admin/identity-providers', ['identity_provider.read.any'])).toBe(
+      true,
+    )
+    expect(
+      canAccessAdminPath('/admin/identity-providers/new', ['identity_provider.create.any']),
+    ).toBe(true)
+    expect(
+      canAccessAdminPath('/admin/identity-providers/provider-1/edit', [
+        'identity_provider.read.any',
+        'identity_provider.update.any',
+      ]),
+    ).toBe(true)
+    expect(
+      canAccessAdminPath('/admin/identity-providers/provider-1/edit', [
+        'identity_provider.update.any',
+      ]),
+    ).toBe(false)
+    expect(firstAccessibleAdminPath(['identity_provider.create.any'])).toBe(
+      '/admin/identity-providers/new',
+    )
+    expect(canAccessAdminPath('/admin/identity-providers', ['oauth_app.read.any'])).toBe(false)
+  })
+
+  it('requires a readable OAuth resource before exposing the application administration page', () => {
+    expect(canAccessAdminPath('/admin/oauth-apps', ['oauth_app.read.any'])).toBe(true)
+    expect(canAccessAdminPath('/admin/oauth-apps', ['oauth_grant.read.any'])).toBe(true)
+    expect(canAccessAdminPath('/admin/oauth-apps', ['oauth_app.review.any'])).toBe(false)
+    expect(canAccessAdminPath('/admin/oauth-apps', ['oauth_grant.revoke.any'])).toBe(false)
+  })
 })

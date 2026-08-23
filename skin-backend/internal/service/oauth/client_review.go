@@ -4,15 +4,17 @@ import (
 	"context"
 
 	"element-skin/backend/internal/database"
+	dboauth "element-skin/backend/internal/database/oauth"
+	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/permission"
 )
 
 func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clientID, status, reason string) (map[string]any, error) {
-	if err := actor.Require(permission.MustDefinitionByCode("oauth_app.update.any")); err != nil {
+	if err := actor.Require(permission.MustDefinitionByCode("oauth_app.review.any")); err != nil {
 		return nil, forbidden()
 	}
 	if !validClientStatus(status) || status == StatusPending {
-		return nil, badRequest("invalid status")
+		return nil, badRequest("status", "validate", "invalid")
 	}
 	reason, err := validateReviewReason(status, reason)
 	if err != nil {
@@ -23,35 +25,57 @@ func (s Service) ReviewClient(ctx context.Context, actor permission.Actor, clien
 		return nil, err
 	}
 	if client == nil {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	codes, err := s.clientPermissionCodes(ctx, client.ID)
 	if err != nil {
 		return nil, err
 	}
+	allowedPermissionIDs := []int64(nil)
 	if status == StatusActive {
-		if err := s.grantReviewedClientPermissions(ctx, actor, client.ID, codes); err != nil {
+		allowedPermissionIDs, err = reviewedClientPermissionIDs(codes)
+		if err != nil {
 			return nil, err
 		}
 	}
-	client.Status = status
-	client.UpdatedAt = database.NowMS()
-	ok, err := s.DB.OAuth.UpdateClientStatus(ctx, client.ID, status, client.UpdatedAt)
+	endpoints, err := s.DB.Webhooks.ListEndpointsByClient(ctx, client.ID)
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
-		return nil, notFound("oauth client not found")
-	}
+	client.Status = status
+	client.UpdatedAt = database.NowMS()
+	action := dboauth.ClientCredentialsPreserve
 	if status != StatusActive {
-		if err := s.revokeClientAuthorizations(ctx, client.ID, client.UpdatedAt); err != nil {
+		action = dboauth.ClientCredentialsRevokeAuthorizations
+		if err := s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID); err != nil {
 			return nil, err
 		}
 	}
-	if err := s.notifyOwnerReviewResult(ctx, *client, status, reason); err != nil {
+	mutation, err := s.DB.OAuth.ReviewClientWithCredentials(
+		ctx,
+		client.ID,
+		status,
+		client.UpdatedAt,
+		action,
+		allowedPermissionIDs,
+		actor.SubjectID,
+	)
+	if err != nil {
 		return nil, err
 	}
-	return clientResponse(*client, codes, ""), nil
+	if !mutation.Updated {
+		return nil, notFound("oauth_client", "resolve", "not_found")
+	}
+	if status != StatusActive {
+		reportPostCommitError("remove reviewed client access-token races", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
+	} else if len(allowedPermissionIDs) > 0 {
+		reportPostCommitError(
+			"invalidate reviewed client permission cache",
+			s.DB.Permissions.InvalidateSubjectCache(ctx, permissiondb.SubjectIDForClient(client.ID)),
+		)
+	}
+	reportPostCommitError("notify client owner about review result", s.notifyOwnerReviewResult(ctx, *client, status, reason))
+	return clientResponse(*client, codes, "", endpoints, nil), nil
 }
 
 func (s Service) RotateClientSecret(ctx context.Context, actor permission.Actor, clientID string) (map[string]any, error) {
@@ -60,28 +84,33 @@ func (s Service) RotateClientSecret(ctx context.Context, actor permission.Actor,
 		return nil, err
 	}
 	if client.ClientType != ClientTypeConfidential {
-		return nil, badRequest("public clients do not have secrets")
+		return nil, badRequest("client_secret", "configure", "unsupported")
+	}
+	codes, err := s.clientPermissionCodes(ctx, client.ID)
+	if err != nil {
+		return nil, err
+	}
+	endpoints, err := s.DB.Webhooks.ListEndpointsByClient(ctx, client.ID)
+	if err != nil {
+		return nil, err
 	}
 	raw, hash, err := generateSecret()
 	if err != nil {
 		return nil, err
 	}
 	updatedAt := database.NowMS()
-	if err := s.invalidateClientCredentials(ctx, client.ID, updatedAt); err != nil {
+	if err := s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID); err != nil {
 		return nil, err
 	}
-	ok, err := s.DB.OAuth.RotateClientSecret(ctx, client.ID, hash, updatedAt)
+	ok, err := s.DB.OAuth.RotateClientSecretAndCredentials(ctx, client.ID, hash, updatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if !ok {
-		return nil, notFound("oauth client not found")
+		return nil, notFound("oauth_client", "resolve", "not_found")
 	}
 	client.SecretHash = hash
 	client.UpdatedAt = updatedAt
-	codes, err := s.clientPermissionCodes(ctx, client.ID)
-	if err != nil {
-		return nil, err
-	}
-	return clientResponse(*client, codes, raw), nil
+	reportPostCommitError("remove rotated client access-token races", s.Redis.DeleteOAuthAccessTokensByClient(ctx, client.ID))
+	return clientResponse(*client, codes, raw, endpoints, nil), nil
 }

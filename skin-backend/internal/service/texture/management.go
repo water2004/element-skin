@@ -24,7 +24,7 @@ func (s LibraryService) ListAllTextures(ctx context.Context, actor permission.Ac
 	}
 	lastCreated, lastHash, err := textureCursor(cursor, "last_skin_hash")
 	if err != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	res, err := s.DB.Textures.ListAll(ctx, limit, lastCreated, lastHash, strings.TrimSpace(query), typeFilter)
 	if err != nil {
@@ -48,7 +48,7 @@ func (s LibraryService) UpdateAnyTexture(ctx context.Context, actor permission.A
 			return err
 		}
 		if model != "default" && model != "slim" {
-			return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid model"}
+			return util.HTTPError{Status: http.StatusBadRequest, Object: "texture_model", Operation: "validate", Reason: "invalid"}
 		}
 		patch.Model = &model
 	}
@@ -63,14 +63,14 @@ func (s LibraryService) UpdateAnyTexture(ctx context.Context, actor permission.A
 		patch.IsPublic = &parsed
 	}
 	if textureType != "skin" && textureType != "cape" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid texture_type"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "texture_type", Operation: "validate", Reason: "invalid"}
 	}
 	if patch.Note == nil && patch.Model == nil && patch.IsPublic == nil {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "至少需要一个更新字段: model, note, is_public"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "texture", Operation: "update", Reason: "required"}
 	}
 	if err := s.DB.Textures.AdminPatch(ctx, hash, textureType, patch); err != nil {
 		if errors.Is(err, texturedb.ErrNotFound) {
-			return util.HTTPError{Status: http.StatusNotFound, Detail: "Texture not found"}
+			return util.HTTPError{Status: http.StatusNotFound, Object: "texture", Operation: "resolve", Reason: "not_found"}
 		}
 		return err
 	}
@@ -86,10 +86,10 @@ func (s LibraryService) DeleteAnyTexture(ctx context.Context, actor permission.A
 	}
 	if err := s.DB.Textures.AdminDelete(ctx, hash, textureType, userID, force); err != nil {
 		if errors.Is(err, texturedb.ErrNotFound) {
-			return util.HTTPError{Status: http.StatusNotFound, Detail: "Texture not found"}
+			return util.HTTPError{Status: http.StatusNotFound, Object: "texture", Operation: "resolve", Reason: "not_found"}
 		}
-		if strings.Contains(err.Error(), "user_id") {
-			return util.HTTPError{Status: http.StatusBadRequest, Detail: err.Error()}
+		if errors.Is(err, texturedb.ErrUserIDRequired) {
+			return util.HTTPError{Status: http.StatusBadRequest, Object: "texture", Operation: "delete", Reason: "required"}
 		}
 		return err
 	}
@@ -115,7 +115,7 @@ func publicBool(value any) (bool, error) {
 			return true, nil
 		}
 	}
-	return false, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid is_public"}
+	return false, util.HTTPError{Status: http.StatusBadRequest, Object: "texture_visibility", Operation: "validate", Reason: "invalid"}
 }
 
 func asMap(v any) map[string]any {

@@ -107,8 +107,12 @@ Domain UI pieces live in `dashboard/roles/`:
 - `RoleCard.vue`: card preview and card-level actions.
 - `RolePreviewDialog.vue`: preview, rename, avatar, clear, and delete actions.
 - `CreateRoleDialog.vue`: create-role form.
-- `MicrosoftImportDialog.vue`: Microsoft import confirmation.
+- `OfficialBindingDialog.vue`: select an existing Microsoft OIDC identity, bind its
+  official profile, and explicitly synchronize that profile into a local role.
 - `RemoteYggImportDialog.vue`: remote Yggdrasil import flow.
+
+Identity management lives in `dashboard/identities/`, while administrator-managed
+OIDC provider configuration lives in `admin/identity/`.
 
 Admin role UI follows the same split in `admin/roles/`:
 

@@ -52,16 +52,16 @@ func TestProfileServiceAdminListProfilesRejectsAccessAndBadCursorExactly(t *test
 	admin := testutil.CreateUser(t, db, "admin-profile-list-invalid@test.com", "Password123", "AdminProfileListInvalid", true)
 	actor := testActorWithCodes(admin.ID, "profile.read.any")
 
-	if _, err := svc.ListAllProfiles(ctx, permission.Actor{}, "", 10, ""); !httpError(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.ListAllProfiles(ctx, permission.Actor{}, "", 10, ""); !httpError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("ListAllProfiles without permission mismatch: %#v", err)
 	}
-	if _, err := svc.ListAllProfiles(ctx, actor, "bad-cursor", 10, ""); !httpError(err, http.StatusBadRequest, "Invalid cursor") {
+	if _, err := svc.ListAllProfiles(ctx, actor, "bad-cursor", 10, ""); !httpError(err, http.StatusBadRequest, "pagination_cursor.decode.invalid") {
 		t.Fatalf("ListAllProfiles bad cursor mismatch: %#v", err)
 	}
-	if _, err := svc.ListProfilesByUser(ctx, permission.Actor{}, admin.ID, "", 10); !httpError(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.ListProfilesByUser(ctx, permission.Actor{}, admin.ID, "", 10); !httpError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("ListProfilesByUser without permission mismatch: %#v", err)
 	}
-	if _, err := svc.ListProfilesByUser(ctx, actor, admin.ID, "bad-cursor", 10); !httpError(err, http.StatusBadRequest, "Invalid cursor") {
+	if _, err := svc.ListProfilesByUser(ctx, actor, admin.ID, "bad-cursor", 10); !httpError(err, http.StatusBadRequest, "pagination_cursor.decode.invalid") {
 		t.Fatalf("ListProfilesByUser bad cursor mismatch: %#v", err)
 	}
 }
@@ -91,16 +91,16 @@ func TestProfileServiceUpdateAnyProfileExactStateAndErrors(t *testing.T) {
 		t.Fatalf("empty UpdateAnyProfile should leave name unchanged: profile=%#v err=%v", unchanged, err)
 	}
 
-	if err := svc.UpdateAnyProfile(ctx, permission.Actor{}, profile.ID, "NoPermission"); !httpError(err, http.StatusForbidden, "permission denied") {
+	if err := svc.UpdateAnyProfile(ctx, permission.Actor{}, profile.ID, "NoPermission"); !httpError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("UpdateAnyProfile without permission mismatch: %#v", err)
 	}
-	if err := svc.UpdateAnyProfile(ctx, actor, "missing-admin-update-any", "MissingName"); !httpError(err, http.StatusNotFound, "profile not found") {
+	if err := svc.UpdateAnyProfile(ctx, actor, "missing-admin-update-any", "MissingName"); !httpError(err, http.StatusNotFound, "profile.resolve.not_found") {
 		t.Fatalf("UpdateAnyProfile missing profile mismatch: %#v", err)
 	}
-	if err := svc.UpdateAnyProfile(ctx, actor, profile.ID, "bad-name!"); !httpError(err, http.StatusBadRequest, "invalid profile name") {
+	if err := svc.UpdateAnyProfile(ctx, actor, profile.ID, "bad-name!"); !httpError(err, http.StatusBadRequest, "profile_name.validate.invalid") {
 		t.Fatalf("UpdateAnyProfile invalid name mismatch: %#v", err)
 	}
-	if err := svc.UpdateAnyProfile(ctx, actor, profile.ID, conflict.Name); !httpError(err, http.StatusConflict, "profile name already exists") {
+	if err := svc.UpdateAnyProfile(ctx, actor, profile.ID, conflict.Name); !httpError(err, http.StatusConflict, "profile_name.reserve.conflict") {
 		t.Fatalf("UpdateAnyProfile conflict mismatch: %#v", err)
 	}
 }

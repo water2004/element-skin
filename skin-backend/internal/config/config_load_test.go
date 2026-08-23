@@ -19,6 +19,11 @@ jwt:
 keys:
   private_key: "keys/private.pem"
   public_key: "keys/public.pem"
+oidc:
+  private_key: "keys/oidc-private.pem"
+  public_key: "keys/oidc-public.pem"
+identity:
+  encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 database:
   host: "localhost"
   port: "5432"
@@ -84,6 +89,10 @@ cors:
 	}
 	if cfg.PrivateKeyPath != filepath.Join(dir, "keys", "private.pem") || cfg.PublicKeyPath != filepath.Join(dir, "keys", "public.pem") {
 		t.Fatalf("key paths should resolve relative to config file: %#v", cfg)
+	}
+	if cfg.OIDCPrivateKeyPath != filepath.Join(dir, "keys", "oidc-private.pem") || cfg.OIDCPublicKeyPath != filepath.Join(dir, "keys", "oidc-public.pem") ||
+		cfg.IdentityEncryptionKey != "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=" {
+		t.Fatalf("OIDC and identity config mismatch: %#v", cfg)
 	}
 	if !reflect.DeepEqual(cfg.CORSOrigins, []string{"https://skin.example.com", "http://localhost:5173"}) || cfg.CORSCredentials {
 		t.Fatalf("cors fields not parsed: origins=%#v credentials=%v", cfg.CORSOrigins, cfg.CORSCredentials)

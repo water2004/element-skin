@@ -7,6 +7,7 @@ TOKEN_RESPONSE = {
     "scope": "account.read.self profile.read.owned",
     "refresh_token": "refresh-token-1",
     "permissions": ["account.read.self", "profile.read.owned"],
+    "id_token": "id-token-1",
 }
 
 CLIENT_CREDENTIALS_TOKEN_RESPONSE = {
@@ -66,4 +67,13 @@ PERMISSION_CATALOG_RESPONSE = {
             "description": "Query joined Minecraft session",
         },
     ]
+}
+
+WEBHOOK_SIGNING_SECRET = "whsec_test_signing_secret"
+WEBHOOK_TIMESTAMP = 1_786_118_400_123
+WEBHOOK_PAYLOAD = {
+    "id": "evt_profile_updated_1",
+    "type": "profile.updated",
+    "created_at": 1_786_118_399_000,
+    "data": {"profile_id": "profile-uuid", "user_id": "user-uuid"},
 }

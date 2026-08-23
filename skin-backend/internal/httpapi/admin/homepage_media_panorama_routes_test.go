@@ -41,12 +41,12 @@ func TestHomepageMediaPanoramaUploadUsesGeneratedStandardZipAndYawPitchFields(t 
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec := httptest.NewRecorder()
 	h.UploadHomepagePanorama(rec, req)
-	if rec.Code != http.StatusOK {
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("panorama upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	item := decodeMedia(t, rec.Body.Bytes())
@@ -69,7 +69,7 @@ func TestHomepageMediaPanoramaUploadUsesGeneratedStandardZipAndYawPitchFields(t 
 		}
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/"+item.ID, strings.NewReader(`{"start_yaw":30,"start_pitch":-10,"yaw_speed_dps":-3.5,"pitch_speed_dps":2.25}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/"+item.ID, strings.NewReader(`{"start_yaw":30,"start_pitch":-10,"yaw_speed_dps":-3.5,"pitch_speed_dps":2.25}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
@@ -82,12 +82,12 @@ func TestHomepageMediaPanoramaUploadUsesGeneratedStandardZipAndYawPitchFields(t 
 		t.Fatalf("patched panorama fields mismatch: %#v", patched)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/homepage-media/"+item.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v2/admin/homepage-media/"+item.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteHomepageMedia(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("delete panorama status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if _, err := os.Stat(filepath.Join(cfg.CarouselDir, item.ID)); !os.IsNotExist(err) {
@@ -100,14 +100,14 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	h := admin.NewWithRedis(testutil.TestConfig(), db, testutil.NewMemoryRedis(), nil)
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "bad.txt", []byte("x")))
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Unsupported file format\"}\n" {
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "bad.txt", []byte("x")))
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"upload_file\",\"operation\":\"validate\",\"reason\":\"unsupported\"}}\n" {
 		t.Fatalf("bad extension mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "bad.zip", invalidPanoramaZip(t)))
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"missing panorama_5.png\"}\n" {
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "bad.zip", invalidPanoramaZip(t)))
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"panorama_face\",\"operation\":\"validate\",\"reason\":\"required\",\"params\":{\"face\":\"panorama_5.png\"}}}\n" {
 		t.Fatalf("missing face mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -126,12 +126,12 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
+	req := httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
 	h.UploadHomepagePanorama(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"start_pitch out of range\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"homepage_start_pitch\",\"operation\":\"validate\",\"reason\":\"out_of_range\"}}\n" {
 		t.Fatalf("pitch range mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -150,12 +150,12 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
 	h.UploadHomepagePanorama(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"yaw_speed_dps out of range\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"homepage_yaw_speed\",\"operation\":\"validate\",\"reason\":\"out_of_range\"}}\n" {
 		t.Fatalf("yaw speed range mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -174,12 +174,12 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/homepage-media/panorama", &body)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/homepage-media/panorama", &body)
 	req = withAdminActor(req, "admin-test-user")
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
 	h.UploadHomepagePanorama(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"overlay_opacity_dark out of range\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"homepage_setting\",\"operation\":\"validate\",\"reason\":\"out_of_range\",\"params\":{\"field\":\"overlay_opacity_dark\"}}}\n" {
 		t.Fatalf("overlay range mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -188,15 +188,15 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 		fields map[string]string
 		body   string
 	}{
-		{name: "overlay opacity dark parse", fields: map[string]string{"overlay_opacity_dark": "bad"}, body: "{\"detail\":\"overlay_opacity_dark must be a number\"}\n"},
-		{name: "start yaw parse", fields: map[string]string{"start_yaw": "bad"}, body: "{\"detail\":\"start_yaw must be a number\"}\n"},
-		{name: "start pitch parse", fields: map[string]string{"start_pitch": "bad"}, body: "{\"detail\":\"start_pitch must be a number\"}\n"},
-		{name: "yaw speed parse", fields: map[string]string{"yaw_speed_dps": "bad"}, body: "{\"detail\":\"yaw_speed_dps must be a number\"}\n"},
-		{name: "pitch speed parse", fields: map[string]string{"pitch_speed_dps": "bad"}, body: "{\"detail\":\"pitch_speed_dps must be a number\"}\n"},
+		{name: "overlay opacity dark parse", fields: map[string]string{"overlay_opacity_dark": "bad"}, body: "{\"error\":{\"object\":\"homepage_dark_opacity\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n"},
+		{name: "start yaw parse", fields: map[string]string{"start_yaw": "bad"}, body: "{\"error\":{\"object\":\"homepage_start_yaw\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n"},
+		{name: "start pitch parse", fields: map[string]string{"start_pitch": "bad"}, body: "{\"error\":{\"object\":\"homepage_start_pitch\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n"},
+		{name: "yaw speed parse", fields: map[string]string{"yaw_speed_dps": "bad"}, body: "{\"error\":{\"object\":\"homepage_yaw_speed\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n"},
+		{name: "pitch speed parse", fields: map[string]string{"pitch_speed_dps": "bad"}, body: "{\"error\":{\"object\":\"homepage_pitch_speed\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			req := multipartUploadRequestWithFields(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t), tc.fields)
+			req := multipartUploadRequestWithFields(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t), tc.fields)
 			h.UploadHomepagePanorama(rec, req)
 			if rec.Code != http.StatusBadRequest || rec.Body.String() != tc.body {
 				t.Fatalf("%s mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
@@ -209,15 +209,15 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 		data []byte
 		body string
 	}{
-		{name: "not zip", data: []byte("not a zip archive"), body: "{\"detail\":\"invalid panorama zip\"}\n"},
-		{name: "nested file", data: panoramaZipWithEntries(t, map[string][]byte{"nested/panorama_0.png": pngBytes(t, 8, 8)}), body: "{\"detail\":\"panorama files must be at zip root\"}\n"},
-		{name: "unexpected file", data: panoramaZipWithEntries(t, map[string][]byte{"panorama_0.png": pngBytes(t, 8, 8), "extra.png": pngBytes(t, 8, 8)}), body: "{\"detail\":\"panorama zip must contain only panorama_0.png through panorama_5.png\"}\n"},
-		{name: "oversized face", data: panoramaZipWithEntries(t, map[string][]byte{"panorama_0.png": bytes.Repeat([]byte{'x'}, maxHomepageFaceBytesForTest()+1)}), body: "{\"detail\":\"panorama face too large\"}\n"},
-		{name: "invalid face image", data: panoramaZipWithEntries(t, map[string][]byte{"panorama_0.png": []byte("not png")}), body: "{\"detail\":\"invalid panorama face image\"}\n"},
+		{name: "not zip", data: []byte("not a zip archive"), body: "{\"error\":{\"object\":\"panorama_archive\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "nested file", data: panoramaZipWithEntries(t, map[string][]byte{"nested/panorama_0.png": pngBytes(t, 8, 8)}), body: "{\"error\":{\"object\":\"panorama_archive\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n"},
+		{name: "unexpected file", data: panoramaZipWithEntries(t, map[string][]byte{"panorama_0.png": pngBytes(t, 8, 8), "extra.png": pngBytes(t, 8, 8)}), body: "{\"error\":{\"object\":\"panorama_archive\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n"},
+		{name: "oversized face", data: panoramaZipWithEntries(t, map[string][]byte{"panorama_0.png": bytes.Repeat([]byte{'x'}, maxHomepageFaceBytesForTest()+1)}), body: "{\"error\":{\"object\":\"panorama_face\",\"operation\":\"validate\",\"reason\":\"too_large\"}}\n"},
+		{name: "invalid face image", data: panoramaZipWithEntries(t, map[string][]byte{"panorama_0.png": []byte("not png")}), body: "{\"error\":{\"object\":\"panorama_face\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
-			h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", tc.data))
+			h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", tc.data))
 			if rec.Code != http.StatusBadRequest || rec.Body.String() != tc.body {
 				t.Fatalf("%s mismatch: status=%d body=%q", tc.name, rec.Code, rec.Body.String())
 			}
@@ -228,17 +228,17 @@ func TestHomepageMediaRejectsInvalidPanoramaInputsExactly(t *testing.T) {
 	cfg.CarouselDir = t.TempDir()
 	h = admin.NewWithRedis(cfg, db, testutil.NewMemoryRedis(), nil)
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
-	if rec.Code != http.StatusOK {
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("panorama setup status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	item := decodeMedia(t, rec.Body.Bytes())
-	req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/"+item.ID, strings.NewReader(`{"start_yaw":361}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/"+item.ID, strings.NewReader(`{"start_yaw":361}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", item.ID)
 	rec = httptest.NewRecorder()
 	h.PatchHomepageMedia(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"start_yaw out of range\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"homepage_start_yaw\",\"operation\":\"validate\",\"reason\":\"out_of_range\"}}\n" {
 		t.Fatalf("patch panorama yaw range mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

@@ -19,16 +19,16 @@ func (s LibraryService) PublicLibrary(ctx context.Context, actor permission.Acto
 		return nil, err
 	}
 	if enabled != "true" {
-		return nil, util.HTTPError{Status: http.StatusForbidden, Detail: "Skin library is disabled by administrator"}
+		return nil, util.HTTPError{Status: http.StatusForbidden, Object: "texture_library", Operation: "read", Reason: "disabled"}
 	}
 	lastCreated, lastHash, lastUsage, err := publicLibraryCursor(cursor)
 	if err != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	parsedSort := texturedb.ParsePublicLibrarySort(sort)
 	if cursor != "" && (lastCreated == nil || lastHash == "" ||
 		(parsedSort == texturedb.PublicLibrarySortMostUsed && lastUsage == nil)) {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	return s.DB.Textures.ListPublic(ctx, texturedb.PublicListOptions{
 		Limit:       limit,
@@ -47,10 +47,10 @@ func (s LibraryService) ListMyTextures(ctx context.Context, actor permission.Act
 	}
 	lastCreated, lastHash, err := textureCursor(cursor, "last_hash")
 	if err != nil {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	if cursor != "" && (lastCreated == nil || lastHash == "") {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "Invalid cursor"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "pagination_cursor", Operation: "decode", Reason: "invalid"}
 	}
 	return s.DB.Textures.ListForUser(ctx, actor.UserID, typ, limit, lastCreated, lastHash)
 }
@@ -64,7 +64,7 @@ func (s LibraryService) TextureDetail(ctx context.Context, actor permission.Acto
 		return nil, err
 	}
 	if info == nil {
-		return nil, util.HTTPError{Status: http.StatusNotFound, Detail: "Texture not found"}
+		return nil, util.HTTPError{Status: http.StatusNotFound, Object: "texture", Operation: "resolve", Reason: "not_found"}
 	}
 	return info, nil
 }

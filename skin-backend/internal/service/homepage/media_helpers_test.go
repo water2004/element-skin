@@ -53,7 +53,7 @@ func homepageActor(codes ...string) permission.Actor {
 
 func homepageHTTPError(err error, status int, detail string) bool {
 	httpErr, ok := err.(util.HTTPError)
-	return ok && httpErr.Status == status && httpErr.Detail == detail
+	return ok && httpErr.Status == status && httpErr.Error() == detail
 }
 
 func closedPool(err error) bool {

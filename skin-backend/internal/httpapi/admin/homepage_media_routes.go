@@ -14,7 +14,7 @@ func (h Handler) ListHomepageMedia(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, items)
+	util.JSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h Handler) UploadHomepageImage(w http.ResponseWriter, req *http.Request) {
@@ -32,7 +32,7 @@ func (h Handler) UploadHomepageImage(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, item)
+	util.JSON(w, http.StatusCreated, item)
 }
 
 func (h Handler) UploadHomepagePanorama(w http.ResponseWriter, req *http.Request) {
@@ -50,7 +50,7 @@ func (h Handler) UploadHomepagePanorama(w http.ResponseWriter, req *http.Request
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, item)
+	util.JSON(w, http.StatusCreated, item)
 }
 
 func (h Handler) PatchHomepageMedia(w http.ResponseWriter, req *http.Request) {
@@ -66,7 +66,7 @@ func (h Handler) PatchHomepageMedia(w http.ResponseWriter, req *http.Request) {
 		DurationMS          *int     `json:"duration_ms"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json body"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	item, err := h.homepage.Patch(req.Context(), shared.CurrentActor(req), req.PathValue("id"), homepagesvc.PatchInput{
@@ -92,14 +92,14 @@ func (h Handler) ReorderHomepageMedia(w http.ResponseWriter, req *http.Request) 
 		IDs []string `json:"ids"`
 	}
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json body"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.homepage.Reorder(req.Context(), shared.CurrentActor(req), body.IDs); err != nil {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) DeleteHomepageMedia(w http.ResponseWriter, req *http.Request) {
@@ -107,5 +107,5 @@ func (h Handler) DeleteHomepageMedia(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }

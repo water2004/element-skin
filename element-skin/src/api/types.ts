@@ -7,7 +7,24 @@ export interface CursorPageResponse<T> {
   total?: number
 }
 
-// User (returned by GET /v1/users/me, GET /v1/admin/users)
+export interface ItemListResponse<T> {
+  items: T[]
+}
+
+export type EmailSuffixPolicyMode = 'disabled' | 'allowlist' | 'denylist'
+
+export interface EmailSuffixPolicy {
+  mode: EmailSuffixPolicyMode
+  allowlist: string[]
+  denylist: string[]
+}
+
+export interface PublicEmailSuffixPolicy {
+  mode: EmailSuffixPolicyMode
+  suffixes: string[]
+}
+
+// User (returned by GET /v2/users/me, GET /v2/admin/users)
 export interface User {
   id: string
   email: string
@@ -62,6 +79,7 @@ export interface SiteSettings {
   require_invite?: boolean
   enable_skin_library?: boolean
   email_verify_enabled?: boolean
+  email_suffix_policy?: PublicEmailSuffixPolicy
   footer_text?: string
   filing_icp?: string
   filing_icp_link?: string
@@ -140,29 +158,91 @@ export interface WhitelistResponse {
   items: WhitelistEntry[]
 }
 
-// Microsoft auth
-export interface MicrosoftAuthUrlResponse {
-  auth_url: string
-  state: string
-}
+export type IdentityProviderAdapter = 'generic_oidc' | 'microsoft'
+export type ExternalIdentityAuthorizationStatus = 'active' | 'reauthorization_required'
 
-export interface MicrosoftGameProfile {
+export interface IdentityProvider {
   id: string
   name: string
-  has_game?: boolean
+  adapter: IdentityProviderAdapter
+  icon_url: string
+  login_enabled: boolean
+  link_enabled: boolean
 }
 
-export interface MicrosoftProfileResponse {
-  profile: MicrosoftGameProfile
-  has_game: boolean
-  import_token: string
+export interface AdminIdentityProvider extends IdentityProvider {
+  issuer_url: string
+  authorization_endpoint: string
+  token_endpoint: string
+  userinfo_endpoint: string
+  jwks_uri: string
+  client_id: string
+  has_client_secret: boolean
+  scopes: string[]
+  enabled: boolean
+  display_order: number
+  created_at: number
+  updated_at: number
+}
+
+export interface ExternalIdentity {
+  id: string
+  provider_id: string
+  provider_name: string
+  provider_adapter: IdentityProviderAdapter
+  provider_icon_url: string
+  provider_enabled: boolean
+  provider_link_enabled: boolean
+  subject: string
+  label: string
+  email: string
+  email_verified: boolean
+  display_name: string
+  avatar_url: string
+  created_at: number
+  updated_at: number
+  last_login_at: number | null
+  authorization_status: ExternalIdentityAuthorizationStatus
+  last_refresh_at: number | null
+  last_refresh_error_at: number | null
+}
+
+export interface OfficialProfileBinding {
+  id: string
+  identity_id: string
+  profile_id: string
+  remote_uuid: string
+  remote_name: string
+  remote_skin_url: string
+  remote_cape_url: string
+  remote_skin_model: 'default' | 'slim'
+  created_at: number
+  updated_at: number
+  last_synced_at: number | null
+  profile: Profile
+  identity: {
+    id: string
+    label: string
+    provider_id: string
+    provider_name: string
+    provider_adapter: IdentityProviderAdapter
+  }
 }
 
 export interface YggdrasilImportResult {
   items: Profile[]
   success_count: number
   failure_count: number
-  failed: Array<{ profile_id: string; profile_name: string; detail: string }>
+  failed: Array<{
+    profile_id: string
+    profile_name: string
+    error: {
+      object: string
+      operation: string
+      reason: string
+      params?: Record<string, unknown>
+    }
+  }>
 }
 
 export interface HomepageMedia {

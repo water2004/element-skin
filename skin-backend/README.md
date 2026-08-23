@@ -17,7 +17,7 @@ runtime small, explicit, and centered on the Go domain modules.
   concerns.
 - `internal/redisstore`: Redis-backed cache/verification/rate-limit/auth-cache
   abstractions plus the in-memory test implementation.
-- `internal/service`: site, Yggdrasil, fallback, Microsoft/import, settings, and
+- `internal/service`: site, Yggdrasil, fallback, external identity/official profile, settings, and
   texture-storage domain logic.
 - `internal/util`: small security, pagination, JWT, URL, and response helpers.
 - `internal/integration`: end-to-end backend tests against a real PostgreSQL
@@ -55,14 +55,14 @@ PostgreSQL, and network path rather than a stable unit-test invariant.
 To measure a manually started backend, start the backend first, then run:
 
 ```powershell
-go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /v1/public/settings -concurrency 1,5,10,25,50,100 -duration 10s
+go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /v2/public/settings -concurrency 1,5,10,25,50,100 -duration 10s
 ```
 
 For authenticated frontend endpoints, let the tool log in once and reuse the
 returned cookies:
 
 ```powershell
-go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /v1/users/me -login-email user@example.com -login-password Password123 -concurrency 1,5,10,25,50 -duration 10s
+go run ./cmd/loadtest -target http://127.0.0.1:8000 -path /v2/users/me -login-email user@example.com -login-password Password123 -concurrency 1,5,10,25,50 -duration 10s
 ```
 
 The detailed test harness below measures every frontend-facing endpoint at the
@@ -86,6 +86,53 @@ with `LOADTEST_REPORT` when you want a different report path.
 Use `LOADTEST_DB_MAX_CONNECTIONS` to match the backend database pool size you
 want to measure; the harness defaults this to `20`.
 
+The Webhook-specific harness compares the same profile write in four modes:
+without the database trigger, with no subscriber, with outbox enqueueing, and
+with the asynchronous worker running. Four rotated repeats give every mode each
+execution position once after an unreported warmup. It also measures dispatch
+and delivery throughput for a fixed event count against an in-process
+zero-latency `204` receiver:
+
+```powershell
+$env:WEBHOOK_LOADTEST_ENABLE='1'
+$env:WEBHOOK_LOADTEST_CONCURRENCY='50'
+$env:WEBHOOK_LOADTEST_DURATION='3s'
+$env:WEBHOOK_LOADTEST_REPEATS='4'
+$env:WEBHOOK_LOADTEST_EVENTS='1000'
+$env:WEBHOOK_LOADTEST_WORKER_DB_MAX_CONNECTIONS='2'
+$env:WEBHOOK_LOADTEST_WORKER_ACTIVE_INTERVAL='3s'
+go test ./cmd/loadtest -run TestWebhookLoadImpact -count=1 -v
+```
+
+The Webhook harness writes `../reports/webhook-load-test.md` by default. Use
+`WEBHOOK_LOADTEST_REPORT` to change the output path,
+`WEBHOOK_LOADTEST_DB_MAX_CONNECTIONS` to change the isolated site pool,
+`WEBHOOK_LOADTEST_WORKER_DB_MAX_CONNECTIONS` to change the Worker pool, and
+`WEBHOOK_LOADTEST_WORKER_ACTIVE_INTERVAL` to change the active-queue budget.
+It uses the same temporary PostgreSQL database and isolated Redis prefix as the
+real-backend harness, and never sends requests to a third-party endpoint. Each
+comparison phase truncates the isolated outbox and vacuums the test profile
+table so earlier phases do not bias later phases with dead tuples; long-running
+table growth and autovacuum behavior require a separate soak test. The worker
+opens a separate configurable database pool, matching the production process
+boundary instead of borrowing connections from the site pool. Defaults of two
+connections and a three-second active interval are conservative suggested
+budgets, not production-optimal values inferred from the development machine.
+
+To profile Worker SQL calls without changing production logging or exposing a
+pprof endpoint, run the opt-in traced worker benchmark:
+
+```powershell
+$env:WEBHOOK_SQL_PROFILE_ENABLE='1'
+$env:WEBHOOK_SQL_PROFILE_EVENTS='1000'
+go test ./cmd/loadtest -run TestWebhookWorkerSQLProfile -count=1 -v
+```
+
+It writes `../reports/webhook-worker-sql-profile.md` by default. Override the
+path with `WEBHOOK_SQL_PROFILE_REPORT`. The tracer is attached only to the
+isolated configurable Worker pool and records query fingerprints, calls,
+errors, cumulative duration, average, P95, and maximum duration by phase.
+
 The harness uses `TEST_DATABASE_DSN`/`ADMIN_DATABASE_DSN` when set, otherwise it
 follows the same local PostgreSQL defaults as the integration tests.
 
@@ -100,7 +147,7 @@ paths used by the current frontend and Yggdrasil clients.
   request only on Redis auth-cache misses. Admin/user mutations invalidate the
   auth cache; Redis errors fail protected requests instead of falling back to
   stale or database-only behavior.
-- `/v1/public/settings` and `/v1/public/homepage-media` are served through Redis caches.
+- `/v2/public/settings` and `/v2/public/homepage-media` are served through Redis caches.
   Cache misses rebuild from PostgreSQL/filesystem, while Redis command failures
   fail the request instead of silently falling back.
 - Verification codes, rate-limit counters, and auth snapshots are temporary

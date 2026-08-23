@@ -11,11 +11,15 @@ import (
 
 	"element-skin/backend/internal/config"
 	"element-skin/backend/internal/database/easteregg"
+	"element-skin/backend/internal/database/emailpolicy"
 	"element-skin/backend/internal/database/fallback"
 	"element-skin/backend/internal/database/homepage"
+	"element-skin/backend/internal/database/identity"
 	"element-skin/backend/internal/database/invite"
+	"element-skin/backend/internal/database/migration"
 	"element-skin/backend/internal/database/notice"
 	"element-skin/backend/internal/database/oauth"
+	"element-skin/backend/internal/database/officialprofile"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/database/setting"
@@ -23,6 +27,7 @@ import (
 	"element-skin/backend/internal/database/token"
 	"element-skin/backend/internal/database/user"
 	"element-skin/backend/internal/database/verification"
+	webhookdb "element-skin/backend/internal/database/webhook"
 	"element-skin/backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
@@ -30,23 +35,46 @@ import (
 )
 
 type DB struct {
-	Pool          *pgxpool.Pool
-	Users         user.Store
-	Profiles      profile.Store
-	Textures      texture.Store
-	Tokens        token.Store
-	Settings      setting.Store
-	EasterEggs    easteregg.Store
-	Invites       invite.Store
-	Fallbacks     fallback.Store
-	HomepageMedia homepage.Store
-	Verifications verification.Store
-	Notices       notice.Store
-	OAuth         oauth.Store
-	Permissions   permissiondb.Store
+	Pool             *pgxpool.Pool
+	Users            user.Store
+	Profiles         profile.Store
+	Textures         texture.Store
+	Tokens           token.Store
+	Settings         setting.Store
+	EasterEggs       easteregg.Store
+	EmailPolicies    emailpolicy.Store
+	Invites          invite.Store
+	Fallbacks        fallback.Store
+	HomepageMedia    homepage.Store
+	Identities       identity.Store
+	Migrations       migration.Store
+	Verifications    verification.Store
+	Notices          notice.Store
+	OAuth            oauth.Store
+	OfficialProfiles officialprofile.Store
+	Permissions      permissiondb.Store
+	Webhooks         webhookdb.Store
 }
 
 func Open(ctx context.Context, cfg config.Config) (*DB, error) {
+	db, err := OpenExisting(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Init(ctx); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := db.MigrateHomepageMediaFiles(ctx, cfg.CarouselDir); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return db, nil
+}
+
+// OpenExisting creates a pool for a process that consumes an already initialized schema.
+// Schema creation and file migrations remain owned by the main site process.
+func OpenExisting(ctx context.Context, cfg config.Config) (*DB, error) {
 	pcfg, err := pgxpool.ParseConfig(cfg.DatabaseDSN)
 	if err != nil {
 		return nil, err
@@ -56,34 +84,30 @@ func Open(ctx context.Context, cfg config.Config) (*DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	db := New(pool)
-	if err := db.Init(ctx); err != nil {
-		pool.Close()
-		return nil, err
-	}
-	if err := db.MigrateHomepageMediaFiles(ctx, cfg.CarouselDir); err != nil {
-		pool.Close()
-		return nil, err
-	}
-	return db, nil
+	return New(pool), nil
 }
 
 func New(pool *pgxpool.Pool) *DB {
 	return &DB{
-		Pool:          pool,
-		Users:         user.Store{Pool: pool},
-		Profiles:      profile.Store{Pool: pool},
-		Textures:      texture.Store{Pool: pool},
-		Tokens:        token.Store{Pool: pool},
-		Settings:      setting.Store{Pool: pool},
-		EasterEggs:    easteregg.Store{Pool: pool},
-		Invites:       invite.Store{Pool: pool},
-		Fallbacks:     fallback.Store{Pool: pool},
-		HomepageMedia: homepage.Store{Pool: pool},
-		Verifications: verification.Store{Pool: pool},
-		Notices:       notice.Store{Pool: pool},
-		OAuth:         oauth.Store{Pool: pool},
-		Permissions:   permissiondb.Store{Pool: pool},
+		Pool:             pool,
+		Users:            user.Store{Pool: pool},
+		Profiles:         profile.Store{Pool: pool},
+		Textures:         texture.Store{Pool: pool},
+		Tokens:           token.Store{Pool: pool},
+		Settings:         setting.Store{Pool: pool},
+		EasterEggs:       easteregg.Store{Pool: pool},
+		EmailPolicies:    emailpolicy.Store{Pool: pool},
+		Invites:          invite.Store{Pool: pool},
+		Fallbacks:        fallback.Store{Pool: pool},
+		HomepageMedia:    homepage.Store{Pool: pool},
+		Identities:       identity.Store{Pool: pool},
+		Migrations:       migration.Store{Pool: pool},
+		Verifications:    verification.Store{Pool: pool},
+		Notices:          notice.Store{Pool: pool},
+		OAuth:            oauth.Store{Pool: pool},
+		OfficialProfiles: officialprofile.Store{Pool: pool},
+		Permissions:      permissiondb.Store{Pool: pool},
+		Webhooks:         webhookdb.Store{Pool: pool},
 	}
 }
 
@@ -97,14 +121,7 @@ func (db *DB) Init(ctx context.Context) error {
 	if _, err := db.Pool.Exec(ctx, InitSQL); err != nil {
 		return err
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err != nil {
-		return err
-	}
-	// SeedDefaults reads the 2.4.1 is_admin flag before this final cleanup.
-	_, err := db.Pool.Exec(ctx, `
-		ALTER TABLE users DROP COLUMN IF EXISTS is_admin;
-	`)
-	return err
+	return db.Permissions.SeedDefaults(ctx)
 }
 
 func (db *DB) ResetPublicSchema(ctx context.Context) error {

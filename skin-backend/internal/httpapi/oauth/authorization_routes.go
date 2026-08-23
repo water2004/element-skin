@@ -20,7 +20,7 @@ func (h Handler) AuthorizeInfo(w http.ResponseWriter, req *http.Request) {
 func (h Handler) ApproveAuthorization(w http.ResponseWriter, req *http.Request) {
 	var body authorizeBody
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.oauth.ApproveAuthorization(req.Context(), shared.CurrentActor(req), body.request())
@@ -39,6 +39,7 @@ type authorizeBody struct {
 	State               string `json:"state"`
 	CodeChallenge       string `json:"code_challenge"`
 	CodeChallengeMethod string `json:"code_challenge_method"`
+	Nonce               string `json:"nonce"`
 }
 
 func (b authorizeBody) request() oauthsvc.AuthorizationRequest {
@@ -50,6 +51,7 @@ func (b authorizeBody) request() oauthsvc.AuthorizationRequest {
 		State:               b.State,
 		CodeChallenge:       b.CodeChallenge,
 		CodeChallengeMethod: b.CodeChallengeMethod,
+		Nonce:               b.Nonce,
 	}
 }
 
@@ -63,5 +65,6 @@ func authorizationRequest(req *http.Request) oauthsvc.AuthorizationRequest {
 		State:               q.Get("state"),
 		CodeChallenge:       q.Get("code_challenge"),
 		CodeChallengeMethod: q.Get("code_challenge_method"),
+		Nonce:               q.Get("nonce"),
 	}
 }

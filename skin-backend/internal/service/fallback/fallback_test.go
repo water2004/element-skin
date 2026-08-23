@@ -71,28 +71,28 @@ func TestFallbackWhitelistServiceRejectsInvalidInputsExactly(t *testing.T) {
 	fb := newFallback(db, nil)
 	actor := fallbackActor("official_whitelist.read.any", "official_whitelist.add.any", "official_whitelist.remove.any")
 
-	if _, err := fb.ListWhitelistUsers(ctx, permission.Actor{}, 1); !fallbackHTTPError(err, http.StatusForbidden, "permission denied") {
+	if _, err := fb.ListWhitelistUsers(ctx, permission.Actor{}, 1); !fallbackHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("ListWhitelistUsers without permission mismatch: %#v", err)
 	}
-	if _, err := fb.ListWhitelistUsers(ctx, actor, 0); !fallbackHTTPError(err, http.StatusBadRequest, "endpoint_id is required") {
+	if _, err := fb.ListWhitelistUsers(ctx, actor, 0); !fallbackHTTPError(err, http.StatusBadRequest, "fallback_endpoint.configure.required") {
 		t.Fatalf("ListWhitelistUsers missing endpoint mismatch: %#v", err)
 	}
-	if err := fb.AddWhitelistUser(ctx, permission.Actor{}, fallbacksvc.WhitelistInput{Username: "Player", EndpointID: 1}); !fallbackHTTPError(err, http.StatusForbidden, "permission denied") {
+	if err := fb.AddWhitelistUser(ctx, permission.Actor{}, fallbacksvc.WhitelistInput{Username: "Player", EndpointID: 1}); !fallbackHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("AddWhitelistUser without permission mismatch: %#v", err)
 	}
-	if err := fb.AddWhitelistUser(ctx, actor, fallbacksvc.WhitelistInput{Username: " \t ", EndpointID: 1}); !fallbackHTTPError(err, http.StatusBadRequest, "username is required") {
+	if err := fb.AddWhitelistUser(ctx, actor, fallbacksvc.WhitelistInput{Username: " \t ", EndpointID: 1}); !fallbackHTTPError(err, http.StatusBadRequest, "username.validate.required") {
 		t.Fatalf("AddWhitelistUser blank username mismatch: %#v", err)
 	}
-	if err := fb.AddWhitelistUser(ctx, actor, fallbacksvc.WhitelistInput{Username: "Player", EndpointID: 0}); !fallbackHTTPError(err, http.StatusBadRequest, "endpoint_id is required") {
+	if err := fb.AddWhitelistUser(ctx, actor, fallbacksvc.WhitelistInput{Username: "Player", EndpointID: 0}); !fallbackHTTPError(err, http.StatusBadRequest, "fallback_endpoint.configure.required") {
 		t.Fatalf("AddWhitelistUser missing endpoint mismatch: %#v", err)
 	}
-	if err := fb.AddWhitelistUser(ctx, actor, fallbacksvc.WhitelistInput{Username: "Player", EndpointID: 999999}); !fallbackHTTPError(err, http.StatusNotFound, "fallback endpoint not found") {
+	if err := fb.AddWhitelistUser(ctx, actor, fallbacksvc.WhitelistInput{Username: "Player", EndpointID: 999999}); !fallbackHTTPError(err, http.StatusNotFound, "fallback_endpoint.resolve.not_found") {
 		t.Fatalf("AddWhitelistUser missing endpoint row mismatch: %#v", err)
 	}
-	if err := fb.RemoveWhitelistUser(ctx, permission.Actor{}, "Player", 1); !fallbackHTTPError(err, http.StatusForbidden, "permission denied") {
+	if err := fb.RemoveWhitelistUser(ctx, permission.Actor{}, "Player", 1); !fallbackHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("RemoveWhitelistUser without permission mismatch: %#v", err)
 	}
-	if err := fb.RemoveWhitelistUser(ctx, actor, "Player", 0); !fallbackHTTPError(err, http.StatusBadRequest, "endpoint_id is required") {
+	if err := fb.RemoveWhitelistUser(ctx, actor, "Player", 0); !fallbackHTTPError(err, http.StatusBadRequest, "fallback_endpoint.configure.required") {
 		t.Fatalf("RemoveWhitelistUser missing endpoint mismatch: %#v", err)
 	}
 }
@@ -113,5 +113,5 @@ func fallbackActor(codes ...string) permission.Actor {
 
 func fallbackHTTPError(err error, status int, detail string) bool {
 	httpErr, ok := err.(util.HTTPError)
-	return ok && httpErr.Status == status && httpErr.Detail == detail
+	return ok && httpErr.Status == status && httpErr.Error() == detail
 }

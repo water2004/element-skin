@@ -11,43 +11,43 @@ import (
 
 func validateNotice(notice model.Notice) error {
 	if !validType(notice.Type) {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid type"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "type", Operation: "validate", Reason: "invalid"}
 	}
 	if notice.Title == "" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "title is required"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_title", Operation: "validate", Reason: "required"}
 	}
 	if len([]rune(notice.Title)) > MaxTitleLen {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "title too long"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_title", Operation: "validate", Reason: "too_long"}
 	}
 	if len([]rune(notice.Summary)) > MaxSummaryLen {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "summary too long"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_summary", Operation: "validate", Reason: "too_long"}
 	}
 	if len(notice.ContentMarkdown) > MaxContentLen {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "content_markdown too long"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_content", Operation: "validate", Reason: "too_long"}
 	}
 	if notice.DisplayMode != DisplayInline && notice.DisplayMode != DisplayDetail {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid display_mode"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_display_mode", Operation: "validate", Reason: "invalid"}
 	}
 	if notice.DisplayMode == DisplayDetail && notice.Summary == "" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "summary is required for detail notices"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_summary", Operation: "validate", Reason: "required"}
 	}
 	if notice.DisplayMode == DisplayDetail && notice.ContentMarkdown == "" {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "content_markdown is required for detail notices"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_content", Operation: "validate", Reason: "required"}
 	}
 	if !validLevel(notice.Level) {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid level"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_level", Operation: "validate", Reason: "invalid"}
 	}
 	if notice.Audience != AudienceUsers && notice.Audience != AudienceAdmins && notice.Audience != AudienceTargeted {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid audience"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_audience", Operation: "validate", Reason: "invalid"}
 	}
 	if (notice.LinkText == "") != (notice.LinkURL == "") {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "link_text and link_url must be provided together"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_link", Operation: "validate", Reason: "incomplete"}
 	}
 	if notice.LinkURL != "" && !safeNoticeLink(notice.LinkURL) {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid link_url"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_link", Operation: "validate", Reason: "invalid"}
 	}
 	if notice.StartsAt != nil && notice.EndsAt != nil && *notice.EndsAt <= *notice.StartsAt {
-		return util.HTTPError{Status: http.StatusBadRequest, Detail: "ends_at must be greater than starts_at"}
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "notice_time_range", Operation: "validate", Reason: "invalid"}
 	}
 	return nil
 }
@@ -65,12 +65,12 @@ func normalizedTargetUserIDs(ids []string, audience string) ([]string, error) {
 	}
 	if audience == AudienceTargeted {
 		if len(targets) == 0 {
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "target_user_ids are required for targeted notices"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "notice_target", Operation: "validate", Reason: "required"}
 		}
 		return targets, nil
 	}
 	if len(targets) > 0 {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "target_user_ids require targeted audience"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "notice_target", Operation: "validate", Reason: "unsupported"}
 	}
 	return nil, nil
 }

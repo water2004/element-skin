@@ -1,5 +1,10 @@
 package model
 
+const (
+	ExternalIdentityAuthorizationActive                  = "active"
+	ExternalIdentityAuthorizationReauthorizationRequired = "reauthorization_required"
+)
+
 type User struct {
 	ID                string
 	Email             string
@@ -105,13 +110,14 @@ type OAuthClient struct {
 }
 
 type OAuthGrant struct {
-	ID        string `json:"id"`
-	UserID    string `json:"user_id"`
-	SubjectID string `json:"subject_id"`
-	ClientID  string `json:"client_id"`
-	Status    string `json:"status"`
-	CreatedAt int64  `json:"created_at"`
-	RevokedAt *int64 `json:"revoked_at"`
+	ID         string   `json:"id"`
+	UserID     string   `json:"user_id"`
+	SubjectID  string   `json:"subject_id"`
+	ClientID   string   `json:"client_id"`
+	OIDCScopes []string `json:"oidc_scopes"`
+	Status     string   `json:"status"`
+	CreatedAt  int64    `json:"created_at"`
+	RevokedAt  *int64   `json:"revoked_at"`
 }
 
 type OAuthAuthorizationCode struct {
@@ -122,19 +128,22 @@ type OAuthAuthorizationCode struct {
 	RedirectURI         string
 	CodeChallenge       string
 	CodeChallengeMethod string
+	OIDCScopes          []string
+	Nonce               string
 	ExpiresAt           int64
 	CreatedAt           int64
 	ConsumedAt          *int64
 }
 
 type OAuthToken struct {
-	TokenHash string
-	ClientID  string
-	UserID    string
-	GrantID   string
-	ExpiresAt int64
-	CreatedAt int64
-	RevokedAt *int64
+	TokenHash  string
+	ClientID   string
+	UserID     string
+	GrantID    string
+	OIDCScopes []string
+	ExpiresAt  int64
+	CreatedAt  int64
+	RevokedAt  *int64
 }
 
 type OAuthDeviceCode struct {
@@ -150,4 +159,113 @@ type OAuthDeviceCode struct {
 	DeniedAt       *int64
 	ConsumedAt     *int64
 	LastPolledAt   *int64
+}
+
+type WebhookEndpoint struct {
+	ID               string   `json:"id"`
+	ClientID         string   `json:"client_id"`
+	URL              string   `json:"url"`
+	SecretCiphertext string   `json:"-"`
+	Status           string   `json:"status"`
+	EventTypes       []string `json:"events"`
+	CreatedAt        int64    `json:"created_at"`
+	UpdatedAt        int64    `json:"updated_at"`
+}
+
+type WebhookEvent struct {
+	ID                  string         `json:"id"`
+	Type                string         `json:"type"`
+	TargetClientID      string         `json:"-"`
+	SubjectUserID       string         `json:"-"`
+	Data                map[string]any `json:"data"`
+	CreatedAt           int64          `json:"created_at"`
+	ExpandedAt          *int64         `json:"-"`
+	ExpansionLeaseUntil *int64         `json:"-"`
+	ExpansionLeaseToken string         `json:"-"`
+}
+
+type WebhookExpansion struct {
+	EventID     string
+	LeaseToken  string
+	EndpointIDs []string
+}
+
+type WebhookDelivery struct {
+	ID           string
+	Event        WebhookEvent
+	Endpoint     WebhookEndpoint
+	AttemptCount int
+	CreatedAt    int64
+	LeaseToken   string
+}
+
+type WebhookDeliveryOutcome struct {
+	DeliveryID    string
+	LeaseToken    string
+	Status        string
+	NextAttemptAt int64
+	UpdatedAt     int64
+	HTTPStatus    *int
+	Detail        string
+	DeliveredAt   *int64
+}
+
+type IdentityProvider struct {
+	ID                     string   `json:"id"`
+	Name                   string   `json:"name"`
+	IssuerURL              string   `json:"issuer_url"`
+	AuthorizationEndpoint  string   `json:"authorization_endpoint"`
+	TokenEndpoint          string   `json:"token_endpoint"`
+	UserInfoEndpoint       string   `json:"userinfo_endpoint"`
+	JWKSURI                string   `json:"jwks_uri"`
+	ClientID               string   `json:"client_id"`
+	ClientSecretCiphertext string   `json:"-"`
+	Scopes                 []string `json:"scopes"`
+	Adapter                string   `json:"adapter"`
+	IconURL                string   `json:"icon_url"`
+	Enabled                bool     `json:"enabled"`
+	LoginEnabled           bool     `json:"login_enabled"`
+	LinkEnabled            bool     `json:"link_enabled"`
+	DisplayOrder           int      `json:"display_order"`
+	CreatedAt              int64    `json:"created_at"`
+	UpdatedAt              int64    `json:"updated_at"`
+}
+
+type ExternalIdentity struct {
+	ID            string `json:"id"`
+	UserID        string `json:"user_id"`
+	ProviderID    string `json:"provider_id"`
+	Subject       string `json:"subject"`
+	Label         string `json:"label"`
+	Email         string `json:"email"`
+	EmailVerified bool   `json:"email_verified"`
+	DisplayName   string `json:"display_name"`
+	AvatarURL     string `json:"avatar_url"`
+	CreatedAt     int64  `json:"created_at"`
+	UpdatedAt     int64  `json:"updated_at"`
+	LastLoginAt   *int64 `json:"last_login_at"`
+}
+
+type ExternalIdentityCredential struct {
+	IdentityID             string
+	RefreshTokenCiphertext string
+	GrantedScopes          []string
+	AuthorizationStatus    string
+	LastRefreshAt          *int64
+	LastRefreshErrorAt     *int64
+	UpdatedAt              int64
+}
+
+type OfficialProfileBinding struct {
+	ID              string `json:"id"`
+	IdentityID      string `json:"identity_id"`
+	ProfileID       string `json:"profile_id"`
+	RemoteUUID      string `json:"remote_uuid"`
+	RemoteName      string `json:"remote_name"`
+	RemoteSkinURL   string `json:"remote_skin_url"`
+	RemoteCapeURL   string `json:"remote_cape_url"`
+	RemoteSkinModel string `json:"remote_skin_model"`
+	CreatedAt       int64  `json:"created_at"`
+	UpdatedAt       int64  `json:"updated_at"`
+	LastSyncedAt    *int64 `json:"last_synced_at"`
 }

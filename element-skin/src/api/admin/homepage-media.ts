@@ -1,16 +1,16 @@
 import client from '../client'
-import type { HomepageMedia } from '../types'
+import type { HomepageMedia, ItemListResponse } from '../types'
 
-export function listHomepageMedia(): Promise<{ data: HomepageMedia[] }> {
-  return client.get('/v1/admin/homepage-media')
+export function listHomepageMedia(): Promise<{ data: ItemListResponse<HomepageMedia> }> {
+  return client.get('/v2/admin/homepage-media')
 }
 
 export function uploadHomepageImage(formData: FormData): Promise<{ data: HomepageMedia }> {
-  return client.post('/v1/admin/homepage-media/image', formData)
+  return client.post('/v2/admin/homepage-media/image', formData)
 }
 
 export function uploadHomepagePanorama(formData: FormData): Promise<{ data: HomepageMedia }> {
-  return client.post('/v1/admin/homepage-media/panorama', formData)
+  return client.post('/v2/admin/homepage-media/panorama', formData)
 }
 
 export function patchHomepageMedia(
@@ -30,13 +30,13 @@ export function patchHomepageMedia(
     >
   >,
 ): Promise<{ data: HomepageMedia }> {
-  return client.patch(`/v1/admin/homepage-media/${id}`, body)
+  return client.patch(`/v2/admin/homepage-media/${id}`, body)
 }
 
-export function reorderHomepageMedia(ids: string[]): Promise<{ data: { ok: boolean } }> {
-  return client.patch('/v1/admin/homepage-media/reorder', { ids })
+export function reorderHomepageMedia(ids: string[]): Promise<{ data: void }> {
+  return client.patch('/v2/admin/homepage-media/reorder', { ids })
 }
 
-export function deleteHomepageMedia(id: string): Promise<{ data: { ok: boolean } }> {
-  return client.delete(`/v1/admin/homepage-media/${id}`)
+export function deleteHomepageMedia(id: string): Promise<{ data: void }> {
+  return client.delete(`/v2/admin/homepage-media/${id}`)
 }

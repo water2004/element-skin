@@ -105,15 +105,15 @@ func TestYggdrasilPublicMetadataRequiresPublicPermissionExactly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, err := ygg.PublicKeys(t.Context(), permission.Actor{}); !reflect.DeepEqual(got, model.YggdrasilPublicKeys{}) || !exactHTTPError(err, http.StatusForbidden, "permission denied") {
+	if got, err := ygg.PublicKeys(t.Context(), permission.Actor{}); !reflect.DeepEqual(got, model.YggdrasilPublicKeys{}) || !exactHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("PublicKeys without permission result=%#v err=%#v", got, err)
 	}
-	if got, err := ygg.Metadata(t.Context(), permission.Actor{}); got != nil || !exactHTTPError(err, http.StatusForbidden, "permission denied") {
+	if got, err := ygg.Metadata(t.Context(), permission.Actor{}); got != nil || !exactHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("Metadata without permission result=%#v err=%#v", got, err)
 	}
 }
 
 func exactHTTPError(err error, status int, detail string) bool {
 	var httpErr util.HTTPError
-	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Detail == detail
+	return errors.As(err, &httpErr) && httpErr.Status == status && httpErr.Error() == detail
 }

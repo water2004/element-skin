@@ -199,7 +199,7 @@ func TestPermissionServiceClearRequiresOppositePermissionForDenyOverrides(t *tes
 	if err := svc.SetUserPermissionOverride(ctx, revoker, target.ID, "notice.create.any", "deny"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ClearUserPermissionOverride(ctx, revoker, target.ID, "notice.create.any"); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.ClearUserPermissionOverride(ctx, revoker, target.ID, "notice.create.any"); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("clear deny with revoke permission should fail: %#v", err)
 	}
 	if err := svc.ClearUserPermissionOverride(ctx, granter, target.ID, "notice.create.any"); err != nil {
@@ -219,7 +219,7 @@ func TestPermissionServiceClearRequiresRevokePermissionForAllowOverrides(t *test
 	if err := svc.SetUserPermissionOverride(ctx, granter, target.ID, "notice.create.any", "allow"); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.ClearUserPermissionOverride(ctx, granter, target.ID, "notice.create.any"); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.ClearUserPermissionOverride(ctx, granter, target.ID, "notice.create.any"); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("clear allow with grant permission should fail: %#v", err)
 	}
 	overrides, err := db.Permissions.SubjectPermissionOverridesForUser(ctx, target.ID)

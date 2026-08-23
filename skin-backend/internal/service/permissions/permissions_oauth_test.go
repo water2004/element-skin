@@ -39,7 +39,7 @@ func TestPermissionServiceSetOverrideReconcilesOAuthDependentsExactly(t *testing
 		UpdatedAt:   1000,
 	}
 	clientPermissionIDs := permissionTestIDs("account.read.self", "profile.update.owned", "minecraft_session.hasjoined.server")
-	if err := db.OAuth.CreateClient(ctx, client, clientPermissionIDs); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, clientPermissionIDs, nil); err != nil {
 		t.Fatal(err)
 	}
 	grant := model.OAuthGrant{
@@ -66,7 +66,7 @@ func TestPermissionServiceSetOverrideReconcilesOAuthDependentsExactly(t *testing
 		CreatedAt:   1200,
 		UpdatedAt:   1200,
 	}
-	if err := db.OAuth.CreateClient(ctx, unaffectedClient, permissionTestIDs("account.read.self")); err != nil {
+	if err := db.OAuth.CreateClient(ctx, unaffectedClient, permissionTestIDs("account.read.self"), nil); err != nil {
 		t.Fatal(err)
 	}
 	unaffectedGrant := model.OAuthGrant{
@@ -253,7 +253,7 @@ func TestPermissionServiceClearAllowOverrideReconcilesOAuthDependentsExactly(t *
 		UpdatedAt:   2000,
 	}
 	clientPermissionIDs := permissionTestIDs("notice.create.any")
-	if err := db.OAuth.CreateClient(ctx, client, clientPermissionIDs); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, clientPermissionIDs, nil); err != nil {
 		t.Fatal(err)
 	}
 	grant := model.OAuthGrant{
@@ -280,7 +280,7 @@ func TestPermissionServiceClearAllowOverrideReconcilesOAuthDependentsExactly(t *
 		CreatedAt:   2200,
 		UpdatedAt:   2200,
 	}
-	if err := db.OAuth.CreateClient(ctx, unaffectedClient, permissionTestIDs("account.read.self")); err != nil {
+	if err := db.OAuth.CreateClient(ctx, unaffectedClient, permissionTestIDs("account.read.self"), nil); err != nil {
 		t.Fatal(err)
 	}
 	unaffectedGrant := model.OAuthGrant{

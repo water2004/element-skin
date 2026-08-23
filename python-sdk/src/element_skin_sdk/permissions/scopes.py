@@ -20,10 +20,12 @@ class ProfileScopes:
 class TextureScopes:
     READ_OWNED = "texture.read.owned"
     READ_PUBLIC = "texture.read.public"
-    UPLOAD_OWNED = "texture.upload.owned"
-    UPDATE_OWNED = "texture.update.owned"
+    CREATE_OWNED = "texture.create.owned"
+    UPDATE_METADATA_OWNED = "texture.update_metadata.owned"
+    UPDATE_VISIBILITY_OWNED = "texture.update_visibility.owned"
     DELETE_OWNED = "texture.delete.owned"
-    UPDATE_PUBLIC_OWNED = "texture_public.update.owned"
+    APPLY_OWNED = "texture.apply.owned"
+    CLEAR_OWNED = "texture.clear.owned"
 
 
 class WardrobeScopes:
@@ -70,3 +72,32 @@ class MinecraftScopes:
     PROFILE_READ_PUBLIC = "minecraft_profile.read.public"
     TEXTURE_PROPERTY_READ_PUBLIC = "minecraft_texture_property.read.public"
     SESSION_HASJOINED_SERVER = "minecraft_session.hasjoined.server"
+
+
+class ExternalIdentityScopes:
+    READ_OWNED = "external_identity.read.owned"
+    CREATE_OWNED = "external_identity.create.owned"
+    UPDATE_OWNED = "external_identity.update.owned"
+    DELETE_OWNED = "external_identity.delete.owned"
+
+
+class IdentityProviderScopes:
+    READ_PUBLIC = "identity_provider.read.public"
+    READ_ANY = "identity_provider.read.any"
+    CREATE_ANY = "identity_provider.create.any"
+    UPDATE_ANY = "identity_provider.update.any"
+    DELETE_ANY = "identity_provider.delete.any"
+
+
+class OfficialProfileScopes:
+    READ_OWNED = "official_profile.read.owned"
+    CREATE_OWNED = "official_profile.create.owned"
+    REFRESH_OWNED = "official_profile.refresh.owned"
+    DELETE_OWNED = "official_profile.delete.owned"
+
+
+class OIDCScopes:
+    OPENID = "openid"
+    PROFILE = "profile"
+    EMAIL = "email"
+    OFFLINE_ACCESS = "offline_access"

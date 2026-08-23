@@ -15,7 +15,7 @@ func (h Handler) ListMyTextures(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusOK, res)
 }
 
 func (h Handler) UploadMyTexture(w http.ResponseWriter, req *http.Request) {
@@ -36,7 +36,7 @@ func (h Handler) UploadMyTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusCreated, res)
 }
 
 func (h Handler) UploadAndApplyTexture(w http.ResponseWriter, req *http.Request) {
@@ -56,7 +56,7 @@ func (h Handler) UploadAndApplyTexture(w http.ResponseWriter, req *http.Request)
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, res)
+	util.JSON(w, http.StatusCreated, res)
 }
 
 func (h Handler) TextureDetail(w http.ResponseWriter, req *http.Request) {
@@ -71,7 +71,7 @@ func (h Handler) TextureDetail(w http.ResponseWriter, req *http.Request) {
 func (h Handler) UpdateTexture(w http.ResponseWriter, req *http.Request) {
 	var body map[string]any
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.textures.UpdateTexture(req.Context(), shared.CurrentActor(req), req.PathValue("hash"), req.PathValue("texture_type"), body)
@@ -87,7 +87,7 @@ func (h Handler) DeleteTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) AddTexture(w http.ResponseWriter, req *http.Request) {
@@ -95,18 +95,18 @@ func (h Handler) AddTexture(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }
 
 func (h Handler) ApplyTexture(w http.ResponseWriter, req *http.Request) {
 	var body map[string]string
 	if err := shared.DecodeJSON(req, &body); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Detail: "invalid json"})
+		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	if err := h.textures.ApplyTextureToProfile(req.Context(), shared.CurrentActor(req), body["profile_id"], req.PathValue("hash"), body["texture_type"]); err != nil {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, map[string]any{"ok": true})
+	util.NoContent(w)
 }

@@ -14,7 +14,7 @@ func TestConcurrentRefreshSingleWinner(t *testing.T) {
 	db, h := testutil.NewTestApp(t)
 	user := testutil.CreateUser(t, db, "race@test.com", "Password123", "RaceUser", false)
 
-	login := doJSON(t, h, "POST", "/v1/auth/login", map[string]any{"email": user.Email, "password": "Password123"})
+	login := doJSON(t, h, "POST", "/v2/auth/login", map[string]any{"email": user.Email, "password": "Password123"})
 	refresh := cookieNamed(login, "refresh_token")
 	if refresh == nil {
 		t.Fatal("missing refresh cookie")
@@ -26,7 +26,7 @@ func TestConcurrentRefreshSingleWinner(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			rr := doJSON(t, h, "POST", "/v1/auth/session/refresh", nil, refresh)
+			rr := doJSON(t, h, "POST", "/v2/auth/session/refresh", nil, refresh)
 			codes <- rr.Code
 		}()
 	}

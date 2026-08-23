@@ -7,7 +7,7 @@ import (
 
 func httpError(err error, status int, detail string) bool {
 	he, ok := err.(util.HTTPError)
-	return ok && he.Status == status && he.Detail == detail
+	return ok && he.Status == status && he.Error() == detail
 }
 
 func ptrInt64(v int64) *int64 { return &v }

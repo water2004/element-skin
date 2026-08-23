@@ -149,7 +149,7 @@ func TestSettingsInvalidFallbackGroupPreservesExistingConfiguration(t *testing.T
 		}},
 	})
 	httpErr, ok := err.(util.HTTPError)
-	if !ok || httpErr.Status != 400 || httpErr.Detail != "fallback[1] urls are required" {
+	if !ok || httpErr.Status != 400 || httpErr.Error() != "fallback_url.validate.required" {
 		t.Fatalf("invalid fallback error = %#v, want exact 400 validation error", err)
 	}
 
@@ -314,13 +314,13 @@ func TestSettingsReadUpdateGroupPermissionsAndCacheInvalidationExactly(t *testin
 		t.Fatalf("ReadGroup site settings mismatch: %#v", site)
 	}
 
-	if _, err := svc.ReadGroup(ctx, permission.Actor{}, "site"); !settingsHTTPError(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.ReadGroup(ctx, permission.Actor{}, "site"); !settingsHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("ReadGroup without permission mismatch: %#v", err)
 	}
-	if err := svc.UpdateGroup(ctx, permission.Actor{}, "site", map[string]any{"site_name": "Denied"}); !settingsHTTPError(err, http.StatusForbidden, "permission denied") {
+	if err := svc.UpdateGroup(ctx, permission.Actor{}, "site", map[string]any{"site_name": "Denied"}); !settingsHTTPError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("UpdateGroup without permission mismatch: %#v", err)
 	}
-	if err := svc.UpdateGroup(ctx, updateActor, "missing", map[string]any{"site_name": "Denied"}); !settingsHTTPError(err, http.StatusBadRequest, "invalid settings group") {
+	if err := svc.UpdateGroup(ctx, updateActor, "missing", map[string]any{"site_name": "Denied"}); !settingsHTTPError(err, http.StatusBadRequest, "settings_group.validate.invalid") {
 		t.Fatalf("UpdateGroup invalid group mismatch: %#v", err)
 	}
 }
@@ -382,7 +382,7 @@ func TestSettingsFallbackUpdateRejectsUnknownStableIDWithoutMutation(t *testing.
 			"services_url": "https://missing.example/services",
 		}},
 	})
-	if !settingsHTTPError(err, http.StatusBadRequest, "fallback endpoint not found") {
+	if !settingsHTTPError(err, http.StatusBadRequest, "fallback_endpoint.resolve.not_found") {
 		t.Fatalf("unknown stable endpoint error=%#v; want exact HTTP 400", err)
 	}
 	after, err := db.Fallbacks.ListEndpoints(ctx)
@@ -544,7 +544,7 @@ func TestSettingsFallbackStrategyChangesPreserveEndpointsAndWhitelistsExactly(t 
 	}
 
 	err = svc.UpdateGroup(ctx, actor, "fallback", map[string]any{"fallback_strategy": "random"})
-	if !settingsHTTPError(err, http.StatusBadRequest, "fallback_strategy must be serial or parallel") {
+	if !settingsHTTPError(err, http.StatusBadRequest, "fallback_strategy.validate.invalid") {
 		t.Fatalf("invalid strategy error=%#v; want exact HTTP 400", err)
 	}
 	group, err := svc.GetGroup(ctx, "fallback")
@@ -572,5 +572,5 @@ func settingsActor(codes ...string) permission.Actor {
 
 func settingsHTTPError(err error, status int, detail string) bool {
 	httpErr, ok := err.(util.HTTPError)
-	return ok && httpErr.Status == status && httpErr.Detail == detail
+	return ok && httpErr.Status == status && httpErr.Error() == detail
 }

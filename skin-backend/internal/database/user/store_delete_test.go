@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"element-skin/backend/internal/database/user"
+	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/testutil"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -34,6 +35,27 @@ func TestDeleteRollsBackProfilesTokensAndTexturesWhenUserDeleteFails(t *testing.
 	if added, err := db.Textures.AddToWardrobe(ctx, target.ID, "delete_rollback_shared", "skin"); err != nil || !added {
 		t.Fatalf("add shared texture to target wardrobe: added=%v err=%v", added, err)
 	}
+	ownedClient := model.OAuthClient{
+		ID: "delete-rollback-owned-client", OwnerUserID: target.ID, Name: "Delete rollback owned client",
+		RedirectURI: "https://owned.example/callback", ClientType: "public", Status: "active", CreatedAt: 20, UpdatedAt: 20,
+	}
+	if err := db.OAuth.CreateClient(ctx, ownedClient, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	otherClient := model.OAuthClient{
+		ID: "delete-rollback-other-client", OwnerUserID: owner.ID, Name: "Delete rollback other client",
+		RedirectURI: "https://other.example/callback", ClientType: "public", Status: "active", CreatedAt: 30, UpdatedAt: 30,
+	}
+	if err := db.OAuth.CreateClient(ctx, otherClient, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	targetID := target.ID
+	if err := db.OAuth.CreateDeviceCode(ctx, model.OAuthDeviceCode{
+		DeviceCodeHash: "delete-rollback-device", UserCodeHash: "delete-rollback-user-code",
+		ClientID: otherClient.ID, UserID: &targetID, Status: "approved", ExpiresAt: 10_000, CreatedAt: 40,
+	}, nil); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := db.Pool.Exec(ctx, `CREATE TABLE user_delete_guards (user_id TEXT PRIMARY KEY REFERENCES users(id))`); err != nil {
 		t.Fatal(err)
 	}
@@ -54,6 +76,12 @@ func TestDeleteRollsBackProfilesTokensAndTexturesWhenUserDeleteFails(t *testing.
 	}
 	if got, err := db.Tokens.GetRefresh(ctx, "delete_rollback_refresh"); err != nil || got == nil || got["user_id"] != target.ID {
 		t.Fatalf("failed delete must preserve refresh token: token=%#v err=%v", got, err)
+	}
+	if got, err := db.OAuth.GetClient(ctx, ownedClient.ID); err != nil || got == nil || got.OwnerUserID != target.ID {
+		t.Fatalf("failed delete must preserve owned OAuth client: client=%#v err=%v", got, err)
+	}
+	if got, _, err := db.OAuth.GetDeviceCodeByDeviceCodeHash(ctx, "delete-rollback-device"); err != nil || got == nil || got.UserID == nil || *got.UserID != target.ID {
+		t.Fatalf("failed delete must preserve delegated device code: code=%#v err=%v", got, err)
 	}
 	for _, check := range []struct {
 		userID string

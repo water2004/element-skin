@@ -78,21 +78,21 @@ describe('api client', () => {
     axiosMock.instance.post.mockResolvedValue({ status: 200 })
     axiosMock.instance.mockResolvedValue(retryResponse)
 
-    const original = { url: '/v1/users/me', method: 'get' }
+    const original = { url: '/v2/users/me', method: 'get' }
     await expect(axiosMock.onRejected({ response: { status: 401 }, config: original })).resolves.toBe(
       retryResponse,
     )
 
-    expect(original).toEqual({ url: '/v1/users/me', method: 'get', _retried: true })
+    expect(original).toEqual({ url: '/v2/users/me', method: 'get', _retried: true })
     expect(axiosMock.instance.post).toHaveBeenCalledTimes(1)
-    expect(axiosMock.instance.post).toHaveBeenCalledWith('/v1/auth/session/refresh')
+    expect(axiosMock.instance.post).toHaveBeenCalledWith('/v2/auth/session/refresh')
     expect(axiosMock.instance).toHaveBeenCalledTimes(1)
     expect(axiosMock.instance).toHaveBeenCalledWith(original)
   })
 
   it('does not refresh login logout or refresh-token 401 responses', async () => {
     await importFreshClient()
-    const error = { response: { status: 401 }, config: { url: '/v1/auth/login' } }
+    const error = { response: { status: 401 }, config: { url: '/v2/auth/login' } }
 
     await expect(axiosMock.onRejected(error)).rejects.toBe(error)
     expect(axiosMock.instance.post).not.toHaveBeenCalled()
@@ -101,8 +101,8 @@ describe('api client', () => {
 
   it('does not refresh non-401 responses or requests already retried', async () => {
     await importFreshClient()
-    const forbidden = { response: { status: 403 }, config: { url: '/v1/users/me' } }
-    const retried = { response: { status: 401 }, config: { url: '/v1/users/me', _retried: true } }
+    const forbidden = { response: { status: 403 }, config: { url: '/v2/users/me' } }
+    const retried = { response: { status: 401 }, config: { url: '/v2/users/me', _retried: true } }
 
     await expect(axiosMock.onRejected(forbidden)).rejects.toBe(forbidden)
     await expect(axiosMock.onRejected(retried)).rejects.toBe(retried)
@@ -116,13 +116,13 @@ describe('api client', () => {
     axiosMock.instance.post.mockReturnValue(refresh.promise)
     axiosMock.instance.mockResolvedValue({ status: 200, data: { ok: true } })
 
-    const first = { url: '/v1/users/me', method: 'get' }
-    const second = { url: '/v1/admin/users', method: 'get' }
+    const first = { url: '/v2/users/me', method: 'get' }
+    const second = { url: '/v2/admin/users', method: 'get' }
     const firstRetry = axiosMock.onRejected({ response: { status: 401 }, config: first })
     const secondRetry = axiosMock.onRejected({ response: { status: 401 }, config: second })
 
     expect(axiosMock.instance.post).toHaveBeenCalledTimes(1)
-    expect(axiosMock.instance.post).toHaveBeenCalledWith('/v1/auth/session/refresh')
+    expect(axiosMock.instance.post).toHaveBeenCalledWith('/v2/auth/session/refresh')
 
     refresh.resolve()
     await expect(firstRetry).resolves.toEqual({ status: 200, data: { ok: true } })

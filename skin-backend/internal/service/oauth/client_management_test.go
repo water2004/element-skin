@@ -49,7 +49,7 @@ func TestServiceClientManagementReviewSecretDeleteAndAdminListExactly(t *testing
 	if clientID == "" || firstSecret == "" || created["status"] != oauth.StatusPending {
 		t.Fatalf("created client mismatch: %#v", created)
 	}
-	if _, err := svc.GetClient(ctx, otherActor, clientID); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.GetClient(ctx, otherActor, clientID); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("other user get client error mismatch: %#v", err)
 	}
 	gotClient, err := svc.GetClient(ctx, ownerActor, clientID)
@@ -73,10 +73,10 @@ func TestServiceClientManagementReviewSecretDeleteAndAdminListExactly(t *testing
 	if len(ownedList) != 1 || ownedList[0]["client_id"] != clientID || ownedList[0]["name"] != "Managed app" {
 		t.Fatalf("owned list mismatch: %#v", ownedList)
 	}
-	if _, err := svc.ListClients(ctx, permission.Actor{}, 10); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.ListClients(ctx, permission.Actor{}, 10); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("list without owned permission error mismatch: %#v", err)
 	}
-	if _, err := svc.ListClientsForAdmin(ctx, adminActor, "weird", 10); !isHTTPError(err, 400, "invalid status") {
+	if _, err := svc.ListClientsForAdmin(ctx, adminActor, "weird", 10); !isHTTPError(err, 400, "status.validate.invalid") {
 		t.Fatalf("admin list invalid status error mismatch: %#v", err)
 	}
 	pendingList, err := svc.ListClientsForAdmin(ctx, adminActor, oauth.StatusPending, 10)
@@ -112,7 +112,8 @@ func TestServiceClientManagementReviewSecretDeleteAndAdminListExactly(t *testing
 		WebsiteURL:      "https://managed.example/docs",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, oauth.StatusActive)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +128,7 @@ func TestServiceClientManagementReviewSecretDeleteAndAdminListExactly(t *testing
 	if submitted["status"] != oauth.StatusPending {
 		t.Fatalf("submitted client should be pending: %#v", submitted)
 	}
-	if _, err := svc.ReviewClient(ctx, adminActor, clientID, oauth.StatusPending, ""); !isHTTPError(err, 400, "invalid status") {
+	if _, err := svc.ReviewClient(ctx, adminActor, clientID, oauth.StatusPending, ""); !isHTTPError(err, 400, "status.validate.invalid") {
 		t.Fatalf("review pending status error mismatch: %#v", err)
 	}
 	reviewed, err := svc.ReviewClient(ctx, adminActor, clientID, oauth.StatusActive, "")
@@ -150,7 +151,7 @@ func TestServiceClientManagementReviewSecretDeleteAndAdminListExactly(t *testing
 	}, time.Hour); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.DeleteClient(ctx, otherActor, clientID); !isHTTPError(err, 403, "permission denied") {
+	if err := svc.DeleteClient(ctx, otherActor, clientID); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("other delete error mismatch: %#v", err)
 	}
 	if token, err := svc.Redis.GetOAuthAccessToken(ctx, "managed-client-delete-access"); err != nil || token.ClientID != clientID {
@@ -162,7 +163,7 @@ func TestServiceClientManagementReviewSecretDeleteAndAdminListExactly(t *testing
 	if _, err := svc.Redis.GetOAuthAccessToken(ctx, "managed-client-delete-access"); !errors.Is(err, redisstore.ErrCacheMiss) {
 		t.Fatalf("deleted client access token should be removed exactly, got %v", err)
 	}
-	if _, err := svc.GetClient(ctx, ownerActor, clientID); !isHTTPError(err, 404, "oauth client not found") {
+	if _, err := svc.GetClient(ctx, ownerActor, clientID); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("deleted client get error mismatch: %#v", err)
 	}
 }
@@ -182,47 +183,53 @@ func TestServiceClientManagementRejectsUnauthorizedMissingAndInvalidStateExactly
 	}
 	svc := newOAuthService(db)
 
-	if _, err := svc.CreateClient(ctx, permission.Actor{}, oauth.ClientInput{}); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.CreateClient(ctx, permission.Actor{}, oauth.ClientInput{}); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("create without permission mismatch: %#v", err)
 	}
-	if _, err := svc.ListClientsForAdmin(ctx, permission.Actor{}, "all", 10); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.ListClientsForAdmin(ctx, permission.Actor{}, "all", 10); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("admin list without permission mismatch: %#v", err)
 	}
-	if _, err := svc.GetClient(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth client not found") {
+	if _, err := svc.GetClient(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("get missing client mismatch: %#v", err)
 	}
 	if _, err := svc.UpdateClient(ctx, ownerActor, "missing-client", oauth.ClientInput{
 		Name:            "Missing",
 		RedirectURI:     "https://missing.example/callback",
 		PermissionCodes: []string{"account.read.self"},
-	}, "active"); !isHTTPError(err, 404, "oauth client not found") {
+	}); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("update missing client mismatch: %#v", err)
 	}
-	if _, err := svc.SubmitClientForReview(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth client not found") {
+	if _, err := svc.SubmitClientForReview(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("submit missing client mismatch: %#v", err)
 	}
-	if _, err := svc.ReviewClient(ctx, permission.Actor{}, "missing-client", oauth.StatusActive, ""); !isHTTPError(err, 403, "permission denied") {
+	if _, err := svc.ReviewClient(ctx, permission.Actor{}, "missing-client", oauth.StatusActive, ""); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("review without permission mismatch: %#v", err)
 	}
-	if _, err := svc.ReviewClient(ctx, adminActor, "missing-client", oauth.StatusActive, ""); !isHTTPError(err, 404, "oauth client not found") {
+	updateOnlyBits := permission.NewBitSet(len(permission.Definitions))
+	updateOnlyBits.Set(permission.MustDefinitionByCode("oauth_app.update.any").BitIndex)
+	updateOnlyActor := permission.Actor{SubjectID: "user:update-only", UserID: owner.ID, Permissions: updateOnlyBits}
+	if _, err := svc.ReviewClient(ctx, updateOnlyActor, "missing-client", oauth.StatusActive, ""); !isHTTPError(err, 403, "permission.check.denied") {
+		t.Fatalf("review with update-only permission mismatch: %#v", err)
+	}
+	if _, err := svc.ReviewClient(ctx, adminActor, "missing-client", oauth.StatusActive, ""); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("review missing client mismatch: %#v", err)
 	}
-	if _, err := svc.RotateClientSecret(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth client not found") {
+	if _, err := svc.RotateClientSecret(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("rotate missing client mismatch: %#v", err)
 	}
-	if err := svc.DeleteClient(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth client not found") {
+	if err := svc.DeleteClient(ctx, ownerActor, "missing-client"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("delete missing client mismatch: %#v", err)
 	}
-	if _, err := svc.ClientPermissions(ctx, adminActor, "missing-client"); !isHTTPError(err, 404, "oauth client not found") {
+	if _, err := svc.ClientPermissions(ctx, adminActor, "missing-client"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("client permissions missing mismatch: %#v", err)
 	}
-	if err := svc.SetClientPermissionOverride(ctx, permission.Actor{}, "missing-client", "account.read.self", "deny"); !isHTTPError(err, 403, "permission denied") {
+	if err := svc.SetClientPermissionOverride(ctx, permission.Actor{}, "missing-client", "account.read.self", "deny"); !isHTTPError(err, 403, "permission.check.denied") {
 		t.Fatalf("set permission deny without revoke permission mismatch: %#v", err)
 	}
-	if err := svc.SetClientPermissionOverride(ctx, adminActor, "missing-client", "account.read.self", "allow"); !isHTTPError(err, 404, "oauth client not found") {
+	if err := svc.SetClientPermissionOverride(ctx, adminActor, "missing-client", "account.read.self", "allow"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("set permission missing client mismatch: %#v", err)
 	}
-	if err := svc.ClearClientPermissionOverride(ctx, adminActor, "missing-client", "account.read.self"); !isHTTPError(err, 404, "oauth client not found") {
+	if err := svc.ClearClientPermissionOverride(ctx, adminActor, "missing-client", "account.read.self"); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("clear permission missing client mismatch: %#v", err)
 	}
 
@@ -241,25 +248,18 @@ func TestServiceClientManagementRejectsUnauthorizedMissingAndInvalidStateExactly
 		RedirectURI:     "https://reject-state.example/callback",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, "")
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	if keptStatus["status"] != oauth.StatusPending || keptStatus["name"] != "Reject state app kept" {
-		t.Fatalf("admin update with empty status should preserve current status: %#v", keptStatus)
+		t.Fatalf("admin configuration update should preserve current status: %#v", keptStatus)
 	}
-	if _, err := svc.UpdateClient(ctx, adminActor, clientID, oauth.ClientInput{
-		Name:            "Reject state app updated",
-		RedirectURI:     "https://reject-state.example/callback",
-		ClientType:      oauth.ClientTypeConfidential,
-		PermissionCodes: []string{"account.read.self"},
-	}, "archived"); !isHTTPError(err, 400, "invalid status") {
-		t.Fatalf("update invalid status mismatch: %#v", err)
-	}
-	if err := svc.ClearClientPermissionOverride(ctx, adminActor, clientID, "not.a.permission"); !isHTTPError(err, 400, "invalid permission") {
+	if err := svc.ClearClientPermissionOverride(ctx, adminActor, clientID, "not.a.permission"); !isHTTPError(err, 400, "permission.validate.invalid") {
 		t.Fatalf("clear invalid permission mismatch: %#v", err)
 	}
-	if err := svc.ClearClientPermissionOverride(ctx, adminActor, clientID, "account.read.self"); !isHTTPError(err, 404, "permission override not found") {
+	if err := svc.ClearClientPermissionOverride(ctx, adminActor, clientID, "account.read.self"); !isHTTPError(err, 404, "permission_override.resolve.not_found") {
 		t.Fatalf("clear missing permission override mismatch: %#v", err)
 	}
 	if err := svc.SetClientPermissionOverride(ctx, adminActor, clientID, "account.update.self", "deny"); err != nil {
@@ -271,7 +271,7 @@ func TestServiceClientManagementRejectsUnauthorizedMissingAndInvalidStateExactly
 	if err := svc.DeleteClient(ctx, adminActor, clientID); err != nil {
 		t.Fatalf("admin delete client failed: %v", err)
 	}
-	if _, err := svc.GetClient(ctx, adminActor, clientID); !isHTTPError(err, 404, "oauth client not found") {
+	if _, err := svc.GetClient(ctx, adminActor, clientID); !isHTTPError(err, 404, "oauth_client.resolve.not_found") {
 		t.Fatalf("admin deleted client should be gone: %#v", err)
 	}
 }

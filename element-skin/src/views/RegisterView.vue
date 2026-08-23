@@ -10,7 +10,40 @@
         <p class="m-0 text-sm text-[var(--color-text-light)]">创建一个新账号来开始使用</p>
       </div>
 
-      <el-form :model="form" :rules="rules" ref="formRef" label-position="top" size="large">
+      <el-alert
+        v-if="identityTicket"
+        type="success"
+        :closable="false"
+        show-icon
+        class="mb-6"
+        :title="identityProviderName ? `已验证 ${identityProviderName} 身份` : '外部身份验证已完成'"
+        description="仍需完整填写本站用户名、邮箱、密码，以及站点要求的验证码和邀请码。注册成功后该身份会绑定到新账户。"
+      />
+
+      <el-skeleton v-if="settingsLoading" :rows="6" animated />
+
+      <div v-else-if="settingsError" class="space-y-4">
+        <el-alert
+          type="error"
+          title="无法加载注册配置"
+          description="为避免遗漏验证码、邀请码或邮箱后缀要求，配置加载成功前不能提交注册。"
+          :closable="false"
+          show-icon
+        />
+        <el-button type="primary" plain class="w-full" @click="loadRegistrationSettings">
+          重新加载
+        </el-button>
+      </div>
+
+      <el-alert
+        v-else-if="!allowRegister"
+        type="warning"
+        title="本站当前已关闭新用户注册"
+        :closable="false"
+        show-icon
+      />
+
+      <el-form v-else :model="form" :rules="rules" ref="formRef" label-position="top" size="large">
         <el-form-item label="用户名" prop="username">
           <el-input
             v-model="form.username"
@@ -21,11 +54,11 @@
         </el-form-item>
 
         <el-form-item label="邮箱地址" prop="email">
-          <el-input
+          <EmailSuffixInput
             v-model="form.email"
+            :policy="emailSuffixPolicy"
             placeholder="请输入邮箱地址"
-            :prefix-icon="Message"
-            @keyup.enter="register"
+            @enter="register"
           />
         </el-form-item>
 
@@ -72,13 +105,18 @@
           />
         </el-form-item>
 
-        <el-form-item v-if="requireInvite" label="邀请码" prop="invite">
-          <el-input
-            v-model="form.invite"
-            placeholder="请输入邀请码"
-            :prefix-icon="Ticket"
-            @keyup.enter="register"
-          />
+        <el-form-item v-if="requireInvite" label="邀请码" prop="invite" required>
+          <div class="w-full">
+            <el-input
+              v-model="form.invite"
+              placeholder="请输入管理员提供的邀请码"
+              :prefix-icon="Ticket"
+              @keyup.enter="register"
+            />
+            <p class="mt-1.5 mb-0 text-xs text-[var(--color-text-light)]">
+              邀请码会按原文校验，请保留其中的空格、大小写和符号。
+            </p>
+          </div>
         </el-form-item>
 
         <el-form-item>
@@ -98,17 +136,26 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, reactive, ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Message, Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
+import { Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
+import type { PublicEmailSuffixPolicy } from '@/api/types'
 import { sendVerificationCode, register as apiRegister } from '@/api/auth'
 import { getErrorMessage, isValidationError } from '@/utils/error'
+import { getIdentityProviders } from '@/api/identity'
+import EmailSuffixInput from '@/components/common/EmailSuffixInput.vue'
+import { disabledEmailSuffixPolicy, emailSuffixPolicyError } from '@/utils/emailSuffixPolicy'
+import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
+const route = useRoute()
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
+const settingsLoading = ref(true)
+const settingsError = ref(false)
+const allowRegister = ref(false)
 
 const form = reactive({
   username: '',
@@ -121,11 +168,21 @@ const form = reactive({
 
 const emailVerifyEnabled = ref(false)
 const requireInvite = ref(false)
+const emailSuffixPolicy = ref<PublicEmailSuffixPolicy>({
+  ...disabledEmailSuffixPolicy,
+})
 const codeLoading = ref(false)
 const countdown = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
+const identityTicket = ref(
+  typeof route.query.identity_ticket === 'string' ? route.query.identity_ticket : '',
+)
+const identityProviderId =
+  typeof route.query.provider_id === 'string' ? route.query.provider_id : ''
+const identityProviderName = ref('')
+const loginReturnTo = internalRedirectTarget(route.query.redirect, '')
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 3, message: '用户名至少需要3个字符', trigger: 'blur' },
@@ -139,20 +196,22 @@ const rules: FormRules = {
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
     { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' },
-  ],
-  code: [{ required: true, message: '请输入验证码' }],
-  invite: [
     {
       validator: (_rule, value, callback) => {
-        if (requireInvite.value && !String(value || '').trim()) {
-          callback(new Error('请输入邀请码'))
+        const message = emailSuffixPolicyError(String(value || ''), emailSuffixPolicy.value)
+        if (message) {
+          callback(new Error(message))
           return
         }
         callback()
       },
-      trigger: 'blur',
+      trigger: ['blur', 'change'],
     },
   ],
+  code: [{ required: true, message: '请输入验证码' }],
+  invite: requireInvite.value
+    ? [{ required: true, message: '请输入邀请码', trigger: ['blur', 'change'] }]
+    : [],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
     { min: 6, message: '密码至少需要6个字符', trigger: 'blur' },
@@ -170,19 +229,47 @@ const rules: FormRules = {
       trigger: 'blur',
     },
   ],
-}
+}))
 
-onMounted(async () => {
+async function loadRegistrationSettings() {
+  settingsLoading.value = true
+  settingsError.value = false
   try {
     const res = await getPublicSettings()
-    emailVerifyEnabled.value = res.data.email_verify_enabled ?? false
-    requireInvite.value = res.data.require_invite ?? false
+    if (
+      typeof res.data.allow_register !== 'boolean' ||
+      typeof res.data.require_invite !== 'boolean' ||
+      typeof res.data.email_verify_enabled !== 'boolean' ||
+      !res.data.email_suffix_policy
+    ) {
+      throw new Error('registration settings response is incomplete')
+    }
+    allowRegister.value = res.data.allow_register
+    emailVerifyEnabled.value = res.data.email_verify_enabled
+    requireInvite.value = res.data.require_invite
+    emailSuffixPolicy.value = res.data.email_suffix_policy
     if (!requireInvite.value) {
       form.invite = ''
       formRef.value?.clearValidate('invite')
     }
   } catch (e) {
     console.error('Failed to fetch settings', e)
+    settingsError.value = true
+  } finally {
+    settingsLoading.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadRegistrationSettings()
+  if (identityTicket.value && identityProviderId) {
+    try {
+      const providers = await getIdentityProviders()
+      identityProviderName.value =
+        providers.data.items.find((provider) => provider.id === identityProviderId)?.name || ''
+    } catch (e) {
+      console.error('Failed to resolve registration identity provider', e)
+    }
   }
 })
 
@@ -228,7 +315,8 @@ async function register() {
       email: form.email,
       password: form.password,
       code: form.code,
-      ...(requireInvite.value ? { invite: form.invite.trim() } : {}),
+      ...(requireInvite.value ? { invite: form.invite } : {}),
+      ...(identityTicket.value ? { identity_ticket: identityTicket.value } : {}),
     }
 
     await apiRegister(payload)
@@ -236,7 +324,10 @@ async function register() {
 
     // 延迟跳转，让用户看到成功消息
     setTimeout(() => {
-      router.push('/login')
+      router.push({
+        path: '/login',
+        query: loginReturnTo ? { redirect: loginReturnTo } : {},
+      })
     }, 1500)
   } catch (e: unknown) {
     if (!isValidationError(e)) {

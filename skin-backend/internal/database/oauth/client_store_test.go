@@ -31,7 +31,7 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 		CreatedAt:   1000,
 		UpdatedAt:   1000,
 	}
-	if err := db.OAuth.CreateClient(ctx, client, initialPermissions); err != nil {
+	if err := db.OAuth.CreateClient(ctx, client, initialPermissions, nil); err != nil {
 		t.Fatal(err)
 	}
 	var subjectKind, subjectStatus string
@@ -59,6 +59,17 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	if !reflect.DeepEqual(gotPermissions, initialPermissions) {
 		t.Fatalf("initial permissions=%v want=%v", gotPermissions, initialPermissions)
 	}
+	profilePermission := initialPermissions[0]
+	noticePermission := permissionIDs("notice.read.owned")[0]
+	if allowed, err := db.OAuth.ClientHasPermission(ctx, client.ID, profilePermission); err != nil || !allowed {
+		t.Fatalf("active client requested permission allowed=%v err=%v", allowed, err)
+	}
+	if allowed, err := db.OAuth.ClientHasPermission(ctx, client.ID, noticePermission); err != nil || allowed {
+		t.Fatalf("unrequested client permission allowed=%v err=%v", allowed, err)
+	}
+	if allowed, err := db.OAuth.ClientHasPermission(ctx, "missing-client", profilePermission); err != nil || allowed {
+		t.Fatalf("missing client permission allowed=%v err=%v", allowed, err)
+	}
 	list, err := db.OAuth.ListClientsByOwner(ctx, user.ID, 10)
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +87,7 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 		CreatedAt:   1500,
 		UpdatedAt:   1500,
 	}
-	if err := db.OAuth.CreateClient(ctx, otherClient, []int64{}); err != nil {
+	if err := db.OAuth.CreateClient(ctx, otherClient, []int64{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	allClients, err := db.OAuth.ListClients(ctx, 10)
@@ -130,7 +141,7 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	client.ClientType = "public"
 	client.Status = "disabled"
 	client.UpdatedAt = 2000
-	updated, err := db.OAuth.UpdateClient(ctx, client, updatedPermissions)
+	updated, err := db.OAuth.UpdateClient(ctx, client, updatedPermissions, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +161,9 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	}
 	if !reflect.DeepEqual(gotPermissions, updatedPermissions) {
 		t.Fatalf("updated permissions=%v want=%v", gotPermissions, updatedPermissions)
+	}
+	if allowed, err := db.OAuth.ClientHasPermission(ctx, client.ID, updatedPermissions[0]); err != nil || allowed {
+		t.Fatalf("disabled client permission allowed=%v err=%v", allowed, err)
 	}
 	missingPermissions, err := db.OAuth.ClientPermissionIDs(ctx, "missing-client")
 	if err != nil {
@@ -192,7 +206,7 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	}
 	missingUpdate := client
 	missingUpdate.ID = "missing-client"
-	if updated, err := db.OAuth.UpdateClient(ctx, missingUpdate, updatedPermissions); err != nil || updated {
+	if updated, err := db.OAuth.UpdateClient(ctx, missingUpdate, updatedPermissions, nil); err != nil || updated {
 		t.Fatalf("UpdateClient should miss unknown client: updated=%v err=%v", updated, err)
 	}
 	if deleted, err := db.OAuth.DeleteClient(ctx, client.ID, "other-user"); err != nil || deleted {
@@ -201,10 +215,12 @@ func TestClientLifecyclePreservesExactFieldsAndPermissions(t *testing.T) {
 	if deleted, err := db.OAuth.DeleteClient(ctx, client.ID, user.ID); err != nil || !deleted {
 		t.Fatalf("DeleteClient with owner should be true: deleted=%v err=%v", deleted, err)
 	}
+	assertPermissionSubjectAbsent(t, db, permissiondb.SubjectIDForClient(client.ID))
 	if got, err = db.OAuth.GetClient(ctx, client.ID); err != nil || got != nil {
 		t.Fatalf("deleted client should be nil: client=%#v err=%v", got, err)
 	}
 	if deleted, err := db.OAuth.DeleteClient(ctx, otherClient.ID, ""); err != nil || !deleted {
 		t.Fatalf("admin DeleteClient should delete by empty owner: deleted=%v err=%v", deleted, err)
 	}
+	assertPermissionSubjectAbsent(t, db, permissiondb.SubjectIDForClient(otherClient.ID))
 }

@@ -3,7 +3,8 @@
     <PageHeader title="彩蛋列表" subtitle="配置服务端允许启用的节日彩蛋">
       <template #icon><MagicStick /></template>
       <template #actions>
-        <el-button :icon="Refresh" @click="loadSettings" class="hover-lift"> 重新加载 </el-button>
+        <DirtyTag :visible="hasChanges" :spaced="false" />
+        <el-button :icon="Refresh" plain @click="loadSettings" class="hover-lift"> 重新加载 </el-button>
         <el-button type="primary" :loading="saving" @click="saveSettings" class="hover-lift">
           保存
         </el-button>
@@ -34,13 +35,7 @@
             <el-icon><MagicStick /></el-icon>
           </div>
           <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 flex-wrap mb-2">
-              <h3 class="m-0 text-[17px] font-bold text-[var(--color-heading)]">{{ egg.name }}</h3>
-              <el-tag v-if="enabledIds.includes(egg.id)" type="success" effect="light"
-                >已启用</el-tag
-              >
-              <el-tag v-else type="info" effect="plain">未启用</el-tag>
-            </div>
+            <h3 class="m-0 mb-2 text-[17px] font-bold text-[var(--color-heading)]">{{ egg.name }}</h3>
             <p class="m-0 mb-3 text-[var(--color-text-light)] leading-normal">
               {{ egg.description }}
             </p>
@@ -57,17 +52,20 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MagicStick, Refresh } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { availableEasterEggs } from '@/easter-eggs'
 import UiCard from '@/components/ui/UiCard.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const easterEggOptions = availableEasterEggs()
 const enabledIds = ref<string[]>([])
 const saving = ref(false)
+const { hasChanges, capture } = useDirtySnapshot(computed(() => enabledIds.value))
 
 async function loadSettings() {
   try {
@@ -76,6 +74,7 @@ async function loadSettings() {
     enabledIds.value = Array.isArray(enabled)
       ? enabled.filter((item): item is string => typeof item === 'string')
       : []
+    capture()
   } catch {
     ElMessage.error('加载彩蛋设置失败')
   }
@@ -97,6 +96,7 @@ async function saveSettings() {
       easter_eggs_enabled: enabledIds.value,
     })
     ElMessage.success('彩蛋设置已更新')
+    capture()
   } catch {
     ElMessage.error('保存彩蛋设置失败')
   } finally {

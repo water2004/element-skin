@@ -51,6 +51,11 @@ jwt:
 keys:
   private_key: "private.pem"
   public_key: "public.pem"
+oidc:
+  private_key: "oidc-private.pem"
+  public_key: "oidc-public.pem"
+identity:
+  encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 database:
   host: "localhost"
   port: "5432"
@@ -106,6 +111,38 @@ func TestLoadRejectsInvalidEnvironmentOverride(t *testing.T) {
 	cfg, err := Load(path)
 	if err == nil || err.Error() != "invalid environment variable SERVER_PORT" {
 		t.Fatalf("invalid env error=%v cfg=%#v; want exact SERVER_PORT error", err, cfg)
+	}
+}
+
+func TestLoadRejectsInvalidWebhookWorkerBudgetExactly(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		field     string
+		wantError string
+	}{
+		{
+			name:      "database connections",
+			field:     "  max_database_connections: 0\n  active_interval_ms: 3000",
+			wantError: "invalid config webhook_worker.max_database_connections",
+		},
+		{
+			name:      "active interval",
+			field:     "  max_database_connections: 2\n  active_interval_ms: 0",
+			wantError: "invalid config webhook_worker.active_interval_ms",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			clearConfigEnv(t)
+			path := filepath.Join(t.TempDir(), "config.yaml")
+			raw := minimalConfigYAML() + "\nwebhook_worker:\n" + tc.field + "\n"
+			if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Load(path)
+			if err == nil || err.Error() != tc.wantError {
+				t.Fatalf("invalid webhook worker budget cfg=%#v err=%v want=%q", cfg, err, tc.wantError)
+			}
+		})
 	}
 }
 

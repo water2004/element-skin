@@ -41,7 +41,7 @@ func TestTextureUploadReturnsExactDependencyErrors(t *testing.T) {
 		req.SetPathValue("texture_type", "skin")
 		rec := httptest.NewRecorder()
 		h.UploadTexture(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("permission dependency response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})
@@ -82,7 +82,7 @@ func TestTextureUploadReturnsExactDependencyErrors(t *testing.T) {
 		req.SetPathValue("texture_type", "skin")
 		rec := httptest.NewRecorder()
 		h.UploadTexture(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("storage dependency response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if count, err := db.Textures.CountForUser(t.Context(), user.ID); err != nil || count != 0 {
@@ -126,7 +126,7 @@ func TestYggTextureUploadRemovesNewFileWhenDatabaseInsertFails(t *testing.T) {
 	req.SetPathValue("texture_type", "skin")
 	rec := httptest.NewRecorder()
 	h.UploadTexture(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("ygg database upload failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if count, err := db.Textures.CountForUser(t.Context(), user.ID); err != nil || count != 0 {

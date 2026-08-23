@@ -17,6 +17,17 @@ func (s *RedisStore) SetState(ctx context.Context, token string, value map[strin
 	return s.setJSON(ctx, s.stateKey(token), value, ttl)
 }
 
+func (s *RedisStore) GetState(ctx context.Context, token string) (map[string]any, error) {
+	var out map[string]any
+	if err := s.getJSON(ctx, s.stateKey(token), &out); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		return map[string]any{}, nil
+	}
+	return out, nil
+}
+
 var popStateScript = redis.NewScript(`
 local value = redis.call("GET", KEYS[1])
 if not value then
@@ -51,4 +62,8 @@ func (s *RedisStore) PopState(ctx context.Context, token string) (map[string]any
 		return map[string]any{}, nil
 	}
 	return out, nil
+}
+
+func (s *RedisStore) DeleteState(ctx context.Context, token string) error {
+	return s.client.Del(ctx, s.stateKey(token)).Err()
 }

@@ -2,9 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -13,34 +13,65 @@ import (
 	"element-skin/backend/internal/config"
 )
 
+type application interface {
+	Handler() http.Handler
+	Close()
+}
+
+type serverRuntime struct {
+	newApplication func(context.Context, config.Config) (application, error)
+	listen         func(*http.Server) error
+	shutdown       func(*http.Server, context.Context) error
+}
+
+var defaultServerRuntime = serverRuntime{
+	newApplication: func(ctx context.Context, cfg config.Config) (application, error) {
+		return app.New(ctx, cfg)
+	},
+	listen: func(server *http.Server) error {
+		return server.ListenAndServe()
+	},
+	shutdown: func(server *http.Server, ctx context.Context) error {
+		return server.Shutdown(ctx)
+	},
+}
+
 func main() {
 	cfg, err := config.Load("config.yaml")
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	application, err := app.New(context.Background(), cfg)
-	if err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	if err := runServer(ctx, cfg, defaultServerRuntime); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func runServer(ctx context.Context, cfg config.Config, runtime serverRuntime) error {
+	application, err := runtime.newApplication(ctx, cfg)
+	if err != nil {
+		return err
+	}
 	defer application.Close()
-
-	srv := newHTTPServer(cfg, application.Handler())
-
+	server := newHTTPServer(cfg, application.Handler())
+	serveErrors := make(chan error, 1)
 	go func() {
-		log.Printf("Element Skin Go backend listening on %s", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
-		}
+		log.Printf("Element Skin Go backend listening on %s", server.Addr)
+		serveErrors <- runtime.listen(server)
 	}()
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	<-stop
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_ = srv.Shutdown(ctx)
+	select {
+	case err := <-serveErrors:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		shutdownContext, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		return runtime.shutdown(server, shutdownContext)
+	}
 }
 
 func newHTTPServer(cfg config.Config, handler http.Handler) *http.Server {

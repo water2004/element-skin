@@ -19,13 +19,13 @@ func TestHomepageMediaUploadFailsWhenRedisInvalidateFails(t *testing.T) {
 	cfg.CarouselDir = t.TempDir()
 	h := admin.NewWithRedis(cfg, db, &homepageInvalidateFailRedis{Store: testutil.NewMemoryRedis()}, nil)
 
-	req := multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64))
+	req := multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64))
 	rec := httptest.NewRecorder()
 	h.UploadHomepageImage(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("redis fail upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
-	if rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("redis fail upload body mismatch: %q", rec.Body.String())
 	}
 	// Verify DB record was cleaned up after Redis failure.
@@ -46,8 +46,8 @@ func TestHomepageMediaUploadFailsWhenRedisInvalidateFails(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("redis fail panorama upload mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	items, err = db.HomepageMedia.List(context.Background(), false)
@@ -76,8 +76,8 @@ func TestHomepageMediaUploadDatabaseFailureCleansFilesExactly(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64)))
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 64, 64)))
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("image database failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	items, err := db.HomepageMedia.List(context.Background(), false)
@@ -90,8 +90,8 @@ func TestHomepageMediaUploadDatabaseFailureCleansFilesExactly(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("panorama database failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	items, err = db.HomepageMedia.List(context.Background(), false)
@@ -112,17 +112,17 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		h := admin.NewWithRedis(cfg, db, testutil.NewMemoryRedis(), nil)
 		db.Close()
 
-		req := httptest.NewRequest(http.MethodGet, "/v1/admin/homepage-media", nil)
+		req := httptest.NewRequest(http.MethodGet, "/v2/admin/homepage-media", nil)
 		req = withAdminActor(req, "admin-test-user")
 		rec := httptest.NewRecorder()
 		h.ListHomepageMedia(rec, req)
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("list closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
 		rec = httptest.NewRecorder()
-		h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 8, 8)))
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 8, 8)))
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("image upload closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if entries, err := os.ReadDir(cfg.CarouselDir); err != nil || len(entries) != 0 {
@@ -130,37 +130,37 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		}
 
 		rec = httptest.NewRecorder()
-		h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("panorama upload closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		if entries, err := os.ReadDir(cfg.CarouselDir); err != nil || len(entries) != 0 {
 			t.Fatalf("panorama upload closed database should leave no files: entries=%d err=%v", len(entries), err)
 		}
 
-		req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/missing", strings.NewReader(`{"title":"x"}`))
+		req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/missing", strings.NewReader(`{"title":"x"}`))
 		req = withAdminActor(req, "admin-test-user")
 		req.SetPathValue("id", "missing")
 		rec = httptest.NewRecorder()
 		h.PatchHomepageMedia(rec, req)
-		if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"homepage media not found\"}\n" {
+		if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"homepage_media\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 			t.Fatalf("patch closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
-		req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/reorder", strings.NewReader(`{"ids":["missing"]}`))
+		req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/reorder", strings.NewReader(`{"ids":["missing"]}`))
 		req = withAdminActor(req, "admin-test-user")
 		rec = httptest.NewRecorder()
 		h.ReorderHomepageMedia(rec, req)
-		if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"homepage media not found\"}\n" {
+		if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"homepage_media\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 			t.Fatalf("reorder closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 
-		req = httptest.NewRequest(http.MethodDelete, "/v1/admin/homepage-media/missing", nil)
+		req = httptest.NewRequest(http.MethodDelete, "/v2/admin/homepage-media/missing", nil)
 		req = withAdminActor(req, "admin-test-user")
 		req.SetPathValue("id", "missing")
 		rec = httptest.NewRecorder()
 		h.DeleteHomepageMedia(rec, req)
-		if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"homepage media not found\"}\n" {
+		if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"homepage_media\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 			t.Fatalf("delete closed database mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	})
@@ -175,8 +175,8 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		h := admin.NewWithRedis(cfg, db, testutil.NewMemoryRedis(), nil)
 
 		rec := httptest.NewRecorder()
-		h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 8, 8)))
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "slide.png", pngBytes(t, 8, 8)))
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("image mkdir failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		items, err := db.HomepageMedia.List(context.Background(), false)
@@ -185,8 +185,8 @@ func TestHomepageMediaRoutesReturnExactErrorsForClosedDatabaseAndFilesystemFailu
 		}
 
 		rec = httptest.NewRecorder()
-		h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
-		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+		h.UploadHomepagePanorama(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/panorama", "file", "panorama.zip", standardPanoramaZip(t)))
+		if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 			t.Fatalf("panorama mkdir failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 		}
 		items, err = db.HomepageMedia.List(context.Background(), false)
@@ -204,25 +204,25 @@ func TestHomepageMediaMutationRedisFailuresKeepExactPersistedSideEffects(t *test
 	h := admin.NewWithRedis(cfg, db, healthy, nil)
 
 	rec := httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "first.png", pngBytes(t, 8, 8)))
-	if rec.Code != http.StatusOK {
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "first.png", pngBytes(t, 8, 8)))
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("first upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	first := decodeMedia(t, rec.Body.Bytes())
 	rec = httptest.NewRecorder()
-	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v1/admin/homepage-media/image", "file", "second.png", pngBytes(t, 8, 8)))
-	if rec.Code != http.StatusOK {
+	h.UploadHomepageImage(rec, multipartUploadRequest(t, "/v2/admin/homepage-media/image", "file", "second.png", pngBytes(t, 8, 8)))
+	if rec.Code != http.StatusCreated {
 		t.Fatalf("second upload status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	second := decodeMedia(t, rec.Body.Bytes())
 
 	failing := admin.NewWithRedis(cfg, db, &homepageInvalidateFailRedis{Store: testutil.NewMemoryRedis()}, nil)
-	req := httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/"+first.ID, strings.NewReader(`{"title":"Patched before cache failure"}`))
+	req := httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/"+first.ID, strings.NewReader(`{"title":"Patched before cache failure"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", first.ID)
 	rec = httptest.NewRecorder()
 	failing.PatchHomepageMedia(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("patch invalidate failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	row, err := db.HomepageMedia.Get(context.Background(), first.ID)
@@ -230,11 +230,11 @@ func TestHomepageMediaMutationRedisFailuresKeepExactPersistedSideEffects(t *test
 		t.Fatalf("patch should persist before invalidate failure: row=%#v err=%v", row, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPatch, "/v1/admin/homepage-media/reorder", strings.NewReader(`{"ids":["`+second.ID+`","`+first.ID+`"]}`))
+	req = httptest.NewRequest(http.MethodPatch, "/v2/admin/homepage-media/reorder", strings.NewReader(`{"ids":["`+second.ID+`","`+first.ID+`"]}`))
 	req = withAdminActor(req, "admin-test-user")
 	rec = httptest.NewRecorder()
 	failing.ReorderHomepageMedia(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("reorder invalidate failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	items, err := db.HomepageMedia.List(context.Background(), false)
@@ -245,12 +245,12 @@ func TestHomepageMediaMutationRedisFailuresKeepExactPersistedSideEffects(t *test
 		t.Fatalf("reorder should persist before invalidate failure: %#v", items)
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/homepage-media/"+first.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v2/admin/homepage-media/"+first.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("id", first.ID)
 	rec = httptest.NewRecorder()
 	failing.DeleteHomepageMedia(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("delete invalidate failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if _, err := db.HomepageMedia.Get(context.Background(), first.ID); err == nil {

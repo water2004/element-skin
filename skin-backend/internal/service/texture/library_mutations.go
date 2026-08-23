@@ -12,7 +12,7 @@ import (
 func (s LibraryService) UpdateTexture(ctx context.Context, actor permission.Actor, hash, textureType string, body map[string]any) (map[string]any, error) {
 	var patch texturedb.Patch
 	if model, ok := body["model"].(string); ok && model != "default" && model != "slim" {
-		return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid model"}
+		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "texture_model", Operation: "validate", Reason: "invalid"}
 	} else if ok {
 		if err := requireActorPermission(actor, textureUpdateMetadataOwnedPermission); err != nil {
 			return nil, err
@@ -38,7 +38,7 @@ func (s LibraryService) UpdateTexture(ctx context.Context, actor permission.Acto
 		case int:
 			parsed = x != 0
 		default:
-			return nil, util.HTTPError{Status: http.StatusBadRequest, Detail: "invalid is_public"}
+			return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "texture_visibility", Operation: "validate", Reason: "invalid"}
 		}
 		patch.IsPublic = &parsed
 	}
@@ -51,7 +51,6 @@ func (s LibraryService) UpdateTexture(ctx context.Context, actor permission.Acto
 	if err != nil {
 		return nil, err
 	}
-	info["ok"] = true
 	return info, nil
 }
 
@@ -71,7 +70,7 @@ func (s LibraryService) DeleteTexture(ctx context.Context, actor permission.Acto
 		return err
 	}
 	if !deleted {
-		return util.HTTPError{Status: http.StatusNotFound, Detail: "Texture not found"}
+		return util.HTTPError{Status: http.StatusNotFound, Object: "texture", Operation: "resolve", Reason: "not_found"}
 	}
 	return nil
 }

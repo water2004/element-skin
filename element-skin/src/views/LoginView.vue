@@ -45,6 +45,32 @@
         </el-button>
       </div>
 
+      <template v-if="loginProviders.length">
+        <el-divider class="external-login-divider">或使用外部身份登录</el-divider>
+        <div class="external-login-buttons grid gap-3">
+          <el-button
+            v-for="provider in loginProviders"
+            :key="provider.id"
+            class="external-login-button"
+            size="large"
+            :loading="authorizingProviderId === provider.id"
+            :disabled="!!authorizingProviderId"
+            @click="loginWithProvider(provider.id)"
+          >
+            <span class="external-login-content">
+              <img
+                v-if="provider.icon_url"
+                :src="provider.icon_url"
+                alt=""
+                class="h-5 w-5 shrink-0 rounded-sm object-contain"
+              />
+              <el-icon v-else class="shrink-0"><Connection /></el-icon>
+              <span>使用 {{ provider.name }} 登录</span>
+            </span>
+          </el-button>
+        </div>
+      </template>
+
       <div class="text-center mt-6 text-[var(--color-text)] text-sm transition-colors">
         <span>还没有账号？</span>
         <el-button link type="primary" @click="$router.push('/register')"> 立即注册 </el-button>
@@ -55,14 +81,18 @@
 
 <script setup lang="ts">
 import { reactive, ref, inject, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Message, Lock, Right } from '@element-plus/icons-vue'
+import { Message, Lock, Right, Connection } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import { siteLogin } from '@/api/auth'
+import { getIdentityProviders, startIdentityAuthorization } from '@/api/identity'
+import type { IdentityProvider } from '@/api/types'
 import { getErrorMessage, isValidationError } from '@/utils/error'
+import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
+const route = useRoute()
 const fetchMe = inject<() => Promise<void>>('fetchMe')
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
@@ -73,6 +103,8 @@ const form = reactive({
 })
 
 const emailVerifyEnabled = ref(false)
+const loginProviders = ref<IdentityProvider[]>([])
+const authorizingProviderId = ref('')
 
 onMounted(async () => {
   try {
@@ -80,6 +112,12 @@ onMounted(async () => {
     emailVerifyEnabled.value = res.data.email_verify_enabled ?? false
   } catch (e) {
     console.error('Failed to fetch settings', e)
+  }
+  try {
+    const res = await getIdentityProviders()
+    loginProviders.value = res.data.items.filter((provider) => provider.login_enabled)
+  } catch (e) {
+    console.error('Failed to fetch identity providers', e)
   }
 })
 
@@ -107,7 +145,7 @@ async function login() {
     if (fetchMe) await fetchMe()
 
     ElMessage.success('登录成功！')
-    router.push('/dashboard')
+    await router.replace(loginReturnTarget())
   } catch (e: unknown) {
     if (!isValidationError(e)) {
       ElMessage.error('登录失败: ' + getErrorMessage(e, '登录失败'))
@@ -115,6 +153,25 @@ async function login() {
   } finally {
     loading.value = false
   }
+}
+
+async function loginWithProvider(providerId: string) {
+  try {
+    authorizingProviderId.value = providerId
+    const res = await startIdentityAuthorization({
+      provider_id: providerId,
+      intent: 'login',
+      return_to: loginReturnTarget(),
+    })
+    window.location.assign(res.data.authorization_url)
+  } catch (e: unknown) {
+    authorizingProviderId.value = ''
+    ElMessage.error('外部登录失败: ' + getErrorMessage(e, '无法开始登录'))
+  }
+}
+
+function loginReturnTarget() {
+  return internalRedirectTarget(route.query.redirect)
 }
 </script>
 
@@ -127,5 +184,25 @@ async function login() {
 
 :deep(.el-input__wrapper) {
   height: 48px;
+}
+
+.external-login-buttons :deep(.el-button) {
+  width: 100%;
+  margin-left: 0 !important;
+}
+
+.external-login-divider :deep(.el-divider__text) {
+  background: var(--color-card-background);
+}
+
+.external-login-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.external-login-content :deep(.el-icon + span) {
+  margin-left: 0;
 }
 </style>

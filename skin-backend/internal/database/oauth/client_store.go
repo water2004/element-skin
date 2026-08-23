@@ -4,17 +4,21 @@ import (
 	"context"
 	"errors"
 
+	webhookdb "element-skin/backend/internal/database/webhook"
 	"element-skin/backend/internal/model"
 
 	"github.com/jackc/pgx/v5"
 )
 
-func (s Store) CreateClient(ctx context.Context, client model.OAuthClient, permissionIDs []int64) error {
+func (s Store) CreateClient(ctx context.Context, client model.OAuthClient, permissionIDs []int64, endpoints []model.WebhookEndpoint) error {
 	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO delegated_clients
 			(id, owner_user_id, name, description, redirect_uri, website_url, client_type, secret_hash, status, created_at, updated_at)
@@ -33,34 +37,26 @@ func (s Store) CreateClient(ctx context.Context, client model.OAuthClient, permi
 	`, "client:"+client.ID, client.CreatedAt); err != nil {
 		return err
 	}
+	if err := webhookdb.ReplaceEndpoints(ctx, tx, client.ID, endpoints); err != nil {
+		return err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
+		return err
+	}
 	return tx.Commit(ctx)
 }
 
-func (s Store) UpdateClient(ctx context.Context, client model.OAuthClient, permissionIDs []int64) (bool, error) {
-	tx, err := s.Pool.Begin(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer tx.Rollback(ctx)
-	tag, err := tx.Exec(ctx, `
-		UPDATE delegated_clients
-		SET name=$2, description=$3, redirect_uri=$4, website_url=$5, client_type=$6, status=$7, updated_at=$8
-		WHERE id=$1
-	`, client.ID, client.Name, client.Description, client.RedirectURI, client.WebsiteURL, client.ClientType, client.Status, client.UpdatedAt)
-	if err != nil || tag.RowsAffected() == 0 {
-		return false, err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM delegated_client_permissions WHERE client_id=$1`, client.ID); err != nil {
-		return false, err
-	}
-	if err := insertClientPermissions(ctx, tx, client.ID, permissionIDs, client.UpdatedAt); err != nil {
-		return false, err
-	}
-	return true, tx.Commit(ctx)
+func (s Store) UpdateClient(ctx context.Context, client model.OAuthClient, permissionIDs []int64, endpoints []model.WebhookEndpoint) (bool, error) {
+	result, err := s.UpdateClientWithCredentials(ctx, client, permissionIDs, endpoints, ClientCredentialsPreserve)
+	return result.Updated, err
 }
 
 func (s Store) RotateClientSecret(ctx context.Context, clientID, secretHash string, updatedAt int64) (bool, error) {
-	tag, err := s.Pool.Exec(ctx, `UPDATE delegated_clients SET secret_hash=$2, updated_at=$3 WHERE id=$1`, clientID, secretHash, updatedAt)
+	return rotateClientSecret(ctx, s.Pool, clientID, secretHash, updatedAt)
+}
+
+func rotateClientSecret(ctx context.Context, q queryer, clientID, secretHash string, updatedAt int64) (bool, error) {
+	tag, err := q.Exec(ctx, `UPDATE delegated_clients SET secret_hash=$2, updated_at=$3 WHERE id=$1`, clientID, secretHash, updatedAt)
 	if err != nil {
 		return false, err
 	}
@@ -68,11 +64,25 @@ func (s Store) RotateClientSecret(ctx context.Context, clientID, secretHash stri
 }
 
 func (s Store) DeleteClient(ctx context.Context, clientID, ownerUserID string) (bool, error) {
-	tag, err := s.Pool.Exec(ctx, `DELETE FROM delegated_clients WHERE id=$1 AND ($2='' OR owner_user_id=$2)`, clientID, ownerUserID)
+	tx, err := s.Pool.Begin(ctx)
 	if err != nil {
 		return false, err
 	}
-	return tag.RowsAffected() > 0, nil
+	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return false, err
+	}
+	tag, err := tx.Exec(ctx, `DELETE FROM delegated_clients WHERE id=$1 AND ($2='' OR owner_user_id=$2)`, clientID, ownerUserID)
+	if err != nil || tag.RowsAffected() == 0 {
+		return false, err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM permission_subjects WHERE id=$1`, "client:"+clientID); err != nil {
+		return false, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
+		return false, err
+	}
+	return true, tx.Commit(ctx)
 }
 
 func (s Store) GetClient(ctx context.Context, clientID string) (*model.OAuthClient, error) {
@@ -153,15 +163,8 @@ func (s Store) ListClientsByStatus(ctx context.Context, status string, limit int
 }
 
 func (s Store) UpdateClientStatus(ctx context.Context, clientID, status string, updatedAt int64) (bool, error) {
-	tag, err := s.Pool.Exec(ctx, `
-		UPDATE delegated_clients
-		SET status=$2, updated_at=$3
-		WHERE id=$1
-	`, clientID, status, updatedAt)
-	if err != nil {
-		return false, err
-	}
-	return tag.RowsAffected() > 0, nil
+	result, err := s.UpdateClientStatusWithCredentials(ctx, clientID, status, updatedAt, ClientCredentialsPreserve)
+	return result.Updated, err
 }
 
 func (s Store) ClientPermissionIDs(ctx context.Context, clientID string) ([]int64, error) {
@@ -176,4 +179,17 @@ func (s Store) ClientPermissionIDs(ctx context.Context, clientID string) ([]int6
 	}
 	defer rows.Close()
 	return scanInt64Rows(rows)
+}
+
+func (s Store) ClientHasPermission(ctx context.Context, clientID string, permissionID int64) (bool, error) {
+	var allowed bool
+	err := s.Pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM delegated_clients AS client
+			JOIN delegated_client_permissions AS requested ON requested.client_id=client.id
+			WHERE client.id=$1 AND client.status='active' AND requested.permission_id=$2
+		)
+	`, clientID, permissionID).Scan(&allowed)
+	return allowed, err
 }

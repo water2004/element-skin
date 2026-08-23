@@ -3,6 +3,7 @@ package oauth
 import (
 	"time"
 
+	"element-skin/backend/internal/config"
 	"element-skin/backend/internal/database"
 	"element-skin/backend/internal/redisstore"
 )
@@ -23,17 +24,27 @@ const (
 )
 
 type Service struct {
-	DB    *database.DB
-	Redis redisstore.Store
+	DB         *database.DB
+	Redis      redisstore.Store
+	Config     config.Config
+	OIDCSigner *OIDCSigner
 }
 
 type ClientInput struct {
-	Name            string
-	Description     string
-	RedirectURI     string
-	WebsiteURL      string
-	ClientType      string
-	PermissionCodes []string
+	Name             string
+	Description      string
+	RedirectURI      string
+	WebsiteURL       string
+	ClientType       string
+	PermissionCodes  []string
+	WebhookEndpoints []WebhookEndpointInput
+}
+
+type WebhookEndpointInput struct {
+	ID         string
+	URL        string
+	EventTypes []string
+	Enabled    *bool
 }
 
 type AuthorizationRequest struct {
@@ -44,11 +55,13 @@ type AuthorizationRequest struct {
 	State               string
 	CodeChallenge       string
 	CodeChallengeMethod string
+	Nonce               string
 }
 
 type AuthorizationDetails struct {
 	Client      map[string]any   `json:"client"`
 	Scopes      []map[string]any `json:"scopes"`
+	OIDCScopes  []string         `json:"oidc_scopes"`
 	RedirectURI string           `json:"redirect_uri"`
 	State       string           `json:"state,omitempty"`
 }
@@ -99,4 +112,5 @@ type TokenResponse struct {
 	RefreshToken string   `json:"refresh_token,omitempty"`
 	Scope        string   `json:"scope"`
 	Permissions  []string `json:"permissions"`
+	IDToken      string   `json:"id_token,omitempty"`
 }

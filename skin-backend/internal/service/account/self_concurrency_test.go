@@ -43,7 +43,7 @@ func TestConcurrentEmailChangesConsumeOneCodeExactlyOnce(t *testing.T) {
 	}, func(actor permission.Actor) error {
 		return svc.ChangeEmailSelf(context.Background(), actor, targetEmail, code)
 	})
-	assertOneSelfUpdateConflict(t, results, "Invalid or expired verification code")
+	assertOneSelfUpdateConflict(t, results, "verification_code.verify.invalid", "Email already in use")
 	var targetCount, originalCount int
 	if err := db.Pool.QueryRow(ctx, `
 		SELECT
@@ -86,7 +86,7 @@ func TestConcurrentDisplayNameUpdatesKeepNameUnique(t *testing.T) {
 	}, func(actor permission.Actor) error {
 		return svc.UpdateSelf(context.Background(), actor, map[string]any{"display_name": targetName})
 	})
-	assertOneSelfUpdateConflict(t, results, "Username already exists")
+	assertOneSelfUpdateConflict(t, results, "username.reserve.conflict")
 	var targetCount, originalCount int
 	if err := db.Pool.QueryRow(ctx, `
 		SELECT

@@ -73,20 +73,20 @@ func (s Service) RotateRefresh(ctx context.Context, raw string) (map[string]any,
 		return nil, err
 	}
 	if row == nil {
-		return nil, util.HTTPError{Status: 401, Detail: "invalid refresh token"}
+		return nil, util.HTTPError{Status: 401, Object: "refresh_token", Operation: "verify", Reason: "invalid"}
 	}
 	if database.NowMS() >= row["expires_at"].(int64) {
 		if err := s.DB.Tokens.DeleteRefresh(ctx, oldHash); err != nil {
 			return nil, err
 		}
-		return nil, util.HTTPError{Status: 401, Detail: "refresh token expired"}
+		return nil, util.HTTPError{Status: 401, Object: "refresh_token", Operation: "verify", Reason: "expired"}
 	}
 	user, err := s.DB.Users.GetByID(ctx, row["user_id"].(string))
 	if err != nil {
 		return nil, err
 	}
 	if user == nil {
-		return nil, util.HTTPError{Status: 401, Detail: "invalid refresh token"}
+		return nil, util.HTTPError{Status: 401, Object: "refresh_token", Operation: "verify", Reason: "invalid"}
 	}
 	pending, err := s.prepareSession(ctx, user.ID, nil)
 	if err != nil {
@@ -97,7 +97,7 @@ func (s Service) RotateRefresh(ctx context.Context, raw string) (map[string]any,
 		return nil, err
 	}
 	if !rotated {
-		return nil, util.HTTPError{Status: 401, Detail: "invalid refresh token"}
+		return nil, util.HTTPError{Status: 401, Object: "refresh_token", Operation: "verify", Reason: "invalid"}
 	}
 	return pending.response, nil
 }

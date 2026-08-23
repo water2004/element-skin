@@ -36,13 +36,21 @@ type RateLimitResult struct {
 }
 
 type OAuthAccessToken struct {
-	TokenHash     string  `json:"token_hash"`
-	ClientID      string  `json:"client_id"`
-	UserID        string  `json:"user_id,omitempty"`
-	GrantID       string  `json:"grant_id,omitempty"`
-	PermissionIDs []int64 `json:"permission_ids"`
-	ExpiresAt     int64   `json:"expires_at"`
-	CreatedAt     int64   `json:"created_at"`
+	TokenHash     string   `json:"token_hash"`
+	ClientID      string   `json:"client_id"`
+	UserID        string   `json:"user_id,omitempty"`
+	GrantID       string   `json:"grant_id,omitempty"`
+	PermissionIDs []int64  `json:"permission_ids"`
+	OIDCScopes    []string `json:"oidc_scopes"`
+	ExpiresAt     int64    `json:"expires_at"`
+	CreatedAt     int64    `json:"created_at"`
+}
+
+type ExternalAccessToken struct {
+	IdentityID  string `json:"identity_id"`
+	AccessToken string `json:"access_token"`
+	TokenType   string `json:"token_type"`
+	ExpiresAt   int64  `json:"expires_at"`
 }
 
 type Store interface {
@@ -72,7 +80,9 @@ type Store interface {
 	MarkFallbackRequest(context.Context, string, string, time.Duration) (bool, error)
 	DeleteFallbackRequest(context.Context, string, string) error
 	SetState(context.Context, string, map[string]any, time.Duration) error
+	GetState(context.Context, string) (map[string]any, error)
 	PopState(context.Context, string) (map[string]any, error)
+	DeleteState(context.Context, string) error
 	HitRateLimit(context.Context, string, int, time.Duration) (RateLimitResult, error)
 	GetAuthUser(context.Context, string) (AuthUser, error)
 	SetAuthUser(context.Context, AuthUser, time.Duration) error
@@ -93,6 +103,9 @@ type Store interface {
 	DeleteOAuthAccessTokensByClient(context.Context, string) error
 	DeleteOAuthAccessTokensByGrant(context.Context, string) error
 	DeleteOAuthAccessTokensByUser(context.Context, string) error
+	SetExternalAccessToken(context.Context, ExternalAccessToken, time.Duration) error
+	GetExternalAccessToken(context.Context, string) (ExternalAccessToken, error)
+	DeleteExternalAccessToken(context.Context, string) error
 }
 
 type RedisStore struct {

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 
+	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
 	verificationsvc "element-skin/backend/internal/service/verification"
 	"element-skin/backend/internal/util"
 )
@@ -23,7 +24,7 @@ func (s Service) ResetPassword(ctx context.Context, email, newPassword, code str
 	}
 	if strong == "true" {
 		if errs := util.ValidateStrongPassword(newPassword); len(errs) > 0 {
-			return util.HTTPError{Status: 400, Detail: util.JoinPasswordErrors(errs)}
+			return util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": errs}}
 		}
 	}
 	enabled, err := settings.Get(ctx, "email_verify_enabled", "false")
@@ -31,21 +32,21 @@ func (s Service) ResetPassword(ctx context.Context, email, newPassword, code str
 		return err
 	}
 	if enabled != "true" {
-		return util.HTTPError{Status: 403, Detail: "Password reset via email is disabled"}
+		return util.HTTPError{Status: 403, Object: "password_reset", Operation: "create", Reason: "disabled"}
 	}
 	ok, err := s.VerifyCode(ctx, email, code, "reset")
 	if err != nil {
 		return err
 	}
 	if !ok {
-		return util.HTTPError{Status: 400, Detail: "Invalid or expired verification code"}
+		return util.HTTPError{Status: 400, Object: "verification_code", Operation: "verify", Reason: "invalid"}
 	}
 	user, err := s.DB.Users.GetByEmail(ctx, email)
 	if err != nil {
 		return err
 	}
 	if user == nil {
-		return util.HTTPError{Status: 404, Detail: "User not found"}
+		return util.HTTPError{Status: 404, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	hash, err := util.HashPassword(newPassword)
 	if err != nil {
@@ -57,7 +58,7 @@ func (s Service) ResetPassword(ctx context.Context, email, newPassword, code str
 		return err
 	}
 	if !consumed {
-		return util.HTTPError{Status: 400, Detail: "Invalid or expired verification code"}
+		return util.HTTPError{Status: 400, Object: "verification_code", Operation: "verify", Reason: "invalid"}
 	}
 	restoreCode := func() {
 		_ = verification.Restore(ctx, email, code, verificationsvc.PurposeReset)
@@ -73,7 +74,7 @@ func (s Service) ResetPassword(ctx context.Context, email, newPassword, code str
 	}
 	if !updated {
 		restoreCode()
-		return util.HTTPError{Status: 404, Detail: "User not found"}
+		return util.HTTPError{Status: 404, Object: "user", Operation: "resolve", Reason: "not_found"}
 	}
 	return nil
 }
@@ -90,4 +91,15 @@ func (s Service) verification() verificationsvc.Service {
 		verification.Settings = s.Settings
 	}
 	return verification
+}
+
+func (s Service) emailPolicy() emailpolicysvc.Service {
+	policy := s.EmailPolicy
+	if policy.DB == nil {
+		policy.DB = s.DB
+	}
+	if policy.Redis == nil {
+		policy.Redis = s.Redis
+	}
+	return policy
 }

@@ -22,6 +22,11 @@ jwt:
 keys:
   private_key: "private.pem"
   public_key: "public.pem"
+oidc:
+  private_key: "oidc-private.pem"
+  public_key: "oidc-public.pem"
+identity:
+  encryption_key: "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 database:
   host: "localhost"
   port: "5432"
@@ -60,7 +65,10 @@ func setCompleteConfigEnv(t *testing.T) {
 	t.Setenv("JWT_EXPIRE_DAYS", "8")
 	t.Setenv("JWT_ACCESS_EXPIRE_MINUTES", "35")
 	t.Setenv("KEYS_PRIVATE_KEY", "env-private.pem")
-	t.Setenv("KEYS_PUBLIC_KEY", "/abs/env-public.pem")
+	t.Setenv("KEYS_PUBLIC_KEY", "abs/env-public.pem")
+	t.Setenv("OIDC_PRIVATE_KEY", "env-oidc-private.pem")
+	t.Setenv("OIDC_PUBLIC_KEY", "abs/env-oidc-public.pem")
+	t.Setenv("IDENTITY_ENCRYPTION_KEY", "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=")
 	t.Setenv("DATABASE_HOST", "env-db")
 	t.Setenv("DATABASE_PORT", "6543")
 	t.Setenv("DATABASE_USER", "env-user")
@@ -68,6 +76,8 @@ func setCompleteConfigEnv(t *testing.T) {
 	t.Setenv("DATABASE_NAME", "env-db-name")
 	t.Setenv("DATABASE_SSLMODE", "require")
 	t.Setenv("DATABASE_MAX_CONNECTIONS", "31")
+	t.Setenv("WEBHOOK_WORKER_MAX_DATABASE_CONNECTIONS", "3")
+	t.Setenv("WEBHOOK_WORKER_ACTIVE_INTERVAL_MS", "1750")
 	t.Setenv("SERVER_SITE_URL", "https://env.example")
 	t.Setenv("SERVER_API_URL", "https://env.example/api")
 	t.Setenv("SERVER_HOST", "0.0.0.0")
@@ -95,11 +105,16 @@ func clearConfigEnv(t *testing.T) {
 		"DATABASE_NAME",
 		"DATABASE_SSLMODE",
 		"DATABASE_MAX_CONNECTIONS",
+		"WEBHOOK_WORKER_MAX_DATABASE_CONNECTIONS",
+		"WEBHOOK_WORKER_ACTIVE_INTERVAL_MS",
 		"JWT_SECRET",
 		"JWT_EXPIRE_DAYS",
 		"JWT_ACCESS_EXPIRE_MINUTES",
 		"KEYS_PRIVATE_KEY",
 		"KEYS_PUBLIC_KEY",
+		"OIDC_PRIVATE_KEY",
+		"OIDC_PUBLIC_KEY",
+		"IDENTITY_ENCRYPTION_KEY",
 		"SERVER_SITE_URL",
 		"SERVER_API_URL",
 		"SERVER_HOST",

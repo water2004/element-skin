@@ -13,7 +13,7 @@ export function remoteYggApiCases(): ApiCase[] {
           password: 'remote-password',
         }),
       args: [
-        '/v1/imports/remote-ygg/profiles/preview',
+        '/v2/imports/remote-ygg/profiles/preview',
         {
           api_url: 'https://ygg.example/api',
           username: 'remote-user',
@@ -30,7 +30,7 @@ export function remoteYggApiCases(): ApiCase[] {
           profiles: [{ profile_id: 'p1', profile_name: 'RemotePlayer' }],
         }),
       args: [
-        '/v1/imports/remote-ygg/profiles/import-batch',
+        '/v2/imports/remote-ygg/profiles/import-batch',
         {
           api_url: 'https://ygg.example/api',
           profiles: [{ profile_id: 'p1', profile_name: 'RemotePlayer' }],

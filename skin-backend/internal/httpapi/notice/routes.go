@@ -37,7 +37,7 @@ func (h Handler) MarkRead(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	util.NoContent(w)
 }
 
 func (h Handler) Dismiss(w http.ResponseWriter, req *http.Request) {
@@ -45,5 +45,5 @@ func (h Handler) Dismiss(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	util.NoContent(w)
 }

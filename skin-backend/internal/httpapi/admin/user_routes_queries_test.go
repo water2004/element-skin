@@ -20,7 +20,7 @@ func TestUserRoutesListAndProtectCurrentUserExactly(t *testing.T) {
 	adminUser := testutil.CreateUser(t, db, "admin-users@test.com", "Password123", "AdminUsers", true)
 	other := testutil.CreateUser(t, db, "listed-users@test.com", "Password123", "ListedUsers", false)
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users?limit=1&q=Listed", nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/admin/users?limit=1&q=Listed", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec := httptest.NewRecorder()
@@ -32,23 +32,23 @@ func TestUserRoutesListAndProtectCurrentUserExactly(t *testing.T) {
 		t.Fatalf("admin user list mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodDelete, "/v1/admin/users/"+adminUser.ID, nil)
+	req = httptest.NewRequest(http.MethodDelete, "/v2/admin/users/"+adminUser.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", adminUser.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.DeleteUser(rec, req)
-	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "cannot delete yourself") {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"user\",\"operation\":\"delete\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("self delete should be forbidden exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+adminUser.ID+"/protected-subject/transfer", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+adminUser.ID+"/protected-subject/transfer", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", adminUser.ID)
 	req = withProtectedActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.TransferProtectedSubject(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"cannot transfer protected subject to yourself\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_subject\",\"operation\":\"transfer\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("protected subject self transfer should be rejected exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -61,7 +61,7 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 	target := testutil.CreateUser(t, db, "target-user-actions@test.com", "Password123", "TargetUserActions", false)
 	profile := testutil.CreateProfile(t, db, target.ID, "target_user_profile", "TargetUserProfile")
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/admin/users/"+target.ID, nil)
+	req := httptest.NewRequest(http.MethodGet, "/v2/admin/users/"+target.ID, nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -71,7 +71,7 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 		t.Fatalf("user detail response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodGet, "/v1/admin/users/"+target.ID+"/profiles", nil)
+	req = httptest.NewRequest(http.MethodGet, "/v2/admin/users/"+target.ID+"/profiles", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -82,7 +82,7 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 	}
 
 	banUntil := time.Now().Add(time.Hour).UnixMilli()
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(banUntil)+`,"reason":"route test ban"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/ban", strings.NewReader(`{"banned_until":`+strconvI64(banUntil)+`,"reason":"route test ban"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
@@ -95,25 +95,25 @@ func TestUserRoutesDetailProfilesBanUnbanAndResetPassword(t *testing.T) {
 		t.Fatalf("target should be banned: banned=%v err=%v", banned, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/"+target.ID+"/unban", nil)
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/"+target.ID+"/unban", nil)
 	req = withAdminActor(req, "admin-test-user")
 	req.SetPathValue("user_id", target.ID)
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.UnbanUser(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("unban user response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	if banned, err := db.Users.IsBanned(req.Context(), target.ID); err != nil || banned {
 		t.Fatalf("target should be unbanned: banned=%v err=%v", banned, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/admin/users/password/reset", strings.NewReader(`{"user_id":"`+target.ID+`","new_password":"AdminNewPassword123"}`))
 	req = withAdminActor(req, "admin-test-user")
 	req = withAdminActor(req, adminUser.ID)
 	rec = httptest.NewRecorder()
 	h.ResetUserPassword(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("reset password response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	updated, err := db.Users.GetByID(req.Context(), target.ID)
@@ -131,7 +131,7 @@ func TestUserProfilesPaginatesEncodedCursorWithoutRepeatingRows(t *testing.T) {
 	secondProfile := testutil.CreateProfile(t, db, target.ID, "admin_user_profile_page_b", "ProfilePageB")
 
 	requestPage := func(cursor string) *httptest.ResponseRecorder {
-		targetURL := "/v1/admin/users/" + target.ID + "/profiles?limit=1"
+		targetURL := "/v2/admin/users/" + target.ID + "/profiles?limit=1"
 		if cursor != "" {
 			targetURL += "&cursor=" + cursor
 		}
@@ -179,7 +179,7 @@ func TestUserProfilesPaginatesEncodedCursorWithoutRepeatingRows(t *testing.T) {
 		util.EncodeCursor(map[string]any{"unexpected": "value"}),
 	} {
 		rec := requestPage(malformed)
-		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"Invalid cursor\"}\n" {
+		if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"pagination_cursor\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 			t.Fatalf("malformed user profile cursor status=%d body=%q", rec.Code, rec.Body.String())
 		}
 	}

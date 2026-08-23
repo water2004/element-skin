@@ -33,7 +33,7 @@ func (h Handler) PublicHomepageMedia(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
-	util.JSON(w, 200, items)
+	util.JSON(w, 200, map[string]any{"items": items})
 }
 
 func (h Handler) PublicFallbackStatus(w http.ResponseWriter, req *http.Request) {

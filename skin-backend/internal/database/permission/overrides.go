@@ -15,6 +15,13 @@ type SubjectPermissionOverride struct {
 	CreatedAt      int64
 }
 
+func (s Store) InvalidateSubjectCache(ctx context.Context, subjectID string) error {
+	if s.Cache == nil {
+		return nil
+	}
+	return s.Cache.DeleteEffective(ctx, subjectID)
+}
+
 func (s Store) SetSubjectPermissionOverride(ctx context.Context, userID string, def core.Definition, effect string, grantedBySubjectID string) error {
 	if err := s.EnsureUserSubject(ctx, userID); err != nil {
 		return err

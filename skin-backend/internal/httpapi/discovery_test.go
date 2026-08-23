@@ -20,7 +20,7 @@ func TestDiscoveryCapabilitiesAndPermissionCatalogExactPayloads(t *testing.T) {
 	router := httpapi.NewRouter(cfg, db, yggsvc.Yggdrasil{DB: db, Cfg: cfg})
 
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/capabilities", nil))
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v2/capabilities", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("capabilities status mismatch: got=%d body=%q", rec.Code, rec.Body.String())
 	}
@@ -36,16 +36,19 @@ func TestDiscoveryCapabilitiesAndPermissionCatalogExactPayloads(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &capabilities); err != nil {
 		t.Fatalf("decode capabilities %q: %v", rec.Body.String(), err)
 	}
-	if capabilities.APIVersion != "v1" ||
+	if capabilities.APIVersion != "v2" ||
 		capabilities.SiteName != "Element Skin" ||
 		capabilities.SiteURL != "https://skin.example/root" ||
 		capabilities.APIURL != "https://skin.example/root" ||
-		len(capabilities.Features) != 6 ||
+		len(capabilities.Features) != 9 ||
 		!capabilities.Features["skin_library"] ||
 		!capabilities.Features["oauth"] ||
 		!capabilities.Features["device_code"] ||
 		!capabilities.Features["minecraft_api"] ||
-		!capabilities.Features["microsoft_import"] ||
+		!capabilities.Features["external_identities"] ||
+		!capabilities.Features["oidc_client"] ||
+		!capabilities.Features["oidc_server"] ||
+		!capabilities.Features["official_profiles"] ||
 		!capabilities.Features["remote_ygg_import"] ||
 		len(capabilities.TextureTypes) != 2 ||
 		capabilities.TextureTypes[0] != "skin" ||
@@ -57,7 +60,7 @@ func TestDiscoveryCapabilitiesAndPermissionCatalogExactPayloads(t *testing.T) {
 	}
 
 	rec = httptest.NewRecorder()
-	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v1/permissions/catalog", nil))
+	router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/v2/permissions/catalog", nil))
 	if rec.Code != http.StatusOK {
 		t.Fatalf("permission catalog status mismatch: got=%d body=%q", rec.Code, rec.Body.String())
 	}

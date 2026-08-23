@@ -24,9 +24,9 @@ type delegatedCredentialFixture struct {
 
 func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExactly(t *testing.T) {
 	for _, tc := range []struct {
-		name              string
-		transition        func(context.Context, oauth.Service, permission.Actor, permission.Actor, string) error
-		wantRefreshDetail string
+		name                      string
+		transition                func(context.Context, oauth.Service, permission.Actor, permission.Actor, string) error
+		wantRefreshClassification string
 	}{
 		{
 			name: "administrator rejects client",
@@ -34,7 +34,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 				_, err := svc.ReviewClient(ctx, admin, clientID, oauth.StatusRejected, "review rejected")
 				return err
 			},
-			wantRefreshDetail: "invalid client_id",
+			wantRefreshClassification: "client_id.verify.invalid",
 		},
 		{
 			name: "administrator disables client",
@@ -42,7 +42,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 				_, err := svc.ReviewClient(ctx, admin, clientID, oauth.StatusDisabled, "security incident")
 				return err
 			},
-			wantRefreshDetail: "invalid client_id",
+			wantRefreshClassification: "client_id.verify.invalid",
 		},
 		{
 			name: "developer submits active client for review",
@@ -50,7 +50,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 				_, err := svc.SubmitClientForReview(ctx, owner, clientID)
 				return err
 			},
-			wantRefreshDetail: "invalid client_id",
+			wantRefreshClassification: "client_id.verify.invalid",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -73,7 +73,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 			if err := tc.transition(ctx, svc, ownerActor, adminActor, credential.clientID); err != nil {
 				t.Fatal(err)
 			}
-			assertClientCredentialRows(t, ctx, db, credential.clientID, 0, 2, 0, 0)
+			assertClientCredentialRows(t, ctx, db, credential.clientID, 0, 1, 0, 0)
 			assertAccessTokenMissing(t, ctx, svc, credential.accessToken)
 			if _, ok, err := svc.ActorForBearer(ctx, credential.accessToken); err != nil || ok {
 				t.Fatalf("invalidated access token should not authenticate: ok=%v err=%v", ok, err)
@@ -91,7 +91,7 @@ func TestServiceClientNonActiveTransitionsRevokeAuthorizationsAndCredentialsExac
 				ClientSecret: credential.clientSecret,
 				RefreshToken: credential.refreshToken,
 			})
-			assertHTTPError(t, err, 400, tc.wantRefreshDetail)
+			assertHTTPError(t, err, 400, tc.wantRefreshClassification)
 		})
 	}
 }
@@ -121,7 +121,7 @@ func TestServiceSecretRotationInvalidatesCredentialsButPreservesAuthorizationsEx
 	if newSecret == "" || newSecret == credential.clientSecret {
 		t.Fatalf("rotated secret mismatch: old=%q new=%q", credential.clientSecret, newSecret)
 	}
-	assertClientCredentialRows(t, ctx, db, credential.clientID, 2, 0, 0, 0)
+	assertClientCredentialRows(t, ctx, db, credential.clientID, 1, 0, 0, 0)
 	assertAccessTokenMissing(t, ctx, svc, credential.accessToken)
 	introspection, err := svc.Introspect(ctx, adminActor, credential.accessToken)
 	if err != nil {
@@ -136,27 +136,32 @@ func TestServiceSecretRotationInvalidatesCredentialsButPreservesAuthorizationsEx
 		ClientSecret: newSecret,
 		RefreshToken: credential.refreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "client_credentials",
 		ClientID:     credential.clientID,
 		ClientSecret: credential.clientSecret,
 		Scope:        "account.read.self",
 	})
-	assertHTTPError(t, err, 400, "invalid client_secret")
+	assertHTTPError(t, err, 400, "client_secret.verify.invalid")
 }
 
 func TestServiceGrantRevocationInvalidatesOnlyThatGrantCredentialsExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	owner := testutil.CreateUser(t, db, "grant-revoke-owner@test.com", "Password123", "GrantRevokeOwner", false)
+	other := testutil.CreateUser(t, db, "grant-revoke-other@test.com", "Password123", "GrantRevokeOther", false)
 	ownerActor, err := db.Permissions.ActorForUser(ctx, owner.ID, permissiondb.EffectiveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherActor, err := db.Permissions.ActorForUser(ctx, other.ID, permissiondb.EffectiveOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	svc := newOAuthService(db)
 	first := issueDelegatedCredential(t, ctx, db, svc, ownerActor, "Grant revoke app", "https://grant-revoke.example/callback", "account.read.self")
-	second := issueDelegatedCredentialForClient(t, ctx, svc, ownerActor, first.clientID, first.clientSecret, "https://grant-revoke.example/callback", "account.read.self")
+	second := issueDelegatedCredentialForClient(t, ctx, svc, otherActor, first.clientID, first.clientSecret, "https://grant-revoke.example/callback", "account.read.self")
 
 	if err := svc.RevokeGrant(ctx, ownerActor, first.grantID); err != nil {
 		t.Fatal(err)
@@ -173,7 +178,12 @@ func TestServiceClientPermissionReductionRevokesOnlyIncompatibleGrantExactly(t *
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	owner := testutil.CreateUser(t, db, "permission-reduction-owner@test.com", "Password123", "PermissionReductionOwner", false)
+	other := testutil.CreateUser(t, db, "permission-reduction-other@test.com", "Password123", "PermissionReductionOther", false)
 	ownerActor, err := db.Permissions.ActorForUser(ctx, owner.ID, permissiondb.EffectiveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherActor, err := db.Permissions.ActorForUser(ctx, other.ID, permissiondb.EffectiveOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,14 +201,15 @@ func TestServiceClientPermissionReductionRevokesOnlyIncompatibleGrantExactly(t *
 	clientSecret := created["client_secret"].(string)
 	activateOAuthClient(t, db, clientID)
 	readCredential := issueDelegatedCredentialForClient(t, ctx, svc, ownerActor, clientID, clientSecret, "https://permission-reduction.example/callback", "account.read.self")
-	updateCredential := issueDelegatedCredentialForClient(t, ctx, svc, ownerActor, clientID, clientSecret, "https://permission-reduction.example/callback", "account.update.self")
+	updateCredential := issueDelegatedCredentialForClient(t, ctx, svc, otherActor, clientID, clientSecret, "https://permission-reduction.example/callback", "account.update.self")
 
 	updated, err := svc.UpdateClient(ctx, ownerActor, clientID, oauth.ClientInput{
 		Name:            "Permission reduction app",
 		RedirectURI:     "https://permission-reduction.example/callback",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, oauth.StatusActive)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,7 +239,7 @@ func TestServiceClientPermissionReductionRevokesOnlyIncompatibleGrantExactly(t *
 		ClientSecret: clientSecret,
 		RefreshToken: updateCredential.refreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 }
 
 func TestServiceClientMetadataUpdatePreservesCredentialsExactly(t *testing.T) {
@@ -250,14 +261,15 @@ func TestServiceClientMetadataUpdatePreservesCredentialsExactly(t *testing.T) {
 		WebsiteURL:      "https://metadata.example",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, oauth.StatusActive)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	if updated["name"] != "Renamed metadata app" || updated["description"] != "Updated description" || updated["website_url"] != "https://metadata.example" {
 		t.Fatalf("metadata update response mismatch: %#v", updated)
 	}
-	assertClientCredentialRows(t, ctx, db, credential.clientID, 2, 0, 1, 2)
+	assertClientCredentialRows(t, ctx, db, credential.clientID, 1, 0, 1, 2)
 	if _, ok, err := svc.ActorForBearer(ctx, credential.accessToken); err != nil || !ok {
 		t.Fatalf("metadata update must preserve access token: ok=%v err=%v", ok, err)
 	}
@@ -292,14 +304,15 @@ func TestServiceClientRedirectUpdateInvalidatesCredentialsButPreservesGrantExact
 		RedirectURI:     "https://redirect.example/new-callback",
 		ClientType:      oauth.ClientTypeConfidential,
 		PermissionCodes: []string{"account.read.self"},
-	}, oauth.StatusActive)
+	})
+
 	if err != nil {
 		t.Fatal(err)
 	}
 	if updated["redirect_uri"] != "https://redirect.example/new-callback" || updated["status"] != oauth.StatusActive {
 		t.Fatalf("redirect update response mismatch: %#v", updated)
 	}
-	assertClientCredentialRows(t, ctx, db, credential.clientID, 2, 0, 0, 0)
+	assertClientCredentialRows(t, ctx, db, credential.clientID, 1, 0, 0, 0)
 	assertAccessTokenMissing(t, ctx, svc, credential.accessToken)
 	_, err = svc.IssueToken(ctx, oauth.TokenRequest{
 		GrantType:    "refresh_token",
@@ -307,7 +320,7 @@ func TestServiceClientRedirectUpdateInvalidatesCredentialsButPreservesGrantExact
 		ClientSecret: credential.clientSecret,
 		RefreshToken: credential.refreshToken,
 	})
-	assertHTTPError(t, err, 400, "invalid refresh_token")
+	assertHTTPError(t, err, 400, "refresh_token.verify.invalid")
 }
 
 func issueDelegatedCredential(t *testing.T, ctx context.Context, db *database.DB, svc oauth.Service, actor permission.Actor, name, redirectURI, scope string) delegatedCredentialFixture {

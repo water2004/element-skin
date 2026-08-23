@@ -26,7 +26,7 @@ func TestSessionRoutesLoginSetsExactCookies(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"site-login@test.com","password":"Password123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"site-login@test.com","password":"Password123"}`))
 	rec := httptest.NewRecorder()
 	h.Login(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"user_id":"`+user.ID+`"`) || !strings.Contains(rec.Body.String(), `"permissions":[`) {
@@ -53,7 +53,7 @@ func TestSessionRoutesAuthRateLimitIsScopedByForwardedClientIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	first := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"site-rate-limit@test.com","password":"Password123"}`))
+	first := httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"site-rate-limit@test.com","password":"Password123"}`))
 	first.RemoteAddr = "10.0.0.2:1234"
 	first.Header.Set("X-Forwarded-For", "198.51.100.1, 203.0.113.9")
 	rec := httptest.NewRecorder()
@@ -62,17 +62,17 @@ func TestSessionRoutesAuthRateLimitIsScopedByForwardedClientIP(t *testing.T) {
 		t.Fatalf("first login from forwarded IP should pass: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	second := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"site-rate-limit@test.com","password":"Password123"}`))
+	second := httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"site-rate-limit@test.com","password":"Password123"}`))
 	second.RemoteAddr = "10.0.0.2:1234"
 	second.Header.Set("X-Forwarded-For", "203.0.113.9")
 	rec = httptest.NewRecorder()
 	h.Login(rec, second)
 	if rec.Code != http.StatusTooManyRequests || rec.Header().Get("Retry-After") != "60" ||
-		rec.Body.String() != "{\"detail\":\"Too many requests, please try again later\"}\n" {
+		rec.Body.String() != "{\"error\":{\"object\":\"rate_limit\",\"operation\":\"check\",\"reason\":\"exceeded\"}}\n" {
 		t.Fatalf("second login from same forwarded IP should be rate-limited: status=%d retry=%q body=%q", rec.Code, rec.Header().Get("Retry-After"), rec.Body.String())
 	}
 
-	otherIP := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"site-rate-limit@test.com","password":"Password123"}`))
+	otherIP := httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"site-rate-limit@test.com","password":"Password123"}`))
 	otherIP.RemoteAddr = "10.0.0.2:1234"
 	otherIP.Header.Set("X-Forwarded-For", "203.0.113.10")
 	rec = httptest.NewRecorder()
@@ -88,7 +88,7 @@ func TestSessionRoutesRefreshRotatesAndLogoutRevokesExactly(t *testing.T) {
 	h := site.New(cfg, db, nil)
 	testutil.CreateUser(t, db, "site-refresh@test.com", "Password123", "SiteRefresh", false)
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"site-refresh@test.com","password":"Password123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"site-refresh@test.com","password":"Password123"}`))
 	rec := httptest.NewRecorder()
 	h.Login(rec, req)
 	if rec.Code != http.StatusOK {
@@ -122,7 +122,7 @@ func TestSessionRoutesRefreshRotatesAndLogoutRevokesExactly(t *testing.T) {
 	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: rotatedRefresh})
 	rec = httptest.NewRecorder()
 	h.Logout(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("logout response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	cookies := rec.Result().Cookies()
@@ -141,7 +141,7 @@ func TestSessionRoutesRefreshRotatesAndLogoutRevokesExactly(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/session/refresh", nil)
 	rec = httptest.NewRecorder()
 	h.RefreshToken(rec, req)
-	if rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), `"detail":"not authenticated"`) {
+	if rec.Code != http.StatusUnauthorized || rec.Body.String() != "{\"error\":{\"object\":\"authentication\",\"operation\":\"verify\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("refresh without cookie mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -171,7 +171,7 @@ func TestSessionRoutesLogoutReportsRevokeFailureWithoutClearingCookies(t *testin
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("logout status = %d, want %d; body = %q", rec.Code, http.StatusInternalServerError, rec.Body.String())
 	}
-	if got, want := rec.Body.String(), "{\"detail\":\"Internal server error\"}\n"; got != want {
+	if got, want := rec.Body.String(), "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n"; got != want {
 		t.Fatalf("logout body = %q, want %q", got, want)
 	}
 	if cookies := rec.Result().Cookies(); len(cookies) != 0 {
@@ -195,10 +195,10 @@ func TestSessionRoutesRegisterCreatesFirstAdminAndProfileExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/register", strings.NewReader(`{"email":"new-user@test.com","password":"Password123","username":"New User"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/auth/register", strings.NewReader(`{"email":"new-user@test.com","password":"Password123","username":"New User"}`))
 	rec := httptest.NewRecorder()
 	h.Register(rec, req)
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"id":"`) {
+	if rec.Code != http.StatusCreated || !strings.Contains(rec.Body.String(), `"id":"`) {
 		t.Fatalf("register response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	id := jsonStringField(t, rec.Body.String(), "id")
@@ -225,7 +225,7 @@ func TestSessionRoutesVerificationAndResetPasswordExactFlow(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/verification-code", strings.NewReader(`{"email":"reset-flow@test.com","type":"reset"}`))
 	rec := httptest.NewRecorder()
 	h.SendVerificationCode(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"Email verification is disabled"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"email_verification\",\"operation\":\"create\",\"reason\":\"disabled\"}}\n" {
 		t.Fatalf("verification disabled response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -244,7 +244,7 @@ func TestSessionRoutesVerificationAndResetPasswordExactFlow(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/verification-code", strings.NewReader(`{"email":"reset-flow@test.com","type":"reset"}`))
 	rec = httptest.NewRecorder()
 	h.SendVerificationCode(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true,\"ttl\":123}\n" {
+	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ttl\":123}\n" {
 		t.Fatalf("send reset verification response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	code, err := redis.GetVerificationCode(t.Context(), "reset-flow@test.com", "reset")
@@ -252,10 +252,10 @@ func TestSessionRoutesVerificationAndResetPasswordExactFlow(t *testing.T) {
 		t.Fatalf("reset verification code should be stored in redis: code=%q err=%v", code, err)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/auth/password/reset", strings.NewReader(`{"email":"reset-flow@test.com","password":"NewPassword123","code":"`+code+`"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/auth/password/reset", strings.NewReader(`{"email":"reset-flow@test.com","password":"NewPassword123","code":"`+code+`"}`))
 	rec = httptest.NewRecorder()
 	h.ResetPassword(rec, req)
-	if rec.Code != http.StatusOK || rec.Body.String() != "{\"ok\":true}\n" {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("reset password response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 	updated, err := db.Users.GetByID(req.Context(), user.ID)
@@ -272,7 +272,7 @@ func TestSessionRoutesVerificationAndResetPasswordExactFlow(t *testing.T) {
 	req = httptest.NewRequest(http.MethodPost, "/verification-code", strings.NewReader(`{"email":"reset-flow@test.com","type":"bad"}`))
 	rec = httptest.NewRecorder()
 	h.SendVerificationCode(rec, req)
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"detail":"invalid verification type"`) {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"verification_type\",\"operation\":\"validate\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid verification type response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -289,12 +289,12 @@ func TestSessionRoutesRejectMalformedAndIncompletePayloadsWithoutMutation(t *tes
 		call   func(http.ResponseWriter, *http.Request)
 		want   string
 	}{
-		{name: "login malformed json", target: "/v1/auth/login", body: `{`, call: h.Login, want: "{\"detail\":\"invalid json\"}\n"},
-		{name: "register malformed json", target: "/v1/auth/register", body: `{`, call: h.Register, want: "{\"detail\":\"invalid json\"}\n"},
-		{name: "verification malformed json", target: "/verification-code", body: `{`, call: h.SendVerificationCode, want: "{\"detail\":\"invalid json\"}\n"},
-		{name: "verification missing email", target: "/verification-code", body: `{"type":"register"}`, call: h.SendVerificationCode, want: "{\"detail\":\"email required\"}\n"},
-		{name: "reset malformed json", target: "/v1/auth/password/reset", body: `{`, call: h.ResetPassword, want: "{\"detail\":\"invalid json\"}\n"},
-		{name: "reset missing code", target: "/v1/auth/password/reset", body: `{"email":"person@test.com","password":"NewPassword123"}`, call: h.ResetPassword, want: "{\"detail\":\"email, password and code required\"}\n"},
+		{name: "login malformed json", target: "/v2/auth/login", body: `{`, call: h.Login, want: "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "register malformed json", target: "/v2/auth/register", body: `{`, call: h.Register, want: "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "verification malformed json", target: "/verification-code", body: `{`, call: h.SendVerificationCode, want: "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "verification missing email", target: "/verification-code", body: `{"type":"register"}`, call: h.SendVerificationCode, want: "{\"error\":{\"object\":\"email\",\"operation\":\"validate\",\"reason\":\"required\"}}\n"},
+		{name: "reset malformed json", target: "/v2/auth/password/reset", body: `{`, call: h.ResetPassword, want: "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n"},
+		{name: "reset missing code", target: "/v2/auth/password/reset", body: `{"email":"person@test.com","password":"NewPassword123"}`, call: h.ResetPassword, want: "{\"error\":{\"object\":\"registration\",\"operation\":\"validate\",\"reason\":\"required\"}}\n"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -322,7 +322,7 @@ func TestSessionRoutesFailClosedOnRateLimitConfigurationAndStoreErrors(t *testin
 	}
 	cache := redisstore.NewMemoryStore()
 	h := site.NewWithRedis(cfg, db, cache, nil, siteTestMailSender{})
-	req := httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"rate-limit-failure@test.com","password":"Password123"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"rate-limit-failure@test.com","password":"Password123"}`))
 	rec := httptest.NewRecorder()
 	h.Login(rec, req)
 	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"user_id":"`+user.ID+`"`) {
@@ -338,10 +338,10 @@ func TestSessionRoutesFailClosedOnRateLimitConfigurationAndStoreErrors(t *testin
 	failedUser := testutil.CreateUser(t, db, "rate-limit-store-failure@test.com", "Password123", "RateLimitStoreFailure", false)
 	failingCache := &rateLimitFailRedis{Store: cache}
 	h = site.NewWithRedis(cfg, db, failingCache, nil, siteTestMailSender{})
-	req = httptest.NewRequest(http.MethodPost, "/v1/auth/login", strings.NewReader(`{"email":"rate-limit-store-failure@test.com","password":"Password123"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/auth/login", strings.NewReader(`{"email":"rate-limit-store-failure@test.com","password":"Password123"}`))
 	rec = httptest.NewRecorder()
 	h.Login(rec, req)
-	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"detail\":\"Internal server error\"}\n" {
+	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("rate-limit store failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 

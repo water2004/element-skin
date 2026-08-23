@@ -95,16 +95,16 @@ func TestTextureManagementRejectsInvalidInputsExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := svc.ListAllTextures(ctx, textureActor(admin.ID), "", 10, "", "skin"); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if _, err := svc.ListAllTextures(ctx, textureActor(admin.ID), "", 10, "", "skin"); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("ListAllTextures without permission mismatch: %#v", err)
 	}
-	if _, err := svc.ListAllTextures(ctx, readActor, "bad-cursor", 10, "", "skin"); !httpErrorIs(err, http.StatusBadRequest, "Invalid cursor") {
+	if _, err := svc.ListAllTextures(ctx, readActor, "bad-cursor", 10, "", "skin"); !httpErrorIs(err, http.StatusBadRequest, "pagination_cursor.decode.invalid") {
 		t.Fatalf("ListAllTextures bad cursor mismatch: %#v", err)
 	}
-	if err := svc.UpdateAnyTexture(ctx, textureActor(admin.ID), "admin_manage_invalid_skin", "skin", map[string]any{"note": "Denied"}); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.UpdateAnyTexture(ctx, textureActor(admin.ID), "admin_manage_invalid_skin", "skin", map[string]any{"note": "Denied"}); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("UpdateAnyTexture metadata permission mismatch: %#v", err)
 	}
-	if err := svc.UpdateAnyTexture(ctx, textureActor(admin.ID, "texture.update_metadata.any"), "admin_manage_invalid_skin", "skin", map[string]any{"is_public": true}); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.UpdateAnyTexture(ctx, textureActor(admin.ID, "texture.update_metadata.any"), "admin_manage_invalid_skin", "skin", map[string]any{"is_public": true}); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("UpdateAnyTexture visibility permission mismatch: %#v", err)
 	}
 	for _, tc := range []struct {
@@ -112,9 +112,9 @@ func TestTextureManagementRejectsInvalidInputsExactly(t *testing.T) {
 		body   map[string]any
 		detail string
 	}{
-		{"invalid model", map[string]any{"model": "wide"}, "invalid model"},
-		{"invalid public bool", map[string]any{"is_public": "yes"}, "invalid is_public"},
-		{"empty body", map[string]any{}, "至少需要一个更新字段: model, note, is_public"},
+		{"texture_model.validate.invalid", map[string]any{"model": "wide"}, "texture_model.validate.invalid"},
+		{"invalid public bool", map[string]any{"is_public": "yes"}, "texture_visibility.validate.invalid"},
+		{"empty body", map[string]any{}, "texture.update.required"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := svc.UpdateAnyTexture(ctx, updateActor, "admin_manage_invalid_skin", "skin", tc.body); !httpErrorIs(err, http.StatusBadRequest, tc.detail) {
@@ -122,19 +122,19 @@ func TestTextureManagementRejectsInvalidInputsExactly(t *testing.T) {
 			}
 		})
 	}
-	if err := svc.UpdateAnyTexture(ctx, updateActor, "admin_manage_invalid_skin", "elytra", map[string]any{"note": "bad"}); !httpErrorIs(err, http.StatusBadRequest, "Invalid texture_type") {
+	if err := svc.UpdateAnyTexture(ctx, updateActor, "admin_manage_invalid_skin", "elytra", map[string]any{"note": "bad"}); !httpErrorIs(err, http.StatusBadRequest, "texture_type.validate.invalid") {
 		t.Fatalf("UpdateAnyTexture invalid type mismatch: %#v", err)
 	}
-	if err := svc.UpdateAnyTexture(ctx, updateActor, "missing-admin-manage", "skin", map[string]any{"note": "bad"}); !httpErrorIs(err, http.StatusNotFound, "Texture not found") {
+	if err := svc.UpdateAnyTexture(ctx, updateActor, "missing-admin-manage", "skin", map[string]any{"note": "bad"}); !httpErrorIs(err, http.StatusNotFound, "texture.resolve.not_found") {
 		t.Fatalf("UpdateAnyTexture missing texture mismatch: %#v", err)
 	}
-	if err := svc.DeleteAnyTexture(ctx, textureActor(admin.ID), "admin_manage_invalid_skin", "skin", uploader.ID, false); !httpErrorIs(err, http.StatusForbidden, "permission denied") {
+	if err := svc.DeleteAnyTexture(ctx, textureActor(admin.ID), "admin_manage_invalid_skin", "skin", uploader.ID, false); !httpErrorIs(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("DeleteAnyTexture without permission mismatch: %#v", err)
 	}
-	if err := svc.DeleteAnyTexture(ctx, deleteActor, "admin_manage_invalid_skin", "skin", "", false); !httpErrorIs(err, http.StatusBadRequest, "per-user deletion requires user_id") {
+	if err := svc.DeleteAnyTexture(ctx, deleteActor, "admin_manage_invalid_skin", "skin", "", false); !httpErrorIs(err, http.StatusBadRequest, "texture.delete.required") {
 		t.Fatalf("DeleteAnyTexture missing user_id mismatch: %#v", err)
 	}
-	if err := svc.DeleteAnyTexture(ctx, deleteActor, "missing-admin-manage", "skin", uploader.ID, false); !httpErrorIs(err, http.StatusNotFound, "Texture not found") {
+	if err := svc.DeleteAnyTexture(ctx, deleteActor, "missing-admin-manage", "skin", uploader.ID, false); !httpErrorIs(err, http.StatusNotFound, "texture.resolve.not_found") {
 		t.Fatalf("DeleteAnyTexture missing texture mismatch: %#v", err)
 	}
 	if err := svc.DeleteAnyTexture(ctx, deleteActor, "missing-admin-manage", "skin", "", true); err != nil {

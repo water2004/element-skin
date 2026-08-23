@@ -26,6 +26,15 @@ func applyEnvOverrides(cfg *Config, raw rawConfig) (bool, error) {
 		func() (bool, error) {
 			return applyStringEnv(raw, "KEYS_PUBLIC_KEY", "keys.public_key", &cfg.PublicKeyPath)
 		},
+		func() (bool, error) {
+			return applyStringEnv(raw, "OIDC_PRIVATE_KEY", "oidc.private_key", &cfg.OIDCPrivateKeyPath)
+		},
+		func() (bool, error) {
+			return applyStringEnv(raw, "OIDC_PUBLIC_KEY", "oidc.public_key", &cfg.OIDCPublicKeyPath)
+		},
+		func() (bool, error) {
+			return applyStringEnv(raw, "IDENTITY_ENCRYPTION_KEY", "identity.encryption_key", &cfg.IdentityEncryptionKey)
+		},
 		func() (bool, error) { return applyStringEnv(raw, "DATABASE_HOST", "database.host", &cfg.DatabaseHost) },
 		func() (bool, error) { return applyStringEnv(raw, "DATABASE_PORT", "database.port", &cfg.DatabasePort) },
 		func() (bool, error) { return applyStringEnv(raw, "DATABASE_USER", "database.user", &cfg.DatabaseUser) },
@@ -38,6 +47,12 @@ func applyEnvOverrides(cfg *Config, raw rawConfig) (bool, error) {
 		},
 		func() (bool, error) {
 			return applyInt32Env(raw, "DATABASE_MAX_CONNECTIONS", "database.max_connections", &cfg.MaxConnections, positiveInt)
+		},
+		func() (bool, error) {
+			return applyInt32Env(raw, "WEBHOOK_WORKER_MAX_DATABASE_CONNECTIONS", "webhook_worker.max_database_connections", &cfg.WebhookWorkerMaxConnections, positiveInt)
+		},
+		func() (bool, error) {
+			return applyIntEnv(raw, "WEBHOOK_WORKER_ACTIVE_INTERVAL_MS", "webhook_worker.active_interval_ms", &cfg.WebhookWorkerActiveIntervalMS, positiveInt)
 		},
 		func() (bool, error) { return applyStringEnv(raw, "SERVER_SITE_URL", "server.site_url", &cfg.SiteURL) },
 		func() (bool, error) { return applyStringEnv(raw, "SERVER_API_URL", "server.api_url", &cfg.APIURL) },

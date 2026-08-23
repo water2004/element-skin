@@ -11,7 +11,7 @@ import (
 
 func (h Handler) Token(w http.ResponseWriter, req *http.Request) {
 	if err := req.ParseForm(); err != nil {
-		writeProtocolError(w, util.HTTPError{Status: 400, Detail: "invalid form"})
+		writeProtocolError(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	clientID, clientSecret := clientCredentials(req)
@@ -35,7 +35,7 @@ func (h Handler) Token(w http.ResponseWriter, req *http.Request) {
 
 func (h Handler) Revoke(w http.ResponseWriter, req *http.Request) {
 	if err := req.ParseForm(); err != nil {
-		writeProtocolError(w, util.HTTPError{Status: 400, Detail: "invalid form"})
+		writeProtocolError(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	clientID, clientSecret := clientCredentials(req)
@@ -48,7 +48,7 @@ func (h Handler) Revoke(w http.ResponseWriter, req *http.Request) {
 
 func (h Handler) Introspect(w http.ResponseWriter, req *http.Request) {
 	if err := req.ParseForm(); err != nil {
-		writeProtocolError(w, util.HTTPError{Status: 400, Detail: "invalid form"})
+		writeProtocolError(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
 	res, err := h.oauth.Introspect(req.Context(), shared.CurrentActor(req), req.Form.Get("token"))

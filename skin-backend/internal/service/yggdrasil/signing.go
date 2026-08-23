@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/pem"
@@ -66,6 +67,22 @@ func (s *Signer) SignPropertyValue(value string) (string, error) {
 		return "", err
 	}
 	return base64.StdEncoding.EncodeToString(signature), nil
+}
+
+func (s *Signer) SignRS256(value []byte) ([]byte, error) {
+	if s == nil || s.privateKey == nil {
+		return nil, errors.New("RSA signing key is not loaded")
+	}
+	digest := sha256.Sum256(value)
+	return rsa.SignPKCS1v15(rand.Reader, s.privateKey, crypto.SHA256, digest[:])
+}
+
+func (s *Signer) RSAPublicKey() *rsa.PublicKey {
+	if s == nil || s.privateKey == nil {
+		return nil
+	}
+	publicKey := s.privateKey.PublicKey
+	return &publicKey
 }
 
 func ensureSigningKeyFiles(privatePath, publicPath string) error {

@@ -65,7 +65,7 @@ func TestNoticePatchInputRejectsInvalidValueTypesExactly(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := noticePatchInput(tc.raw)
 			var httpErr util.HTTPError
-			if !errors.As(err, &httpErr) || httpErr.Status != 400 || httpErr.Detail != "invalid patch value" {
+			if !errors.As(err, &httpErr) || httpErr.Status != 400 || httpErr.Error() != "patch_value.decode.invalid" {
 				t.Fatalf("patch %s error mismatch: %#v", tc.name, err)
 			}
 		})

@@ -12,7 +12,7 @@ func TestPublicSettingsAndAuthlibHeader(t *testing.T) {
 	if err := db.Settings.Set(context.Background(), "site_name", "Public Name"); err != nil {
 		t.Fatal(err)
 	}
-	resp := doJSON(t, h, "GET", "/v1/public/settings", nil)
+	resp := doJSON(t, h, "GET", "/v2/public/settings", nil)
 	if resp.Code != 200 {
 		t.Fatalf("public settings status=%d body=%s", resp.Code, resp.Body.String())
 	}
@@ -54,7 +54,7 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 		t.Fatalf("wardrobe add for second most_used setup ok=%v err=%v", ok, err)
 	}
 
-	resp := doJSON(t, h, "GET", "/v1/public/skin-library?q=MagicSword", nil)
+	resp := doJSON(t, h, "GET", "/v2/public/skin-library?q=MagicSword", nil)
 	if resp.Code != 200 {
 		t.Fatalf("library status=%d body=%s", resp.Code, resp.Body.String())
 	}
@@ -62,33 +62,33 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 	if len(items) != 1 || items[0].(map[string]any)["hash"] != "aaaa" || items[0].(map[string]any)["uploader_name"] != "ApiSearchAlice" {
 		t.Fatalf("unexpected name search items: %#v", items)
 	}
-	if byHash := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=bbb", nil))["items"].([]any); len(byHash) != 1 || byHash[0].(map[string]any)["hash"] != "bbbb" {
+	if byHash := parseJSON(t, doJSON(t, h, "GET", "/v2/public/skin-library?q=bbb", nil))["items"].([]any); len(byHash) != 1 || byHash[0].(map[string]any)["hash"] != "bbbb" {
 		t.Fatalf("hash search should return bob texture only: %#v", byHash)
 	}
-	if byUploader := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=ApiSearchCharlie", nil))["items"].([]any); len(byUploader) != 2 {
+	if byUploader := parseJSON(t, doJSON(t, h, "GET", "/v2/public/skin-library?q=ApiSearchCharlie", nil))["items"].([]any); len(byUploader) != 2 {
 		t.Fatalf("uploader search should return both charlie textures: %#v", byUploader)
 	}
-	if lower := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=magicsword", nil))["items"].([]any); len(lower) != 1 || lower[0].(map[string]any)["hash"] != "aaaa" {
+	if lower := parseJSON(t, doJSON(t, h, "GET", "/v2/public/skin-library?q=magicsword", nil))["items"].([]any); len(lower) != 1 || lower[0].(map[string]any)["hash"] != "aaaa" {
 		t.Fatalf("search should be case-insensitive: %#v", lower)
 	}
-	if none := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=ZZZ_no_such_token", nil))["items"].([]any); len(none) != 0 {
+	if none := parseJSON(t, doJSON(t, h, "GET", "/v2/public/skin-library?q=ZZZ_no_such_token", nil))["items"].([]any); len(none) != 0 {
 		t.Fatalf("miss search should be empty: %#v", none)
 	}
-	if priv := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=UniquePrivateTex", nil))["items"].([]any); len(priv) != 0 {
+	if priv := parseJSON(t, doJSON(t, h, "GET", "/v2/public/skin-library?q=UniquePrivateTex", nil))["items"].([]any); len(priv) != 0 {
 		t.Fatalf("private matching texture should be excluded: %#v", priv)
 	}
-	mostUsed := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?sort=most_used&texture_type=skin&limit=2", nil))["items"].([]any)
+	mostUsed := parseJSON(t, doJSON(t, h, "GET", "/v2/public/skin-library?sort=most_used&texture_type=skin&limit=2", nil))["items"].([]any)
 	if len(mostUsed) != 2 || mostUsed[0].(map[string]any)["hash"] != "aaaa" || mostUsed[0].(map[string]any)["usage_count"] != float64(3) || mostUsed[1].(map[string]any)["hash"] != "bbbb" || mostUsed[1].(map[string]any)["usage_count"] != float64(2) {
 		t.Fatalf("most_used sort should order by personal library user count: %#v", mostUsed)
 	}
-	if skins := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=SharedName&texture_type=skin", nil))["items"].([]any); len(skins) != 0 {
+	if skins := parseJSON(t, doJSON(t, h, "GET", "/v2/public/skin-library?q=SharedName&texture_type=skin", nil))["items"].([]any); len(skins) != 0 {
 		t.Fatalf("skin filter should exclude matching cape: %#v", skins)
 	}
-	if capes := parseJSON(t, doJSON(t, h, "GET", "/v1/public/skin-library?q=SharedName&texture_type=cape", nil))["items"].([]any); len(capes) != 1 || capes[0].(map[string]any)["hash"] != "dddd" {
+	if capes := parseJSON(t, doJSON(t, h, "GET", "/v2/public/skin-library?q=SharedName&texture_type=cape", nil))["items"].([]any); len(capes) != 1 || capes[0].(map[string]any)["hash"] != "dddd" {
 		t.Fatalf("cape filter should include matching cape only: %#v", capes)
 	}
 	for _, badLimit := range []string{"-1", "0", "99999999"} {
-		clamped := doJSON(t, h, "GET", "/v1/public/skin-library?limit="+badLimit, nil)
+		clamped := doJSON(t, h, "GET", "/v2/public/skin-library?limit="+badLimit, nil)
 		if clamped.Code != 200 {
 			t.Fatalf("public library limit=%s should be clamped, got %d body=%s", badLimit, clamped.Code, clamped.Body.String())
 		}
@@ -101,7 +101,7 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 	seen := map[string]bool{}
 	cursor := ""
 	for i := 0; i < 10; i++ {
-		path := "/v1/public/skin-library?limit=2"
+		path := "/v2/public/skin-library?limit=2"
 		if cursor != "" {
 			path += "&cursor=" + cursor
 		}
@@ -126,14 +126,14 @@ func TestPublicSkinLibrarySearchAndWardrobeName(t *testing.T) {
 			t.Fatalf("public library pagination missed %s, saw %#v", hash, seen)
 		}
 	}
-	if badCursor := doJSON(t, h, "GET", "/v1/public/skin-library?cursor=garbage!!", nil); badCursor.Code != 400 {
+	if badCursor := doJSON(t, h, "GET", "/v2/public/skin-library?cursor=garbage!!", nil); badCursor.Code != 400 {
 		t.Fatalf("invalid public library cursor should be 400, got %d body=%s", badCursor.Code, badCursor.Body.String())
 	}
 	if err := db.Settings.Set(context.Background(), "enable_skin_library", false); err != nil {
 		t.Fatal(err)
 	}
 	invalidateSettings(t, redis)
-	if disabled := doJSON(t, h, "GET", "/v1/public/skin-library", nil); disabled.Code != 403 {
+	if disabled := doJSON(t, h, "GET", "/v2/public/skin-library", nil); disabled.Code != 403 {
 		t.Fatalf("disabled public library should be 403, got %d body=%s", disabled.Code, disabled.Body.String())
 	}
 }

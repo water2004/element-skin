@@ -7,12 +7,69 @@ import (
 	"element-skin/backend/internal/permission"
 )
 
+var supportedOIDCScopes = map[string]bool{
+	"openid":         true,
+	"profile":        true,
+	"email":          true,
+	"offline_access": true,
+}
+
+type authorizationScopes struct {
+	Permissions []string
+	OIDC        []string
+}
+
 func parseScope(raw string) ([]string, error) {
 	parts := strings.Fields(raw)
 	if len(parts) == 0 {
-		return nil, badRequest("scope is required")
+		return nil, badRequest("oauth_scope", "validate", "required")
 	}
 	return validateCodes(parts)
+}
+
+func parseAuthorizationScopes(raw string) (authorizationScopes, error) {
+	parts := strings.Fields(raw)
+	if len(parts) == 0 {
+		return authorizationScopes{}, badRequest("oauth_scope", "validate", "required")
+	}
+	permissionCodes := make([]string, 0, len(parts))
+	oidcScopes := make([]string, 0, 4)
+	seenOIDC := map[string]bool{}
+	for _, scope := range parts {
+		if supportedOIDCScopes[scope] {
+			if !seenOIDC[scope] {
+				seenOIDC[scope] = true
+				oidcScopes = append(oidcScopes, scope)
+			}
+			continue
+		}
+		permissionCodes = append(permissionCodes, scope)
+	}
+	if len(oidcScopes) > 0 && !seenOIDC["openid"] {
+		return authorizationScopes{}, badRequest("oidc_scope", "validate", "required")
+	}
+	codes, err := validateCodes(permissionCodes)
+	if err != nil {
+		return authorizationScopes{}, err
+	}
+	sort.Strings(oidcScopes)
+	return authorizationScopes{Permissions: codes, OIDC: oidcScopes}, nil
+}
+
+func combinedScopes(permissionCodes, oidcScopes []string) []string {
+	out := append([]string(nil), permissionCodes...)
+	out = append(out, oidcScopes...)
+	sort.Strings(out)
+	return out
+}
+
+func hasOIDCScope(scopes []string, want string) bool {
+	for _, scope := range scopes {
+		if scope == want {
+			return true
+		}
+	}
+	return false
 }
 
 func validateCodes(codes []string) ([]string, error) {
@@ -22,7 +79,7 @@ func validateCodes(codes []string) ([]string, error) {
 		code = strings.TrimSpace(code)
 		def, ok := permission.DefinitionByCode(code)
 		if !ok || def.Scope.ID == permission.ScopeSystem {
-			return nil, badRequest("invalid scope")
+			return nil, badRequest("oauth_scope", "validate", "invalid")
 		}
 		if !seen[code] {
 			seen[code] = true
@@ -55,6 +112,20 @@ func permissionCodesFromIDs(ids []int64) []string {
 	}
 	sort.Strings(codes)
 	return codes
+}
+
+func intersectPermissionCodes(left, right []string) []string {
+	allowed := make(map[string]bool, len(right))
+	for _, code := range right {
+		allowed[code] = true
+	}
+	out := make([]string, 0, len(left))
+	for _, code := range left {
+		if allowed[code] {
+			out = append(out, code)
+		}
+	}
+	return out
 }
 
 func permissionCodesFromBitSet(bits permission.BitSet) []string {

@@ -98,7 +98,57 @@ func TestAuthServiceClosedDatabaseReturnsExactDependencyErrors(t *testing.T) {
 	if result, err := svc.Login(ctx, "closed-auth@test.com", "Password123"); result != nil || !closedPoolError(err) {
 		t.Fatalf("Login closed database = result=%#v err=%v; want nil and closed pool", result, err)
 	}
+	if result, err := svc.IssueSessionForUser(ctx, "closed-user"); result != nil || !closedPoolError(err) {
+		t.Fatalf("IssueSessionForUser closed database = result=%#v err=%v; want nil and closed pool", result, err)
+	}
 	if id, err := svc.Register(ctx, "closed-register-dependency@test.com", "Password123", "ClosedRegisterDependency", "", ""); id != "" || !closedPoolError(err) {
 		t.Fatalf("Register closed database = id=%q err=%v; want empty id and closed pool", id, err)
 	}
+}
+
+func TestAuthRegisterPropagatesEachSettingsStageFailureWithoutCreatingUser(t *testing.T) {
+	for _, key := range []string{
+		"allow_register",
+		"email_verify_enabled",
+		"require_invite",
+		"profile_uuid_mode",
+	} {
+		t.Run(key, func(t *testing.T) {
+			db, _ := testutil.NewTestApp(t)
+			ctx := context.Background()
+			wantErr := errors.New(key + " unavailable")
+			cache := &settingKeyFailStore{
+				Store:   testutil.NewMemoryRedis(),
+				failKey: key,
+				err:     wantErr,
+			}
+			svc := authsvc.Service{
+				DB:       db,
+				Cfg:      testutil.TestConfig(),
+				Redis:    cache,
+				Settings: settingssvc.Settings{DB: db, Redis: cache},
+			}
+
+			id, err := svc.Register(ctx, key+"@test.com", "Password123", "SettingsStage", "", "")
+			if id != "" || !errors.Is(err, wantErr) {
+				t.Fatalf("Register at %s = id=%q err=%v; want empty id and exact dependency error", key, id, err)
+			}
+			if count, countErr := db.Users.Count(ctx); countErr != nil || count != 0 {
+				t.Fatalf("Register at %s left users=%d err=%v", key, count, countErr)
+			}
+		})
+	}
+}
+
+type settingKeyFailStore struct {
+	redisstore.Store
+	failKey string
+	err     error
+}
+
+func (s *settingKeyFailStore) GetSetting(ctx context.Context, key string) (string, error) {
+	if key == s.failKey {
+		return "", s.err
+	}
+	return s.Store.GetSetting(ctx, key)
 }

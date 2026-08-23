@@ -73,45 +73,45 @@ func TestProfilesRejectInvalidProfileInputsExactly(t *testing.T) {
 		{"empty create name", func() error {
 			_, err := svc.CreateProfile(ctx, testUserActor(user.ID), "", "default")
 			return err
-		}, 400, "name required"},
+		}, 400, "profile_name.validate.required"},
 		{"invalid create name", func() error {
 			_, err := svc.CreateProfile(ctx, testUserActor(user.ID), "bad-name!", "default")
 			return err
-		}, 400, "角色名只能包含字母、数字、下划线，长度1-16字符"},
+		}, 400, "profile_name.validate.invalid"},
 		{"duplicate create name", func() error {
 			_, err := svc.CreateProfile(ctx, testUserActor(user.ID), existing.Name, "default")
 			return err
-		}, 400, "角色名已被占用，请换一个名称"},
+		}, 400, "profile_name.reserve.conflict"},
 		{"empty update name", func() error {
 			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, "")
-		}, 400, "name required"},
+		}, 400, "profile_name.validate.required"},
 		{"invalid update name", func() error {
 			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, "bad-name!")
-		}, 400, "角色名只能包含字母、数字、下划线，长度1-16字符"},
+		}, 400, "profile_name.validate.invalid"},
 		{"duplicate update name", func() error {
 			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, existing.Name)
-		}, 400, "角色名已被占用"},
+		}, 400, "profile_name.reserve.conflict"},
 		{"foreign update", func() error {
 			return svc.UpdateProfile(ctx, testUserActor(user.ID), foreign.ID, "StolenProfileSvc")
-		}, 403, "not allowed"},
+		}, 403, "permission.check.denied"},
 		{"missing update", func() error {
 			return svc.UpdateProfile(ctx, testUserActor(user.ID), "missing-profile", "MissingProfileSvc")
-		}, 404, "profile not found"},
+		}, 404, "profile.resolve.not_found"},
 		{"foreign delete", func() error {
 			return svc.DeleteProfile(ctx, testUserActor(user.ID), foreign.ID)
-		}, 403, "not allowed"},
+		}, 403, "permission.check.denied"},
 		{"missing delete", func() error {
 			return svc.DeleteProfile(ctx, testUserActor(user.ID), "missing-profile")
-		}, 404, "profile not found"},
+		}, 404, "profile.resolve.not_found"},
 		{"invalid clear texture type", func() error {
 			return svc.ClearProfileTexture(ctx, testUserActor(user.ID), target.ID, "elytra")
-		}, 400, "Invalid texture_type"},
+		}, 400, "texture_type.validate.invalid"},
 		{"foreign clear texture", func() error {
 			return svc.ClearProfileTexture(ctx, testUserActor(user.ID), foreign.ID, "skin")
-		}, 403, "not allowed"},
+		}, 403, "permission.check.denied"},
 		{"missing clear texture", func() error {
 			return svc.ClearProfileTexture(ctx, testUserActor(user.ID), "missing-profile", "skin")
-		}, 404, "profile not found"},
+		}, 404, "profile.resolve.not_found"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := tc.call(); !httpError(err, tc.code, tc.want) {
@@ -153,7 +153,7 @@ func TestCreateProfileMapsDatabaseIDConflictExactly(t *testing.T) {
 	}
 
 	result, err := svc.CreateProfile(ctx, testUserActor(user.ID), "ForcedUUID", "slim")
-	if result != nil || !httpError(err, 400, "角色 UUID 冲突，无法新建角色") {
+	if result != nil || !httpError(err, 400, "profile_uuid.reserve.conflict") {
 		t.Fatalf("forced profile ID conflict result=%#v err=%#v; want nil and exact 400", result, err)
 	}
 	if stored, err := db.Profiles.GetByName(ctx, "ForcedUUID"); err != nil || stored != nil {
@@ -188,7 +188,7 @@ func TestCreateProfileOfflineModeUsesDeterministicIDAndRejectsIDConflict(t *test
 	conflictingID := util.OfflineUUIDNoDash("OfflineClash")
 	testutil.CreateProfile(t, db, other.ID, conflictingID, "DifferentName")
 	result, err := svc.CreateProfile(ctx, testUserActor(user.ID), "OfflineClash", "slim")
-	if result != nil || !httpError(err, 400, "角色 UUID 冲突，无法新建角色") {
+	if result != nil || !httpError(err, 400, "profile_uuid.reserve.conflict") {
 		t.Fatalf("offline profile ID conflict result=%#v err=%#v", result, err)
 	}
 	if stored, err := db.Profiles.GetByName(ctx, "OfflineClash"); err != nil || stored != nil {

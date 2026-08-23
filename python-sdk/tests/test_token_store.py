@@ -17,6 +17,7 @@ def test_memory_token_store_round_trips_and_clears_exact_token() -> None:
         scope="account.read.self",
         refresh_token="refresh-token-1",
         permissions=("account.read.self",),
+        id_token="id-token-1",
     )
     store = MemoryTokenStore()
 
@@ -36,6 +37,7 @@ def test_file_token_store_writes_structured_json_and_clears_file(tmp_path) -> No
         scope="account.read.self",
         refresh_token="refresh-token-1",
         permissions=("account.read.self",),
+        id_token="id-token-1",
     )
     store = FileTokenStore(path)
 
@@ -48,6 +50,7 @@ def test_file_token_store_writes_structured_json_and_clears_file(tmp_path) -> No
         "scope": "account.read.self",
         "refresh_token": "refresh-token-1",
         "permissions": ["account.read.self"],
+        "id_token": "id-token-1",
     }
     assert store.load() == tokens
     store.clear()
@@ -84,6 +87,7 @@ def test_file_token_store_ignores_chmod_failure(monkeypatch, tmp_path) -> None:
         "scope": "",
         "refresh_token": None,
         "permissions": [],
+        "id_token": None,
     }
 
 

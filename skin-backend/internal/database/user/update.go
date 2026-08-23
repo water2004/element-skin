@@ -2,9 +2,10 @@ package user
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func (s Store) Update(ctx context.Context, id string, fields map[string]any) error {
@@ -32,38 +33,26 @@ func (s Store) Update(ctx context.Context, id string, fields map[string]any) err
 			return err
 		}
 	}
-	updated := false
+	assignments := make([]string, 0, len(fields))
+	arguments := make([]any, 0, len(fields)+1)
 	for _, k := range []string{"email", "display_name", "preferred_language", "avatar_hash"} {
 		v, ok := fields[k]
 		if !ok {
 			continue
 		}
-		var tag pgconn.CommandTag
-		switch k {
-		case "email":
-			tag, err = tx.Exec(ctx, `UPDATE users SET email=$1 WHERE id=$2`, v, id)
-			if err != nil {
-				return err
-			}
-		case "display_name":
-			tag, err = tx.Exec(ctx, `UPDATE users SET display_name=$1 WHERE id=$2`, v, id)
-			if err != nil {
-				return err
-			}
-		case "preferred_language":
-			tag, err = tx.Exec(ctx, `UPDATE users SET preferred_language=$1 WHERE id=$2`, v, id)
-			if err != nil {
-				return err
-			}
-		case "avatar_hash":
-			tag, err = tx.Exec(ctx, `UPDATE users SET avatar_hash=$1 WHERE id=$2`, v, id)
-			if err != nil {
-				return err
-			}
-		}
-		updated = updated || tag.RowsAffected() > 0
+		arguments = append(arguments, v)
+		assignments = append(assignments, fmt.Sprintf("%s=$%d", k, len(arguments)))
 	}
-	if !updated {
+	arguments = append(arguments, id)
+	tag, err := tx.Exec(ctx, fmt.Sprintf(
+		"UPDATE users SET %s WHERE id=$%d",
+		strings.Join(assignments, ","),
+		len(arguments),
+	), arguments...)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
 		return pgx.ErrNoRows
 	}
 	return tx.Commit(ctx)

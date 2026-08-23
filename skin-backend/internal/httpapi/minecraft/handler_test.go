@@ -30,7 +30,7 @@ func TestMinecraftRoutesReturnExactProfileAndTextureResponses(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req := minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/by-name/"+profile.Name, nil)
+	req := minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/by-name/"+profile.Name, nil)
 	req.SetPathValue("name", profile.Name)
 	rec := httptest.NewRecorder()
 	h.ProfileByName(rec, req)
@@ -45,7 +45,7 @@ func TestMinecraftRoutesReturnExactProfileAndTextureResponses(t *testing.T) {
 		t.Fatalf("profile by name body mismatch: %#v", byName)
 	}
 
-	req = minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/"+profile.ID+"/textures-property", nil)
+	req = minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/"+profile.ID+"/textures-property", nil)
 	req.SetPathValue("profile_id", profile.ID)
 	rec = httptest.NewRecorder()
 	h.TexturesProperty(rec, req)
@@ -61,7 +61,7 @@ func TestMinecraftRoutesReturnExactProfileAndTextureResponses(t *testing.T) {
 		t.Fatalf("textures property body mismatch: %#v", textureBody)
 	}
 
-	req = minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/by-name/"+profile.Name, nil)
+	req = minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/by-name/"+profile.Name, nil)
 	req.SetPathValue("path", "by-name/"+profile.Name)
 	rec = httptest.NewRecorder()
 	h.Profiles(rec, req)
@@ -76,7 +76,7 @@ func TestMinecraftRoutesReturnExactProfileAndTextureResponses(t *testing.T) {
 		t.Fatalf("profiles dispatcher by-name mismatch: %#v", dispatchedByName)
 	}
 
-	req = minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/"+profile.ID, nil)
+	req = minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/"+profile.ID, nil)
 	req.SetPathValue("path", profile.ID)
 	rec = httptest.NewRecorder()
 	h.Profiles(rec, req)
@@ -91,7 +91,7 @@ func TestMinecraftRoutesReturnExactProfileAndTextureResponses(t *testing.T) {
 		t.Fatalf("profiles dispatcher by-id mismatch: %#v", dispatchedByID)
 	}
 
-	req = minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/"+profile.ID+"/textures-property", nil)
+	req = minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/"+profile.ID+"/textures-property", nil)
 	req.SetPathValue("path", profile.ID+"/textures-property")
 	rec = httptest.NewRecorder()
 	h.Profiles(rec, req)
@@ -106,11 +106,11 @@ func TestMinecraftRoutesReturnExactProfileAndTextureResponses(t *testing.T) {
 		t.Fatalf("profiles dispatcher textures mismatch: %#v", dispatchedTexture)
 	}
 
-	req = minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/", nil)
+	req = minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/", nil)
 	req.SetPathValue("path", "")
 	rec = httptest.NewRecorder()
 	h.Profiles(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"minecraft route not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_route\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("profiles dispatcher not found mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -120,41 +120,41 @@ func TestMinecraftRoutesValidateBulkBodyAndMissingProfilesExactly(t *testing.T) 
 	cfg := testutil.TestConfig()
 	h := minecraft.New(db, nil, yggsvc.Yggdrasil{DB: db, Cfg: cfg, Redis: redis})
 
-	req := minecraftPublicRequest(http.MethodPost, "/v1/minecraft/profiles/by-names", strings.NewReader(`{"names":["Missing"]}`))
+	req := minecraftPublicRequest(http.MethodPost, "/v2/minecraft/profiles/by-names", strings.NewReader(`{"names":["Missing"]}`))
 	rec := httptest.NewRecorder()
 	h.ProfilesByNames(rec, req)
 	if rec.Code != http.StatusOK || rec.Body.String() != "{\"items\":[]}\n" {
 		t.Fatalf("missing bulk profile response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = minecraftPublicRequest(http.MethodPost, "/v1/minecraft/profiles/by-names", strings.NewReader(`[`))
+	req = minecraftPublicRequest(http.MethodPost, "/v2/minecraft/profiles/by-names", strings.NewReader(`[`))
 	rec = httptest.NewRecorder()
 	h.ProfilesByNames(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("invalid bulk json response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/missing-profile", nil)
+	req = minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/missing-profile", nil)
 	req.SetPathValue("profile_id", "missing-profile")
 	rec = httptest.NewRecorder()
 	h.ProfileByID(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"minecraft profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing profile response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/by-name/Missing", nil)
+	req = minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/by-name/Missing", nil)
 	req.SetPathValue("name", "Missing")
 	rec = httptest.NewRecorder()
 	h.ProfileByName(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"minecraft profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing profile by name mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = minecraftPublicRequest(http.MethodGet, "/v1/minecraft/profiles/missing-profile/textures-property", nil)
+	req = minecraftPublicRequest(http.MethodGet, "/v2/minecraft/profiles/missing-profile/textures-property", nil)
 	req.SetPathValue("profile_id", "missing-profile")
 	rec = httptest.NewRecorder()
 	h.TexturesProperty(rec, req)
-	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"detail\":\"minecraft profile not found\"}\n" {
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"resolve\",\"reason\":\"not_found\"}}\n" {
 		t.Fatalf("missing textures property mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
@@ -166,10 +166,10 @@ func TestMinecraftRoutesValidateBulkBodyAndMissingProfilesExactly(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	req = minecraftPublicRequest(http.MethodPost, "/v1/minecraft/profiles/by-names", strings.NewReader(string(body)))
+	req = minecraftPublicRequest(http.MethodPost, "/v2/minecraft/profiles/by-names", strings.NewReader(string(body)))
 	rec = httptest.NewRecorder()
 	h.ProfilesByNames(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"too many names\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_profile\",\"operation\":\"read\",\"reason\":\"exceeded\"}}\n" {
 		t.Fatalf("too many bulk names mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -188,7 +188,7 @@ func TestMinecraftHasJoinedRouteUsesCurrentActorExactly(t *testing.T) {
 	if err := redis.SetYggSession(t.Context(), model.Session{ServerID: "route-server", AccessToken: "route-access", CreatedAt: database.NowMS()}, time.Minute); err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(http.MethodPost, "/v1/minecraft/session/has-joined", strings.NewReader(`{"username":"MinecraftJoined","server_id":"route-server"}`))
+	req := httptest.NewRequest(http.MethodPost, "/v2/minecraft/session/has-joined", strings.NewReader(`{"username":"MinecraftJoined","server_id":"route-server"}`))
 	req = req.WithContext(shared.WithActor(req.Context(), clientActorWith("minecraft_session.hasjoined.server")))
 	rec := httptest.NewRecorder()
 	h.HasJoined(rec, req)
@@ -204,27 +204,27 @@ func TestMinecraftHasJoinedRouteUsesCurrentActorExactly(t *testing.T) {
 		t.Fatalf("has joined body mismatch: %#v", body)
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/minecraft/session/has-joined", strings.NewReader(`[`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/minecraft/session/has-joined", strings.NewReader(`[`))
 	req = req.WithContext(shared.WithActor(req.Context(), clientActorWith("minecraft_session.hasjoined.server")))
 	rec = httptest.NewRecorder()
 	h.HasJoined(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"invalid json\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
 		t.Fatalf("has joined invalid json mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/minecraft/session/has-joined", strings.NewReader(`{"username":"MinecraftJoined"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/minecraft/session/has-joined", strings.NewReader(`{"username":"MinecraftJoined"}`))
 	req = req.WithContext(shared.WithActor(req.Context(), clientActorWith("minecraft_session.hasjoined.server")))
 	rec = httptest.NewRecorder()
 	h.HasJoined(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"detail\":\"username and server_id are required\"}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"minecraft_session\",\"operation\":\"join\",\"reason\":\"required\"}}\n" {
 		t.Fatalf("has joined missing fields mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	req = httptest.NewRequest(http.MethodPost, "/v1/minecraft/session/has-joined", strings.NewReader(`{"username":"MinecraftJoined","server_id":"route-server"}`))
+	req = httptest.NewRequest(http.MethodPost, "/v2/minecraft/session/has-joined", strings.NewReader(`{"username":"MinecraftJoined","server_id":"route-server"}`))
 	req = req.WithContext(shared.WithActor(req.Context(), clientActorWith()))
 	rec = httptest.NewRecorder()
 	h.HasJoined(rec, req)
-	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"detail\":\"permission denied\"}\n" {
+	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"permission\",\"operation\":\"check\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("has joined missing permission mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }

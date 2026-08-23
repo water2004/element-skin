@@ -39,7 +39,7 @@ func TestNoticeServiceSystemMaintenanceActorCanOnlyCreateSystemNotices(t *testin
 		Summary:     "Not allowed",
 		DisplayMode: noticesvc.DisplayInline,
 	})
-	if denied != nil || !httpError(err, http.StatusForbidden, "permission denied") {
+	if denied != nil || !httpError(err, http.StatusForbidden, "permission.check.denied") {
 		t.Fatalf("system actor announcement create=%#v err=%#v; want forbidden", denied, err)
 	}
 }
