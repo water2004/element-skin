@@ -6,7 +6,7 @@
 >
 > v4.0.0 的自动数据库升级只支持 **v3.0.2 → v4.0.0**。v2.x、v3.0.0 和 v3.0.1 站点必须先升级到 v3.0.2 并确认运行正常，再升级到 v4.0.0。
 >
-> **部署方式已经改变。** 相比 v3，v4 的完整部署必须同时运行主后端与独立的 Webhook Worker。Docker Compose 用户必须同步新版 `.env.example` 和 `docker-compose.yml`，不能只替换镜像版本。
+> **部署方式已经改变。** 相比 v3，v4 的官方 Compose 新增并默认启动独立的 Webhook Worker。Docker Compose 用户必须同步新版 `.env.example` 和 `docker-compose.yml`，不能只替换镜像版本；自建部署只有在启用 Webhook 时才需要运行 Worker。
 >
 > 升级前请完整备份 PostgreSQL 数据库、`./data` 中的 Yggdrasil/OIDC 密钥、材质与首页媒体文件、生产环境变量和当前 Compose 配置。
 
@@ -284,8 +284,9 @@ webhook-worker
 - 主后端继续运行站点 HTTP 服务。
 - Worker 使用镜像内的 `/app/webhook-worker`，不暴露端口。
 - 新版 Compose 会自动启动两个进程。
-- 自建 Docker、systemd、Kubernetes 或其他部署必须显式同时运行两者。
-- 只运行主后端不会投递任何 Webhook，不能依赖主后端代替 Worker。
+- 自建 Docker、systemd、Kubernetes 或其他部署在启用 Webhook 时，需要显式运行 Worker。
+- 未使用 Webhook 的站点可以只运行主后端。
+- 已配置 Webhook 订阅但没有运行 Worker 时，主站其他功能仍可用，但事件只会积压在数据库中，不会投递或清理。
 
 升级时必须同时同步仓库根目录的 `.env.example` 和 `docker-compose.yml`，然后把现有生产配置迁移到新 `.env`，不要只修改 `ELEMENT_SKIN_IMAGE`。
 
@@ -327,7 +328,7 @@ ${SERVER_API_URL}/v2/auth/oidc/callback
 3. 停止写入，并完整备份 PostgreSQL 数据库、`./data`、材质与首页媒体目录、生产 `.env` 和旧 `docker-compose.yml`。
 4. 获取 v4.0.0 的 `.env.example` 与 `docker-compose.yml`，将生产配置迁移到新 `.env`。
 5. 使用 `openssl rand -base64 32` 生成一次 `IDENTITY_ENCRYPTION_KEY` 并安全保存。
-6. 检查 `OIDC_PRIVATE_KEY`、`OIDC_PUBLIC_KEY` 和 Webhook Worker 配置。
+6. 检查 `OIDC_PRIVATE_KEY` 和 `OIDC_PUBLIC_KEY`；使用 Webhook 时同时检查 Worker 配置。
 7. 使用 Microsoft 功能时，在 Azure/Entra 应用中加入 `${SERVER_API_URL}/v2/auth/oidc/callback`。
 8. 拉取并启动新版服务：
 
@@ -336,7 +337,7 @@ docker compose pull
 docker compose up -d
 ~~~
 
-9. 同时检查 `backend` 与 `webhook-worker` 日志，确认数据库升级、OIDC 密钥加载、Microsoft 配置迁移和 Worker 启动成功。
+9. 检查 `backend` 日志，确认数据库升级、OIDC 密钥加载和 Microsoft 配置迁移成功；使用 Webhook 时再检查 `webhook-worker` 日志和启动状态。
 10. 验证本站登录与注册、外部身份连接、正版同步、OAuth/OIDC 授权、`/v2` API、Webhook 投递和管理员细粒度权限。
 11. 更新所有第三方脚本、机器人和客户端；旧 `/v1` 调用不能继续使用。
 
@@ -344,7 +345,7 @@ docker compose up -d
 
 v4.0.0 会改变数据库结构、部署进程和外部集成协议。需要回滚时：
 
-1. 停止 v4 的 `backend` 与 `webhook-worker`。
+1. 停止 v4 的 `backend`，以及正在运行的 `webhook-worker`。
 2. 恢复升级前完整备份的 v3 PostgreSQL 数据库。
 3. 恢复升级前的 v3 `.env`、Compose 配置、密钥和数据目录。
 4. 再启动原 v3 镜像。

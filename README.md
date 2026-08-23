@@ -66,8 +66,9 @@ cp .env.example .env
 
 **v4.0.0 的部署方式已经改变。** 相比 v3，官方 Compose 新增了独立的 `webhook-worker` 服务，旧版
 `docker-compose.yml` 不能原样继续使用。Compose 会从同一镜像启动 `backend` 和 `webhook-worker`；
-worker 不暴露端口。自建部署也必须同时运行主后端和镜像内的 `/app/webhook-worker`，否则站点功能仍可
-访问，但 Webhook 永远不会投递。
+worker 不暴露端口。自建部署只有在启用 Webhook 时才需要运行镜像内的 `/app/webhook-worker`；未使用
+Webhook 的站点可以只运行主后端。已经配置 Webhook 订阅但没有运行 Worker 时，主站其他功能仍可用，
+但事件只会积压在数据库中，不会投递或清理。
 
 首次启动时如果 Yggdrasil 的 `/app/data/private.pem`、`/app/data/public.pem` 或 OIDC 的
 `/app/data/oidc-private.pem`、`/app/data/oidc-public.pem` 不存在，系统会自动生成并保存。请持久化
@@ -340,18 +341,20 @@ v2.4.1 没有对应 OAuth 功能，因此以下场景不参与跨版本对比：
 
 ### Webhook 性能影响
 
-Webhook 压测以同一个 profile 更新接口为负载，使用 50 并发、每阶段 3 秒、四轮平衡轮换、20 个主站数据库连接和独立的 5 连接 Worker 池，对比关闭触发器、无订阅、仅写 outbox、worker 同时运行四种模式。相对变化先在每轮内与该轮基线配对，再取中位数；所有写请求均成功：
+Webhook 压测以同一个 profile 更新接口为负载，使用 50 并发、每阶段 3 秒、四轮平衡轮换、20 个主站数据库连接和独立的 2 连接 Worker 池，对比关闭触发器、无订阅、仅写 outbox、Worker 同时运行四种模式。相对变化先在每轮内与该轮基线配对，再取中位数；所有写请求均成功：
 
 | 模式 | 中位成功 req/s | 相对同轮功能前基线中位数 | 中位 P95 |
 | --- | ---: | ---: | ---: |
-| 关闭触发器（功能前近似基线） | 15236.4 | 0.0% | 5.1ms |
-| 启用触发器，无订阅 | 13902.2 | -7.4% | 5.5ms |
-| 有订阅，仅写 outbox | 13085.6 | -16.4% | 5.8ms |
-| 有订阅，worker 同时运行 | 11860.8 | -18.5% | 6.6ms |
+| 关闭触发器（功能前近似基线） | 13860.3 | 0.0% | 6.5ms |
+| 启用触发器，无订阅 | 13088.3 | -5.4% | 6.8ms |
+| 有订阅，仅写 outbox | 11740.8 | -13.8% | 7.6ms |
+| 有订阅，Worker 同时运行 | 11727.7 | -16.2% | 7.5ms |
 
-在本机零延迟 `204` 接收端下，1000 个固定事件的紧循环 outbox 展开、HTTP 投递落库和组合吞吐分别为 1225.2、4678.3 和 970.9 events/s；包含当前 500ms 轮询、每批 200 个事件和 50 个投递限制的生产 Worker 持续端到端吞吐只有 104.7 events/s。Worker 同时运行相对同轮“仅写 outbox”再降低 6.5% 主站写吞吐，中位 P95 增加 0.8ms：异步拆分避免了第三方 HTTP 直接阻塞主站请求，但共享 PostgreSQL 的查询和 I/O 竞争仍存在。持续事件速率超过单 Worker 吞吐时会积压，应增加 Worker 实例或调整批次与调度策略；实际投递能力还需结合第三方网络延迟复测。完整方法、原始轮次和限制见 [`reports/webhook-load-test.md`](reports/webhook-load-test.md)。
+连续两次相同参数复测中，无订阅 trigger 的相对吞吐成本为 `5.4%～5.5%`，有订阅并写 outbox 的成本为 `13.8%～16.3%`，P95 增量为 `0.3～1.1ms`，失败率均为 `0%`。Worker 相对“仅写 outbox”的短样本变化分别为 `-4.8%` 和 `+2.7%`，不足以从整机波动中识别稳定的额外影响；可以确认的主要成本位于业务事务内的订阅检查和 outbox 插入。
 
-进一步的 CPU、block、mutex 和 Worker SQL profile 见 [`reports/webhook-performance-profile.md`](reports/webhook-performance-profile.md)。Profile 显示 1000 个事件会执行 18,040 次 Worker SQL，其中 12,000 次属于权限与授权路径；后续优化将以该基线复测，不以代码推断代替证据。
+在本机零延迟 `204` 接收端下，1000 个固定事件的紧循环 outbox 展开、HTTP 投递落库和组合吞吐分别为 13521.2、7806.0 和 4948.9 events/s。包含保守 `3000ms` 活动间隔的生产循环端到端吞吐为 82.0 events/s；该数字是资源预算效果，不是数据库处理上限。完整方法、原始轮次和限制见 [`reports/webhook-load-test-after.md`](reports/webhook-load-test-after.md)。
+
+进一步的 CPU、block、mutex 和 Worker SQL profile 见 [`reports/webhook-performance-profile-after.md`](reports/webhook-performance-profile-after.md) 与 [`reports/webhook-worker-sql-profile-after.md`](reports/webhook-worker-sql-profile-after.md)。当前 1000 个事件的生产循环只执行 80 次 Worker SQL，即 `0.08` 次/event；事件领取和投递状态提交均按批处理，没有按事件产生线性数据库往返。
 
 ## 📄 许可证
 
