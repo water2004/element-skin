@@ -16,6 +16,9 @@ func (s Store) CreateClient(ctx context.Context, client model.OAuthClient, permi
 		return err
 	}
 	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO delegated_clients
 			(id, owner_user_id, name, description, redirect_uri, website_url, client_type, secret_hash, status, created_at, updated_at)
@@ -35,6 +38,9 @@ func (s Store) CreateClient(ctx context.Context, client model.OAuthClient, permi
 		return err
 	}
 	if err := webhookdb.ReplaceEndpoints(ctx, tx, client.ID, endpoints); err != nil {
+		return err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
@@ -63,11 +69,17 @@ func (s Store) DeleteClient(ctx context.Context, clientID, ownerUserID string) (
 		return false, err
 	}
 	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return false, err
+	}
 	tag, err := tx.Exec(ctx, `DELETE FROM delegated_clients WHERE id=$1 AND ($2='' OR owner_user_id=$2)`, clientID, ownerUserID)
 	if err != nil || tag.RowsAffected() == 0 {
 		return false, err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM permission_subjects WHERE id=$1`, "client:"+clientID); err != nil {
+		return false, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
 		return false, err
 	}
 	return true, tx.Commit(ctx)

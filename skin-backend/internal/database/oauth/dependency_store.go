@@ -2,6 +2,8 @@ package oauth
 
 import (
 	"context"
+
+	webhookdb "element-skin/backend/internal/database/webhook"
 )
 
 type RevokedGrantDependency struct {
@@ -114,7 +116,25 @@ func revokeInvalidGrantsForClient(ctx context.Context, q transactionQueryer, cli
 }
 
 func (s Store) DisableInvalidClientsForOwner(ctx context.Context, ownerUserID string, allowedPermissionIDs []int64, exemptPermissionIDs []int64, updatedAt int64) ([]DisabledClientDependency, error) {
-	return disableInvalidClientsForOwner(ctx, s.Pool, ownerUserID, allowedPermissionIDs, exemptPermissionIDs, updatedAt)
+	tx, err := s.Pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return nil, err
+	}
+	disabled, err := disableInvalidClientsForOwner(ctx, tx, ownerUserID, allowedPermissionIDs, exemptPermissionIDs, updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return disabled, nil
 }
 
 func disableInvalidClientsForOwner(ctx context.Context, q transactionQueryer, ownerUserID string, allowedPermissionIDs []int64, exemptPermissionIDs []int64, updatedAt int64) ([]DisabledClientDependency, error) {
@@ -191,8 +211,14 @@ func (s Store) DisableInvalidClientsForOwnerWithCredentials(ctx context.Context,
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return nil, err
+	}
 	disabled, err := disableInvalidClientsForOwner(ctx, tx, ownerUserID, allowedPermissionIDs, exemptPermissionIDs, updatedAt)
 	if err != nil {
+		return nil, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
 		return nil, err
 	}
 	for _, item := range disabled {

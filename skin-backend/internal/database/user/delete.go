@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 
+	webhookdb "element-skin/backend/internal/database/webhook"
+
 	"github.com/jackc/pgx/v5"
 )
 
@@ -13,6 +15,9 @@ func (s Store) Delete(ctx context.Context, id string) (bool, error) {
 		return false, err
 	}
 	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return false, err
+	}
 	type textureKey struct {
 		hash        string
 		textureType string
@@ -110,6 +115,9 @@ func (s Store) Delete(ctx context.Context, id string) (bool, error) {
 		if _, err := tx.Exec(ctx, `DELETE FROM permission_subjects WHERE id = ANY($1::text[])`, clientSubjectIDs); err != nil {
 			return false, err
 		}
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
+		return false, err
 	}
 	return tag.RowsAffected() > 0, tx.Commit(ctx)
 }

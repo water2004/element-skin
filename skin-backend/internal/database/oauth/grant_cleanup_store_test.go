@@ -2,12 +2,107 @@ package oauth_test
 
 import (
 	"context"
+	"reflect"
 	"testing"
 
+	oauthdb "element-skin/backend/internal/database/oauth"
 	permissiondb "element-skin/backend/internal/database/permission"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/testutil"
 )
+
+func TestDependencyRevocationStoresReturnExactDependencies(t *testing.T) {
+	t.Run("user permission change", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user := testutil.CreateUser(t, db, "oauth-user-dependency@test.com", "pw", "OAuthUserDependency", false)
+		permissionSet := permissionIDs("profile.read.owned")
+		client := model.OAuthClient{
+			ID:          "client-user-dependency",
+			OwnerUserID: user.ID,
+			Name:        "User dependency client",
+			ClientType:  "public",
+			Status:      "active",
+			CreatedAt:   1000,
+			UpdatedAt:   1000,
+		}
+		if err := db.OAuth.CreateClient(ctx, client, permissionSet, nil); err != nil {
+			t.Fatal(err)
+		}
+		grant := model.OAuthGrant{
+			ID:        "grant-user-dependency",
+			UserID:    user.ID,
+			SubjectID: permissiondb.SubjectIDForUser(user.ID),
+			ClientID:  client.ID,
+			Status:    "active",
+			CreatedAt: 1100,
+		}
+		if err := db.OAuth.CreateGrant(ctx, grant, permissionSet); err != nil {
+			t.Fatal(err)
+		}
+
+		const revokedAt = int64(1200)
+		got, err := db.OAuth.RevokeInvalidGrantsForUser(ctx, user.ID, []int64{}, revokedAt)
+		want := []oauthdb.RevokedGrantDependency{{
+			GrantID:    grant.ID,
+			UserID:     user.ID,
+			ClientID:   client.ID,
+			ClientName: client.Name,
+			RevokedAt:  revokedAt,
+		}}
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("user dependencies=%#v err=%v want=%#v", got, err, want)
+		}
+		assertOAuthGrantStatus(t, db, grant.ID, "revoked", revokedAt)
+	})
+
+	t.Run("client permission change", func(t *testing.T) {
+		db, _ := testutil.NewTestAppTB(t)
+		ctx := context.Background()
+		user := testutil.CreateUser(t, db, "oauth-client-dependency@test.com", "pw", "OAuthClientDependency", false)
+		permissionSet := permissionIDs("profile.read.owned")
+		client := model.OAuthClient{
+			ID:          "client-permission-dependency",
+			OwnerUserID: user.ID,
+			Name:        "Client permission dependency",
+			ClientType:  "public",
+			Status:      "active",
+			CreatedAt:   2000,
+			UpdatedAt:   2000,
+		}
+		if err := db.OAuth.CreateClient(ctx, client, permissionSet, nil); err != nil {
+			t.Fatal(err)
+		}
+		grant := model.OAuthGrant{
+			ID:        "grant-client-dependency",
+			UserID:    user.ID,
+			SubjectID: permissiondb.SubjectIDForUser(user.ID),
+			ClientID:  client.ID,
+			Status:    "active",
+			CreatedAt: 2100,
+		}
+		if err := db.OAuth.CreateGrant(ctx, grant, permissionSet); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Pool.Exec(ctx, `DELETE FROM delegated_client_permissions WHERE client_id=$1`, client.ID); err != nil {
+			t.Fatal(err)
+		}
+
+		const revokedAt = int64(2200)
+		got, err := db.OAuth.RevokeInvalidGrantsForClient(ctx, client.ID, revokedAt)
+		want := []oauthdb.RevokedGrantDependency{{
+			GrantID:    grant.ID,
+			UserID:     user.ID,
+			ClientID:   client.ID,
+			ClientName: client.Name,
+			RevokedAt:  revokedAt,
+		}}
+		if err != nil || !reflect.DeepEqual(got, want) {
+			t.Fatalf("client dependencies=%#v err=%v want=%#v", got, err, want)
+		}
+		assertOAuthGrantStatus(t, db, grant.ID, "revoked", revokedAt)
+	})
+}
 
 func TestDeleteRevokedGrantsDeletesOnlyExpiredRevokedRowsAndDependenciesExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)

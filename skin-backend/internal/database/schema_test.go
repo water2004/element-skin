@@ -215,7 +215,7 @@ func TestInitSQLExecutesSuccessfullyAgainstRealDatabase(t *testing.T) {
 		"roles", "role_permissions", "subject_roles", "subject_permission_overrides", "session_permission_policies",
 		"identity_providers", "external_identities", "external_identity_credentials", "official_profile_bindings",
 		"oauth_device_codes", "oauth_device_code_permissions", "webhook_endpoints", "webhook_endpoint_events",
-		"webhook_events", "webhook_deliveries",
+		"webhook_active_event_types", "webhook_events", "webhook_deliveries",
 	}
 	for _, table := range expectedTables {
 		var exists bool

@@ -18,6 +18,7 @@ import (
 
 	"element-skin/backend/internal/database"
 	permissiondb "element-skin/backend/internal/database/permission"
+	webhookdb "element-skin/backend/internal/database/webhook"
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/permission"
 	webhookservice "element-skin/backend/internal/service/webhook"
@@ -348,28 +349,42 @@ func seedWebhookLoadData(t *testing.T, db *database.DB, concurrency int, endpoin
 }
 
 func configureWebhookLoadMode(ctx context.Context, db *database.DB, mode webhookLoadMode) error {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return err
+	}
 	triggerState := "DISABLE"
 	if mode.Trigger {
 		triggerState = "ENABLE"
 	}
-	if _, err := db.Pool.Exec(ctx, "ALTER TABLE profiles "+triggerState+" TRIGGER profiles_webhook_event"); err != nil {
+	if _, err := tx.Exec(ctx, "ALTER TABLE profiles "+triggerState+" TRIGGER profiles_webhook_event"); err != nil {
 		return err
 	}
-	if _, err := db.Pool.Exec(ctx, `TRUNCATE webhook_events CASCADE`); err != nil {
+	if _, err := tx.Exec(ctx, `TRUNCATE webhook_events CASCADE`); err != nil {
 		return err
 	}
-	if _, err := db.Pool.Exec(ctx, `DELETE FROM webhook_endpoint_events WHERE endpoint_id=$1`, webhookLoadEndpointID); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM webhook_endpoint_events WHERE endpoint_id=$1`, webhookLoadEndpointID); err != nil {
 		return err
 	}
 	if mode.Subscribed {
-		if _, err := db.Pool.Exec(ctx, `
+		if _, err := tx.Exec(ctx, `
 			INSERT INTO webhook_endpoint_events (endpoint_id,event_type,created_at)
 			VALUES ($1,'profile.updated',$2)
 		`, webhookLoadEndpointID, database.NowMS()); err != nil {
 			return err
 		}
 	}
-	_, err := db.Pool.Exec(ctx, `VACUUM (ANALYZE) profiles`)
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return err
+	}
+	_, err = db.Pool.Exec(ctx, `VACUUM (ANALYZE) profiles`)
 	return err
 }
 

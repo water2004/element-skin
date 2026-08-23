@@ -34,6 +34,9 @@ func (s Store) UpdateClientWithCredentials(
 		return ClientMutationResult{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return ClientMutationResult{}, err
+	}
 
 	tag, err := tx.Exec(ctx, `
 		UPDATE delegated_clients
@@ -51,6 +54,9 @@ func (s Store) UpdateClientWithCredentials(
 		return ClientMutationResult{}, err
 	}
 	if err := webhookdb.ReplaceEndpoints(ctx, tx, client.ID, endpoints); err != nil {
+		return ClientMutationResult{}, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
 		return ClientMutationResult{}, err
 	}
 
@@ -77,9 +83,15 @@ func (s Store) UpdateClientStatusWithCredentials(
 		return ClientMutationResult{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return ClientMutationResult{}, err
+	}
 
 	updated, err := updateClientStatus(ctx, tx, clientID, status, updatedAt)
 	if err != nil || !updated {
+		return ClientMutationResult{}, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
 		return ClientMutationResult{}, err
 	}
 	result := ClientMutationResult{Updated: true}
@@ -107,12 +119,18 @@ func (s Store) ReviewClientWithCredentials(
 		return ClientMutationResult{}, err
 	}
 	defer tx.Rollback(ctx)
+	if err := webhookdb.LockSubscriptionSnapshot(ctx, tx); err != nil {
+		return ClientMutationResult{}, err
+	}
 
 	if err := allowClientPermissions(ctx, tx, clientID, allowedPermissionIDs, grantedBySubjectID, updatedAt); err != nil {
 		return ClientMutationResult{}, err
 	}
 	updated, err := updateClientStatus(ctx, tx, clientID, status, updatedAt)
 	if err != nil || !updated {
+		return ClientMutationResult{}, err
+	}
+	if err := webhookdb.RefreshSubscriptionSnapshot(ctx, tx); err != nil {
 		return ClientMutationResult{}, err
 	}
 	result := ClientMutationResult{Updated: true}

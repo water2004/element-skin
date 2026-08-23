@@ -45,6 +45,7 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 		"oauth_refresh_tokens",
 		"webhook_endpoints",
 		"webhook_endpoint_events",
+		"webhook_active_event_types",
 		"webhook_events",
 		"webhook_deliveries",
 		"permission_audit_logs",

@@ -501,6 +501,11 @@ CREATE TABLE IF NOT EXISTS webhook_endpoint_events (
     FOREIGN KEY(endpoint_id) REFERENCES webhook_endpoints(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS webhook_active_event_types (
+    event_type TEXT PRIMARY KEY,
+    subscriber_count BIGINT NOT NULL CHECK(subscriber_count > 0)
+);
+
 CREATE TABLE IF NOT EXISTS webhook_events (
     id TEXT PRIMARY KEY,
     event_type TEXT NOT NULL,
@@ -635,6 +640,18 @@ ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS nonce TEXT NOT NU
 ALTER TABLE oauth_refresh_tokens ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 DELETE FROM permissions WHERE code LIKE 'microsoft_import.%';
 
+-- Keep startup rebuilds serialized with runtime OAuth/Webhook configuration mutations.
+-- This value matches subscriptionSnapshotLockID in internal/database/webhook.
+SELECT pg_advisory_xact_lock(4995432366660407119);
+TRUNCATE webhook_active_event_types;
+INSERT INTO webhook_active_event_types (event_type, subscriber_count)
+SELECT subscription.event_type, COUNT(*)
+FROM webhook_endpoint_events AS subscription
+JOIN webhook_endpoints AS endpoint ON endpoint.id = subscription.endpoint_id
+JOIN delegated_clients AS client ON client.id = endpoint.client_id
+WHERE endpoint.status = 'active' AND client.status = 'active'
+GROUP BY subscription.event_type;
+
 CREATE OR REPLACE FUNCTION webhook_event_has_subscribers(wanted_event_type TEXT)
 RETURNS BOOLEAN
 LANGUAGE SQL
@@ -642,12 +659,8 @@ STABLE
 AS $$
     SELECT EXISTS (
         SELECT 1
-        FROM webhook_endpoint_events AS subscription
-        JOIN webhook_endpoints AS endpoint ON endpoint.id = subscription.endpoint_id
-        JOIN delegated_clients AS client ON client.id = endpoint.client_id
-        WHERE subscription.event_type = wanted_event_type
-          AND endpoint.status = 'active'
-          AND client.status = 'active'
+        FROM webhook_active_event_types
+        WHERE event_type = wanted_event_type
     );
 $$;
 
