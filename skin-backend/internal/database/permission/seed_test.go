@@ -44,7 +44,7 @@ func TestSeedDefaultsPersistsCatalogExactly(t *testing.T) {
 	}
 }
 
-func TestSeedMigratesExistingAdminFlagsToRolesExactly(t *testing.T) {
+func TestSeedPreservesExistingAdminRolesExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	admin := testutil.CreateUser(t, db, "permission-admin@test.com", "pw", "PermissionAdmin", true)
@@ -57,44 +57,14 @@ func TestSeedMigratesExistingAdminFlagsToRolesExactly(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !has(adminBits, "notice.create.any") {
-		t.Fatal("migrated admin should create notices")
+		t.Fatal("admin should retain notice creation permission")
 	}
 	if has(adminBits, "permission_protected.manage.any") {
-		t.Fatal("migrated admin must not manage protected permission subjects")
+		t.Fatal("admin must not manage protected permission subjects")
 	}
 	protected, err := db.Permissions.UserIsProtected(ctx, protectedUser.ID)
 	if err != nil || !protected {
 		t.Fatalf("existing protected subject should remain protected: protected=%v err=%v", protected, err)
-	}
-}
-
-func TestSeedUserSubjectsMigratesIsAdminColumnExactly(t *testing.T) {
-	db, _ := testutil.NewTestAppTB(t)
-	ctx := context.Background()
-
-	adminUser := testutil.CreateUser(t, db, "migrate-admin@test.com", "pw", "MigrateAdmin", false)
-	normalUser := testutil.CreateUser(t, db, "migrate-normal@test.com", "pw", "MigrateNormal", false)
-
-	if _, err := db.Pool.Exec(ctx, `ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT FALSE`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Pool.Exec(ctx, `UPDATE users SET is_admin=TRUE WHERE id=$1`, adminUser.ID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.Pool.Exec(ctx, `DELETE FROM subject_roles WHERE role_id=$1`, core.RoleAdmin); err != nil {
-		t.Fatal(err)
-	}
-	if err := db.Permissions.SeedDefaults(ctx); err != nil {
-		t.Fatal(err)
-	}
-
-	hasAdmin, err := db.Permissions.UserHasRole(ctx, adminUser.ID, core.RoleAdmin)
-	if err != nil || !hasAdmin {
-		t.Fatalf("is_admin=TRUE user should get admin role: has=%v err=%v", hasAdmin, err)
-	}
-	normalHasAdmin, err := db.Permissions.UserHasRole(ctx, normalUser.ID, core.RoleAdmin)
-	if err != nil || normalHasAdmin {
-		t.Fatalf("is_admin=FALSE user should not get admin role: has=%v err=%v", normalHasAdmin, err)
 	}
 }
 

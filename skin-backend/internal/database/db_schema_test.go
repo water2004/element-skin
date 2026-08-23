@@ -57,15 +57,6 @@ func TestDBInitSchemaDefaultsAndCoreHelpers(t *testing.T) {
 			t.Fatalf("InitSQL should create table %s", table)
 		}
 	}
-	for _, table := range []string{"tokens", "sessions"} {
-		var exists bool
-		if err := db.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name=$1)`, table).Scan(&exists); err != nil {
-			t.Fatal(err)
-		}
-		if exists {
-			t.Fatalf("InitSQL should drop legacy Yggdrasil persistence table %s", table)
-		}
-	}
 	siteName, err := db.Settings.Get(ctx, "site_name", "")
 	if err != nil {
 		t.Fatal(err)
@@ -151,8 +142,8 @@ func TestInitSQLContainsExpectedConstraintsAndIndexes(t *testing.T) {
 		"secret_hash TEXT NOT NULL DEFAULT ''",
 		"authorization_status TEXT NOT NULL DEFAULT 'active'",
 		"CHECK(authorization_status IN ('active', 'reauthorization_required'))",
-		"ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_at BIGINT",
-		"ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_error_at BIGINT",
+		"last_refresh_at BIGINT",
+		"last_refresh_error_at BIGINT",
 		"ON CONFLICT (key) DO NOTHING",
 	}
 	for _, fragment := range required {

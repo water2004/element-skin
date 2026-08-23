@@ -550,62 +550,6 @@ CREATE TABLE IF NOT EXISTS permission_audit_logs (
     FOREIGN KEY(target_grant_id) REFERENCES delegated_permission_grants(id) ON DELETE SET NULL
 );
 
--- Migrations from the Python 2.4.1 schema only.
-ALTER TABLE skin_library DROP CONSTRAINT IF EXISTS skin_library_pkey;
-ALTER TABLE skin_library ADD CONSTRAINT skin_library_pkey PRIMARY KEY (skin_hash, texture_type);
-ALTER TABLE skin_library ADD COLUMN IF NOT EXISTS usage_count BIGINT NOT NULL DEFAULT 0;
-DROP TABLE IF EXISTS sessions;
-DROP TABLE IF EXISTS tokens;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at BIGINT NOT NULL DEFAULT 0;
-ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS authorization_status TEXT NOT NULL DEFAULT 'active'
-    CHECK(authorization_status IN ('active', 'reauthorization_required'));
-ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_at BIGINT;
-ALTER TABLE external_identity_credentials ADD COLUMN IF NOT EXISTS last_refresh_error_at BIGINT;
-ALTER TABLE webhook_events ADD COLUMN IF NOT EXISTS expansion_lease_until BIGINT;
-ALTER TABLE webhook_events ADD COLUMN IF NOT EXISTS expansion_lease_token TEXT;
-ALTER TABLE webhook_deliveries ADD COLUMN IF NOT EXISTS lease_token TEXT;
-ALTER TABLE identity_providers DROP COLUMN IF EXISTS registration_enabled;
-
--- A real Minecraft profile UUID identifies one site role and one official binding.
--- Retain the binding already using the real UUID when repairing legacy duplicates.
-WITH ranked_official_bindings AS (
-    SELECT id,
-           ROW_NUMBER() OVER (
-               PARTITION BY remote_uuid
-               ORDER BY (profile_id = remote_uuid) DESC, created_at ASC, id ASC
-           ) AS position
-    FROM official_profile_bindings
-)
-DELETE FROM official_profile_bindings AS binding
-USING ranked_official_bindings AS ranked
-WHERE binding.id = ranked.id AND ranked.position > 1;
-ALTER TABLE official_profile_bindings
-    DROP CONSTRAINT IF EXISTS official_profile_bindings_identity_id_remote_uuid_key;
-
-DO $$
-BEGIN
-    IF EXISTS (
-        SELECT 1 FROM information_schema.columns
-        WHERE table_schema='public' AND table_name='fallback_endpoints' AND column_name='skin_domains'
-    ) THEN
-        INSERT INTO fallback_skin_domains (endpoint_id,domain,sort_order)
-        SELECT endpoint.id, btrim(item.domain), item.ordinality
-        FROM fallback_endpoints endpoint
-        CROSS JOIN LATERAL unnest(string_to_array(endpoint.skin_domains, ','))
-            WITH ORDINALITY AS item(domain, ordinality)
-        WHERE btrim(item.domain) <> ''
-        ON CONFLICT (endpoint_id,domain) DO NOTHING;
-        ALTER TABLE fallback_endpoints DROP COLUMN skin_domains;
-    END IF;
-END $$;
-
-UPDATE users SET created_at = 0 WHERE created_at IS NULL;
-UPDATE skin_library sl SET usage_count = CASE sl.texture_type
-    WHEN 'skin' THEN (SELECT COUNT(*) FROM user_textures ut WHERE ut.hash = sl.skin_hash AND ut.texture_type = 'skin')
-    WHEN 'cape' THEN (SELECT COUNT(*) FROM user_textures ut WHERE ut.hash = sl.skin_hash AND ut.texture_type = 'cape')
-    ELSE (SELECT COUNT(*) FROM user_textures ut WHERE ut.hash = sl.skin_hash AND ut.texture_type = sl.texture_type)
-END;
-
 CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles (user_id, id);
 CREATE INDEX IF NOT EXISTS idx_site_refresh_user ON site_refresh_tokens (user_id);
 CREATE INDEX IF NOT EXISTS idx_site_refresh_expires ON site_refresh_tokens (expires_at);
@@ -616,12 +560,6 @@ CREATE INDEX IF NOT EXISTS idx_users_created_id ON users (created_at, id);
 CREATE INDEX IF NOT EXISTS idx_skin_library_public_created_hash ON skin_library (is_public, created_at, skin_hash);
 CREATE INDEX IF NOT EXISTS idx_skin_library_created_hash ON skin_library (created_at, skin_hash);
 CREATE INDEX IF NOT EXISTS idx_skin_library_public_usage_created_hash ON skin_library (is_public, usage_count DESC, created_at DESC, skin_hash DESC);
-DELETE FROM whitelisted_users duplicate
-USING whitelisted_users retained
-WHERE duplicate.id > retained.id
-  AND duplicate.username=retained.username
-  AND duplicate.endpoint_id=retained.endpoint_id;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_whitelisted_users_username_endpoint ON whitelisted_users (username, endpoint_id);
 CREATE INDEX IF NOT EXISTS idx_whitelisted_users_endpoint ON whitelisted_users (endpoint_id);
 CREATE INDEX IF NOT EXISTS idx_fallback_skin_domains_order ON fallback_skin_domains (endpoint_id, sort_order, domain);
 CREATE INDEX IF NOT EXISTS idx_homepage_media_public_order ON homepage_media (enabled, sort_order, id);
@@ -688,9 +626,9 @@ CREATE INDEX IF NOT EXISTS idx_external_identities_user ON external_identities (
 CREATE INDEX IF NOT EXISTS idx_official_profile_bindings_identity ON official_profile_bindings (identity_id, created_at, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_official_profile_bindings_remote_uuid ON official_profile_bindings (remote_uuid);
 
--- Breaking migration: the v2 identity model replaces the one-shot Microsoft import contract.
--- Legacy Microsoft settings are retained here and migrated transactionally by the identity
--- service after configuration and OIDC discovery are available.
+-- Published v3 to v4 migrations.
+-- Legacy Microsoft settings remain available for the identity service to migrate after
+-- configuration and OIDC discovery are available.
 ALTER TABLE delegated_permission_grants ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';

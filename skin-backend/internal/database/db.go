@@ -121,14 +121,7 @@ func (db *DB) Init(ctx context.Context) error {
 	if _, err := db.Pool.Exec(ctx, InitSQL); err != nil {
 		return err
 	}
-	if err := db.Permissions.SeedDefaults(ctx); err != nil {
-		return err
-	}
-	// SeedDefaults reads the 2.4.1 is_admin flag before this final cleanup.
-	_, err := db.Pool.Exec(ctx, `
-		ALTER TABLE users DROP COLUMN IF EXISTS is_admin;
-	`)
-	return err
+	return db.Permissions.SeedDefaults(ctx)
 }
 
 func (db *DB) ResetPublicSchema(ctx context.Context) error {

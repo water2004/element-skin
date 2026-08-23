@@ -148,22 +148,6 @@ func seedUserSubjects(ctx context.Context, tx pgx.Tx, now int64) error {
 	`, core.RoleUser, now); err != nil {
 		return err
 	}
-	// The flag exists only in the Python 2.4.1 source schema.
-	hasAdmin, err := usersColumnExists(ctx, tx, "is_admin")
-	if err != nil {
-		return err
-	}
-	if hasAdmin {
-		if _, err := tx.Exec(ctx, `
-			INSERT INTO subject_roles (subject_id,role_id,created_at)
-			SELECT 'user:' || id, $1, $2
-			FROM users
-			WHERE is_admin=TRUE
-			ON CONFLICT (subject_id, role_id) DO NOTHING
-		`, core.RoleAdmin, now); err != nil {
-			return err
-		}
-	}
 	if err := seedProtectedUserSubject(ctx, tx, now); err != nil {
 		return err
 	}
@@ -237,18 +221,4 @@ func protectedSeedCandidate(ctx context.Context, tx pgx.Tx) (string, error) {
 		return "", nil
 	}
 	return subjectID, err
-}
-
-func usersColumnExists(ctx context.Context, tx pgx.Tx, column string) (bool, error) {
-	var exists bool
-	err := tx.QueryRow(ctx, `
-		SELECT EXISTS (
-			SELECT 1
-			FROM information_schema.columns
-			WHERE table_schema='public'
-			  AND table_name='users'
-			  AND column_name=$1
-		)
-	`, column).Scan(&exists)
-	return exists, err
 }
