@@ -27,9 +27,10 @@
 - **Yggdrasil 兼容**：支持 Authlib-Injector、启动器和 Minecraft 服务器所需的认证、会话、角色查询、材质签名与服务器加入接口。
 - **Fallback 服务**：支持多个外部皮肤站作为 fallback，提供健康检查、角色与材质导入、公钥发现和缓存。
 - **用户与资源管理**：支持邮箱验证、密码找回、角色管理、皮肤与披风上传、衣柜、3D 预览和公共皮肤库。
-- **外部身份与角色同步**：支持多 OIDC 身份、Microsoft 正版角色绑定与显式同步，以及远程 Yggdrasil 角色导入。
+- **外部身份与角色同步**：支持多 OIDC 身份、第三方登录、Microsoft 正版角色绑定与显式同步，以及远程 Yggdrasil 角色导入。
 - **细粒度权限**：支持多角色、单项权限覆盖、权限范围、受保护权限主体和按权限展示页面与操作。
-- **OAuth 第三方应用**：支持公开应用、机密应用、Authorization Code + PKCE、Device Code、Client Credentials、Refresh Token、撤销、权限审核和按权限订阅的异步 Webhook。
+- **OAuth/OIDC 第三方应用**：支持标准 OpenID Connect Provider、公开与机密 OAuth 应用、Authorization Code + PKCE、Device Code、Client Credentials、Refresh Token、撤销、权限审核和按权限订阅的异步 Webhook。
+- **注册策略**：支持邮箱验证码、邮箱后缀白名单或黑名单、邀请码以及对应的公开注册引导。
 - **通知中心**：统一展示公告、系统消息和 OAuth 事件，支持 Markdown 长公告、短公告、定向投递、未读提醒和过期清理。
 - **Minecraft 能力 API**：通过 `/v2/minecraft` 提供公开角色查询、材质属性读取和服务器加入结果校验，不替代 Yggdrasil 协议。
 - **首页与仪表盘**：支持普通背景图、Minecraft 全景背景、首页媒体管理、服务状态监测、公告侧栏和节日彩蛋。
@@ -77,7 +78,7 @@ Webhook 的站点可以只运行主后端。已经配置 Webhook 订阅但没有
 身份提供方后不得重新生成，否则已有密文将无法解密。
 
 v4.0.0 的自动数据库升级只支持 v3.0.2 → v4.0.0。v2.x、v3.0.0 和 v3.0.1 站点必须先升级到
-v3.0.2 并确认能够正常启动，再升级到 v4.0.0；v4 不再包含其他版本的直升逻辑。
+v3.0.2 并确认能够正常启动，再升级到 v4.0.0。完整变化和升级步骤见 [v4.0.0 Release Notes](RELEASE.md)。
 
 从 v3.0.2 升级时，后端会把已配置的 `microsoft_client_id` 和 `microsoft_client_secret` 一次性迁移为
 只开放绑定能力的 Microsoft OIDC provider。只有 provider 创建成功后才删除旧设置；失败时保留旧值
@@ -279,82 +280,6 @@ go test ./...
 
 ### 编写新测试
 单元测试使用内存 Redis mock；`internal/integration` 使用真实 Redis，并通过唯一 key 前缀自动清理测试数据，不会清空你的本地 Redis。
-
-## 📈 并发压测结果
-
-最新一次 v3.0.0 压测在本机通过 `skin-backend/cmd/loadtest` 启动隔离测试数据库、真实 Redis key 前缀和进程内 HTTP 服务完成，不会触碰正常运行数据库。命令如下：
-
-```bash
-cd skin-backend
-LOADTEST_ENABLE=1 LOADTEST_CONCURRENCY=200 LOADTEST_DURATION=1s go test ./cmd/loadtest -run TestRealBackendLoad -count=1 -v
-```
-
-测试数据：100 个用户、300 个角色、500 条材质记录、50 个邀请码、1 个预置 Yggdrasil join 会话。固定并发：200；每个场景窗口：1s；数据库连接池：20。当前报告包含公开端点、Cookie、OAuth delegated、Client Credentials、管理员和 Yggdrasil 场景，全部 0 失败。
-
-### v3.0.0 与 v2.4.1 功能对照
-
-下表比较的是同一业务功能在两个版本中的实际接口，不是 Go 与 Python 实现语言对比。v2.4.1 基准取自 Python 2.4.1 压测，v3.0.0 基准取自本次 Go 压测；v2.4.1 使用旧站点路径，v3.0.0 使用 `/v2` 路径，Yggdrasil 协议路径保持不变。
-
-| 功能（v2.4.1 → v3.0.0） | v3.0.0 req/s | v2.4.1 req/s | 变化 | v3.0.0 P95 | v2.4.1 P95 |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 公开设置（`/public/settings` → `/v2/public/settings`） | 26733.6 | 1913.7 | 14.0x | 8.4ms | 200.3ms |
-| 首页媒体（`/public/homepage-media` → `/v2/public/homepage-media`） | 32634.7 | 2138.0 | 15.3x | 7.8ms | 113.4ms |
-| 公开皮肤库（`/public/skin-library` → `/v2/public/skin-library`） | 18196.2 | 777.9 | 23.4x | 16.1ms | 552.6ms |
-| 登录（`/site-login` → `/v2/auth/login`） | 311.7 | 42.1 | 7.4x | 890.7ms | 4.58s |
-| Yggdrasil 元数据（`/` → `/`） | 26109.0 | 2694.4 | 9.7x | 10.2ms | 110.9ms |
-| Yggdrasil authenticate | 289.6 | 42.6 | 6.8x | 1.11s | 4.54s |
-| Yggdrasil validate | 16188.3 | 1126.3 | 14.4x | 13.9ms | 422.1ms |
-| Yggdrasil profile | 70172.7 | 1782.7 | 39.4x | 4.6ms | 151.1ms |
-| Yggdrasil 按名称查询 | 75233.8 | 1827.5 | 41.2x | 4.2ms | 164.2ms |
-| Yggdrasil hasJoined | 1976.9 | 250.8 | 7.9x | 158.5ms | 1.36s |
-| 当前用户（`/me` → `/v2/users/me`） | 12896.7 | 984.3 | 13.1x | 18.7ms | 384.1ms |
-| 我的角色（`/me/profiles` → `/v2/users/me/profiles`） | 17094.2 | 891.2 | 19.2x | 13.4ms | 469.3ms |
-| 我的材质（`/me/textures` → `/v2/users/me/textures`） | 17070.5 | 1125.8 | 15.2x | 13.6ms | 361.6ms |
-| 材质详情（`/me/textures/{hash}/skin` → `/v2/users/me/textures/{hash}/skin`） | 16641.1 | 1101.1 | 15.1x | 13.8ms | 360.5ms |
-| 管理员用户列表（`/admin/users` → `/v2/admin/users`） | 1879.5 | 672.9 | 2.8x | 124.8ms | 780.4ms |
-| 管理员用户详情（`/admin/users/{id}` → `/v2/admin/users/{id}`） | 12154.6 | 822.2 | 14.8x | 19.4ms | 510.3ms |
-| 管理员用户角色列表（`/admin/users/{id}/profiles` → `/v2/admin/users/{id}/profiles`） | 16390.8 | 1032.5 | 15.9x | 13.8ms | 689.5ms |
-| 管理员角色列表（`/admin/profiles` → `/v2/admin/profiles`） | 14260.2 | 809.2 | 17.6x | 17.0ms | 822.5ms |
-| 管理员材质列表（`/admin/textures` → `/v2/admin/textures`） | 14997.6 | 793.0 | 18.9x | 17.0ms | 659.7ms |
-| 管理员邀请码（`/admin/invites` → `/v2/admin/invites`） | 14821.4 | 915.9 | 16.2x | 16.0ms | 371.8ms |
-| 管理员站点设置（`/admin/settings/site` → `/v2/admin/settings/site`） | 2607.6 | 1318.3 | 2.0x | 80.8ms | 890.1ms |
-
-这组对比只能说明固定测试条件下的吞吐和延迟差异，不能把路径迁移本身当作性能原因。3.0.0 额外增加了细粒度权限、Redis 权限缓存和统一 Actor 处理，因此当前用户和管理员列表等复杂权限路径需要重点关注。
-
-### v3.0.0 新增 OAuth 压测场景
-
-v2.4.1 没有对应 OAuth 功能，因此以下场景不参与跨版本对比：
-
-| 场景 | 接口 | 成功 req/s | P95 |
-| --- | --- | ---: | ---: |
-| OAuth delegated 当前用户 | `/v2/users/me` | 9588.1 | 28.1ms |
-| OAuth delegated 角色列表 | `/v2/users/me/profiles` | 13213.5 | 18.9ms |
-| OAuth delegated 材质列表 | `/v2/users/me/textures` | 11809.0 | 23.5ms |
-| OAuth delegated 材质详情 | `/v2/users/me/textures/{hash}/skin` | 13124.8 | 19.1ms |
-| OAuth delegated 管理员用户列表 | `/v2/admin/users` | 1712.3 | 136.3ms |
-| OAuth delegated 管理员用户详情 | `/v2/admin/users/{id}` | 9374.1 | 29.7ms |
-| OAuth delegated 管理员邀请码 | `/v2/admin/invites` | 11404.4 | 22.5ms |
-| Client Credentials 管理员邀请码 | `/v2/admin/invites` | 6709.2 | 42.1ms |
-| OAuth delegated 管理员设置 | `/v2/admin/settings/site` | 2525.0 | 83.0ms |
-
-完整报告见 [`reports/concurrency-load-test.md`](reports/concurrency-load-test.md)。压测报告使用隔离 PostgreSQL 数据库和 Redis key 前缀，测试结束后自动清理测试数据。
-
-### Webhook 性能影响
-
-Webhook 压测以同一个 profile 更新接口为负载，使用 50 并发、每阶段 3 秒、四轮平衡轮换、20 个主站数据库连接和独立的 2 连接 Worker 池，对比关闭触发器、无订阅、仅写 outbox、Worker 同时运行四种模式。相对变化先在每轮内与该轮基线配对，再取中位数；所有写请求均成功：
-
-| 模式 | 中位成功 req/s | 相对同轮功能前基线中位数 | 中位 P95 |
-| --- | ---: | ---: | ---: |
-| 关闭触发器（功能前近似基线） | 13860.3 | 0.0% | 6.5ms |
-| 启用触发器，无订阅 | 13088.3 | -5.4% | 6.8ms |
-| 有订阅，仅写 outbox | 11740.8 | -13.8% | 7.6ms |
-| 有订阅，Worker 同时运行 | 11727.7 | -16.2% | 7.5ms |
-
-连续两次相同参数复测中，无订阅 trigger 的相对吞吐成本为 `5.4%～5.5%`，有订阅并写 outbox 的成本为 `13.8%～16.3%`，P95 增量为 `0.3～1.1ms`，失败率均为 `0%`。Worker 相对“仅写 outbox”的短样本变化分别为 `-4.8%` 和 `+2.7%`，不足以从整机波动中识别稳定的额外影响；可以确认的主要成本位于业务事务内的订阅检查和 outbox 插入。
-
-在本机零延迟 `204` 接收端下，1000 个固定事件的紧循环 outbox 展开、HTTP 投递落库和组合吞吐分别为 13521.2、7806.0 和 4948.9 events/s。包含保守 `3000ms` 活动间隔的生产循环端到端吞吐为 82.0 events/s；该数字是资源预算效果，不是数据库处理上限。完整方法、原始轮次和限制见 [`reports/webhook-load-test-after.md`](reports/webhook-load-test-after.md)。
-
-进一步的 CPU、block、mutex 和 Worker SQL profile 见 [`reports/webhook-performance-profile-after.md`](reports/webhook-performance-profile-after.md) 与 [`reports/webhook-worker-sql-profile-after.md`](reports/webhook-worker-sql-profile-after.md)。当前 1000 个事件的生产循环只执行 80 次 Worker SQL，即 `0.08` 次/event；事件领取和投递状态提交均按批处理，没有按事件产生线性数据库往返。
 
 ## 📄 许可证
 

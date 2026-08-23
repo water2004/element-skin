@@ -12,13 +12,13 @@
 
 ## 版本范围
 
-本版本以 v3.0.2 为功能比较基线，自动迁移入口只面向正式发布的 v3.0.2 数据库结构。v3.0.2 之前的版本和开发期间的中间结构不属于兼容面，也不保留对应迁移路径。
+本版本以 v3.0.2 为功能比较基线，自动数据库升级只支持正式发布的 v3.0.2 → v4.0.0。
 
 产品版本与 API 协议版本相互独立：
 
 - Element Skin 产品版本升级为 **v4.0.0**。
 - 站点 JSON API 从 `/v1` 升级为 **`/v2`**。
-- OAuth 2.1、OpenID Connect 与 Yggdrasil 继续使用各自的标准端点和协议格式。
+- OAuth 2.1、OpenID Connect 与 Yggdrasil 使用各自的标准端点和协议格式，不随站点 API 版本变化。
 
 本版本的用户可见变化主要包括：
 
@@ -27,8 +27,8 @@
 - 在现有 OAuth 应用体系中加入标准 OpenID Connect Provider 能力。
 - 新增按应用权限投递、带签名和重试机制的 Webhook。
 - 站点 JSON API 升级到 `/v2`，统一响应、错误、状态码与字段语义。
-- 新增邮箱后缀策略，完善注册邀请码和公开注册配置。
-- 更新细粒度权限、管理页面、Python SDK、开发者文档和部署方式。
+- 新增邮箱后缀策略和自由格式邀请码。
+- 更新细粒度权限、Python SDK、开发者文档和部署方式。
 
 ## 重大变化
 
@@ -36,11 +36,10 @@
 
 管理员可以配置多个兼容 OIDC Discovery 的外部身份提供方：
 
-- 支持通用 OIDC 提供方和 Microsoft 能力适配器。
+- 支持通用 OIDC 提供方，Microsoft 账号同样通过 OIDC 连接。
 - 可配置名称、Issuer、Client ID、Client Secret、scope、图标和显示顺序。
 - 可以分别控制提供方是否启用、是否允许第三方登录、是否允许已登录用户连接身份。
 - 保存配置时会验证 Discovery 信息；远端端点必须使用安全的 HTTPS 地址。
-- 回调地址由 `SERVER_API_URL` 统一生成，并在创建和编辑页展示。
 
 用户新增独立的“身份管理”页面：
 
@@ -49,7 +48,6 @@
 - 身份页会展示头像、显示名称、邮箱、外部账号标识、授权状态及关联的正版角色。
 - 用户可以添加、重新连接和删除身份。
 - 重新连接时必须确认仍是原来的外部账号；选错账号不会替换既有身份。
-- 外部 access token 只在实际调用远端能力时按需刷新。
 - refresh token 或长期授权失效后，身份会标记为需要重新连接；原身份和正版绑定关系不会被静默删除。
 
 外部登录不会绕过本站注册要求：
@@ -63,7 +61,7 @@
 
 旧版一次性“导入 Microsoft 角色”改为长期、可管理的正版角色绑定：
 
-- Microsoft 连接与其他 OIDC 身份走同一套身份接口、授权状态和重新连接流程。
+- Microsoft 账号作为外部身份在身份管理页连接、重新授权和删除。
 - 点击“绑定正版”时，用户需要从已经连接且状态正常的 Microsoft 身份中选择账号。
 - 本站以远端正版 UUID 建立关系：已有自己的角色会复用，没有时会创建，已属于其他用户时会明确拒绝。
 - 只有用户点击“同步正版数据”时，才同步远端角色名称、皮肤和披风。
@@ -79,7 +77,7 @@
 
 ### 3. 本站支持标准 OpenID Connect Provider
 
-现有 OAuth 客户端体系现在同时支持标准 OpenID Connect，不另建一套客户端或审核入口：
+在第三方应用中登记的 OAuth 客户端现在可以申请 OIDC scope，并使用本站作为标准 OpenID Connect Provider：
 
 - 新增 OpenID Discovery、JWKS、RS256 ID Token 和 UserInfo。
 - 支持 `openid`、`profile`、`email`、`offline_access` 标准 scope。
@@ -96,7 +94,7 @@
 
 ### 4. 站点 API 升级到 `/v2`
 
-所有站点 JSON API 已从 `/v1` 迁移到 `/v2`。旧 `/v1` 和未版本化站点业务路径不再保留，自定义前端、脚本、机器人、SDK 和第三方集成必须同步更新。
+所有站点 JSON API 已从 `/v1` 迁移到 `/v2`。旧 `/v1` 不再保留，自定义前端、脚本、机器人、SDK 和第三方集成必须同步更新。
 
 本次变化不能通过简单替换 URL 中的 `v1` 完成：
 
@@ -108,7 +106,6 @@
 - 无返回内容的动作、幂等设置和删除统一使用 `204 No Content`。
 - 不再返回只用于表达 HTTP 成功的 `ok`、`success`、`message` 或通用 `data` envelope。
 - 材质资源字段使用 `type`，写入和筛选参数使用 `texture_type`。
-- 明确提供但无效的 Cookie 或 Bearer 凭据返回 `401`，不会降级为访客。
 
 普通 `/v2` 错误统一为：
 
@@ -152,20 +149,17 @@ oauth_app.review.any
 - 旧 `microsoft_import.*` 权限已移除。
 - OAuth 应用的通过、驳回、停用和重新启用由独立的 `oauth_app.review.any` 授权，不再隐含在 `oauth_app.update.any` 中。
 - 内置角色已经更新；自定义角色和申请过旧权限的应用需要管理员重新检查。
-- OIDC、OAuth、身份、正版角色和管理页面按细粒度权限展示入口与操作。
-- 只拥有部分管理权限的用户可以进入对应页面，但只能查看和执行实际获授权的操作。
+- 新增的 OIDC、外部身份、正版角色和应用审核操作分别使用上述细粒度权限。
 
 ## OAuth 应用与 Webhook
 
 ### 1. 第三方应用管理
 
-- 应用创建和编辑改为独立页面。
 - 应用可以统一维护基本信息、公开或机密类型、OAuth 回调、OIDC scope、站点 API 权限和 Webhook endpoint。
 - Authorization Code 应用必须配置回调；只使用 Device Code 或 Client Credentials 的应用可以不配置回调。
 - OAuth 回调地址与 Webhook 接收地址是两种独立配置。
 - 只使用 OIDC 登录的应用可以申请零项站点 API 权限。
-- Client Secret 与 Webhook signing secret 生成后只显示一次。
-- 同一用户对同一应用只保留一条有效授权；再次批准会更新原授权。
+- Webhook signing secret 生成后只显示一次。
 
 ### 2. Webhook 事件
 
@@ -220,20 +214,9 @@ endpoint 的事件范围同时受以下条件约束：
 - 黑名单模式在前端直接提示不可用，不继续请求验证码。
 - 前端预检只用于交互，后端仍执行最终校验。
 
-### 2. 公开注册要求
+### 2. 自由格式邀请码
 
-公开站点配置明确返回：
-
-- `allow_register`
-- `require_invite`
-- `email_verify_enabled`
-- `email_suffix_policy`
-
-需要邀请码时，注册页显示必填项并执行必填校验；不需要时不显示。公开注册配置加载失败时，前端会阻止提交，避免遗漏站点要求。
-
-### 3. 任意字符串邀请码
-
-- 邀请码支持包含空格、引号、斜杠、反斜杠和其他任意 UTF-8 字符。
+- 邀请码支持空格、引号、斜杠、反斜杠和 Unicode 字符；空字符串与 NUL 字符除外。
 - 邀请码按原文校验，保留大小写、空格和符号。
 - 管理 API 创建时使用无填充 Base64URL 的 `code_base64` 字段。
 - 管理 API 删除路径使用相同 Base64URL 编码。
@@ -253,18 +236,6 @@ endpoint 的事件范围同时受以下条件约束：
 - 新增可插拔 `ReplayGuard` 与适合本地开发的 `MemoryReplayGuard`。
 - 新增 FastAPI 和 Flask Webhook 接收示例。
 - SDK 快速开始、OAuth 流程、权限模型、错误与 Token、API 客户端、OIDC 和 Webhook 文档已经更新。
-
-## 前端与管理体验
-
-- 新增用户身份管理页和 Microsoft 正版角色绑定选择流程。
-- OIDC 提供方与 OAuth 应用使用独立创建、编辑页面。
-- 管理员 OIDC 页新增“本站 OIDC 信息”卡片，集中展示本站 Issuer、Discovery、Authorization、Token、UserInfo 和 JWKS 地址，并引导管理员前往第三方应用页面登记或审核客户端。
-- 提供方回调地址只在创建和编辑页展示，不在列表页重复显示。
-- 移除旧 Microsoft 专用提示横幅。
-- 应用授权页分别解释 OIDC scope 和站点 API 权限。
-- 注册页会根据公开配置显示邮箱后缀、验证码和邀请码要求。
-- 邀请码管理页补充任意字符、原文匹配和 Base64URL 传输提示。
-- 站点设置、邮件设置、Mojang/Fallback 设置和彩蛋设置会提示未保存更改。
 
 ## 配置与部署
 
@@ -303,7 +274,7 @@ WEBHOOK_WORKER_ACTIVE_INTERVAL_MS=3000
 - OIDC 公私钥文件在配置路径不存在时会自动生成。
 - 必须持久化 `./data`，不得删除或替换已投入使用的 Yggdrasil 或 OIDC 私钥。
 - `IDENTITY_ENCRYPTION_KEY` 不会自动生成。
-- `IDENTITY_ENCRYPTION_KEY` 用于保护外部身份 refresh token 和 OIDC client secret，启用相关功能后必须长期保持不变。
+- `IDENTITY_ENCRYPTION_KEY` 用于保护外部身份 refresh token 和外部身份提供方的 client secret，启用相关功能后必须长期保持不变。
 - Worker 的数据库连接数和轮询间隔可通过对应环境变量调整。
 
 ### 3. Microsoft 配置迁移
