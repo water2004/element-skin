@@ -75,10 +75,10 @@ worker 不暴露端口。自建部署也必须同时运行主后端和镜像内�
 替换这些私钥。`IDENTITY_ENCRYPTION_KEY` 用于加密 OIDC client secret 和外部 refresh token，配置
 身份提供方后不得重新生成，否则已有密文将无法解密。
 
-v4.0.0 的自动数据库升级只支持正式发布的 v3.0.0、v3.0.1、v3.0.2。v2.x 站点必须先升级到
-v3.0.2 并确认能够正常启动，再升级到 v4.0.0；v4 不再包含任何 v2.x 直升逻辑。
+v4.0.0 的自动数据库升级只支持 v3.0.2 → v4.0.0。v2.x、v3.0.0 和 v3.0.1 站点必须先升级到
+v3.0.2 并确认能够正常启动，再升级到 v4.0.0；v4 不再包含其他版本的直升逻辑。
 
-从 v3.0.x 升级时，后端会把已配置的 `microsoft_client_id` 和 `microsoft_client_secret` 一次性迁移为
+从 v3.0.2 升级时，后端会把已配置的 `microsoft_client_id` 和 `microsoft_client_secret` 一次性迁移为
 只开放绑定能力的 Microsoft OIDC provider。只有 provider 创建成功后才删除旧设置；失败时保留旧值
 并终止启动。旧版导入的角色和材质保持不变，但旧流程没有持久化 Microsoft 用户 refresh token，
 因此用户仍需重新授权一次。升级前还需要在 Azure 应用中加入新的 Web 回调地址：

@@ -626,7 +626,7 @@ CREATE INDEX IF NOT EXISTS idx_external_identities_user ON external_identities (
 CREATE INDEX IF NOT EXISTS idx_official_profile_bindings_identity ON official_profile_bindings (identity_id, created_at, id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_official_profile_bindings_remote_uuid ON official_profile_bindings (remote_uuid);
 
--- Published v3 to v4 migrations.
+-- Published v3.0.2 to v4 migrations.
 -- Legacy Microsoft settings remain available for the identity service to migrate after
 -- configuration and OIDC discovery are available.
 ALTER TABLE delegated_permission_grants ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

@@ -113,7 +113,7 @@ func TestInitConsolidatesDuplicateActiveOAuthGrantsAndInvalidatesOldCredentialsE
 	}
 }
 
-func TestInitMigratesPublishedV3OIDCStateExactly(t *testing.T) {
+func TestInitMigratesPublishedV302OIDCStateExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 	if _, err := db.Pool.Exec(ctx, `
@@ -180,7 +180,7 @@ func TestInitMigratesPublishedV3OIDCStateExactly(t *testing.T) {
 	}
 }
 
-func TestInitPreservesV3MicrosoftSettingsForTransactionalServiceMigration(t *testing.T) {
+func TestInitPreservesV302MicrosoftSettingsForTransactionalServiceMigration(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()
 	want := map[string]string{
