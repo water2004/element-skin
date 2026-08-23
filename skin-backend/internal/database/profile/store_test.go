@@ -3,6 +3,7 @@ package profile_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"element-skin/backend/internal/database/profile"
@@ -103,6 +104,42 @@ func TestStoreCRUDHelpersSearchAndCascade(t *testing.T) {
 	}
 	if got, err := store.GetByID(ctx, p.ID); err != nil || got != nil {
 		t.Fatalf("delete cascade should remove profile row: profile=%#v err=%v", got, err)
+	}
+}
+
+func TestUpdateOwnedNameResolvesAndMutatesExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	store := profile.Store{Pool: db.Pool}
+	owner := testutil.CreateUser(t, db, "profile-owned-update@test.com", "Password123", "ProfileOwnedUpdate", false)
+	other := testutil.CreateUser(t, db, "profile-owned-update-other@test.com", "Password123", "ProfileOwnedOther", false)
+	target := testutil.CreateProfile(t, db, owner.ID, "profile_owned_update", "OwnedBefore")
+	foreign := testutil.CreateProfile(t, db, other.ID, "profile_owned_update_foreign", "OwnedForeign")
+	conflict := testutil.CreateProfile(t, db, owner.ID, "profile_owned_update_conflict", "OwnedConflict")
+
+	if got, err := store.UpdateOwnedName(ctx, target.ID, owner.ID, "bad-name!", false); err != nil || !reflect.DeepEqual(got, profile.OwnedNameUpdateResult{Found: true, Owned: true}) {
+		t.Fatalf("validation-only owned result=%#v err=%v", got, err)
+	}
+	if got, err := store.UpdateOwnedName(ctx, foreign.ID, owner.ID, "NotApplied", true); err != nil || !reflect.DeepEqual(got, profile.OwnedNameUpdateResult{Found: true}) {
+		t.Fatalf("foreign result=%#v err=%v", got, err)
+	}
+	if got, err := store.UpdateOwnedName(ctx, "missing-owned-profile", owner.ID, "NotApplied", true); err != nil || !reflect.DeepEqual(got, profile.OwnedNameUpdateResult{}) {
+		t.Fatalf("missing result=%#v err=%v", got, err)
+	}
+	if got, err := store.UpdateOwnedName(ctx, target.ID, owner.ID, "OwnedAfter", true); err != nil || !reflect.DeepEqual(got, profile.OwnedNameUpdateResult{Found: true, Owned: true, Updated: true}) {
+		t.Fatalf("owned update result=%#v err=%v", got, err)
+	}
+	if _, err := store.UpdateOwnedName(ctx, target.ID, owner.ID, conflict.Name, true); !profile.IsNameConflict(err) {
+		t.Fatalf("owned name conflict error=%v", err)
+	}
+
+	storedTarget, err := store.GetByID(ctx, target.ID)
+	if err != nil || storedTarget == nil || storedTarget.Name != "OwnedAfter" {
+		t.Fatalf("stored target=%#v err=%v", storedTarget, err)
+	}
+	storedForeign, err := store.GetByID(ctx, foreign.ID)
+	if err != nil || storedForeign == nil || storedForeign.Name != foreign.Name {
+		t.Fatalf("stored foreign=%#v err=%v", storedForeign, err)
 	}
 }
 

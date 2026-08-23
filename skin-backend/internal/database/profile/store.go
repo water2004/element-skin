@@ -15,6 +15,12 @@ type Store struct {
 	Pool *pgxpool.Pool
 }
 
+type OwnedNameUpdateResult struct {
+	Found   bool
+	Owned   bool
+	Updated bool
+}
+
 func NormalizeModel(m string) string {
 	if m == "slim" {
 		return "slim"
@@ -97,6 +103,26 @@ func (s Store) CountByUser(ctx context.Context, userID string) (int, error) {
 func (s Store) UpdateName(ctx context.Context, id, name string) (bool, error) {
 	tag, err := s.Pool.Exec(ctx, `UPDATE profiles SET name=$1 WHERE id=$2`, name, id)
 	return tag.RowsAffected() > 0, err
+}
+
+func (s Store) UpdateOwnedName(ctx context.Context, id, userID, name string, apply bool) (OwnedNameUpdateResult, error) {
+	var result OwnedNameUpdateResult
+	err := s.Pool.QueryRow(ctx, `
+		WITH target AS MATERIALIZED (
+			SELECT user_id
+			FROM profiles
+			WHERE id=$1
+		), updated AS (
+			UPDATE profiles
+			SET name=$3
+			WHERE id=$1 AND user_id=$2 AND $4
+			RETURNING 1
+		)
+		SELECT EXISTS(SELECT 1 FROM target),
+		       EXISTS(SELECT 1 FROM target WHERE user_id=$2),
+		       EXISTS(SELECT 1 FROM updated)
+	`, id, userID, name, apply).Scan(&result.Found, &result.Owned, &result.Updated)
+	return result, err
 }
 
 func (s Store) UpdateSkin(ctx context.Context, id string, hash *string) error {

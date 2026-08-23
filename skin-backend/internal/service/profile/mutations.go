@@ -3,7 +3,6 @@ package profile
 import (
 	"context"
 	"net/http"
-	"regexp"
 
 	profilestore "element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/permission"
@@ -14,39 +13,27 @@ func (s Service) UpdateProfile(ctx context.Context, actor permission.Actor, prof
 	if err := requireActorPermission(actor, profileUpdateOwnedPermission); err != nil {
 		return err
 	}
-	p, err := s.DB.Profiles.GetByID(ctx, profileID)
-	if err != nil {
-		return err
-	}
-	if p == nil {
-		return util.HTTPError{Status: http.StatusNotFound, Object: "profile", Operation: "resolve", Reason: "not_found"}
-	}
-	if p.UserID != actor.UserID {
-		return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
-	}
-	if name == "" {
-		return util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "validate", Reason: "required"}
-	}
-	if !regexp.MustCompile(`^[A-Za-z0-9_]{1,16}$`).MatchString(name) {
-		return util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "validate", Reason: "invalid"}
-	}
-	if p.Name != name {
-		existing, err := s.DB.Profiles.GetByName(ctx, name)
-		if err != nil {
-			return err
-		}
-		if existing != nil {
-			return util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "reserve", Reason: "conflict"}
-		}
-	}
-	updated, err := s.DB.Profiles.UpdateName(ctx, profileID, name)
+	validName := util.ValidProfileName(name)
+	result, err := s.DB.Profiles.UpdateOwnedName(ctx, profileID, actor.UserID, name, validName)
 	if profilestore.IsNameConflict(err) {
 		return util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "reserve", Reason: "conflict"}
 	}
 	if err != nil {
 		return err
 	}
-	if !updated {
+	if !result.Found {
+		return util.HTTPError{Status: http.StatusNotFound, Object: "profile", Operation: "resolve", Reason: "not_found"}
+	}
+	if !result.Owned {
+		return util.HTTPError{Status: http.StatusForbidden, Object: "permission", Operation: "check", Reason: "denied"}
+	}
+	if name == "" {
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "validate", Reason: "required"}
+	}
+	if !validName {
+		return util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "validate", Reason: "invalid"}
+	}
+	if !result.Updated {
 		return util.HTTPError{Status: http.StatusNotFound, Object: "profile", Operation: "resolve", Reason: "not_found"}
 	}
 	return nil

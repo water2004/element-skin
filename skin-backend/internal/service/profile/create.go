@@ -3,7 +3,6 @@ package profile
 import (
 	"context"
 	"net/http"
-	"regexp"
 
 	profilestore "element-skin/backend/internal/database/profile"
 	"element-skin/backend/internal/model"
@@ -19,7 +18,7 @@ func (s Service) CreateProfile(ctx context.Context, actor permission.Actor, name
 	if name == "" {
 		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "validate", Reason: "required"}
 	}
-	if !regexp.MustCompile(`^[A-Za-z0-9_]{1,16}$`).MatchString(name) {
+	if !util.ValidProfileName(name) {
 		return nil, util.HTTPError{Status: http.StatusBadRequest, Object: "profile_name", Operation: "validate", Reason: "invalid"}
 	}
 	if p, err := s.DB.Profiles.GetByName(ctx, name); err != nil {
