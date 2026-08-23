@@ -1,6 +1,6 @@
 <template>
   <div class="max-w-[1000px] mx-auto py-5 animate-fade-in">
-    <PageHeader title="OpenID Connect" subtitle="管理本站作为身份提供方和客户端的两类接入">
+    <PageHeader title="OIDC 身份提供方" subtitle="配置允许用户登录和绑定的外部 OIDC 端点">
       <template #icon><Connection /></template>
       <template #actions>
         <ActionBar>
@@ -16,11 +16,12 @@
         <div>
           <div class="flex items-center gap-2 text-lg font-semibold text-[var(--color-heading)]">
             <el-icon><Promotion /></el-icon>
-            本站作为 OIDC Provider
+            本站 OIDC 信息
           </div>
           <p class="mt-2 mb-0 text-sm leading-6 text-[var(--color-text-light)]">
-            外部站点可以把本站作为登录源。应用先在“第三方应用”中登记精确回调地址，审核通过后使用
-            Authorization Code + PKCE 发起授权。
+            外部站点可以使用本站进行 OIDC
+            登录。应用先在“第三方应用”中登记精确回调地址，审核通过后使用 Authorization Code + PKCE
+            发起授权。
           </p>
         </div>
 
@@ -67,13 +68,6 @@
         </div>
       </div>
     </UiCard>
-
-    <div class="mb-4">
-      <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">本站作为 OIDC Client</h2>
-      <p class="mt-1 mb-0 text-sm text-[var(--color-text-light)]">
-        下列外部身份提供方可用于本站登录、身份绑定和重新授权。
-      </p>
-    </div>
 
     <div v-loading="loading" class="min-h-[220px]">
       <div v-if="providers.length" class="grid gap-4">

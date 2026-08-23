@@ -72,18 +72,20 @@ beforeEach(() => {
 })
 
 describe('OIDC identity provider pages', () => {
-  it('explains both OIDC roles with exact discovery endpoints and no Microsoft banner', async () => {
+  it('shows site OIDC information above the external provider list', async () => {
     const mounted = await mountPage('/admin/identity-providers', providerRoutes(), [
       'identity_provider.read.any',
     ])
     await flushUI()
 
-    expect(mounted.root.textContent).toContain('本站作为 OIDC Provider')
+    expect(mounted.root.textContent).toContain('OIDC 身份提供方')
+    expect(mounted.root.textContent).toContain('本站 OIDC 信息')
     expect(mounted.root.textContent).toContain(
       'https://skin.example/api/.well-known/openid-configuration',
     )
     expect(mounted.root.textContent).toContain('https://skin.example/oauth/authorize')
-    expect(mounted.root.textContent).toContain('本站作为 OIDC Client')
+    expect(mounted.root.textContent).not.toContain('本站作为 OIDC Provider')
+    expect(mounted.root.textContent).not.toContain('本站作为 OIDC Client')
     expect(mounted.root.textContent).not.toContain(redirectUri)
     expect(mounted.root.textContent).not.toContain('请在身份提供方添加 Redirect URI')
     expect(mounted.root.textContent).not.toContain('Microsoft 也是普通 OIDC 身份提供方')
