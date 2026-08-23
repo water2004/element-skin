@@ -84,6 +84,8 @@ describe('OIDC identity provider pages', () => {
     )
     expect(mounted.root.textContent).toContain('https://skin.example/oauth/authorize')
     expect(mounted.root.textContent).toContain('本站作为 OIDC Client')
+    expect(mounted.root.textContent).not.toContain(redirectUri)
+    expect(mounted.root.textContent).not.toContain('请在身份提供方添加 Redirect URI')
     expect(mounted.root.textContent).not.toContain('Microsoft 也是普通 OIDC 身份提供方')
     expect(oauthApiMocks.getOpenIDConfiguration).toHaveBeenCalledTimes(1)
     mounted.unmount()
@@ -123,6 +125,8 @@ describe('OIDC identity provider pages', () => {
     ])
     await flushUI()
 
+    expect(mounted.root.textContent).toContain('请在身份提供方添加 Redirect URI')
+    expect(mounted.root.textContent).toContain(redirectUri)
     setInputValue(inputForLabel(mounted.root, '显示名称'), ' Generic Provider ')
     setInputValue(inputForLabel(mounted.root, 'Issuer URL'), ' https://issuer.example ')
     setInputValue(inputForLabel(mounted.root, 'Client ID'), ' client-id ')

@@ -75,8 +75,6 @@
       </p>
     </div>
 
-    <OidcRedirectUriNotice :uri="redirectUri" class="mb-6" />
-
     <div v-loading="loading" class="min-h-[220px]">
       <div v-if="providers.length" class="grid gap-4">
         <UiCard v-for="provider in providers" :key="provider.id" hoverable>
@@ -139,14 +137,12 @@ import UiCard from '@/components/ui/UiCard.vue'
 import { deleteIdentityProvider, getAdminIdentityProviders } from '@/api/admin/identity-providers'
 import type { AdminIdentityProvider, User } from '@/api/types'
 import { getErrorMessage } from '@/utils/error'
-import OidcRedirectUriNotice from './OidcRedirectUriNotice.vue'
 import { getOpenIDConfiguration, type OpenIDConfiguration } from '@/api/oauth'
 
 const router = useRouter()
 const user = inject<Ref<User | null>>('user', ref(null))
 const providers = ref<AdminIdentityProvider[]>([])
 const loading = ref(false)
-const redirectUri = ref('')
 const discovery = ref<OpenIDConfiguration | null>(null)
 const discoveryLoading = ref(false)
 const discoveryError = ref(false)
@@ -196,7 +192,6 @@ async function loadProviders() {
   try {
     const response = await getAdminIdentityProviders()
     providers.value = response.data.items
-    redirectUri.value = response.data.redirect_uri
   } catch (e: unknown) {
     ElMessage.error('加载提供方失败: ' + getErrorMessage(e, '加载失败'))
   } finally {
