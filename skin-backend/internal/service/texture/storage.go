@@ -94,7 +94,7 @@ func TexturePixelHash(img image.Image) string {
 	pos := 8
 	for x := b.Min.X; x < b.Max.X; x++ {
 		for y := b.Min.Y; y < b.Max.Y; y++ {
-			rgba := color.RGBAModel.Convert(img.At(x, y)).(color.RGBA)
+			rgba := color.NRGBAModel.Convert(img.At(x, y)).(color.NRGBA)
 			if rgba.A == 0 {
 				rgba.R, rgba.G, rgba.B = 0, 0, 0
 			}
