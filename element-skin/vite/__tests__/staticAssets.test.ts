@@ -1,12 +1,13 @@
 // @vitest-environment node
 
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import { describe, expect, it } from 'vitest'
 
 import { isPathInside, resolveStaticAssetRequest } from '../staticAssets'
 
-const backendRoot = path.resolve('D:/workspace/skin-backend')
+const backendRoot = fileURLToPath(new URL('../fixtures/skin-backend', import.meta.url))
 
 describe('resolveStaticAssetRequest', () => {
   it.each([
