@@ -88,7 +88,7 @@ import { getPublicSettings } from '@/api/public'
 import { siteLogin } from '@/api/auth'
 import { getIdentityProviders, startIdentityAuthorization } from '@/api/identity'
 import type { IdentityProvider } from '@/api/types'
-import { getErrorMessage, isValidationError } from '@/utils/error'
+import { getErrorMessage, getApiErrorMessage, isValidationError } from '@/utils/error'
 import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
@@ -107,6 +107,7 @@ const loginProviders = ref<IdentityProvider[]>([])
 const authorizingProviderId = ref('')
 
 onMounted(async () => {
+  handleRedirectedIdentityError()
   try {
     const res = await getPublicSettings()
     emailVerifyEnabled.value = res.data.email_verify_enabled ?? false
@@ -120,6 +121,21 @@ onMounted(async () => {
     console.error('Failed to fetch identity providers', e)
   }
 })
+
+function handleRedirectedIdentityError() {
+  const object = route.query.error_object
+  const operation = route.query.error_operation
+  const reason = route.query.error_reason
+  if (typeof object !== 'string' || typeof operation !== 'string' || typeof reason !== 'string') {
+    return
+  }
+  ElMessage.warning(getApiErrorMessage({ object, operation, reason }, '外部身份登录失败'))
+  const query = { ...route.query }
+  delete query.error_object
+  delete query.error_operation
+  delete query.error_reason
+  void router.replace({ query })
+}
 
 const rules: FormRules = {
   email: [

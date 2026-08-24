@@ -26,6 +26,7 @@ const exactMessages: Record<string, string> = {
   'rate_limit.check.exceeded': '请求过于频繁，请稍后再试',
   'identity.link.already_exists': '该外部身份已绑定到当前账户',
   'identity.link.conflict': '该外部身份已被其他账户绑定',
+  'identity.login.not_linked': '该外部身份尚未绑定本站账号，请先使用账号密码登录，再到控制台的「外部身份」页进行绑定',
   'identity.authorize.required': '该外部身份需要重新授权',
   'identity.authorize.mismatch': '授权账户与已绑定身份不一致',
   'identity.authorize.denied': '外部身份授权已被拒绝',

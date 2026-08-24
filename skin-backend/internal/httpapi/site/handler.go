@@ -11,7 +11,6 @@ import (
 	accountsvc "element-skin/backend/internal/service/account"
 	authsvc "element-skin/backend/internal/service/auth"
 	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
-	identitysvc "element-skin/backend/internal/service/identity"
 	mailsvc "element-skin/backend/internal/service/mail"
 	profilesvc "element-skin/backend/internal/service/profile"
 	publicsitesvc "element-skin/backend/internal/service/publicsite"
@@ -47,8 +46,7 @@ func NewWithRedis(cfg config.Config, db *database.DB, redis redisstore.Store, au
 	verification := verificationsvc.Service{DB: db, Redis: redis, Settings: settings, Sender: sender}
 	emailPolicy := emailpolicysvc.Service{DB: db, Redis: redis}
 	verification.EmailPolicy = emailPolicy
-	identityService := identitysvc.Service{DB: db, Config: cfg, Redis: redis}
-	authService := authsvc.Service{DB: db, Cfg: cfg, Redis: redis, Settings: settings, Verification: verification, Identity: identityService, EmailPolicy: emailPolicy}
+	authService := authsvc.Service{DB: db, Cfg: cfg, Redis: redis, Settings: settings, Verification: verification, EmailPolicy: emailPolicy}
 	accounts := accountsvc.AccountService{DB: db, Redis: redis, Verification: verification, EmailPolicy: emailPolicy}
 	profiles := profilesvc.Service{DB: db, Settings: settings}
 	textures := texturesvc.LibraryService{DB: db, Settings: settings}

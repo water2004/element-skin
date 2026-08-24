@@ -37,6 +37,9 @@ describe('getErrorMessage', () => {
     expect(
       getApiErrorMessage({ object: 'identity', operation: 'authorize', reason: 'incomplete' }),
     ).toBe('身份连接未完成，原有身份没有改变')
+    expect(
+      getApiErrorMessage({ object: 'identity', operation: 'login', reason: 'not_linked' }),
+    ).toBe('该外部身份尚未绑定本站账号，请先使用账号密码登录，再到控制台的「外部身份」页进行绑定')
   })
 
   it('localizes OAuth protocol errors separately', () => {

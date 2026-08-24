@@ -10,16 +10,6 @@
         <p class="m-0 text-sm text-[var(--color-text-light)]">创建一个新账号来开始使用</p>
       </div>
 
-      <el-alert
-        v-if="identityTicket"
-        type="success"
-        :closable="false"
-        show-icon
-        class="mb-6"
-        :title="identityProviderName ? `已验证 ${identityProviderName} 身份` : '外部身份验证已完成'"
-        description="仍需完整填写本站用户名、邮箱、密码，以及站点要求的验证码和邀请码。注册成功后该身份会绑定到新账户。"
-      />
-
       <el-skeleton v-if="settingsLoading" :rows="6" animated />
 
       <div v-else-if="settingsError" class="space-y-4">
@@ -137,20 +127,17 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import type { PublicEmailSuffixPolicy } from '@/api/types'
 import { sendVerificationCode, register as apiRegister } from '@/api/auth'
 import { getErrorMessage, isValidationError } from '@/utils/error'
-import { getIdentityProviders } from '@/api/identity'
 import EmailSuffixInput from '@/components/common/EmailSuffixInput.vue'
 import { disabledEmailSuffixPolicy, emailSuffixPolicyError } from '@/utils/emailSuffixPolicy'
-import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
-const route = useRoute()
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 const settingsLoading = ref(true)
@@ -174,13 +161,6 @@ const emailSuffixPolicy = ref<PublicEmailSuffixPolicy>({
 const codeLoading = ref(false)
 const countdown = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
-const identityTicket = ref(
-  typeof route.query.identity_ticket === 'string' ? route.query.identity_ticket : '',
-)
-const identityProviderId =
-  typeof route.query.provider_id === 'string' ? route.query.provider_id : ''
-const identityProviderName = ref('')
-const loginReturnTo = internalRedirectTarget(route.query.redirect, '')
 
 const rules = computed<FormRules>(() => ({
   username: [
@@ -262,15 +242,6 @@ async function loadRegistrationSettings() {
 
 onMounted(async () => {
   await loadRegistrationSettings()
-  if (identityTicket.value && identityProviderId) {
-    try {
-      const providers = await getIdentityProviders()
-      identityProviderName.value =
-        providers.data.items.find((provider) => provider.id === identityProviderId)?.name || ''
-    } catch (e) {
-      console.error('Failed to resolve registration identity provider', e)
-    }
-  }
 })
 
 async function sendCode() {
@@ -316,7 +287,6 @@ async function register() {
       password: form.password,
       code: form.code,
       ...(requireInvite.value ? { invite: form.invite } : {}),
-      ...(identityTicket.value ? { identity_ticket: identityTicket.value } : {}),
     }
 
     await apiRegister(payload)
@@ -324,10 +294,7 @@ async function register() {
 
     // 延迟跳转，让用户看到成功消息
     setTimeout(() => {
-      router.push({
-        path: '/login',
-        query: loginReturnTo ? { redirect: loginReturnTo } : {},
-      })
+      router.push('/login')
     }, 1500)
   } catch (e: unknown) {
     if (!isValidationError(e)) {
