@@ -23,9 +23,7 @@ const (
 	AuthorizationIntentLink  = "link"
 
 	authorizationStateKind = "oidc_authorization"
-	registrationStateKind  = "oidc_registration"
 	authorizationStateTTL  = 10 * time.Minute
-	registrationStateTTL   = 15 * time.Minute
 )
 
 type AuthorizationStart struct {
@@ -34,12 +32,11 @@ type AuthorizationStart struct {
 }
 
 type AuthorizationResult struct {
-	Intent             string
-	UserID             string
-	IdentityID         string
-	RegistrationTicket string
-	ProviderID         string
-	ReturnTo           string
+	Intent     string
+	UserID     string
+	IdentityID string
+	ProviderID string
+	ReturnTo   string
 }
 
 func (s Service) StartAuthorization(ctx context.Context, actor permission.Actor, providerID, intent, identityID, returnTo string) (AuthorizationStart, error) {
@@ -222,20 +219,17 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 		}
 		return AuthorizationResult{Intent: intent, UserID: userID, IdentityID: identityID, ProviderID: provider.ID}, nil
 	case AuthorizationIntentLogin:
-		if existing != nil {
-			if err := s.updateIdentityAuthorization(ctx, *existing, claims, tokens); err != nil {
-				return AuthorizationResult{}, err
+		if existing == nil {
+			err := forbiddenCode("identity", "login", "not_linked")
+			if returnTo != "" {
+				err.Params = map[string]any{"return_to": returnTo}
 			}
-			return AuthorizationResult{Intent: intent, UserID: existing.UserID, IdentityID: existing.ID, ProviderID: provider.ID, ReturnTo: returnTo}, nil
-		}
-		if !provider.LoginEnabled {
-			return AuthorizationResult{}, forbiddenCode("identity_provider", "login", "disabled")
-		}
-		ticket, err := s.createRegistrationTicket(ctx, *provider, claims, tokens)
-		if err != nil {
 			return AuthorizationResult{}, err
 		}
-		return AuthorizationResult{Intent: "registration", RegistrationTicket: ticket, ProviderID: provider.ID, ReturnTo: returnTo}, nil
+		if err := s.updateIdentityAuthorization(ctx, *existing, claims, tokens); err != nil {
+			return AuthorizationResult{}, err
+		}
+		return AuthorizationResult{Intent: intent, UserID: existing.UserID, IdentityID: existing.ID, ProviderID: provider.ID, ReturnTo: returnTo}, nil
 	default:
 		return AuthorizationResult{}, badRequest("authorization_intent", "validate", "invalid")
 	}
@@ -325,34 +319,6 @@ func (s Service) cacheAccessToken(ctx context.Context, identityID string, tokens
 		IdentityID: identityID, AccessToken: tokens.AccessToken, TokenType: tokens.TokenType,
 		ExpiresAt: expiresAt,
 	}, ttl)
-}
-
-func (s Service) createRegistrationTicket(ctx context.Context, provider model.IdentityProvider, claims OIDCClaims, tokens OIDCTokens) (string, error) {
-	ticket, err := opaqueToken()
-	if err != nil {
-		return "", err
-	}
-	expiresAt := int64(0)
-	if !tokens.Expiry.IsZero() {
-		expiresAt = tokens.Expiry.UnixMilli()
-	}
-	if err := s.Redis.SetState(ctx, ticket, map[string]any{
-		"kind":           registrationStateKind,
-		"provider_id":    provider.ID,
-		"subject":        claims.Subject,
-		"email":          claims.Email,
-		"email_verified": claims.EmailVerified,
-		"display_name":   claims.DisplayName,
-		"avatar_url":     claims.AvatarURL,
-		"access_token":   tokens.AccessToken,
-		"refresh_token":  tokens.RefreshToken,
-		"token_type":     tokens.TokenType,
-		"expires_at":     expiresAt,
-		"scopes":         tokens.Scopes,
-	}, registrationStateTTL); err != nil {
-		return "", err
-	}
-	return ticket, nil
 }
 
 func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, nonce, pkceVerifier, intent, loginHint string) (string, error) {

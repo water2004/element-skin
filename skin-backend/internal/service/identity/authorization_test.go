@@ -189,7 +189,7 @@ func TestOIDCLinkRequestsAccountSelectionOnlyFromMicrosoft(t *testing.T) {
 	}
 }
 
-func TestOIDCLoginReturnsExistingUserOrRegistrationTicketWithoutCreatingAccount(t *testing.T) {
+func TestOIDCLoginReturnsOnlyLinkedIdentitiesAndNeverCreatesAccounts(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
 	user := testutil.CreateUser(t, db, "oidc-login@test.com", "pw", "OIDCLogin", false)
@@ -230,18 +230,17 @@ func TestOIDCLoginReturnsExistingUserOrRegistrationTicketWithoutCreatingAccount(
 		t.Fatal(err)
 	}
 	client.claims = identity.OIDCClaims{Subject: "new-subject", Email: "suggested@example.com", EmailVerified: true, DisplayName: "Suggested"}
-	client.tokens = identity.OIDCTokens{AccessToken: "registration-access", RefreshToken: "registration-refresh", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour), Scopes: []string{"openid", "email"}}
-	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "", "")
+	client.tokens = identity.OIDCTokens{AccessToken: "unlinked-access", RefreshToken: "unlinked-refresh", TokenType: "Bearer", Expiry: time.Now().Add(time.Hour), Scopes: []string{"openid", "email"}}
+	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "", returnTo)
 	if err != nil {
 		t.Fatal(err)
 	}
-	registration, err := service.CompleteAuthorization(ctx, "code-new", mustAuthorizationState(t, started.AuthorizationURL), "")
-	if err != nil {
-		t.Fatal(err)
+	unlinkedState := mustAuthorizationState(t, started.AuthorizationURL)
+	unlinked, err := service.CompleteAuthorization(ctx, "code-new", unlinkedState, "")
+	if unlinked != (identity.AuthorizationResult{}) {
+		t.Fatalf("unlinked login result=%#v", unlinked)
 	}
-	if registration.Intent != "registration" || registration.RegistrationTicket == "" || registration.UserID != "" || registration.IdentityID != "" {
-		t.Fatalf("registration handoff mismatch: %#v", registration)
-	}
+	assertHTTPError(t, err, 403, "identity.login.not_linked")
 	var afterUsers, identities int
 	if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&afterUsers); err != nil {
 		t.Fatal(err)
@@ -252,13 +251,10 @@ func TestOIDCLoginReturnsExistingUserOrRegistrationTicketWithoutCreatingAccount(
 	if afterUsers != beforeUsers || identities != 0 {
 		t.Fatalf("OIDC callback must not create an account: users=%d/%d identities=%d", beforeUsers, afterUsers, identities)
 	}
-	pending, err := service.ConsumeRegistration(ctx, registration.RegistrationTicket)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if pending.Claims.Subject != "new-subject" || pending.Claims.Email != "suggested@example.com" ||
-		pending.Tokens.RefreshToken != "registration-refresh" || pending.Provider.ID != provider.ID {
-		t.Fatalf("pending registration mismatch: %#v", pending)
+	if _, err := service.CompleteAuthorization(ctx, "code-replay", unlinkedState, ""); err == nil {
+		t.Fatal("unlinked callback state must stay consumed")
+	} else {
+		assertHTTPError(t, err, 400, "oidc_state.verify.invalid")
 	}
 }
 
@@ -546,17 +542,15 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	}
 
 	client.claims.Subject = "new-registration-subject"
-	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "", "")
+	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "/dashboard", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	provider.LoginEnabled = false
-	updateOIDCTestProvider(t, db, provider)
-	if _, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), ""); err == nil {
-		t.Fatal("disabling login should also stop unmatched identities from continuing registration")
-	} else {
-		assertHTTPError(t, err, 403, "identity_provider.login.disabled")
+	unlinked, err := service.CompleteAuthorization(ctx, "code", mustAuthorizationState(t, started.AuthorizationURL), "")
+	if unlinked != (identity.AuthorizationResult{}) {
+		t.Fatalf("unmatched identity result=%#v", unlinked)
 	}
+	assertHTTPError(t, err, 403, "identity.login.not_linked")
 
 	disappearing := provider
 	disappearing.ID = "oidc-disappearing-provider"

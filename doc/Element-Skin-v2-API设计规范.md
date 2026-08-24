@@ -159,7 +159,7 @@ Content-Type: application/json
 
 `intent` 仅允许：
 
-- `login`：公开登录或进入完整注册流程；
+- `login`：公开登录已绑定的外部身份；
 - `link`：为当前本站用户添加或重新授权身份，需要 `external_identity.create.owned`。
 
 `identity_id` 只允许用于 `link`。省略时表示在该 provider 下添加身份；传入时表示重新连接当前用户
@@ -191,31 +191,18 @@ GET /v2/auth/oidc/callback
 
 callback 会校验 state、nonce、PKCE、issuer、签名、audience 和 subject，并一次性消费 state。
 
-### 3.4 登录后没有本站账户
+### 3.4 登录时没有已绑定的本站账户
 
-若 `(provider_id, subject)` 已绑定，callback 签发本站 cookie 并跳转仪表盘。若未绑定且 provider
-允许登录，callback 只签发短期、一次性的 `identity_ticket`，然后跳转：
+若 `(provider_id, subject)` 已绑定，callback 签发本站 cookie 并跳转仪表盘（或原 `return_to`）。
+若未绑定，callback 返回稳定错误 `403 identity.login.not_linked`，并重定向：
 
 ```text
-/register?identity_ticket=...&provider_id=...
+/login?error_object=identity&error_operation=login&error_reason=not_linked&redirect=<return_to>
 ```
 
-它不会自动创建用户。注册仍提交完整本站表单：
-
-```json
-{
-  "email": "local@example.com",
-  "password": "local-password",
-  "username": "LocalName",
-  "code": "required-when-enabled",
-  "invite": "required-when-enabled",
-  "identity_ticket": "one-time-ticket"
-}
-```
-
-邮箱格式、密码、用户名唯一性、邮箱验证码、邀请注册和并发约束与普通注册完全相同。OIDC email、
-display name 或 email_verified 不补全也不覆盖这些字段。失败时 ticket、验证码和邀请码使用次数均不
-应被错误消费；成功时在同一注册事务中创建用户、权限主体、外部身份和长期凭据。
+登录页提示该外部身份尚未绑定本站账号，引导用户先使用邮箱密码完成普通登录，再到
+「控制台 → 外部身份」通过 `link` intent 显式绑定。OIDC 登录不创建账户、不签发注册票据，
+注册接口不接受任何外部身份字段。
 
 ### 3.5 外部 token 生命周期
 
@@ -534,7 +521,7 @@ provider 冲突均终止启动并保留旧设置。旧版没有持久化用户 r
 
 - OIDC discovery、issuer、nonce、PKCE、签名和回调 state 的成功及失败路径；
 - 同 provider 多身份、重复 subject、跨用户冲突、重新授权和并发刷新；
-- OIDC 未匹配账户时完整注册字段、验证码、邀请码、ticket 重放与失败回滚；
+- OIDC 未匹配账户时精确返回 `identity.login.not_linked`，不创建用户、身份或票据，state 保持一次性；
 - 外部 token 加密、Redis access 缓存、refresh 轮换和并发单航班；
 - refresh 被拒绝后的结构化状态、重新授权恢复，以及上游 `401` 强制刷新单次重试；
 - 指定 `identity_id` 的重新连接必须拒绝错误 subject，并验证失败后身份、凭据和缓存均不变；
