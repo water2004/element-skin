@@ -28,8 +28,12 @@ export function resolveStaticAssetRequest(
   if (!match) return null
 
   const type = match[1] as 'textures' | 'carousel'
+  const requestedName = match[2]
+  if (requestedName.includes('\\')) {
+    return null
+  }
   const rootPath = path.resolve(backendRoot, type)
-  const filePath = path.resolve(rootPath, match[2])
+  const filePath = path.resolve(rootPath, requestedName)
   if (!isPathInside(rootPath, filePath)) return null
 
   return {
