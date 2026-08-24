@@ -289,7 +289,8 @@ func addTexture(ctx context.Context, tx pgx.Tx, userID string, hash *string, tex
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO user_textures (user_id,hash,texture_type,note,model,is_public,created_at)
 		VALUES ($1,$2,$3,'',$4,0,$5)
-		ON CONFLICT DO NOTHING
+		ON CONFLICT (user_id,hash,texture_type) DO UPDATE
+		SET model=EXCLUDED.model
 	`, userID, *hash, textureType, textureModel, createdAt)
 	if err != nil {
 		return err
@@ -298,7 +299,9 @@ func addTexture(ctx context.Context, tx pgx.Tx, userID string, hash *string, tex
 		INSERT INTO skin_library
 			(skin_hash,texture_type,is_public,uploader,model,name,created_at,usage_count)
 		VALUES ($1,$2,0,$3,$4,'',$5,1)
-		ON CONFLICT DO NOTHING
+		ON CONFLICT (skin_hash,texture_type) DO UPDATE
+		SET model=EXCLUDED.model
+		WHERE skin_library.uploader=EXCLUDED.uploader
 	`, *hash, textureType, userID, textureModel, createdAt); err != nil {
 		return err
 	}
