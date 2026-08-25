@@ -35,6 +35,42 @@ go vet ./...
 go build ./cmd/element-skin
 ```
 
+## Texture Hash Repair
+
+`repair_texture_hashes.py` checks texture filenames with the Yggdrasil pixel-hash
+algorithm and updates every matching PostgreSQL reference. Install its standalone
+dependencies first:
+
+```bash
+python -m pip install -r requirements-maintenance.txt
+```
+
+Back up PostgreSQL and the texture directory, then stop both the backend and the
+webhook worker. Run without `--apply` first; exit status `2` means repairs were
+found and no persistent changes were made:
+
+```bash
+python repair_texture_hashes.py \
+  --textures-dir /path/to/frontend/static/textures \
+  --postgres-dsn 'postgresql://user:password@host:5432/elementskin?sslmode=disable'
+```
+
+After checking the reported mappings and database reference counts, apply the
+repair with the same explicit arguments:
+
+```bash
+python repair_texture_hashes.py \
+  --textures-dir /path/to/frontend/static/textures \
+  --postgres-dsn 'postgresql://user:password@host:5432/elementskin?sslmode=disable' \
+  --apply
+```
+
+When both an incorrect hash and its correct target already exist, the correctly
+hashed file and database records are preserved. The script repairs user avatars,
+profile skins and capes, personal textures, the public texture library, and usage
+counts in one locked PostgreSQL transaction. A database failure restores staged
+filenames before exiting.
+
 The backend requires Redis at runtime. Local development can keep using
 `config.yaml` directly. `config.Load` reads `config.yaml`, applies matching
 environment variables, derives PostgreSQL and Redis connection strings from

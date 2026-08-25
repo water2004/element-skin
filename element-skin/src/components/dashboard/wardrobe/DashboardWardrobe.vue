@@ -191,12 +191,16 @@ async function updateModel(val: string | number | boolean | null | undefined) {
 async function updateIsPublic(val: string | number | boolean) {
   if (!selectedTexture.value || isDetailLoading.value) return
   const tex = selectedTexture.value
+  const isPublic = val === 1 || val === true
   try {
-    await patchTexture(tex.hash, tex.type, { is_public: val === 1 })
-    ElMessage.success(val === 1 ? '材质已公开' : '材质已设为私有')
+    await patchTexture(tex.hash, tex.type, { is_public: isPublic })
+    const visibility = isPublic ? 1 : 0
+    tex.is_public = visibility
+    const localTex = textures.value.find((item) => item.hash === tex.hash && item.type === tex.type)
+    if (localTex) localTex.is_public = visibility
+    ElMessage.success(isPublic ? '材质已公开' : '材质已设为私有')
   } catch {
     ElMessage.error('更新公开状态失败')
-    tex.is_public = val === 1 ? 0 : 1
   }
 }
 

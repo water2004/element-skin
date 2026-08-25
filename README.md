@@ -77,8 +77,9 @@ Webhook 的站点可以只运行主后端。已经配置 Webhook 订阅但没有
 替换这些私钥。`IDENTITY_ENCRYPTION_KEY` 用于加密 OIDC client secret 和外部 refresh token，配置
 身份提供方后不得重新生成，否则已有密文将无法解密。
 
-v4.0.0 的自动数据库升级只支持 v3.0.2 → v4.0.0。v2.x、v3.0.0 和 v3.0.1 站点必须先升级到
-v3.0.2 并确认能够正常启动，再升级到 v4.0.0。完整变化和升级步骤见 [v4.0.0 Release Notes](RELEASE.md)。
+v4 的自动数据库升级只支持从 v3.0.2 开始。v2.x、v3.0.0 和 v3.0.1 站点必须先升级到
+v3.0.2 并确认能够正常启动，再升级到当前版本。从 v3.0.0 至 v4.0.0 升级到 v4.0.1 时还必须执行
+材质哈希检查/修复；完整顺序和脚本用法见 [v4.0.1 Release Notes](RELEASE.md)。
 
 从 v3.0.2 升级时，后端会把已配置的 `microsoft_client_id` 和 `microsoft_client_secret` 一次性迁移为
 只开放绑定能力的 Microsoft OIDC provider。只有 provider 创建成功后才删除旧设置；失败时保留旧值

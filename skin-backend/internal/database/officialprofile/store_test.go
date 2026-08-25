@@ -53,6 +53,9 @@ func TestOfficialProfileStoreLifecycleAndSyncPersistExactStructuredState(t *test
 
 	skinHash := "official_store_skin"
 	capeHash := "official_store_cape"
+	if err := db.Textures.AddToLibrary(ctx, user.ID, skinHash, "skin", "Keep existing metadata", true, "default"); err != nil {
+		t.Fatal(err)
+	}
 	updated, err := db.OfficialProfiles.Sync(ctx, officialstore.SyncInput{
 		ID: binding.ID, UserID: user.ID, RemoteName: "RemoteNew",
 		RemoteSkinURL: "https://textures.example/skin.png", RemoteCapeURL: "https://textures.example/cape.png",
@@ -68,11 +71,60 @@ func TestOfficialProfileStoreLifecycleAndSyncPersistExactStructuredState(t *test
 	if view.Profile.Name != "RemoteNew" || view.Profile.TextureModel != "slim" || view.Profile.SkinHash == nil || *view.Profile.SkinHash != skinHash || view.Profile.CapeHash == nil || *view.Profile.CapeHash != capeHash {
 		t.Fatalf("synced profile mismatch: %#v", view.Profile)
 	}
-	for _, texture := range []struct{ hash, kind, model string }{{skinHash, "skin", "slim"}, {capeHash, "cape", "default"}} {
+	for _, texture := range []struct {
+		hash, kind, model, note string
+		isPublic                int
+	}{
+		{skinHash, "skin", "slim", "Keep existing metadata", 1},
+		{capeHash, "cape", "default", "", 0},
+	} {
 		info, err := db.Textures.GetInfo(ctx, user.ID, texture.hash, texture.kind)
-		if err != nil || info == nil || info["model"] != texture.model || info["is_public"] != 0 {
+		if err != nil || info == nil || info["model"] != texture.model || info["note"] != texture.note || info["is_public"] != texture.isPublic {
 			t.Fatalf("synced texture %#v info=%#v err=%v", texture, info, err)
 		}
+	}
+	var libraryModel, libraryName, libraryUploader string
+	var libraryPublic int
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT model,name,is_public,uploader
+		FROM skin_library
+		WHERE skin_hash=$1 AND texture_type='skin'
+	`, skinHash).Scan(&libraryModel, &libraryName, &libraryPublic, &libraryUploader); err != nil {
+		t.Fatal(err)
+	}
+	if libraryModel != "slim" || libraryName != "Keep existing metadata" || libraryPublic != 1 || libraryUploader != user.ID {
+		t.Fatalf("synced existing library metadata=(%q,%q,%d,%q); want model slim with original metadata", libraryModel, libraryName, libraryPublic, libraryUploader)
+	}
+
+	otherUploader := testutil.CreateUser(t, db, "official-store-other-uploader@test.com", "Password123", "OfficialStoreOtherUploader", false)
+	sharedSkinHash := "official_store_shared_skin"
+	if err := db.Textures.AddToLibrary(ctx, otherUploader.ID, sharedSkinHash, "skin", "Other uploader metadata", true, "default"); err != nil {
+		t.Fatal(err)
+	}
+	if added, err := db.Textures.AddToWardrobe(ctx, user.ID, sharedSkinHash, "skin"); err != nil || !added {
+		t.Fatalf("add shared texture to wardrobe: added=%v err=%v", added, err)
+	}
+	updated, err = db.OfficialProfiles.Sync(ctx, officialstore.SyncInput{
+		ID: binding.ID, UserID: user.ID, RemoteName: "RemoteNew",
+		RemoteSkinURL: "https://textures.example/shared.png", RemoteSkinModel: "slim",
+		SkinHash: &sharedSkinHash, SyncedAt: 100,
+	})
+	if err != nil || !updated {
+		t.Fatalf("sync shared texture updated=%v err=%v", updated, err)
+	}
+	sharedInfo, err := db.Textures.GetInfo(ctx, user.ID, sharedSkinHash, "skin")
+	if err != nil || sharedInfo == nil || sharedInfo["model"] != "slim" || sharedInfo["note"] != "Other uploader metadata" || sharedInfo["is_public"] != 2 {
+		t.Fatalf("synced shared wardrobe texture=%#v err=%v", sharedInfo, err)
+	}
+	if err := db.Pool.QueryRow(ctx, `
+		SELECT model,name,is_public,uploader
+		FROM skin_library
+		WHERE skin_hash=$1 AND texture_type='skin'
+	`, sharedSkinHash).Scan(&libraryModel, &libraryName, &libraryPublic, &libraryUploader); err != nil {
+		t.Fatal(err)
+	}
+	if libraryModel != "default" || libraryName != "Other uploader metadata" || libraryPublic != 1 || libraryUploader != otherUploader.ID {
+		t.Fatalf("shared library metadata=(%q,%q,%d,%q); want original uploader metadata", libraryModel, libraryName, libraryPublic, libraryUploader)
 	}
 
 	deleted, err := db.OfficialProfiles.DeleteByIDAndUser(ctx, binding.ID, user.ID)

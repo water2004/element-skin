@@ -94,6 +94,38 @@ func TestTextureStorageHashStabilityAndAlphaZero(t *testing.T) {
 	}
 }
 
+func TestTexturePixelHashMatchesYggdrasilReferenceVector(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 2, 3))
+	pixels := [][]color.NRGBA{
+		{{R: 255, A: 255}, {B: 255, A: 255}, {R: 255, B: 255, A: 255}},
+		{{G: 255, A: 255}, {R: 24, G: 48, B: 96, A: 0}, {R: 255, G: 255, A: 255}},
+	}
+	for x := range pixels {
+		for y := range pixels[x] {
+			img.SetNRGBA(x, y, pixels[x][y])
+		}
+	}
+
+	const expected = "47a4c518f80f94ad8737713e0325a98e1f2647f962b9a646f58cd0bbd5afe683"
+	if got := TexturePixelHash(img); got != expected {
+		t.Fatalf("TexturePixelHash(reference)=%q; want %q", got, expected)
+	}
+}
+
+func TestTexturePixelHashDoesNotPremultiplySemiTransparentPixels(t *testing.T) {
+	img := image.NewNRGBA(image.Rect(0, 0, 64, 64))
+	for x := 0; x < 64; x++ {
+		for y := 0; y < 64; y++ {
+			img.SetNRGBA(x, y, color.NRGBA{R: 200, G: 100, B: 50, A: 128})
+		}
+	}
+
+	const expected = "514253a25317e04c5ba9f8b3c468800f7e73ced124aef621f12cc6bbf0216a11"
+	if got := TexturePixelHash(img); got != expected {
+		t.Fatalf("TexturePixelHash(semitransparent)=%q; want v2/Yggdrasil hash %q", got, expected)
+	}
+}
+
 func TestProcessAndSaveTrackedReportsOnlyTheCreatingWrite(t *testing.T) {
 	storage, err := NewTextureStorage(t.TempDir())
 	if err != nil {
