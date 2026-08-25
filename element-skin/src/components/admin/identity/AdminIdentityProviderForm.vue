@@ -95,7 +95,7 @@
           <div class="mb-5">
             <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">开放能力</h2>
             <p class="mt-1 mb-0 text-sm text-[var(--color-text-light)]">
-              登录同时包含已有用户登录，以及未匹配身份继续完成新用户注册。
+              登录只面向已绑定的外部身份；未绑定的外部登录会引导用户先账号密码登录，再到控制台绑定。
             </p>
           </div>
           <div class="grid gap-4 md:grid-cols-3">
@@ -117,7 +117,7 @@
                   <el-switch v-model="form.login_enabled" />
                 </div>
                 <div class="mt-2 text-xs text-[var(--color-text-light)]">
-                  同时允许新用户接续注册。
+                  允许已绑定的外部身份登录本站。
                 </div>
               </div>
             </UiOptionCard>
