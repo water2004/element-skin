@@ -542,7 +542,7 @@ func TestOIDCAuthorizationStateMachineRejectsUnavailableAndMalformedTransitionsE
 	}
 
 	client.claims.Subject = "new-registration-subject"
-	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "/dashboard", "")
+	started, err = service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, "login", "", "/dashboard")
 	if err != nil {
 		t.Fatal(err)
 	}
