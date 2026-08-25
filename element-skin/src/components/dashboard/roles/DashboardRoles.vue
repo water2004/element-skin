@@ -371,13 +371,20 @@ async function createRole() {
 
 async function deleteRole(pid: string) {
   try {
+    await ElMessageBox.confirm('真的要删除吗？你将永久丢失此角色（真的很久）！', '删除角色', {
+      type: 'error',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+    })
     await deleteProfile(pid)
     ElMessage.success('已删除')
     showPreviewDialog.value = false
     await Promise.all([refreshFirstPage(), fetchOfficialResources()])
     if (fetchMe) fetchMe()
-  } catch {
-    ElMessage.error('删除失败')
+  } catch (e: unknown) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error('删除失败')
+    }
   }
 }
 
@@ -404,9 +411,9 @@ async function updateRoleName(name: string) {
 
 async function clearRoleSkin(pid: string) {
   try {
-    await ElMessageBox.confirm('确定要清除该角色的皮肤吗？', '确认清除', {
+    await ElMessageBox.confirm('确定要清除该角色的皮肤吗？此操作不可撤销。', '确认清除', {
       type: 'warning',
-      confirmButtonText: '确定清除',
+      confirmButtonText: '确认清除',
       cancelButtonText: '取消',
     })
     await clearProfileSkin(pid)
@@ -415,7 +422,7 @@ async function clearRoleSkin(pid: string) {
     await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e: unknown) {
-    if (e !== 'cancel') {
+    if (e !== 'cancel' && e !== 'close') {
       ElMessage.error('清除失败: ' + getErrorMessage(e, '清除失败'))
     }
   }
@@ -423,9 +430,9 @@ async function clearRoleSkin(pid: string) {
 
 async function clearRoleCape(pid: string) {
   try {
-    await ElMessageBox.confirm('确定要清除该角色的披风吗？', '确认清除', {
+    await ElMessageBox.confirm('确定要清除该角色的披风吗？此操作不可撤销。', '确认清除', {
       type: 'warning',
-      confirmButtonText: '确定清除',
+      confirmButtonText: '确认清除',
       cancelButtonText: '取消',
     })
     await clearProfileCape(pid)
@@ -434,7 +441,7 @@ async function clearRoleCape(pid: string) {
     await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e: unknown) {
-    if (e !== 'cancel') {
+    if (e !== 'cancel' && e !== 'close') {
       ElMessage.error('清除失败: ' + getErrorMessage(e, '清除失败'))
     }
   }
