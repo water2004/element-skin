@@ -51,6 +51,10 @@ const props = withDefaults(
   { capeUrl: null, model: 'default', width: 300, height: 400, isStatic: false }
 )
 
+const emit = defineEmits<{
+  error: [reason: unknown]
+}>()
+
 const container = ref<HTMLDivElement | null>(null)
 const snapshotUrl = ref<string | null>(null)
 let viewer: skinview3d.SkinViewer | null = null
@@ -137,8 +141,18 @@ async function initViewer() {
     const canvas = document.createElement('canvas')
     viewer = new skinview3d.SkinViewer({
       canvas,
-      ...config,
+      width: props.width,
+      height: props.height,
+      model: props.model === 'slim' ? 'slim' : 'default',
     })
+
+    try {
+      await viewer.loadSkin(props.skinUrl, { model: props.model === 'slim' ? 'slim' : 'default' })
+      if (props.capeUrl) await viewer.loadCape(props.capeUrl)
+    } catch (e) {
+      emit('error', e)
+      return
+    }
 
     container.value.appendChild(viewer.canvas)
     viewer.autoRotate = true

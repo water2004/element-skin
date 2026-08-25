@@ -69,6 +69,7 @@
       ref="uploadDialogRef"
       v-model="showUploadDialog"
       v-model:form="uploadForm"
+      :preview-url="previewUrl"
       @file-change="handleFileChange"
       @submit="doUpload"
     />
@@ -76,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue'
+import { ref, onMounted, onUnmounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import type { Ref } from 'vue'
@@ -84,7 +85,7 @@ import { Upload } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import TextureDetailDialog from '@/components/dashboard/wardrobe/TextureDetailDialog.vue'
 import TextureUploadDialog from '@/components/dashboard/wardrobe/TextureUploadDialog.vue'
-import { createDefaultUploadForm } from '@/components/dashboard/wardrobe/uploadForm'
+import { createDefaultUploadForm, disposeLocalTextureUrl, replaceLocalTextureUrl } from '@/components/dashboard/wardrobe/uploadForm'
 import TextureCard from '@/components/textures/TextureCard.vue'
 import {
   cacheSkinTextureWidths,
@@ -133,6 +134,7 @@ const isApplying = ref(false)
 const showUploadDialog = ref(false)
 const uploadForm = ref(createDefaultUploadForm())
 const uploadDialogRef = ref<InstanceType<typeof TextureUploadDialog> | null>(null)
+const previewUrl = ref<string | null>(null)
 const applyForm = ref({ profile_id: '', texture_type: '', hash: '' })
 
 async function openDetailDialog(tex: Texture) {
@@ -251,6 +253,13 @@ async function refreshFirstPage() {
 
 function handleFileChange(file: UploadFile) {
   uploadForm.value.file = file.raw ?? null
+  previewUrl.value = replaceLocalTextureUrl(previewUrl.value, uploadForm.value.file)
+}
+
+function resetUploadState() {
+  uploadForm.value = createDefaultUploadForm()
+  disposeLocalTextureUrl(previewUrl.value)
+  previewUrl.value = null
 }
 
 async function doUpload() {
@@ -271,7 +280,7 @@ async function doUpload() {
     await uploadTexture(formData)
     ElMessage.success('上传成功')
     showUploadDialog.value = false
-    uploadForm.value = createDefaultUploadForm()
+    resetUploadState()
     uploadDialogRef.value?.clearFiles()
     await refreshFirstPage()
   } catch (e: unknown) {
@@ -320,5 +329,9 @@ async function doApply() {
 onMounted(() => {
   refreshFirstPage()
   fetchUserProfiles()
+})
+
+onUnmounted(() => {
+  disposeLocalTextureUrl(previewUrl.value)
 })
 </script>

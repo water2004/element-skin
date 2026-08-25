@@ -61,6 +61,10 @@ const container = ref<HTMLDivElement | null>(null)
 const snapshotUrl = ref<string | null>(null)
 let viewer: skinview3d.SkinViewer | null = null
 
+const emit = defineEmits<{
+  error: [reason: unknown]
+}>()
+
 const backEquipment = ref<'cape' | 'elytra'>('cape')
 
 function handleEquipmentChange() {
@@ -135,10 +139,14 @@ async function initViewer() {
     container.value.innerHTML = ''
 
     const canvas = document.createElement('canvas')
-    viewer = new skinview3d.SkinViewer({
-      canvas,
-      ...config,
-    })
+    viewer = new skinview3d.SkinViewer({ canvas, width: props.width, height: props.height })
+
+    try {
+      await viewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
+    } catch (e) {
+      emit('error', e)
+      return
+    }
 
     container.value.appendChild(viewer.canvas)
     if (viewer.playerObject) {
@@ -149,8 +157,6 @@ async function initViewer() {
     viewer.autoRotateSpeed = 0.5
     viewer.zoom = 1
     viewer.playerWrapper.position.y = 4
-
-    viewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
   }
 }
 
