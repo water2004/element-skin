@@ -116,8 +116,8 @@ OIDC claim 只保存为外部身份资料，不替代本站账户字段，也不
 保存时必须读取并校验 `/.well-known/openid-configuration`，要求 discovery issuer 与配置值完全
 一致，并拒绝不安全的非 HTTPS 外部端点。更新时不提交 `client_secret` 表示保留原密钥。
 
-`login_enabled` 同时控制已有外部身份登录，以及尚未匹配身份继续完成本站注册；不再提供第二个
-“允许接续注册”开关。`link_enabled` 只控制已登录用户添加或重新连接身份。
+`login_enabled` 只控制已有外部身份的登录；未匹配身份的登录返回 `identity.login.not_linked`
+并引导用户先普通登录再绑定，不提供接续注册。`link_enabled` 只控制已登录用户添加或重新连接身份。
 
 OIDC callback 不由管理员配置。服务端按 `SERVER_API_URL`（或对应配置文件中的 `server.api_url`）
 派生并在公开、管理员 provider 列表响应的 `redirect_uri` 字段中返回：
