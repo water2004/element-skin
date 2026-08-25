@@ -15,3 +15,12 @@ export function createDefaultUploadForm(): TextureUploadForm {
     file: null,
   }
 }
+
+export function replaceLocalTextureUrl(current: string | null, file: File | null): string | null {
+  if (current) URL.revokeObjectURL(current)
+  return file ? URL.createObjectURL(file) : null
+}
+
+export function disposeLocalTextureUrl(url: string | null): void {
+  if (url) URL.revokeObjectURL(url)
+}
