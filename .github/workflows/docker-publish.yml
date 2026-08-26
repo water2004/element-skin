@@ -6,6 +6,7 @@ on:
     tags: [ 'v*.*.*' ]
   pull_request:
     branches: [ "main" ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -103,6 +104,10 @@ jobs:
           should_build=false
 
           if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            should_build=true
+          elif [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            # Manual runs build exactly the ref picked in the UI/CLI; images are
+            # tagged with the branch name and short SHA so shared tags stay safe.
             should_build=true
           elif [ "${GITHUB_REF_TYPE}" = "branch" ]; then
             case "${GITHUB_REF_NAME}" in
