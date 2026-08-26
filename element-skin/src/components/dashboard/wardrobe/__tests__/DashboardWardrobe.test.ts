@@ -25,9 +25,6 @@ vi.mock('@/components/textures/textureAssets', () => ({
 vi.mock('@/components/common/CursorPager.vue', () => ({
   default: defineComponent({ render: () => h('div') }),
 }))
-vi.mock('@/components/dashboard/wardrobe/TextureUploadDialog.vue', () => ({
-  default: defineComponent({ render: () => h('div') }),
-}))
 vi.mock('@/components/textures/TextureCard.vue', () => ({
   default: defineComponent({
     props: { texture: { type: Object, required: true } },
@@ -135,10 +132,55 @@ describe('DashboardWardrobe texture visibility', () => {
     app.unmount()
     host.remove()
   })
+
+  it('discards the pending upload and preview when the dialog closes without submitting', async () => {
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:test'),
+      revokeObjectURL: vi.fn(),
+    })
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const app = createApp(DashboardWardrobe)
+    app.use(ElementPlus)
+    app.mount(host)
+    await flushUI()
+
+    const setup = app._instance?.setupState as {
+      showUploadDialog: boolean
+      uploadForm: { file: File | null; texture_type: string; model: string; note: string; is_public: boolean }
+      previewUrl: string | null
+      handleFileChange: (file: { raw: File }) => void
+    }
+
+    // Select a file and confirm the pending state is populated.
+    setup.showUploadDialog = true
+    setup.handleFileChange({ raw: new File(['x'], 'a.png', { type: 'image/png' }) })
+    await flushUI()
+    expect(setup.uploadForm.file).toBeInstanceOf(File)
+    expect(setup.previewUrl).toBe('blob:test')
+
+    // Closing the dialog without submitting discards the pending upload.
+    setup.showUploadDialog = false
+    await flushUI()
+    expect(setup.uploadForm.file).toBeNull()
+    expect(setup.previewUrl).toBeNull()
+
+    app.unmount()
+    host.remove()
+    vi.unstubAllGlobals()
+  })
 })
 
 function button(root: HTMLElement, testId: string): HTMLButtonElement {
   const result = root.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
+  expect(result).not.toBeNull()
+  return result!
+}
+
+function buttonByText(root: HTMLElement, label: string): HTMLButtonElement {
+  const result = [...root.querySelectorAll<HTMLButtonElement>('button')].find((item) =>
+    item.textContent?.includes(label),
+  )
   expect(result).not.toBeNull()
   return result!
 }

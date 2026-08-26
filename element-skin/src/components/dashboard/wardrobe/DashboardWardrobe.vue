@@ -77,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, inject } from 'vue'
+import { ref, watch, onMounted, onUnmounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import type { Ref } from 'vue'
@@ -262,6 +262,16 @@ function resetUploadState() {
   previewUrl.value = null
 }
 
+// Closing the upload dialog without submitting must discard the pending file
+// and preview; otherwise reopening shows a stale preview and a working upload
+// while the file picker no longer lists the selected file.
+watch(showUploadDialog, (isOpen) => {
+  if (!isOpen) {
+    resetUploadState()
+    uploadDialogRef.value?.clearFiles()
+  }
+})
+
 async function doUpload() {
   const file = uploadForm.value.file
   if (!file) return ElMessage.error('请选择文件')
@@ -280,8 +290,6 @@ async function doUpload() {
     await uploadTexture(formData)
     ElMessage.success('上传成功')
     showUploadDialog.value = false
-    resetUploadState()
-    uploadDialogRef.value?.clearFiles()
     await refreshFirstPage()
   } catch (e: unknown) {
     ElMessage.error('上传失败: ' + getErrorMessage(e, '上传失败'))
