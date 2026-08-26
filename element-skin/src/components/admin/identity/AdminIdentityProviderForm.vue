@@ -52,7 +52,7 @@
                 :closable="false"
                 show-icon
                 title="QQ 互联端点由系统内置"
-                description="无需填写 Issuer URL 和 Scopes。请在 QQ 互联管理中心创建网站应用，将 APP ID 填入 Client ID、APP Key 填入 Client Secret，并在应用设置中把下方回调地址登记为网站回调域。"
+                description="无需填写 Issuer URL 和 Scopes。请在 QQ 互联管理中心创建网站应用，在应用设置中把 Redirect URI 登记为网站回调域，填入获得的 APP ID 和 APP Key。"
               />
             </template>
             <template v-else>
