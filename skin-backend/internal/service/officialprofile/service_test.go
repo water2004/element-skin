@@ -453,19 +453,29 @@ func TestOfficialBindingSyncFailureCleansFilesAndLeavesBindingAndProfileUntouche
 func TestOfficialBindingRejectsWrongAdapterAndPermissionsBeforeRemoteCalls(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()
-	user, identity, _, identities, _ := officialFixture(t, db, identitysvc.AdapterGenericOIDC)
 	resolver := &fakeMicrosoftResolver{err: errors.New("must not call")}
 	service := officialsvc.Service{
-		DB: db, Identities: identities, Resolver: resolver, TexturesDir: t.TempDir(),
+		DB: db, Identities: identitysvc.Service{DB: db, Config: testutil.TestConfig(), Redis: redisstore.NewMemoryStore()},
+		Resolver: resolver, TexturesDir: t.TempDir(),
 		Download: officialTextureDownloader(t),
 	}
+	for _, adapter := range []string{identitysvc.AdapterGenericOIDC, identitysvc.AdapterQQ} {
+		t.Run(adapter, func(t *testing.T) {
+			user, identity, _, identities, _ := officialFixture(t, db, adapter)
 
-	_, err := service.Create(ctx, officialActor(user.ID), identity.ID)
-	assertOfficialHTTPError(t, err, 403, "permission.check.denied")
-	_, err = service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
-	assertOfficialHTTPError(t, err, 409, "identity.validate.unsupported")
-	if resolver.calls != 0 {
-		t.Fatalf("rejected binding called Microsoft resolver %d times", resolver.calls)
+			_, err := service.Create(ctx, officialActor(user.ID), identity.ID)
+			assertOfficialHTTPError(t, err, 403, "permission.check.denied")
+			_, err = service.Create(ctx, officialActor(user.ID, "official_profile.create.owned"), identity.ID)
+			assertOfficialHTTPError(t, err, 409, "identity.validate.unsupported")
+			if resolver.calls != 0 {
+				t.Fatalf("rejected %s binding called Microsoft resolver %d times", adapter, resolver.calls)
+			}
+			var bindingCount int
+			if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM official_profile_bindings WHERE identity_id=$1`, identity.ID).Scan(&bindingCount); err != nil || bindingCount != 0 {
+				t.Fatalf("rejected %s binding must not persist rows count=%d err=%v", adapter, bindingCount, err)
+			}
+			_ = identities
+		})
 	}
 }
 
@@ -701,10 +711,17 @@ func officialFixture(t *testing.T, db *database.DB, adapter string) (model.User,
 	t.Helper()
 	ctx := context.Background()
 	user := testutil.CreateUser(t, db, "official-owner-"+adapter+"@test.com", "Password123", "OfficialOwner", false)
+	issuerURL := "https://login.example"
+	clientID := "client"
+	if adapter == identitysvc.AdapterQQ {
+		issuerURL = identitysvc.QQUIssuerURL
+		clientID = "client-app-id"
+	}
 	provider := model.IdentityProvider{
-		ID: "official-provider-" + adapter, Name: "Provider", IssuerURL: "https://login.example",
-		AuthorizationEndpoint: "https://login.example/authorize", TokenEndpoint: "https://login.example/token",
-		JWKSURI: "https://login.example/jwks", ClientID: "client", Adapter: adapter, Enabled: true,
+		ID: "official-provider-" + adapter, Name: "Provider", IssuerURL: issuerURL,
+		AuthorizationEndpoint: issuerURL + "/authorize", TokenEndpoint: issuerURL + "/token",
+		UserInfoEndpoint: issuerURL + "/userinfo", JWKSURI: issuerURL + "/keys", ClientID: clientID,
+		Adapter: adapter, Enabled: true,
 		CreatedAt: 1, UpdatedAt: 1,
 	}
 	box, err := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
@@ -729,7 +746,11 @@ func officialFixture(t *testing.T, db *database.DB, adapter string) (model.User,
 	}); err != nil {
 		t.Fatal(err)
 	}
-	profile := testutil.CreateProfile(t, db, user.ID, "0123456789abcdef0123456789abcdef", "LocalRole")
+	profileID := "0123456789abcdef0123456789abcdef"
+	if adapter == identitysvc.AdapterQQ {
+		profileID = "fedcba98765432100123456789abcdef"
+	}
+	profile := testutil.CreateProfile(t, db, user.ID, profileID, "LocalRole-"+adapter)
 	cache := redisstore.NewMemoryStore()
 	if err := cache.SetExternalAccessToken(ctx, redisstore.ExternalAccessToken{IdentityID: identity.ID, AccessToken: "microsoft-access", TokenType: "Bearer", ExpiresAt: time.Now().Add(time.Hour).UnixMilli()}, time.Hour); err != nil {
 		t.Fatal(err)

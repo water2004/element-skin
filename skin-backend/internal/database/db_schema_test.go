@@ -153,3 +153,54 @@ func TestInitSQLContainsExpectedConstraintsAndIndexes(t *testing.T) {
 		}
 	}
 }
+
+func TestInitSQLUpgradesLegacyIdentityProviderAdapterConstraintExactly(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := context.Background()
+	if _, err := db.Pool.Exec(ctx, `ALTER TABLE identity_providers DROP CONSTRAINT identity_providers_adapter_check`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Pool.Exec(ctx, `ALTER TABLE identity_providers ADD CONSTRAINT identity_providers_adapter_check CHECK (adapter IN ('generic_oidc', 'microsoft'))`); err != nil {
+		t.Fatal(err)
+	}
+	insertProbe := func(id, adapter string) error {
+		_, err := db.Pool.Exec(ctx, `
+			INSERT INTO identity_providers (id,name,issuer_url,authorization_endpoint,token_endpoint,userinfo_endpoint,jwks_uri,client_id,scopes,adapter,created_at,updated_at)
+			VALUES ($1,'Probe','https://probe.example','https://probe.example/authorize','https://probe.example/token','','','client',ARRAY['openid']::text[],$2,1,1)
+		`, id, adapter)
+		return err
+	}
+	if err := insertProbe("adapter-probe-legacy", "generic_oidc"); err != nil {
+		t.Fatalf("legacy adapter must stay valid before the upgrade: %v", err)
+	}
+	if _, err := db.Pool.Exec(ctx, `DELETE FROM identity_providers WHERE id='adapter-probe-legacy'`); err != nil {
+		t.Fatal(err)
+	}
+	if err := insertProbe("adapter-probe-qq", "qq"); err == nil {
+		t.Fatal("pre-upgrade constraint must reject the qq adapter")
+	}
+	if err := db.Init(ctx); err != nil {
+		t.Fatalf("re-init must be idempotent and upgrade the constraint: %v", err)
+	}
+	if err := insertProbe("adapter-probe-qq", "qq"); err != nil {
+		t.Fatalf("upgraded constraint must accept the qq adapter: %v", err)
+	}
+	if err := insertProbe("adapter-probe-wechat", "wechat"); err == nil {
+		t.Fatal("upgraded constraint must still reject unknown adapters")
+	} else if !strings.Contains(err.Error(), "identity_providers_adapter_check") {
+		t.Fatalf("unknown adapter failure must come from the adapter check: %v", err)
+	}
+	for _, id := range []string{"adapter-probe-legacy", "adapter-probe-qq", "adapter-probe-wechat"} {
+		var count int
+		if err := db.Pool.QueryRow(ctx, `SELECT COUNT(*) FROM identity_providers WHERE id=$1`, id).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		wantLegacy := 0
+		if id == "adapter-probe-qq" {
+			wantLegacy = 1
+		}
+		if count != wantLegacy {
+			t.Fatalf("probe %q rows=%d want=%d", id, count, wantLegacy)
+		}
+	}
+}

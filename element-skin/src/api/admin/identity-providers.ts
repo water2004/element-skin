@@ -1,5 +1,5 @@
 import client from '../client'
-import type { AdminIdentityProvider, ItemListResponse } from '../types'
+import type { AdminIdentityProvider, IdentityProviderAdapter, ItemListResponse } from '../types'
 
 export interface IdentityProviderInput {
   name: string
@@ -7,7 +7,7 @@ export interface IdentityProviderInput {
   client_id: string
   client_secret?: string
   scopes: string[]
-  adapter: 'generic_oidc' | 'microsoft'
+  adapter: IdentityProviderAdapter
   icon_url: string
   enabled: boolean
   login_enabled: boolean

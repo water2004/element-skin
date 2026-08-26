@@ -20,7 +20,11 @@
           <div class="mb-5">
             <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">连接配置</h2>
             <p class="mt-1 mb-0 text-sm text-[var(--color-text-light)]">
-              保存时后端会读取并验证 Issuer 的 OIDC Discovery 文档。
+              {{
+                form.adapter === 'qq'
+                  ? '保存时后端使用内置的 QQ 互联端点，不会请求 Discovery 文档。'
+                  : '保存时后端会读取并验证 Issuer 的 OIDC Discovery 文档。'
+              }}
             </p>
           </div>
 
@@ -33,37 +37,57 @@
                 <el-select v-model="form.adapter" class="w-full" @change="applyAdapterDefaults">
                   <el-option label="通用 OIDC" value="generic_oidc" />
                   <el-option label="Microsoft（启用正版能力）" value="microsoft" />
+                  <el-option label="QQ 互联" value="qq" />
                 </el-select>
               </el-form-item>
             </div>
 
-            <el-form-item label="Issuer URL" required>
-              <el-input v-model="form.issuer_url" placeholder="https://issuer.example" />
-            </el-form-item>
-
-            <el-alert
-              v-if="form.adapter === 'microsoft'"
-              class="mb-5"
-              type="info"
-              :closable="false"
-              show-icon
-              title="Microsoft 正版登录使用个人账户租户"
-              description="Entra 应用必须允许个人 Microsoft 账户；推荐的 Supported account types 是“任何组织目录中的帐户和个人 Microsoft 帐户”。"
-            />
+            <template v-if="form.adapter === 'qq'">
+              <el-alert
+                class="mb-5"
+                type="info"
+                :closable="false"
+                show-icon
+                title="QQ 互联端点由系统内置"
+                description="无需填写 Issuer URL 和 Scopes。请在 QQ 互联管理中心创建网站应用，将 APP ID 填入 Client ID、APP Key 填入 Client Secret，并在应用设置中把下方回调地址登记为网站回调域。"
+              />
+            </template>
+            <template v-else>
+              <el-form-item label="Issuer URL" required>
+                <el-input v-model="form.issuer_url" placeholder="https://issuer.example" />
+              </el-form-item>
+              <el-alert
+                v-if="form.adapter === 'microsoft'"
+                class="mb-5"
+                type="info"
+                :closable="false"
+                show-icon
+                title="Microsoft 正版登录使用个人账户租户"
+                description="Entra 应用必须允许个人 Microsoft 账户；推荐的 Supported account types 是“任何组织目录中的帐户和个人 Microsoft 帐户”。"
+              />
+            </template>
 
             <div class="grid gap-x-4 md:grid-cols-2">
-              <el-form-item label="Client ID" required>
+              <el-form-item :label="form.adapter === 'qq' ? 'APP ID（Client ID）' : 'Client ID'" required>
                 <el-input v-model="form.client_id" />
               </el-form-item>
               <el-form-item
-                :label="providerId ? 'Client Secret（留空保持不变）' : 'Client Secret'"
+                :label="
+                  form.adapter === 'qq'
+                    ? providerId
+                      ? 'APP Key（留空保持不变）'
+                      : 'APP Key'
+                    : providerId
+                      ? 'Client Secret（留空保持不变）'
+                      : 'Client Secret'
+                "
                 :required="!providerId"
               >
                 <el-input v-model="form.client_secret" type="password" show-password />
               </el-form-item>
             </div>
 
-            <el-form-item label="Scopes" required>
+            <el-form-item v-if="form.adapter !== 'qq'" label="Scopes" required>
               <el-input
                 v-model="form.scopes"
                 type="textarea"

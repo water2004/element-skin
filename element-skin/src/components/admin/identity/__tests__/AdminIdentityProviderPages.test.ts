@@ -25,6 +25,7 @@ vi.mock('@/api/identity', () => identityApiMocks)
 vi.mock('@/api/oauth', () => oauthApiMocks)
 
 const redirectUri = 'https://skin.example/api/v2/auth/oidc/callback'
+const qqIssuer = 'https://graph.qq.com'
 const provider: AdminIdentityProvider = {
   id: 'provider-1',
   name: 'Microsoft',
@@ -44,6 +45,19 @@ const provider: AdminIdentityProvider = {
   display_order: 1,
   created_at: 1000,
   updated_at: 1000,
+}
+const qqProvider: AdminIdentityProvider = {
+  ...provider,
+  id: 'provider-qq',
+  name: 'QQ 登录',
+  adapter: 'qq',
+  issuer_url: qqIssuer,
+  authorization_endpoint: `${qqIssuer}/oauth2.0/authorize`,
+  token_endpoint: `${qqIssuer}/oauth2.0/token`,
+  userinfo_endpoint: `${qqIssuer}/user/get_user_info`,
+  jwks_uri: '',
+  client_id: '100012345',
+  scopes: ['get_user_info'],
 }
 
 beforeEach(() => {
@@ -154,6 +168,45 @@ describe('OIDC identity provider pages', () => {
     expect(mounted.router.currentRoute.value.name).toBe('admin-identity-provider-edit')
     mounted.unmount()
   })
+
+  it('locks the QQ edit form onto builtin endpoints and submits the exact platform payload', async () => {
+    adminApiMocks.getAdminIdentityProvider.mockResolvedValue({ data: qqProvider })
+    adminApiMocks.updateIdentityProvider.mockResolvedValue({ data: qqProvider })
+    const mounted = await mountPage('/admin/identity-providers/provider-qq/edit', providerRoutes(), [
+      'identity_provider.update.any',
+    ])
+    await flushUI()
+
+    expect(mounted.root.textContent).toContain('QQ 互联端点由系统内置')
+    expect(mounted.root.textContent).toContain('APP ID（Client ID）')
+    expect(mounted.root.textContent).toContain('APP Key（留空保持不变）')
+    expect(formItemLabels(mounted.root)).toEqual([
+      '显示名称',
+      '适配器',
+      'APP ID（Client ID）',
+      'APP Key（留空保持不变）',
+      '图标 URL',
+      '显示顺序',
+    ])
+
+    findButton(mounted.root, '保存修改').click()
+    await flushUI()
+
+    expect(adminApiMocks.updateIdentityProvider).toHaveBeenCalledTimes(1)
+    expect(adminApiMocks.updateIdentityProvider).toHaveBeenCalledWith('provider-qq', {
+      name: 'QQ 登录',
+      issuer_url: qqIssuer,
+      client_id: '100012345',
+      scopes: ['get_user_info'],
+      adapter: 'qq',
+      icon_url: '',
+      enabled: true,
+      login_enabled: true,
+      link_enabled: true,
+      display_order: 1,
+    })
+    mounted.unmount()
+  })
 })
 
 function providerRoutes(): RouteRecordRaw[] {
@@ -220,6 +273,12 @@ function inputForLabel(root: HTMLElement, label: string) {
   const input = formItem?.querySelector<HTMLInputElement>('input.el-input__inner')
   if (!input) throw new Error(`input not found: ${label}`)
   return input
+}
+
+function formItemLabels(root: HTMLElement): string[] {
+  return [...root.querySelectorAll<HTMLElement>('.el-form-item > label')].map((label) =>
+    (label.textContent || '').trim(),
+  )
 }
 
 async function flushUI() {

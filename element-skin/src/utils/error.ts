@@ -31,6 +31,8 @@ const exactMessages: Record<string, string> = {
   'identity.authorize.mismatch': '授权账户与已绑定身份不一致',
   'identity.authorize.denied': '外部身份授权已被拒绝',
   'identity.authorize.incomplete': '身份连接未完成，原有身份没有改变',
+  'identity_token.exchange.denied': '身份提供方拒绝了本次授权，请重新发起连接',
+  'identity_token.exchange.incomplete': '身份提供方返回的数据不完整，无法完成连接',
   'identity_provider.login.disabled': '该身份提供方已禁用登录',
   'identity_provider.link.disabled': '该身份提供方已禁用绑定',
   'identity_provider.resolve.not_found': '身份提供方不存在',

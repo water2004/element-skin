@@ -166,7 +166,12 @@ func (s Service) CompleteAuthorization(ctx context.Context, code, state, provide
 	}
 	client := s.OIDCClient
 	if client == nil {
-		client = StandardOIDCClient{}
+		switch provider.Adapter {
+		case AdapterQQ:
+			client = QQClient{}
+		default:
+			client = StandardOIDCClient{}
+		}
 	}
 	claims, tokens, err := client.ExchangeAndVerify(
 		ctx,
@@ -326,11 +331,19 @@ func buildAuthorizationURL(provider model.IdentityProvider, redirectURI, state, 
 	if err != nil {
 		return "", err
 	}
-	challengeSum := sha256.Sum256([]byte(pkceVerifier))
 	query := u.Query()
 	query.Set("response_type", "code")
 	query.Set("client_id", provider.ClientID)
 	query.Set("redirect_uri", redirectURI)
+	if provider.Adapter == AdapterQQ {
+		// QQ 互联 ignores OIDC-only parameters and uses API names joined by
+		// commas; state is its only accepted CSRF defense.
+		query.Set("scope", strings.Join(provider.Scopes, ","))
+		query.Set("state", state)
+		u.RawQuery = query.Encode()
+		return u.String(), nil
+	}
+	challengeSum := sha256.Sum256([]byte(pkceVerifier))
 	query.Set("scope", strings.Join(provider.Scopes, " "))
 	query.Set("state", state)
 	query.Set("nonce", nonce)

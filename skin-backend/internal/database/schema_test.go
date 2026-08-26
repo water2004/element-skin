@@ -27,6 +27,9 @@ func TestInitSQLContainsExpectedTablesConstraintsIndexesAndSeeds(t *testing.T) {
 		"idx_site_refresh_expires",
 		"idx_delegated_permission_grants_active_user_client",
 		"CREATE UNIQUE INDEX IF NOT EXISTS idx_official_profile_bindings_remote_uuid",
+		"CHECK(adapter IN ('generic_oidc', 'microsoft', 'qq'))",
+		"ALTER TABLE identity_providers DROP CONSTRAINT IF EXISTS identity_providers_adapter_check",
+		"ADD CONSTRAINT identity_providers_adapter_check\n    CHECK (adapter IN ('generic_oidc', 'microsoft', 'qq'))",
 		"('site_name', '皮肤站')",
 		"ON CONFLICT (key) DO NOTHING",
 	} {

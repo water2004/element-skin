@@ -141,6 +141,104 @@ func TestOIDCAuthorizationLinkUsesStateNoncePKCEAndStoresCredentialsExactly(t *t
 	assertHTTPError(t, err, 400, "oidc_state.verify.invalid")
 }
 
+func TestQQAuthorizationUsesStateOnlyCallbackShapeAndStoresEmptyCredentialsExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	user := testutil.CreateUser(t, db, "qq-login@test.com", "pw", "QQLogin", false)
+	box, err := util.NewSecretBox(testutil.TestConfig().IdentityEncryptionKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encryptedSecret, err := box.Encrypt("qq-app-key")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := model.IdentityProvider{
+		ID: "qq-login-provider", Name: "QQ 登录", IssuerURL: identity.QQUIssuerURL,
+		AuthorizationEndpoint: identity.QQAuthorizationEndpoint, TokenEndpoint: identity.QQTokenEndpoint,
+		UserInfoEndpoint: identity.QQUserInfoEndpoint, ClientID: "client-app-id",
+		ClientSecretCiphertext: encryptedSecret, Scopes: []string{"get_user_info"},
+		Adapter: identity.AdapterQQ, Enabled: true, LoginEnabled: true, LinkEnabled: true,
+		CreatedAt: 1, UpdatedAt: 1,
+	}
+	if err := db.Identities.CreateProvider(ctx, provider); err != nil {
+		t.Fatal(err)
+	}
+	cache := redisstore.NewMemoryStore()
+	client := &fakeOIDCClient{
+		claims: identity.OIDCClaims{Subject: "qq-openid-1", DisplayName: "QQ昵称", AvatarURL: "https://qlogo.example/100.png"},
+		tokens: identity.OIDCTokens{Scopes: []string{"get_user_info"}},
+	}
+	service := identity.Service{DB: db, Config: testutil.TestConfig(), Redis: cache, OIDCClient: client}
+	existing := model.ExternalIdentity{
+		ID: "qq-existing-identity", UserID: user.ID, ProviderID: provider.ID, Subject: "qq-openid-1",
+		CreatedAt: 5, UpdatedAt: 5,
+	}
+	if err := db.Identities.CreateIdentity(ctx, existing, model.ExternalIdentityCredential{IdentityID: existing.ID, GrantedScopes: []string{"get_user_info"}, UpdatedAt: 5}); err != nil {
+		t.Fatal(err)
+	}
+
+	started, err := service.StartAuthorization(ctx, permission.GuestActor(), provider.ID, identity.AuthorizationIntentLogin, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	authorizationURL, err := url.Parse(started.AuthorizationURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	query := authorizationURL.Query()
+	state := query.Get("state")
+	if authorizationURL.Scheme != "https" || authorizationURL.Host != "graph.qq.com" ||
+		authorizationURL.Path != "/oauth2.0/authorize" ||
+		query.Get("response_type") != "code" || query.Get("client_id") != "client-app-id" ||
+		query.Get("redirect_uri") != "http://localhost:8000/v2/auth/oidc/callback" ||
+		query.Get("scope") != "get_user_info" || state == "" {
+		t.Fatalf("qq authorization URL mismatch: %s", started.AuthorizationURL)
+	}
+	for _, unsupported := range []string{"nonce", "code_challenge", "code_challenge_method", "login_hint", "prompt"} {
+		if query.Has(unsupported) {
+			t.Fatalf("qq authorization URL must not send %q: %s", unsupported, started.AuthorizationURL)
+		}
+	}
+
+	completed, err := service.CompleteAuthorization(ctx, "authorization-code", state, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.Intent != identity.AuthorizationIntentLogin || completed.UserID != user.ID || completed.ProviderID != provider.ID {
+		t.Fatalf("qq login completion mismatch: %#v", completed)
+	}
+	if client.calls != 1 || client.provider.Adapter != identity.AdapterQQ || client.clientSecret != "qq-app-key" ||
+		client.redirectURI != "http://localhost:8000/v2/auth/oidc/callback" {
+		t.Fatalf("injected client call mismatch: %#v", client)
+	}
+	linked, err := db.Identities.GetIdentity(ctx, completed.IdentityID)
+	if err != nil || linked == nil || linked.ID != existing.ID {
+		t.Fatalf("qq linked identity=%#v err=%v", linked, err)
+	}
+	if linked.Subject != "qq-openid-1" || linked.DisplayName != "QQ昵称" ||
+		linked.AvatarURL != "https://qlogo.example/100.png" || linked.Email != "" || linked.LastLoginAt == nil {
+		t.Fatalf("qq linked identity claims mismatch: %#v", linked)
+	}
+	credential, err := db.Identities.GetCredential(ctx, completed.IdentityID)
+	if err != nil || credential == nil {
+		t.Fatalf("qq credential=%#v err=%v", credential, err)
+	}
+	if credential.RefreshTokenCiphertext != "" ||
+		credential.AuthorizationStatus != model.ExternalIdentityAuthorizationActive ||
+		strings.Join(credential.GrantedScopes, ",") != "get_user_info" {
+		t.Fatalf("qq credential must be empty but active with granted scopes: %#v", credential)
+	}
+	if _, err = cache.GetExternalAccessToken(ctx, completed.IdentityID); !errors.Is(err, redisstore.ErrCacheMiss) {
+		t.Fatalf("qq login must not cache any access token: %v", err)
+	}
+	if _, err = service.CompleteAuthorization(ctx, "authorization-code", state, ""); err == nil {
+		t.Fatal("replayed qq callback state must stay consumed")
+	} else {
+		assertHTTPError(t, err, 400, "oidc_state.verify.invalid")
+	}
+}
+
 func TestOIDCLinkRequestsAccountSelectionOnlyFromMicrosoft(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()

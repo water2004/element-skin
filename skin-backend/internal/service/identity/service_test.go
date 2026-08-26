@@ -155,6 +155,74 @@ func TestMicrosoftProviderRequiresMinecraftAndRefreshScopesExactly(t *testing.T)
 	}
 }
 
+func TestQQProviderCreationLocksThePlatformContractAndIgnoresCallerEndpointsExactly(t *testing.T) {
+	db, _ := testutil.NewTestAppTB(t)
+	ctx := context.Background()
+	admin := testutil.CreateUser(t, db, "qq-provider-admin@test.com", "pw", "QQProviderAdmin", true)
+	actor := actorForUser(t, db, admin.ID)
+	// Discovery is deliberately absent: the qq adapter must never consult it.
+	service := identity.Service{DB: db, Config: testutil.TestConfig()}
+	secret := "qq-app-key"
+	created, err := service.CreateProvider(ctx, actor, identity.ProviderInput{
+		Name: "QQ 登录", IssuerURL: "", ClientID: "100012345", ClientSecret: &secret,
+		Scopes: []string{"bogus"}, Adapter: identity.AdapterQQ,
+		IconURL: "https://qzonestyle.gtimg.cn/qzone/vas/opensns/res/img/qq.png",
+		Enabled: true, LoginEnabled: true, LinkEnabled: true, DisplayOrder: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created["adapter"] != "qq" || created["issuer_url"] != identity.QQUIssuerURL ||
+		created["authorization_endpoint"] != identity.QQAuthorizationEndpoint ||
+		created["token_endpoint"] != identity.QQTokenEndpoint ||
+		created["userinfo_endpoint"] != identity.QQUserInfoEndpoint ||
+		created["has_client_secret"] != true || !reflect.DeepEqual(created["scopes"], []string{"get_user_info"}) {
+		t.Fatalf("created qq provider mismatch: %#v", created)
+	}
+	providerID := created["id"].(string)
+	stored, err := db.Identities.GetProvider(ctx, providerID)
+	if err != nil || stored == nil {
+		t.Fatalf("stored qq provider=%#v err=%v", stored, err)
+	}
+	if stored.JWKSURI != "" {
+		t.Fatalf("qq provider must not carry a JWKS URI: %#v", stored)
+	}
+	cfg := testutil.TestConfig()
+	box, _ := util.NewSecretBox(cfg.IdentityEncryptionKey)
+	decrypted, err := box.Decrypt(stored.ClientSecretCiphertext)
+	if err != nil || decrypted != secret {
+		t.Fatalf("qq appkey must be encrypted at rest decrypted=%q err=%v", decrypted, err)
+	}
+
+	updateInput := identity.ProviderInput{
+		Name: "QQ 登录改名", IssuerURL: "https://attacker.example", ClientID: "100012345",
+		Adapter: identity.AdapterQQ, Enabled: false, LoginEnabled: true, LinkEnabled: false,
+	}
+	updated, err := service.UpdateProvider(ctx, actor, providerID, updateInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated["issuer_url"] != identity.QQUIssuerURL ||
+		updated["authorization_endpoint"] != identity.QQAuthorizationEndpoint ||
+		updated["token_endpoint"] != identity.QQTokenEndpoint ||
+		updated["userinfo_endpoint"] != identity.QQUserInfoEndpoint ||
+		updated["has_client_secret"] != true || updated["name"] != updateInput.Name ||
+		updated["enabled"] != false || updated["link_enabled"] != false {
+		t.Fatalf("updated qq provider drifted from the platform contract: %#v", updated)
+	}
+	stored, err = db.Identities.GetProvider(ctx, providerID)
+	if err != nil || stored == nil || stored.ClientSecretCiphertext == "" {
+		t.Fatalf("qq provider lost its encrypted appkey after update: %#v err=%v", stored, err)
+	}
+	if decrypted, decryptErr := box.Decrypt(stored.ClientSecretCiphertext); decryptErr != nil || decrypted != secret {
+		t.Fatalf("update must preserve the previous appkey decrypted=%q err=%v", decrypted, decryptErr)
+	}
+
+	unknownAdapterInput := identity.ProviderInput{Name: "Unknown", IssuerURL: "https://x.example", ClientID: "c", Adapter: "wechat"}
+	assertHTTPError(t, func() error { _, err := service.CreateProvider(ctx, actor, unknownAdapterInput); return err }(),
+		400, "identity_provider_adapter.validate.invalid")
+}
+
 func TestIdentityAndProviderDeletionDetachBindingsAndPreserveProfilesExactly(t *testing.T) {
 	db, _ := testutil.NewTestAppTB(t)
 	ctx := context.Background()

@@ -1,7 +1,11 @@
 import type { IdentityProviderInput } from '@/api/admin/identity-providers'
+import type { IdentityProviderAdapter } from '@/api/types'
 
 export const microsoftConsumerIssuer =
   'https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0'
+
+export const qqIssuer = 'https://graph.qq.com'
+export const qqLockedScopes = ['get_user_info']
 
 export interface IdentityProviderFormState {
   name: string
@@ -9,7 +13,7 @@ export interface IdentityProviderFormState {
   client_id: string
   client_secret: string
   scopes: string
-  adapter: 'generic_oidc' | 'microsoft'
+  adapter: IdentityProviderAdapter
   icon_url: string
   enabled: boolean
   login_enabled: boolean
@@ -34,6 +38,11 @@ export function emptyIdentityProviderForm(): IdentityProviderFormState {
 }
 
 export function applyIdentityProviderAdapterDefaults(form: IdentityProviderFormState) {
+  if (form.adapter === 'qq') {
+    form.issuer_url = qqIssuer
+    form.scopes = qqLockedScopes.join(' ')
+    return
+  }
   if (form.adapter !== 'microsoft') return
   if (!form.issuer_url.trim()) form.issuer_url = microsoftConsumerIssuer
   const scopes = new Set(form.scopes.split(/\s+/).filter(Boolean))
@@ -43,12 +52,25 @@ export function applyIdentityProviderAdapterDefaults(form: IdentityProviderFormS
   form.scopes = [...scopes].join(' ')
 }
 
+function identityProviderPayloadForAdapter(
+  form: IdentityProviderFormState,
+): Pick<IdentityProviderInput, 'issuer_url' | 'scopes'> {
+  if (form.adapter === 'qq') {
+    return { issuer_url: qqIssuer, scopes: [...qqLockedScopes] }
+  }
+  return {
+    issuer_url: form.issuer_url.trim(),
+    scopes: form.scopes.split(/\s+/).filter(Boolean),
+  }
+}
+
 export function identityProviderPayload(form: IdentityProviderFormState): IdentityProviderInput {
+  const locked = identityProviderPayloadForAdapter(form)
   const result: IdentityProviderInput = {
     name: form.name.trim(),
-    issuer_url: form.issuer_url.trim(),
+    issuer_url: locked.issuer_url,
     client_id: form.client_id.trim(),
-    scopes: form.scopes.split(/\s+/).filter(Boolean),
+    scopes: locked.scopes,
     adapter: form.adapter,
     icon_url: form.icon_url.trim(),
     enabled: form.enabled,
@@ -64,10 +86,14 @@ export function identityProviderValidationError(
   form: IdentityProviderFormState,
   isCreate: boolean,
 ) {
-  if (!form.name.trim() || !form.issuer_url.trim() || !form.client_id.trim()) {
-    return '请填写名称、Issuer URL 和 Client ID'
+  if (form.adapter === 'qq') {
+    if (!form.name.trim() || !form.client_id.trim()) return '请填写名称和 APP ID（Client ID）'
+  } else {
+    if (!form.name.trim() || !form.issuer_url.trim() || !form.client_id.trim()) {
+      return '请填写名称、Issuer URL 和 Client ID'
+    }
+    if (!form.scopes.trim()) return '请填写 Scopes'
   }
   if (isCreate && !form.client_secret.trim()) return '请填写 Client Secret'
-  if (!form.scopes.trim()) return '请填写 Scopes'
   return ''
 }

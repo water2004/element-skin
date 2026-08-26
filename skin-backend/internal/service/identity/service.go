@@ -21,6 +21,7 @@ import (
 const (
 	AdapterGenericOIDC = "generic_oidc"
 	AdapterMicrosoft   = "microsoft"
+	AdapterQQ          = "qq"
 )
 
 type Service struct {
@@ -262,8 +263,11 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 	if input.Adapter == "" {
 		input.Adapter = AdapterGenericOIDC
 	}
-	if input.Adapter != AdapterGenericOIDC && input.Adapter != AdapterMicrosoft {
+	if input.Adapter != AdapterGenericOIDC && input.Adapter != AdapterMicrosoft && input.Adapter != AdapterQQ {
 		return model.IdentityProvider{}, badRequest("identity_provider_adapter", "validate", "invalid")
+	}
+	if input.Adapter == AdapterQQ {
+		return s.qqProviderFromInput(input, current)
 	}
 	if err := validateEndpointURL(input.IssuerURL); err != nil {
 		return model.IdentityProvider{}, badRequest("issuer_url", "validate", "invalid")
@@ -305,19 +309,9 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 			return model.IdentityProvider{}, badRequest("identity_provider", "discover", "invalid")
 		}
 	}
-	secretCiphertext := ""
-	if current != nil {
-		secretCiphertext = current.ClientSecretCiphertext
-	}
-	if input.ClientSecret != nil {
-		box, err := util.NewSecretBox(s.Config.IdentityEncryptionKey)
-		if err != nil {
-			return model.IdentityProvider{}, err
-		}
-		secretCiphertext, err = box.Encrypt(strings.TrimSpace(*input.ClientSecret))
-		if err != nil {
-			return model.IdentityProvider{}, err
-		}
+	secretCiphertext, err := s.clientSecretCiphertext(input.ClientSecret, current)
+	if err != nil {
+		return model.IdentityProvider{}, err
 	}
 	return model.IdentityProvider{
 		Name:                   input.Name,
@@ -336,6 +330,47 @@ func (s Service) providerFromInput(ctx context.Context, input ProviderInput, cur
 		LinkEnabled:            input.LinkEnabled,
 		DisplayOrder:           input.DisplayOrder,
 	}, nil
+}
+
+// qqProviderFromInput builds the fixed-shape QQ provider. Endpoints, issuer,
+// and scopes are backend constants; administrators only supply credentials
+// and display metadata, so caller-provided endpoint values are ignored.
+func (s Service) qqProviderFromInput(input ProviderInput, current *model.IdentityProvider) (model.IdentityProvider, error) {
+	secretCiphertext, err := s.clientSecretCiphertext(input.ClientSecret, current)
+	if err != nil {
+		return model.IdentityProvider{}, err
+	}
+	return model.IdentityProvider{
+		Name:                   input.Name,
+		IssuerURL:              QQUIssuerURL,
+		AuthorizationEndpoint:  QQAuthorizationEndpoint,
+		TokenEndpoint:          QQTokenEndpoint,
+		UserInfoEndpoint:       QQUserInfoEndpoint,
+		ClientID:               input.ClientID,
+		ClientSecretCiphertext: secretCiphertext,
+		Scopes:                 append([]string(nil), QQScopes...),
+		Adapter:                AdapterQQ,
+		IconURL:                input.IconURL,
+		Enabled:                input.Enabled,
+		LoginEnabled:           input.LoginEnabled,
+		LinkEnabled:            input.LinkEnabled,
+		DisplayOrder:           input.DisplayOrder,
+	}, nil
+}
+
+func (s Service) clientSecretCiphertext(secret *string, current *model.IdentityProvider) (string, error) {
+	ciphertext := ""
+	if current != nil {
+		ciphertext = current.ClientSecretCiphertext
+	}
+	if secret == nil {
+		return ciphertext, nil
+	}
+	box, err := util.NewSecretBox(s.Config.IdentityEncryptionKey)
+	if err != nil {
+		return "", err
+	}
+	return box.Encrypt(strings.TrimSpace(*secret))
 }
 
 func hasScope(scopes []string, expected string) bool {

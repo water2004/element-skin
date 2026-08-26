@@ -200,7 +200,7 @@ CREATE TABLE IF NOT EXISTS identity_providers (
     client_id TEXT NOT NULL,
     client_secret_ciphertext TEXT NOT NULL DEFAULT '',
     scopes TEXT[] NOT NULL DEFAULT ARRAY['openid', 'profile', 'email']::TEXT[],
-    adapter TEXT NOT NULL DEFAULT 'generic_oidc' CHECK(adapter IN ('generic_oidc', 'microsoft')),
+    adapter TEXT NOT NULL DEFAULT 'generic_oidc' CHECK(adapter IN ('generic_oidc', 'microsoft', 'qq')),
     icon_url TEXT NOT NULL DEFAULT '',
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     login_enabled BOOLEAN NOT NULL DEFAULT TRUE,
@@ -639,6 +639,14 @@ ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[
 ALTER TABLE oauth_authorization_codes ADD COLUMN IF NOT EXISTS nonce TEXT NOT NULL DEFAULT '';
 ALTER TABLE oauth_refresh_tokens ADD COLUMN IF NOT EXISTS oidc_scopes TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
 DELETE FROM permissions WHERE code LIKE 'microsoft_import.%';
+
+-- Published adapter constraint upgrade: allow the dedicated QQ provider on
+-- databases created before the qq adapter existed. The inline CREATE TABLE
+-- CHECK above already covers fresh installs; this keeps existing tables in sync.
+ALTER TABLE identity_providers DROP CONSTRAINT IF EXISTS identity_providers_adapter_check;
+ALTER TABLE identity_providers
+    ADD CONSTRAINT identity_providers_adapter_check
+    CHECK (adapter IN ('generic_oidc', 'microsoft', 'qq'));
 
 -- Keep startup rebuilds serialized with runtime OAuth/Webhook configuration mutations.
 -- This value matches subscriptionSnapshotLockID in internal/database/webhook.

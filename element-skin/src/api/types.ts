@@ -158,7 +158,7 @@ export interface WhitelistResponse {
   items: WhitelistEntry[]
 }
 
-export type IdentityProviderAdapter = 'generic_oidc' | 'microsoft'
+export type IdentityProviderAdapter = 'generic_oidc' | 'microsoft' | 'qq'
 export type ExternalIdentityAuthorizationStatus = 'active' | 'reauthorization_required'
 
 export interface IdentityProvider {

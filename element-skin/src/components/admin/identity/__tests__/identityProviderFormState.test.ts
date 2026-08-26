@@ -5,6 +5,7 @@ import {
   identityProviderPayload,
   identityProviderValidationError,
   microsoftConsumerIssuer,
+  qqIssuer,
 } from '../identityProviderFormState'
 
 describe('identityProviderFormState', () => {
@@ -87,5 +88,42 @@ describe('identityProviderFormState', () => {
     expect(identityProviderValidationError(form, true)).toBe('请填写 Scopes')
     form.scopes = 'openid'
     expect(identityProviderValidationError(form, true)).toBe('')
+  })
+
+  it('locks the QQ platform contract: builtin issuer, fixed scopes, and relaxed validation', () => {
+    const form = emptyIdentityProviderForm()
+    form.adapter = 'qq'
+
+    applyIdentityProviderAdapterDefaults(form)
+
+    expect(form.issuer_url).toBe(qqIssuer)
+    expect(form.scopes).toBe('get_user_info')
+
+    Object.assign(form, {
+      name: 'QQ 登录',
+      client_id: '100012345',
+      client_secret: 'app-key',
+    })
+    expect(identityProviderValidationError(form, false)).toBe('')
+    expect(
+      identityProviderValidationError({ ...form, client_id: '' }, false),
+    ).toBe('请填写名称和 APP ID（Client ID）')
+    expect(
+      identityProviderValidationError({ ...form, name: '' }, true),
+    ).toBe('请填写名称和 APP ID（Client ID）')
+
+    expect(identityProviderPayload(form)).toEqual({
+      name: 'QQ 登录',
+      issuer_url: qqIssuer,
+      client_id: '100012345',
+      client_secret: 'app-key',
+      scopes: ['get_user_info'],
+      adapter: 'qq',
+      icon_url: '',
+      enabled: true,
+      login_enabled: true,
+      link_enabled: true,
+      display_order: 0,
+    })
   })
 })
