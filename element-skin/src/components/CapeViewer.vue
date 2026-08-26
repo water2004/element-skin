@@ -60,6 +60,7 @@ const props = withDefaults(
 const container = ref<HTMLDivElement | null>(null)
 const snapshotUrl = ref<string | null>(null)
 let viewer: skinview3d.SkinViewer | null = null
+let generation = 0
 
 const emit = defineEmits<{
   error: [reason: unknown]
@@ -74,6 +75,7 @@ function handleEquipmentChange() {
 }
 
 async function initViewer() {
+  const gen = ++generation
   if (viewer) {
     viewer.dispose()
     viewer = null
@@ -87,6 +89,8 @@ async function initViewer() {
 
   if (props.isStatic) {
     globalCapeRenderLock = globalCapeRenderLock.then(async () => {
+      if (gen !== generation) return
+
       const cacheKey = capeSnapshotCacheKey({
         capeUrl: props.capeUrl,
         width: props.width,
@@ -95,6 +99,7 @@ async function initViewer() {
 
       if (snapshotUrl.value) return
       const cachedUrl = await getCachedImageUrl('viewer-snapshot', cacheKey)
+      if (gen !== generation) return
       if (cachedUrl) {
         snapshotUrl.value = cachedUrl
         return
@@ -119,9 +124,12 @@ async function initViewer() {
         staticViewer.zoom = 1.3
 
         await staticViewer.loadCape(props.capeUrl, { backEquipment: 'cape' })
+        if (gen !== generation) return
         staticViewer.render()
         const blob = await canvasToBlob(tempCanvas)
+        if (gen !== generation) return
         const storedUrl = blob ? await setCachedImageUrl('viewer-snapshot', cacheKey, blob) : null
+        if (gen !== generation) return
         snapshotUrl.value = storedUrl ?? tempCanvas.toDataURL('image/png')
       } catch (e) {
         console.error('CapeViewer static render error:', e)
@@ -135,20 +143,25 @@ async function initViewer() {
     await globalCapeRenderLock
   } else {
     await nextTick()
-    if (!container.value) return
+    if (gen !== generation || !container.value) return
     container.value.innerHTML = ''
 
     const canvas = document.createElement('canvas')
-    viewer = new skinview3d.SkinViewer({ canvas, width: props.width, height: props.height })
+    const localViewer = new skinview3d.SkinViewer({ canvas, width: props.width, height: props.height })
 
     try {
-      await viewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
+      await localViewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
+      if (gen !== generation) { localViewer.dispose(); return }
     } catch (e) {
-      emit('error', e)
+      localViewer.dispose()
+      if (gen === generation) emit('error', e)
       return
     }
 
-    container.value.appendChild(viewer.canvas)
+    if (gen !== generation || !container.value) { localViewer.dispose(); return }
+
+    viewer = localViewer
+    container.value.appendChild(localViewer.canvas)
     if (viewer.playerObject) {
       viewer.playerObject.skin.visible = false
     }
@@ -165,6 +178,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  generation++
   if (viewer) {
     viewer.dispose()
     viewer = null
