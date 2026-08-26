@@ -107,6 +107,28 @@ describe('OIDC identity provider pages', () => {
     mounted.unmount()
   })
 
+  it('renders each adapter with its dedicated label instead of a generic OIDC fallback', async () => {
+    const genericProvider: AdminIdentityProvider = {
+      ...provider,
+      id: 'provider-generic',
+      name: 'Generic',
+      adapter: 'generic_oidc',
+      issuer_url: 'https://generic.example',
+    }
+    adminApiMocks.getAdminIdentityProviders.mockResolvedValue({
+      data: { items: [provider, qqProvider, genericProvider], redirectUri },
+    })
+    const mounted = await mountPage('/admin/identity-providers', providerRoutes(), [
+      'identity_provider.read.any',
+    ])
+    await flushUI()
+
+    expect(mounted.root.textContent).toContain('QQ 互联')
+    expect(mounted.root.textContent).toContain('Microsoft')
+    expect(mounted.root.textContent).toContain('通用 OIDC')
+    mounted.unmount()
+  })
+
   it('navigates from the provider list to standalone create and edit routes', async () => {
     const createPage = await mountPage('/admin/identity-providers', providerRoutes(), [
       'identity_provider.read.any',

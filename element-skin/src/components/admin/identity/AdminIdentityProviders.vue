@@ -93,7 +93,7 @@
                   {{ provider.enabled ? '已启用' : '已停用' }}
                 </el-tag>
                 <el-tag v-if="provider.adapter === 'microsoft'" type="success">Microsoft</el-tag>
-                <el-tag v-else>通用 OIDC</el-tag>
+                <el-tag v-else>{{ identityProviderAdapterLabel(provider.adapter) }}</el-tag>
               </div>
               <div class="mt-2 text-sm text-[var(--color-text-light)] break-all">
                 {{ provider.issuer_url }}
@@ -130,6 +130,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { deleteIdentityProvider, getAdminIdentityProviders } from '@/api/admin/identity-providers'
 import type { AdminIdentityProvider, User } from '@/api/types'
+import { identityProviderAdapterLabel } from '@/utils/identityAdapter'
 import { getErrorMessage } from '@/utils/error'
 import { getOpenIDConfiguration, type OpenIDConfiguration } from '@/api/oauth'
 
