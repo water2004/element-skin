@@ -92,7 +92,7 @@ describe('OIDC identity provider pages', () => {
     ])
     await flushUI()
 
-    expect(mounted.root.textContent).toContain('OIDC 身份提供方')
+    expect(mounted.root.textContent).toContain('身份提供方')
     expect(mounted.root.textContent).toContain('本站 OIDC 信息')
     expect(mounted.root.textContent).toContain(
       'https://skin.example/api/.well-known/openid-configuration',

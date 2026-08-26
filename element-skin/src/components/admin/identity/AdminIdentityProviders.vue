@@ -1,6 +1,6 @@
 <template>
   <div class="max-w-[1000px] mx-auto py-5 animate-fade-in">
-    <PageHeader title="OIDC 身份提供方" subtitle="配置允许用户登录和绑定的外部 OIDC 端点">
+    <PageHeader title="身份提供方" subtitle="配置允许用户登录和绑定的外部登录方式">
       <template #icon><Connection /></template>
       <template #actions>
         <ActionBar>
@@ -115,7 +115,7 @@
           </div>
         </UiCard>
       </div>
-      <el-empty v-else-if="!loading && canRead" description="尚未配置外部 OIDC 提供方" />
+      <el-empty v-else-if="!loading && canRead" description="尚未配置外部身份提供方" />
     </div>
   </div>
 </template>

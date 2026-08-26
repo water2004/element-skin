@@ -1,8 +1,8 @@
 <template>
   <div class="mx-auto max-w-[1000px] space-y-6 py-5 animate-fade-in">
     <PageHeader
-      :title="providerId ? '编辑 OIDC 身份提供方' : '添加 OIDC 身份提供方'"
-      subtitle="配置 Discovery、客户端凭据以及站点开放的身份能力"
+      :title="providerId ? '编辑身份提供方' : '添加身份提供方'"
+      subtitle="配置连接方式、客户端凭据以及站点开放的身份能力"
     >
       <template #icon><Connection /></template>
       <template #actions>

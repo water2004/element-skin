@@ -161,7 +161,7 @@ function permissionGroupLabel(code: string) {
     material: '材质',
     minecraft_session: 'Minecraft 会话',
     external_identity: '外部身份',
-    identity_provider: 'OIDC 身份提供方',
+    identity_provider: '身份提供方',
     official_profile: '正版角色绑定',
     notice: '通知',
     oauth_app: '第三方应用',
