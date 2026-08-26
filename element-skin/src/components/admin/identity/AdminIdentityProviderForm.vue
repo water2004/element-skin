@@ -35,9 +35,12 @@
               </el-form-item>
               <el-form-item label="适配器" required>
                 <el-select v-model="form.adapter" class="w-full" @change="applyAdapterDefaults">
-                  <el-option label="通用 OIDC" value="generic_oidc" />
-                  <el-option label="Microsoft（启用正版能力）" value="microsoft" />
-                  <el-option label="QQ 互联" value="qq" />
+                  <el-option
+                    v-for="option in identityProviderAdapterOptions()"
+                    :key="option.value"
+                    :label="option.label"
+                    :value="option.value"
+                  />
                 </el-select>
               </el-form-item>
             </div>
@@ -188,6 +191,9 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiOptionCard from '@/components/ui/UiOptionCard.vue'
 import { getErrorMessage } from '@/utils/error'
+import {
+  identityProviderAdapterOptions,
+} from '@/utils/identityAdapter'
 import {
   applyIdentityProviderAdapterDefaults,
   emptyIdentityProviderForm,

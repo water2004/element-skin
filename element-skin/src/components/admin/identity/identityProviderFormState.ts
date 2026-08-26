@@ -4,9 +4,6 @@ import type { IdentityProviderAdapter } from '@/api/types'
 export const microsoftConsumerIssuer =
   'https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0'
 
-export const qqIssuer = 'https://graph.qq.com'
-export const qqLockedScopes = ['get_user_info']
-
 export interface IdentityProviderFormState {
   name: string
   issuer_url: string
@@ -39,8 +36,10 @@ export function emptyIdentityProviderForm(): IdentityProviderFormState {
 
 export function applyIdentityProviderAdapterDefaults(form: IdentityProviderFormState) {
   if (form.adapter === 'qq') {
-    form.issuer_url = qqIssuer
-    form.scopes = qqLockedScopes.join(' ')
+    // The backend owns the QQ platform contract (endpoints and scopes); the
+    // form carries no values so the two sides cannot drift apart.
+    form.issuer_url = ''
+    form.scopes = ''
     return
   }
   if (form.adapter !== 'microsoft') return
@@ -56,7 +55,9 @@ function identityProviderPayloadForAdapter(
   form: IdentityProviderFormState,
 ): Pick<IdentityProviderInput, 'issuer_url' | 'scopes'> {
   if (form.adapter === 'qq') {
-    return { issuer_url: qqIssuer, scopes: [...qqLockedScopes] }
+    // Endpoints and scopes are backend constants for QQ; empty values signal
+    // "use the platform contract" and are overwritten server-side.
+    return { issuer_url: '', scopes: [] }
   }
   return {
     issuer_url: form.issuer_url.trim(),

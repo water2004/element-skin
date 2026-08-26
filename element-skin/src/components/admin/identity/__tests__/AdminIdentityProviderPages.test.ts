@@ -217,9 +217,9 @@ describe('OIDC identity provider pages', () => {
     expect(adminApiMocks.updateIdentityProvider).toHaveBeenCalledTimes(1)
     expect(adminApiMocks.updateIdentityProvider).toHaveBeenCalledWith('provider-qq', {
       name: 'QQ 登录',
-      issuer_url: qqIssuer,
+      issuer_url: '',
       client_id: '100012345',
-      scopes: ['get_user_info'],
+      scopes: [],
       adapter: 'qq',
       icon_url: '',
       enabled: true,

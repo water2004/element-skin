@@ -5,7 +5,6 @@ import {
   identityProviderPayload,
   identityProviderValidationError,
   microsoftConsumerIssuer,
-  qqIssuer,
 } from '../identityProviderFormState'
 
 describe('identityProviderFormState', () => {
@@ -94,10 +93,13 @@ describe('identityProviderFormState', () => {
     const form = emptyIdentityProviderForm()
     form.adapter = 'qq'
 
+    form.issuer_url = 'https://residue.example'
+    form.scopes = 'leftover'
+
     applyIdentityProviderAdapterDefaults(form)
 
-    expect(form.issuer_url).toBe(qqIssuer)
-    expect(form.scopes).toBe('get_user_info')
+    expect(form.issuer_url).toBe('')
+    expect(form.scopes).toBe('')
 
     Object.assign(form, {
       name: 'QQ 登录',
@@ -114,10 +116,10 @@ describe('identityProviderFormState', () => {
 
     expect(identityProviderPayload(form)).toEqual({
       name: 'QQ 登录',
-      issuer_url: qqIssuer,
+      issuer_url: '',
       client_id: '100012345',
       client_secret: 'app-key',
-      scopes: ['get_user_info'],
+      scopes: [],
       adapter: 'qq',
       icon_url: '',
       enabled: true,
