@@ -2,6 +2,9 @@
   <el-input
     v-if="policy.mode === 'allowlist'"
     v-model="localPart"
+    :name="name"
+    :type="type"
+    :autocomplete="autocomplete"
     :maxlength="localPartMaxLength"
     :placeholder="placeholder"
     :prefix-icon="Message"
@@ -28,6 +31,9 @@
   <el-input
     v-else
     :model-value="modelValue"
+    :name="name"
+    :type="type"
+    :autocomplete="autocomplete"
     :maxlength="254"
     :placeholder="placeholder"
     :prefix-icon="Message"
@@ -46,8 +52,16 @@ const props = withDefaults(
     modelValue: string
     policy: PublicEmailSuffixPolicy
     placeholder?: string
+    name?: string
+    type?: string
+    autocomplete?: string
   }>(),
-  { placeholder: '请输入邮箱地址' },
+  {
+    placeholder: '请输入邮箱地址',
+    name: undefined,
+    type: 'text',
+    autocomplete: 'off',
+  },
 )
 
 const emit = defineEmits<{

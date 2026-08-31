@@ -37,6 +37,8 @@
         <el-form-item label="用户名" prop="username">
           <el-input
             v-model="form.username"
+            name="display_name"
+            autocomplete="nickname"
             placeholder="请输入用户名"
             :prefix-icon="User"
             @keyup.enter="register"
@@ -47,6 +49,9 @@
           <EmailSuffixInput
             v-model="form.email"
             :policy="emailSuffixPolicy"
+            name="email"
+            type="email"
+            autocomplete="username"
             placeholder="请输入邮箱地址"
             @enter="register"
           />
@@ -56,6 +61,8 @@
           <div class="flex gap-3 w-full">
             <el-input
               v-model="form.code"
+              name="verification_code"
+              autocomplete="one-time-code"
               placeholder="请输入验证码"
               :prefix-icon="Ticket"
               @keyup.enter="register"
@@ -77,6 +84,8 @@
           <el-input
             v-model="form.password"
             type="password"
+            name="password"
+            autocomplete="new-password"
             placeholder="至少6个字符"
             :prefix-icon="Lock"
             show-password
@@ -88,6 +97,8 @@
           <el-input
             v-model="form.confirmPassword"
             type="password"
+            name="password_confirmation"
+            autocomplete="new-password"
             placeholder="请再次输入密码"
             :prefix-icon="Lock"
             show-password
@@ -99,6 +110,8 @@
           <div class="w-full">
             <el-input
               v-model="form.invite"
+              name="invite_code"
+              autocomplete="off"
               placeholder="请输入管理员提供的邀请码"
               :prefix-icon="Ticket"
               @keyup.enter="register"
