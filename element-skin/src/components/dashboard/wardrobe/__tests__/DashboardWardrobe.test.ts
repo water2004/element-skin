@@ -25,6 +25,29 @@ vi.mock('@/components/textures/textureAssets', () => ({
 vi.mock('@/components/common/CursorPager.vue', () => ({
   default: defineComponent({ render: () => h('div') }),
 }))
+vi.mock('@/components/SkinViewer.vue', () => ({
+  default: defineComponent({
+    props: { skinUrl: { type: String, default: '' }, model: { type: String, default: '' } },
+    render() {
+      const self = this as unknown as { skinUrl: string; model: string }
+      return h('div', { 'data-testid': 'viewer-skin' }, [
+        h('span', { 'data-testid': 'viewer-skin-url' }, self.skinUrl),
+        h('span', { 'data-testid': 'viewer-skin-model' }, self.model),
+      ])
+    },
+  }),
+}))
+vi.mock('@/components/CapeViewer.vue', () => ({
+  default: defineComponent({
+    props: { capeUrl: { type: String, default: '' } },
+    render() {
+      const self = this as unknown as { capeUrl: string }
+      return h('div', { 'data-testid': 'viewer-cape' }, [
+        h('span', { 'data-testid': 'viewer-cape-url' }, self.capeUrl),
+      ])
+    },
+  }),
+}))
 vi.mock('@/components/textures/TextureCard.vue', () => ({
   default: defineComponent({
     props: { texture: { type: Object, required: true } },
