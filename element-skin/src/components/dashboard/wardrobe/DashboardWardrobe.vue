@@ -71,6 +71,7 @@
       v-model:form="uploadForm"
       :preview-url="previewUrl"
       @file-change="handleFileChange"
+      @file-remove="handleFileRemove"
       @submit="doUpload"
     />
   </div>
@@ -254,6 +255,11 @@ async function refreshFirstPage() {
 function handleFileChange(file: UploadFile) {
   uploadForm.value.file = file.raw ?? null
   previewUrl.value = replaceLocalTextureUrl(previewUrl.value, uploadForm.value.file)
+}
+
+function handleFileRemove() {
+  uploadForm.value.file = null
+  previewUrl.value = replaceLocalTextureUrl(previewUrl.value, null)
 }
 
 function resetUploadState() {

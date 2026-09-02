@@ -139,6 +139,33 @@ describe('texture upload dialog preview stage', () => {
     expect(openState.value).toBe(false)
     mounted.unmount()
   })
+
+  it('emits fileRemove when the selected file is removed from the list', async () => {
+    const removed: number[] = []
+    const mounted = mountDialog({
+      form: reactive({ ...baseForm }),
+      previewUrl: () => 'blob:preview',
+      onFileRemove: () => removed.push(1),
+    })
+    try {
+      await flushUI()
+      const dialog = document.body.querySelector<HTMLElement>('.ui-dialog--viewer')!
+      const input = dialog.querySelector<HTMLInputElement>('input[type="file"]')
+      expect(input).not.toBeNull()
+      const selectedFiles: File[] = [new File(['a'], 'a.png', { type: 'image/png' })]
+      Object.defineProperty(input!, 'files', { configurable: true, get: () => selectedFiles })
+      input!.dispatchEvent(new Event('change'))
+      await flushUI()
+      expect(dialog.querySelector('.el-upload-list__item')).not.toBeNull()
+
+      dialog.querySelector<HTMLElement>('.el-upload-list__item .el-icon--close')!.click()
+      await settle()
+      expect(removed).toEqual([1])
+      expect(dialog.querySelector('.el-upload-list__item')).toBeNull()
+    } finally {
+      mounted.unmount()
+    }
+  })
 })
 
 interface MountOptions {
@@ -146,6 +173,7 @@ interface MountOptions {
   previewUrl?: () => string | null
   open?: () => boolean
   onSubmit?: () => void
+  onFileRemove?: () => void
   'onUpdate:modelValue'?: (value: boolean) => void
 }
 
@@ -161,6 +189,7 @@ function mountDialog(options: MountOptions) {
         form: options.form ?? { ...baseForm },
         previewUrl: options.previewUrl ? options.previewUrl() : null,
         onSubmit: options.onSubmit,
+        onFileRemove: options.onFileRemove,
         'onUpdate:modelValue': options['onUpdate:modelValue'],
       }),
   })
@@ -197,4 +226,11 @@ async function flushUI() {
   await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
   await nextTick()
+}
+
+// transition-group 的离场动画依赖双 requestAnimationFrame，直接断言 DOM 消失前需要等待。
+async function settle() {
+  await flushUI()
+  await new Promise((resolve) => setTimeout(resolve, 60))
+  await flushUI()
 }
