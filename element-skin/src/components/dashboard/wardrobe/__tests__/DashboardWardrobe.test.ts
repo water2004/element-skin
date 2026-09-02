@@ -286,6 +286,17 @@ describe('DashboardWardrobe texture visibility', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  it('warns when a second file is selected beyond the upload limit', async () => {
+    const mounted = mountWardrobe()
+    try {
+      mounted.setup.handleFileExceed()
+      await flushUI()
+      expect(document.body.textContent).toContain('最多只能上传 1 个文件')
+    } finally {
+      mounted.cleanup()
+    }
+  })
 })
 
 interface WardrobeSetupState {
@@ -294,6 +305,7 @@ interface WardrobeSetupState {
   previewUrl: string | null
   handleFileChange: (file: { raw: File }) => void
   handleFileRemove: () => void
+  handleFileExceed: () => void
   doUpload: () => Promise<unknown>
 }
 

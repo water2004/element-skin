@@ -72,6 +72,7 @@
       :preview-url="previewUrl"
       @file-change="handleFileChange"
       @file-remove="handleFileRemove"
+      @file-exceed="handleFileExceed"
       @submit="doUpload"
     />
   </div>
@@ -260,6 +261,10 @@ function handleFileChange(file: UploadFile) {
 function handleFileRemove() {
   uploadForm.value.file = null
   previewUrl.value = replaceLocalTextureUrl(previewUrl.value, null)
+}
+
+function handleFileExceed() {
+  ElMessage.warning('最多只能上传 1 个文件，请先移除已选文件')
 }
 
 function resetUploadState() {

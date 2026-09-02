@@ -166,6 +166,37 @@ describe('texture upload dialog preview stage', () => {
       mounted.unmount()
     }
   })
+
+  it('emits fileExceed and keeps the first file when the limit is reached', async () => {
+    const exceeded: number[] = []
+    const mounted = mountDialog({
+      form: reactive({ ...baseForm }),
+      previewUrl: () => 'blob:preview',
+      onFileExceed: () => exceeded.push(1),
+    })
+    try {
+      await flushUI()
+      const dialog = document.body.querySelector<HTMLElement>('.ui-dialog--viewer')!
+      const input = dialog.querySelector<HTMLInputElement>('input[type="file"]')!
+      let selectedFiles: File[] = [new File(['a'], 'a.png', { type: 'image/png' })]
+      Object.defineProperty(input, 'files', { configurable: true, get: () => selectedFiles })
+      input.dispatchEvent(new Event('change'))
+      await flushUI()
+      expect(dialog.querySelectorAll('.el-upload-list__item')).toHaveLength(1)
+
+      selectedFiles = [new File(['b'], 'b.png', { type: 'image/png' })]
+      input.dispatchEvent(new Event('change'))
+      await flushUI()
+
+      expect(exceeded).toEqual([1])
+      expect(dialog.querySelectorAll('.el-upload-list__item')).toHaveLength(1)
+      expect(
+        dialog.querySelector('.el-upload-list__item-file-name')?.textContent?.trim(),
+      ).toBe('a.png')
+    } finally {
+      mounted.unmount()
+    }
+  })
 })
 
 interface MountOptions {
@@ -174,6 +205,7 @@ interface MountOptions {
   open?: () => boolean
   onSubmit?: () => void
   onFileRemove?: () => void
+  onFileExceed?: () => void
   'onUpdate:modelValue'?: (value: boolean) => void
 }
 
@@ -190,6 +222,7 @@ function mountDialog(options: MountOptions) {
         previewUrl: options.previewUrl ? options.previewUrl() : null,
         onSubmit: options.onSubmit,
         onFileRemove: options.onFileRemove,
+        onFileExceed: options.onFileExceed,
         'onUpdate:modelValue': options['onUpdate:modelValue'],
       }),
   })

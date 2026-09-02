@@ -43,6 +43,7 @@
             accept=".png"
             :on-change="handleFileChange"
             :on-remove="handleFileRemove"
+            :on-exceed="handleFileExceed"
             drag
             class="upload-wrapper"
           >
@@ -138,6 +139,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   fileChange: [file: UploadFile]
   fileRemove: []
+  fileExceed: []
   submit: []
 }>()
 
@@ -157,6 +159,10 @@ function handleFileChange(file: UploadFile) {
 
 function handleFileRemove() {
   emit('fileRemove')
+}
+
+function handleFileExceed() {
+  emit('fileExceed')
 }
 
 function onPreviewError() {
