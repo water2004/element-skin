@@ -194,7 +194,7 @@ describe('DashboardWardrobe texture visibility', () => {
 
       const input = document.body.querySelector<HTMLInputElement>('input[type="file"]')
       expect(input).not.toBeNull()
-      let selectedFiles: File[] = [new File(['a'], 'a.png', { type: 'image/png' })]
+      const selectedFiles: File[] = [new File(['a'], 'a.png', { type: 'image/png' })]
       Object.defineProperty(input!, 'files', { configurable: true, get: () => selectedFiles })
       input!.dispatchEvent(new Event('change'))
       await flushUI()
