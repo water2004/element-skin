@@ -25,8 +25,28 @@ vi.mock('@/components/textures/textureAssets', () => ({
 vi.mock('@/components/common/CursorPager.vue', () => ({
   default: defineComponent({ render: () => h('div') }),
 }))
-vi.mock('@/components/dashboard/wardrobe/TextureUploadDialog.vue', () => ({
-  default: defineComponent({ render: () => h('div') }),
+vi.mock('@/components/SkinViewer.vue', () => ({
+  default: defineComponent({
+    props: { skinUrl: { type: String, default: '' }, model: { type: String, default: '' } },
+    render() {
+      const self = this as unknown as { skinUrl: string; model: string }
+      return h('div', { 'data-testid': 'viewer-skin' }, [
+        h('span', { 'data-testid': 'viewer-skin-url' }, self.skinUrl),
+        h('span', { 'data-testid': 'viewer-skin-model' }, self.model),
+      ])
+    },
+  }),
+}))
+vi.mock('@/components/CapeViewer.vue', () => ({
+  default: defineComponent({
+    props: { capeUrl: { type: String, default: '' } },
+    render() {
+      const self = this as unknown as { capeUrl: string }
+      return h('div', { 'data-testid': 'viewer-cape' }, [
+        h('span', { 'data-testid': 'viewer-cape-url' }, self.capeUrl),
+      ])
+    },
+  }),
 }))
 vi.mock('@/components/textures/TextureCard.vue', () => ({
   default: defineComponent({
@@ -135,10 +155,192 @@ describe('DashboardWardrobe texture visibility', () => {
     app.unmount()
     host.remove()
   })
+
+  it('discards the pending upload and preview when the dialog closes without submitting', async () => {
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:test'),
+      revokeObjectURL: vi.fn(),
+    })
+    const mounted = mountWardrobe()
+    try {
+      const setup = mounted.setup
+
+      // Select a file and confirm the pending state is populated.
+      setup.showUploadDialog = true
+      setup.handleFileChange({ raw: new File(['x'], 'a.png', { type: 'image/png' }) })
+      await flushUI()
+      expect(setup.uploadForm.file).toBeInstanceOf(File)
+      expect(setup.previewUrl).toBe('blob:test')
+
+      // Closing the dialog without submitting discards the pending upload.
+      setup.showUploadDialog = false
+      await flushUI()
+      expect(setup.uploadForm.file).toBeNull()
+      expect(setup.previewUrl).toBeNull()
+    } finally {
+      mounted.cleanup()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('clears the pending upload through the real remove flow and blocks uploading the removed file', async () => {
+    const { revokeObjectURL } = stubBlobUrls()
+    const mounted = mountWardrobe()
+    try {
+      const setup = mounted.setup
+
+      setup.showUploadDialog = true
+      await flushUI()
+
+      const input = document.body.querySelector<HTMLInputElement>('input[type="file"]')
+      expect(input).not.toBeNull()
+      const selectedFiles: File[] = [new File(['a'], 'a.png', { type: 'image/png' })]
+      Object.defineProperty(input!, 'files', { configurable: true, get: () => selectedFiles })
+      input!.dispatchEvent(new Event('change'))
+      await flushUI()
+
+      expect(setup.uploadForm.file).toBe(selectedFiles[0])
+      expect(setup.previewUrl).toBe('blob:a.png')
+      expect(text(document.body, 'viewer-skin-url')).toBe('blob:a.png')
+
+      const removeButton = document.body.querySelector<HTMLElement>(
+        '.el-upload-list__item .el-icon--close',
+      )
+      expect(removeButton).not.toBeNull()
+      removeButton!.click()
+      await settle()
+
+      expect(document.body.querySelector('.el-upload-list__item')).toBeNull()
+      expect(setup.uploadForm.file).toBeNull()
+      expect(setup.previewUrl).toBeNull()
+      expect(revokeObjectURL).toHaveBeenCalledTimes(1)
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:a.png')
+      expect(document.body.textContent).toContain('选择文件后即可在此预览')
+
+      buttonByText(document.body, '确认上传').click()
+      await flushUI()
+
+      expect(textureApiMocks.uploadTexture).not.toHaveBeenCalled()
+      expect(document.body.textContent).toContain('请选择文件')
+    } finally {
+      mounted.cleanup()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('re-selects a new file after removal without revoking the previous url twice', async () => {
+    const { createObjectURL, revokeObjectURL } = stubBlobUrls()
+    const mounted = mountWardrobe()
+    try {
+      const setup = mounted.setup
+
+      setup.showUploadDialog = true
+      await flushUI()
+
+      const input = document.body.querySelector<HTMLInputElement>('input[type="file"]')!
+      let selectedFiles: File[] = [new File(['a'], 'a.png', { type: 'image/png' })]
+      Object.defineProperty(input, 'files', { configurable: true, get: () => selectedFiles })
+      input.dispatchEvent(new Event('change'))
+      await flushUI()
+
+      document.body.querySelector<HTMLElement>('.el-upload-list__item .el-icon--close')!.click()
+      await settle()
+      expect(setup.uploadForm.file).toBeNull()
+      expect(revokeObjectURL).toHaveBeenCalledTimes(1)
+
+      selectedFiles = [new File(['b'], 'b.png', { type: 'image/png' })]
+      input.dispatchEvent(new Event('change'))
+      await flushUI()
+
+      expect(setup.uploadForm.file).toBe(selectedFiles[0])
+      expect(createObjectURL).toHaveBeenCalledTimes(2)
+      expect(revokeObjectURL).toHaveBeenCalledTimes(1)
+      expect(revokeObjectURL).toHaveBeenNthCalledWith(1, 'blob:a.png')
+      expect(setup.previewUrl).toBe('blob:b.png')
+      expect(text(document.body, 'viewer-skin-url')).toBe('blob:b.png')
+    } finally {
+      mounted.cleanup()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('is idempotent when the removal fires repeatedly without a selection', async () => {
+    const { revokeObjectURL } = stubBlobUrls()
+    const mounted = mountWardrobe()
+    try {
+      const setup = mounted.setup
+      setup.handleFileChange({ raw: new File(['a'], 'a.png', { type: 'image/png' }) })
+      await flushUI()
+      expect(setup.previewUrl).toBe('blob:a.png')
+
+      setup.handleFileRemove()
+      setup.handleFileRemove()
+      await flushUI()
+
+      expect(setup.uploadForm.file).toBeNull()
+      expect(setup.previewUrl).toBeNull()
+      expect(revokeObjectURL).toHaveBeenCalledTimes(1)
+      expect(revokeObjectURL).toHaveBeenCalledWith('blob:a.png')
+    } finally {
+      mounted.cleanup()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('warns when a second file is selected beyond the upload limit', async () => {
+    const mounted = mountWardrobe()
+    try {
+      mounted.setup.handleFileExceed()
+      await flushUI()
+      expect(document.body.textContent).toContain('最多只能上传 1 个文件')
+    } finally {
+      mounted.cleanup()
+    }
+  })
 })
+
+interface WardrobeSetupState {
+  showUploadDialog: boolean
+  uploadForm: { file: File | null; texture_type: string; model: string; note: string; is_public: boolean }
+  previewUrl: string | null
+  handleFileChange: (file: { raw: File }) => void
+  handleFileRemove: () => void
+  handleFileExceed: () => void
+  doUpload: () => Promise<unknown>
+}
+
+function stubBlobUrls() {
+  const createObjectURL = vi.fn((file: File) => `blob:${file.name}` as `${string}:${string}`)
+  const revokeObjectURL = vi.fn()
+  vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+  return { createObjectURL, revokeObjectURL }
+}
+
+function mountWardrobe() {
+  const host = document.createElement('div')
+  document.body.appendChild(host)
+  const app = createApp(DashboardWardrobe)
+  app.use(ElementPlus)
+  app.mount(host)
+  return {
+    setup: app._instance?.setupState as unknown as WardrobeSetupState,
+    cleanup() {
+      app.unmount()
+      host.remove()
+    },
+  }
+}
 
 function button(root: HTMLElement, testId: string): HTMLButtonElement {
   const result = root.querySelector<HTMLButtonElement>(`[data-testid="${testId}"]`)
+  expect(result).not.toBeNull()
+  return result!
+}
+
+function buttonByText(root: HTMLElement, label: string): HTMLButtonElement {
+  const result = [...root.querySelectorAll<HTMLButtonElement>('button')].find((item) =>
+    item.textContent?.includes(label),
+  )
   expect(result).not.toBeNull()
   return result!
 }
@@ -151,4 +353,11 @@ async function flushUI() {
   await Promise.resolve()
   await new Promise((resolve) => setTimeout(resolve, 0))
   await nextTick()
+}
+
+// transition-group 的离场动画依赖双 requestAnimationFrame，直接断言 DOM 消失前需要等待。
+async function settle() {
+  await flushUI()
+  await new Promise((resolve) => setTimeout(resolve, 60))
+  await flushUI()
 }

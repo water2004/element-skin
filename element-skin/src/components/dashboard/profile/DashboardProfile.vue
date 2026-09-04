@@ -95,8 +95,10 @@
           个性化
         </el-divider>
         <el-form-item v-if="user" label="关闭彩蛋">
-          <el-switch v-model="disableEasterEgg" />
-          <el-text size="small" type="info" class="ml-3"> 效果你猜 </el-text>
+          <div class="flex items-center gap-6">
+            <el-switch v-model="disableEasterEgg" />
+            <span class="text-[13px] text-[var(--color-text-light)]">效果你猜</span>
+          </div>
         </el-form-item>
 
         <div class="flex gap-3 justify-end">

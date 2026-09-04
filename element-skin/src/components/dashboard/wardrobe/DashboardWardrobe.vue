@@ -69,14 +69,17 @@
       ref="uploadDialogRef"
       v-model="showUploadDialog"
       v-model:form="uploadForm"
+      :preview-url="previewUrl"
       @file-change="handleFileChange"
+      @file-remove="handleFileRemove"
+      @file-exceed="handleFileExceed"
       @submit="doUpload"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue'
+import { ref, watch, onMounted, onUnmounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import type { Ref } from 'vue'
@@ -84,7 +87,7 @@ import { Upload } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import TextureDetailDialog from '@/components/dashboard/wardrobe/TextureDetailDialog.vue'
 import TextureUploadDialog from '@/components/dashboard/wardrobe/TextureUploadDialog.vue'
-import { createDefaultUploadForm } from '@/components/dashboard/wardrobe/uploadForm'
+import { createDefaultUploadForm, disposeLocalTextureUrl, replaceLocalTextureUrl } from '@/components/dashboard/wardrobe/uploadForm'
 import TextureCard from '@/components/textures/TextureCard.vue'
 import {
   cacheSkinTextureWidths,
@@ -133,6 +136,7 @@ const isApplying = ref(false)
 const showUploadDialog = ref(false)
 const uploadForm = ref(createDefaultUploadForm())
 const uploadDialogRef = ref<InstanceType<typeof TextureUploadDialog> | null>(null)
+const previewUrl = ref<string | null>(null)
 const applyForm = ref({ profile_id: '', texture_type: '', hash: '' })
 
 async function openDetailDialog(tex: Texture) {
@@ -251,7 +255,33 @@ async function refreshFirstPage() {
 
 function handleFileChange(file: UploadFile) {
   uploadForm.value.file = file.raw ?? null
+  previewUrl.value = replaceLocalTextureUrl(previewUrl.value, uploadForm.value.file)
 }
+
+function handleFileRemove() {
+  uploadForm.value.file = null
+  previewUrl.value = replaceLocalTextureUrl(previewUrl.value, null)
+}
+
+function handleFileExceed() {
+  ElMessage.warning('最多只能上传 1 个文件，请先移除已选文件')
+}
+
+function resetUploadState() {
+  uploadForm.value = createDefaultUploadForm()
+  disposeLocalTextureUrl(previewUrl.value)
+  previewUrl.value = null
+}
+
+// Closing the upload dialog without submitting must discard the pending file
+// and preview; otherwise reopening shows a stale preview and a working upload
+// while the file picker no longer lists the selected file.
+watch(showUploadDialog, (isOpen) => {
+  if (!isOpen) {
+    resetUploadState()
+    uploadDialogRef.value?.clearFiles()
+  }
+})
 
 async function doUpload() {
   const file = uploadForm.value.file
@@ -271,8 +301,6 @@ async function doUpload() {
     await uploadTexture(formData)
     ElMessage.success('上传成功')
     showUploadDialog.value = false
-    uploadForm.value = createDefaultUploadForm()
-    uploadDialogRef.value?.clearFiles()
     await refreshFirstPage()
   } catch (e: unknown) {
     ElMessage.error('上传失败: ' + getErrorMessage(e, '上传失败'))
@@ -320,5 +348,9 @@ async function doApply() {
 onMounted(() => {
   refreshFirstPage()
   fetchUserProfiles()
+})
+
+onUnmounted(() => {
+  disposeLocalTextureUrl(previewUrl.value)
 })
 </script>
