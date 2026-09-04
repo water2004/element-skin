@@ -6,7 +6,6 @@ import {
   getErrorMessage,
   isApiError,
   isExternalIdentityReauthorizationRequired,
-  isValidationError,
 } from '../error'
 
 describe('getErrorMessage', () => {
@@ -31,9 +30,9 @@ describe('getErrorMessage', () => {
     expect(
       getApiErrorMessage({ object: 'identity', operation: 'link', reason: 'already_exists' }),
     ).toBe('该外部身份已绑定到当前账户')
-    expect(
-      getApiErrorMessage({ object: 'identity', operation: 'link', reason: 'conflict' }),
-    ).toBe('该外部身份已被其他账户绑定')
+    expect(getApiErrorMessage({ object: 'identity', operation: 'link', reason: 'conflict' })).toBe(
+      '该外部身份已被其他账户绑定',
+    )
     expect(
       getApiErrorMessage({ object: 'identity', operation: 'authorize', reason: 'incomplete' }),
     ).toBe('身份连接未完成，原有身份没有改变')
@@ -66,14 +65,11 @@ describe('getErrorMessage', () => {
       },
     }
     expect(getErrorMessage(error)).toBe('密码需要至少 8 个字符、包含数字')
-    expect(isValidationError(error)).toBe(true)
   })
 
   it('rejects malformed descriptors and unknown protocol errors', () => {
     expect(getApiError({ response: { data: { error: { object: 'profile' } } } })).toBeNull()
-    expect(getErrorMessage({ response: { data: { error: 'unknown_error' } } }, '失败')).toBe(
-      '失败',
-    )
+    expect(getErrorMessage({ response: { data: { error: 'unknown_error' } } }, '失败')).toBe('失败')
   })
 })
 

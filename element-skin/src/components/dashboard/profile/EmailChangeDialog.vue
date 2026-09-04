@@ -71,7 +71,8 @@ import { getPublicSettings } from '@/api/public'
 import type { PublicEmailSuffixPolicy } from '@/api/types'
 import EmailSuffixInput from '@/components/common/EmailSuffixInput.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
-import { getErrorMessage, isValidationError } from '@/utils/error'
+import { getErrorMessage } from '@/utils/error'
+import { validateForm } from '@/utils/formValidation'
 import { disabledEmailSuffixPolicy, emailSuffixPolicyError } from '@/utils/emailSuffixPolicy'
 
 const visible = defineModel<boolean>({ required: true })
@@ -149,18 +150,16 @@ async function sendCode() {
 }
 
 async function submit() {
+  if (!(await validateForm(formRef.value))) return
+
+  loading.value = true
   try {
-    if (!formRef.value) return
-    await formRef.value.validate()
-    loading.value = true
     await changeEmail({ email: form.email, code: form.code })
     ElMessage.success('邮箱重设成功')
     visible.value = false
     emit('changed')
   } catch (error: unknown) {
-    if (!isValidationError(error)) {
-      ElMessage.error('重设失败: ' + getErrorMessage(error, '请稍后再试'))
-    }
+    ElMessage.error('重设失败: ' + getErrorMessage(error, '请稍后再试'))
   } finally {
     loading.value = false
   }

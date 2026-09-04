@@ -146,7 +146,8 @@ import { Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import type { PublicEmailSuffixPolicy } from '@/api/types'
 import { sendVerificationCode, register as apiRegister } from '@/api/auth'
-import { getErrorMessage, isValidationError } from '@/utils/error'
+import { getErrorMessage } from '@/utils/error'
+import { validateForm } from '@/utils/formValidation'
 import EmailSuffixInput from '@/components/common/EmailSuffixInput.vue'
 import { disabledEmailSuffixPolicy, emailSuffixPolicyError } from '@/utils/emailSuffixPolicy'
 
@@ -289,11 +290,10 @@ async function sendCode() {
 }
 
 async function register() {
-  try {
-    if (!formRef.value) return
-    await formRef.value.validate()
-    loading.value = true
+  if (!(await validateForm(formRef.value))) return
 
+  loading.value = true
+  try {
     const payload = {
       username: form.username,
       email: form.email,
@@ -310,9 +310,7 @@ async function register() {
       router.push('/login')
     }, 1500)
   } catch (e: unknown) {
-    if (!isValidationError(e)) {
-      ElMessage.error('注册失败: ' + getErrorMessage(e, '注册失败'))
-    }
+    ElMessage.error('注册失败: ' + getErrorMessage(e, '注册失败'))
   } finally {
     loading.value = false
   }

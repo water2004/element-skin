@@ -72,7 +72,8 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock, Ticket } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import { sendVerificationCode, resetPassword as apiResetPassword } from '@/api/auth'
-import { getErrorMessage, isValidationError } from '@/utils/error'
+import { getErrorMessage } from '@/utils/error'
+import { validateForm } from '@/utils/formValidation'
 
 const router = useRouter()
 const formRef = ref<FormInstance | null>(null)
@@ -157,11 +158,10 @@ async function sendCode() {
 }
 
 async function resetPassword() {
-  try {
-    if (!formRef.value) return
-    await formRef.value.validate()
-    loading.value = true
+  if (!(await validateForm(formRef.value))) return
 
+  loading.value = true
+  try {
     await apiResetPassword({
       email: form.email,
       password: form.password,
@@ -173,9 +173,7 @@ async function resetPassword() {
       router.push('/login')
     }, 1500)
   } catch (e: unknown) {
-    if (!isValidationError(e)) {
-      ElMessage.error('重置失败: ' + getErrorMessage(e, '重置失败'))
-    }
+    ElMessage.error('重置失败: ' + getErrorMessage(e, '重置失败'))
   } finally {
     loading.value = false
   }

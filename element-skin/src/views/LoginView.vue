@@ -88,7 +88,8 @@ import { getPublicSettings } from '@/api/public'
 import { siteLogin } from '@/api/auth'
 import { getIdentityProviders, startIdentityAuthorization } from '@/api/identity'
 import type { IdentityProvider } from '@/api/types'
-import { getErrorMessage, getApiErrorMessage, isValidationError } from '@/utils/error'
+import { getErrorMessage, getApiErrorMessage } from '@/utils/error'
+import { validateForm } from '@/utils/formValidation'
 import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
@@ -146,11 +147,10 @@ const rules: FormRules = {
 }
 
 async function login() {
-  try {
-    if (!formRef.value) return
-    await formRef.value.validate()
-    loading.value = true
+  if (!(await validateForm(formRef.value))) return
 
+  loading.value = true
+  try {
     // 使用站点登录接口（token 自动存入 HttpOnly Cookie）
     await siteLogin({
       email: form.email,
@@ -163,9 +163,7 @@ async function login() {
     ElMessage.success('登录成功！')
     await router.replace(loginReturnTarget())
   } catch (e: unknown) {
-    if (!isValidationError(e)) {
-      ElMessage.error('登录失败: ' + getErrorMessage(e, '登录失败'))
-    }
+    ElMessage.error('登录失败: ' + getErrorMessage(e, '登录失败'))
   } finally {
     loading.value = false
   }
