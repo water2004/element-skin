@@ -66,7 +66,7 @@ func TestAuthRegisterRejectsPolicyFailuresWithoutCreatingUser(t *testing.T) {
 		t.Fatalf("strong password policy should reject weak password with exact HTTP 400, got %#v", err)
 	} else {
 		var httpErr util.HTTPError
-		if !errors.As(err, &httpErr) || !reflect.DeepEqual(httpErr.Params, map[string]any{"rules": []string{"min_length", "uppercase", "number"}}) {
+		if !errors.As(err, &httpErr) || !reflect.DeepEqual(httpErr.Params, map[string]any{"rules": []string{"min_length", "composition"}}) {
 			t.Fatalf("strong password rules mismatch: %#v", err)
 		}
 	}

@@ -22,10 +22,8 @@ func (s Service) ResetPassword(ctx context.Context, email, newPassword, code str
 	if err != nil {
 		return err
 	}
-	if strong == "true" {
-		if errs := util.ValidateStrongPassword(newPassword); len(errs) > 0 {
-			return util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": errs}}
-		}
+	if rules := util.ValidatePassword(newPassword, strong == "true"); len(rules) > 0 {
+		return util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": rules}}
 	}
 	enabled, err := settings.Get(ctx, "email_verify_enabled", "false")
 	if err != nil {

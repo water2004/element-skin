@@ -47,7 +47,7 @@ func NewWithRedis(cfg config.Config, db *database.DB, redis redisstore.Store, au
 	emailPolicy := emailpolicysvc.Service{DB: db, Redis: redis}
 	verification.EmailPolicy = emailPolicy
 	authService := authsvc.Service{DB: db, Cfg: cfg, Redis: redis, Settings: settings, Verification: verification, EmailPolicy: emailPolicy}
-	accounts := accountsvc.AccountService{DB: db, Redis: redis, Verification: verification, EmailPolicy: emailPolicy}
+	accounts := accountsvc.AccountService{DB: db, Redis: redis, Verification: verification, EmailPolicy: emailPolicy, Settings: settings}
 	profiles := profilesvc.Service{DB: db, Settings: settings}
 	textures := texturesvc.LibraryService{DB: db, Settings: settings}
 	public := publicsitesvc.Service{

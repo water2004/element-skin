@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { malformedPasswordErrorFixtures, passwordErrorFixtures } from './fixtures/passwordErrors'
 
 import {
   getApiError,
@@ -51,7 +52,7 @@ describe('getErrorMessage', () => {
     ).toBe('OAuth 授权无效或已过期')
   })
 
-  it('uses controlled params for password requirements', () => {
+  it.each(passwordErrorFixtures)('localizes password rules $rules', ({ rules, message }) => {
     const error = {
       response: {
         data: {
@@ -59,12 +60,32 @@ describe('getErrorMessage', () => {
             object: 'password',
             operation: 'validate',
             reason: 'invalid',
-            params: { rules: ['min_length', 'number', 'unknown'] },
+            params: { rules },
           },
         },
       },
     }
-    expect(getErrorMessage(error)).toBe('密码需要至少 8 个字符、包含数字')
+    expect(getErrorMessage(error)).toBe(message)
+  })
+
+  it.each(malformedPasswordErrorFixtures)(
+    'handles malformed password params $params',
+    ({ params, message }) => {
+      expect(
+        getApiErrorMessage({
+          object: 'password',
+          operation: 'validate',
+          reason: 'invalid',
+          params,
+        }),
+      ).toBe(message)
+    },
+  )
+
+  it('keeps authentication failures generic', () => {
+    expect(
+      getApiErrorMessage({ object: 'credentials', operation: 'verify', reason: 'invalid' }),
+    ).toBe('账号或密码错误')
   })
 
   it('rejects malformed descriptors and unknown protocol errors', () => {

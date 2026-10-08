@@ -34,6 +34,7 @@ func (h Handler) DeleteMe(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, err)
 		return
 	}
+	shared.ClearWebSessionCookies(w, h.cfg)
 	util.NoContent(w)
 }
 

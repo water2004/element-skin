@@ -68,6 +68,9 @@ func (s AccountService) ResetPassword(ctx context.Context, actor permission.Acto
 	if err != nil {
 		return err
 	}
+	if err := s.validatePassword(ctx, newPassword); err != nil {
+		return err
+	}
 	hash, err := util.HashPassword(newPassword)
 	if err != nil {
 		return err

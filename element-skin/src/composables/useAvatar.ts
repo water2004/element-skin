@@ -13,6 +13,7 @@ type SkinModel = 'default' | 'slim'
 // Global reactive state to ensure sync across components
 const currentAvatarImg = ref<string | null>(null)
 const avatarHash = ref<string | null>(null)
+let avatarGeneration = 0
 
 // Sequential generation queue — ensures only ONE WebGL context exists at a time
 let _generationQueue: Promise<unknown> = Promise.resolve()
@@ -71,7 +72,10 @@ function _doGenerateAvatar(hash: string, model: SkinModel = 'default'): Promise<
  * Get avatar image for any texture hash. Returns cached render result from IndexedDB
  * instantly, or generates sequentially (WebGL instances serialized via a promise queue).
  */
-export async function getAvatarForHash(hash: string | null | undefined, model: SkinModel = 'default'): Promise<string | null> {
+export async function getAvatarForHash(
+  hash: string | null | undefined,
+  model: SkinModel = 'default',
+): Promise<string | null> {
   if (!hash) return Promise.resolve(null)
 
   const cached = await getCachedImageUrl('avatar', avatarCacheKey(hash, model))
@@ -83,7 +87,11 @@ export async function getAvatarForHash(hash: string | null | undefined, model: S
 }
 
 export function useAvatar() {
-  async function initializeAvatar(hash: string | null | undefined, model: SkinModel = 'default'): Promise<void> {
+  async function initializeAvatar(
+    hash: string | null | undefined,
+    model: SkinModel = 'default',
+  ): Promise<void> {
+    const generation = ++avatarGeneration
     if (!hash) {
       currentAvatarImg.value = null
       avatarHash.value = null
@@ -92,11 +100,9 @@ export function useAvatar() {
 
     avatarHash.value = hash
     const cached = await getCachedImageUrl('avatar', avatarCacheKey(hash, model))
-    if (cached) {
-      currentAvatarImg.value = cached
-    } else {
-      currentAvatarImg.value = await getAvatarForHash(hash, model)
-    }
+    if (generation !== avatarGeneration) return
+    const image = cached ?? (await getAvatarForHash(hash, model))
+    if (generation === avatarGeneration) currentAvatarImg.value = image
   }
 
   async function setAvatar(hash: string | null, model: SkinModel = 'default'): Promise<boolean> {

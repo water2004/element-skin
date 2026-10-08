@@ -86,7 +86,7 @@
             type="password"
             name="password"
             autocomplete="new-password"
-            placeholder="至少6个字符"
+            placeholder="请输入密码"
             :prefix-icon="Lock"
             show-password
             @keyup.enter="register"
@@ -206,10 +206,7 @@ const rules = computed<FormRules>(() => ({
   invite: requireInvite.value
     ? [{ required: true, message: '请输入邀请码', trigger: ['blur', 'change'] }]
     : [],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少需要6个字符', trigger: 'blur' },
-  ],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     {

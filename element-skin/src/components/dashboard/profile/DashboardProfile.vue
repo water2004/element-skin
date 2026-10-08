@@ -172,6 +172,7 @@ const { currentAvatarImg: customAvatar } = useAvatar()
 // Inject shared state from AppLayout
 const user = inject<Ref<User | null>>('user', ref(null))
 const fetchMe = inject<() => Promise<void>>('fetchMe')
+const clearSessionState = inject<() => void>('clearSessionState')!
 
 const router = useRouter()
 const form = ref({
@@ -244,10 +245,6 @@ async function updateProfile() {
         ElMessage.error('请输入旧密码')
         return
       }
-      if (form.value.new_password.length < 6) {
-        ElMessage.error('新密码长度不能少于6个字符')
-        return
-      }
       if (form.value.new_password !== form.value.confirm_password) {
         ElMessage.error('两次输入的新密码不一致')
         return
@@ -282,13 +279,15 @@ async function handleEmailChanged() {
 async function confirmDeleteAccount() {
   try {
     await deleteMe()
-    ElMessage.success('账号已注销')
-    setTimeout(() => {
-      router.push('/')
-    }, 1000)
   } catch (e: unknown) {
     ElMessage.error('注销失败: ' + getErrorMessage(e, '注销失败'))
+    return
   }
+  showDeleteDialog.value = false
+  deleteConfirmText.value = ''
+  clearSessionState()
+  ElMessage.success('账号已注销')
+  await router.replace('/')
 }
 </script>
 

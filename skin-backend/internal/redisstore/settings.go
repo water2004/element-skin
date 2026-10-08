@@ -9,6 +9,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+const publicSettingsCacheKey = "settings:v2"
+
 func (s *RedisStore) GetSetting(ctx context.Context, key string) (string, error) {
 	value, err := s.client.Get(ctx, s.key("settings", key)).Result()
 	if err == redis.Nil {
@@ -27,18 +29,18 @@ func (s *RedisStore) InvalidateSettings(ctx context.Context) error {
 
 func (s *RedisStore) GetPublicSettings(ctx context.Context) (map[string]any, error) {
 	var out map[string]any
-	if err := s.getJSON(ctx, s.key("public", "settings"), &out); err != nil {
+	if err := s.getJSON(ctx, s.key("public", publicSettingsCacheKey), &out); err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
 func (s *RedisStore) SetPublicSettings(ctx context.Context, value map[string]any, ttl time.Duration) error {
-	return s.setJSON(ctx, s.key("public", "settings"), value, ttl)
+	return s.setJSON(ctx, s.key("public", publicSettingsCacheKey), value, ttl)
 }
 
 func (s *RedisStore) InvalidatePublicSettings(ctx context.Context) error {
-	return s.client.Del(ctx, s.key("public", "settings")).Err()
+	return s.client.Del(ctx, s.key("public", publicSettingsCacheKey)).Err()
 }
 
 func (s *RedisStore) GetPublicHomepageMedia(ctx context.Context) ([]model.HomepageMedia, error) {
