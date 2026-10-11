@@ -1,6 +1,5 @@
 import type { Component } from 'vue'
 import {
-  Back,
   Bell,
   Box,
   Link,
@@ -26,13 +25,22 @@ export interface NavLink {
 }
 
 export interface DrawerLink {
+  type?: 'item' | 'group'
+  index?: string
+  collapsible?: boolean
   isDivider?: boolean
   path?: string
   title?: string
   icon?: Component
+  children?: DrawerLink[]
 }
 
-const dashboardLinks: NavLink[] = [
+export interface AccountLink {
+  path: string
+  title: string
+}
+
+const dashboardLinks: (AccountLink & { icon: Component })[] = [
   { path: '/dashboard/home', title: '仪表盘', icon: Odometer },
   { path: '/notifications', title: '通知中心', icon: Bell },
   { path: '/dashboard/wardrobe', title: '我的衣柜', icon: Box },
@@ -42,15 +50,22 @@ const dashboardLinks: NavLink[] = [
   { path: '/dashboard/oauth', title: '第三方应用', icon: Link },
 ]
 
+const accountPaths = new Set(['/dashboard/profile', '/dashboard/identities', '/dashboard/oauth'])
+
+export function buildAccountLinks(userPermissions: string[]): AccountLink[] {
+  return dashboardLinks.filter(
+    (item) => accountPaths.has(item.path) && canAccessSiteLink(item, userPermissions),
+  )
+}
+
 const adminNavLinks: NavLink[] = [
-  { path: '/dashboard', title: '返回面板', icon: Back },
+  { path: '/admin/settings', title: '站点设置', icon: Setting },
+  { path: '/admin/notices', title: '通知公告', icon: Bell },
   { path: '/admin/users', title: '用户管理', icon: User },
   { path: '/admin/roles', title: '角色管理', icon: User },
   { path: '/admin/textures', title: '材质管理', icon: Box },
   { path: '/admin/invites', title: '邀请码管理', icon: Tools },
-  { path: '/admin/settings', title: '站点设置', icon: Setting },
   { path: '/admin/email', title: '邮件服务', icon: Message },
-  { path: '/admin/notices', title: '通知公告', icon: Bell },
   { path: '/admin/oauth-apps', title: '第三方应用', icon: Link },
   { path: '/admin/identity-providers', title: 'OIDC 身份提供方', icon: Link },
   { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
@@ -96,9 +111,18 @@ export function buildNavLinks(input: {
   if (input.enableSkinLibrary && canAccessSitePath('/skin-library', input.userPermissions)) {
     links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
   }
-  links.push(...dashboardLinks.filter((item) => canAccessSiteLink(item, input.userPermissions)))
-  if (canAccessAdmin(input.userPermissions))
-    links.push({ path: '/admin', title: '管理面板', icon: Tools })
+  const primaryDashboardPaths = new Set([
+    '/dashboard/home',
+    '/dashboard/wardrobe',
+    '/dashboard/roles',
+  ])
+  links.push(
+    ...dashboardLinks.filter(
+      (item) =>
+        primaryDashboardPaths.has(item.path || '') &&
+        canAccessSiteLink(item, input.userPermissions),
+    ),
+  )
   return links
 }
 
@@ -110,14 +134,53 @@ export function buildDrawerLinks(input: {
   if (!input.isLogged) return []
 
   const links: DrawerLink[] = []
+  const dashboardItems = dashboardLinks.filter((item) =>
+    canAccessSiteLink(item, input.userPermissions),
+  )
+  const dashboardHome = dashboardItems.find((item) => item.path === '/dashboard/home')
+  if (dashboardHome) links.push(dashboardHome)
+
+  const materialItems = dashboardItems.filter((item) =>
+    ['/dashboard/wardrobe', '/dashboard/roles'].includes(item.path || ''),
+  )
   if (input.enableSkinLibrary && canAccessSitePath('/skin-library', input.userPermissions)) {
-    links.push({ path: '/skin-library', title: '皮肤库', icon: Picture })
+    materialItems.unshift({ path: '/skin-library', title: '皮肤库', icon: Picture })
   }
-  links.push({ isDivider: true })
-  links.push(...dashboardLinks.filter((item) => canAccessSiteLink(item, input.userPermissions)))
+  if (materialItems.length) {
+    links.push({
+      isDivider: true,
+    })
+    links.push({
+      type: 'group',
+      index: 'material-roles-group',
+      title: '材质与角色',
+      collapsible: false,
+      children: materialItems,
+    })
+  }
+
+  const accountItems = dashboardItems.filter(
+    (item) => item.path === '/notifications' || accountPaths.has(item.path),
+  )
+  if (accountItems.length) {
+    links.push({ isDivider: true })
+    links.push({
+      type: 'group',
+      index: 'account-apps-group',
+      title: '消息与账户',
+      collapsible: false,
+      children: accountItems,
+    })
+  }
   if (canAccessAdmin(input.userPermissions)) {
     links.push({ isDivider: true })
-    links.push(...filterAdminLinks(adminNavLinks, input.userPermissions))
+    links.push({
+      type: 'group',
+      index: 'admin-group',
+      title: '管理面板',
+      collapsible: false,
+      children: filterAdminLinks(adminNavLinks, input.userPermissions),
+    })
   }
   return links
 }
@@ -133,15 +196,15 @@ function buildAdminNavItems(userPermissions: string[]): NavLink[] {
   )
   const directItems = filterAdminLinks(
     [
-      { type: 'item' as const, path: '/admin/invites', title: '邀请码管理', icon: Tools },
+      { type: 'item' as const, path: '/admin/notices', title: '通知公告', icon: Bell },
       { type: 'item' as const, path: '/admin/settings', title: '站点设置', icon: Setting },
     ],
     userPermissions,
   )
   const configChildren = filterAdminLinks(
     [
+      { path: '/admin/invites', title: '邀请码管理', icon: Tools },
       { path: '/admin/email', title: '邮件服务', icon: Message },
-      { path: '/admin/notices', title: '通知公告', icon: Bell },
       { path: '/admin/oauth-apps', title: '第三方应用', icon: Link },
       { path: '/admin/identity-providers', title: 'OIDC 身份提供方', icon: Link },
       { path: '/admin/mojang', title: 'Fallback 服务', icon: Link },
@@ -152,7 +215,6 @@ function buildAdminNavItems(userPermissions: string[]): NavLink[] {
   )
 
   return [
-    { type: 'item', path: '/dashboard', title: '返回面板', icon: Back },
     ...(contentChildren.length
       ? [
           {

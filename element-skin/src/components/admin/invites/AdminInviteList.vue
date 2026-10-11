@@ -56,8 +56,10 @@
           :loading="pagination.isLoading.value"
           :disabled-prev="!pagination.canGoPrev.value"
           :disabled-next="!pagination.canGoNext.value"
+          :page-size="pagination.limit.value"
           @prev="handlePrevPage"
           @next="handleNextPage"
+          @page-size-change="handlePageSizeChange"
         />
       </div>
     </UiCard>
@@ -147,8 +149,8 @@ import UiSegmented from '@/components/ui/UiSegmented.vue'
 import { getErrorMessage } from '@/utils/error'
 
 const invites = ref<Invite[]>([])
-const limit = 15
-const pagination = useCursorPagination<Invite>(limit)
+const pagination = useCursorPagination<Invite>(20)
+const limit = pagination.limit
 const inviteDialogVisible = ref(false)
 const inviteMode = ref('auto')
 const customInviteCode = ref('')
@@ -173,7 +175,7 @@ async function loadInvites() {
   try {
     const res = await getAdminInvites({
       cursor: pagination.currentCursor.value,
-      limit: limit,
+      limit: limit.value,
     })
     invites.value = res.data.items
     pagination.setPageData(res.data)
@@ -201,6 +203,11 @@ async function handlePrevPage() {
 async function refreshFirstPage() {
   pagination.reset()
   await loadInvites()
+}
+
+async function handlePageSizeChange(value: number) {
+  if (!pagination.setLimit(value)) return
+  await refreshFirstPage()
 }
 
 function generateRandomCode() {

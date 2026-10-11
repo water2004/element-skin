@@ -18,8 +18,10 @@
       :loading="loading"
       :disabled-prev="disabledPrev"
       :disabled-next="disabledNext"
+      :page-size="pageSize"
       @prev="$emit('prev')"
       @next="$emit('next')"
+      @page-size-change="$emit('page-size-change', $event)"
     />
   </div>
 </template>
@@ -33,10 +35,12 @@ defineProps<{
   loading: boolean
   disabledPrev: boolean
   disabledNext: boolean
+  pageSize: number
 }>()
 
 defineEmits<{
   prev: []
   next: []
+  'page-size-change': [value: number]
 }>()
 </script>

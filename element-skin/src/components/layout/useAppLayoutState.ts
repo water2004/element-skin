@@ -8,7 +8,9 @@ import { useAvatar } from '@/composables/useAvatar'
 import { useNotificationIndicator } from '@/composables/useNotificationIndicator'
 import { useTheme } from '@/composables/useTheme'
 import { appStorage } from '@/storage'
+import { canAccessSitePath } from '@/permissions/sitePages'
 import {
+  buildAccountLinks,
   buildDefaultOpeneds,
   buildDrawerLinks,
   buildNavLinks,
@@ -54,6 +56,10 @@ export function useAppLayoutState() {
   const isLogged = computed(() => !!user.value)
   const userPermissions = computed(() => user.value?.permissions || [])
   const canAccessAdmin = computed(() => canAccessAdminPanel(userPermissions.value))
+  const canAccessNotifications = computed(
+    () => isLogged.value && canAccessSitePath('/notifications', userPermissions.value),
+  )
+  const accountLinks = computed(() => buildAccountLinks(userPermissions.value))
   const defaultOpeneds = computed(() => buildDefaultOpeneds(route.path))
   const navLinks = computed<NavLink[]>(() =>
     buildNavLinks({
@@ -87,19 +93,22 @@ export function useAppLayoutState() {
 
   function updateFooterHeight() {
     nextTick(() => {
-      if (footerRef.value?.rootElement) footerHeight.value = footerRef.value.rootElement.offsetHeight
+      if (footerRef.value?.rootElement)
+        footerHeight.value = footerRef.value.rootElement.offsetHeight
       else footerHeight.value = 0
     })
   }
 
   function shouldShowNotificationBadge(item: NavLink | DrawerLink) {
-    return item.path === '/notifications' && hasUnreadNotifications.value
+    return (
+      canAccessNotifications.value && item.path === '/notifications' && hasUnreadNotifications.value
+    )
   }
 
   function startUnreadRefreshTimer() {
     if (unreadRefreshTimer !== null) return
     unreadRefreshTimer = window.setInterval(() => {
-      if (isLogged.value) void refreshUnreadNotifications()
+      if (canAccessNotifications.value) void refreshUnreadNotifications()
     }, 60_000)
   }
 
@@ -133,8 +142,6 @@ export function useAppLayoutState() {
       if (res.data.avatar_hash) {
         initializeAvatar(res.data.avatar_hash)
       }
-      void refreshUnreadNotifications()
-      startUnreadRefreshTimer()
     } catch {
       user.value = null
       clearUnreadNotifications()
@@ -153,15 +160,14 @@ export function useAppLayoutState() {
   provide('footerHeight', footerHeight)
 
   watch(
-    isLogged,
-    (logged) => {
-      if (logged) {
-        void refreshUnreadNotifications()
-        startUnreadRefreshTimer()
-        return
-      }
+    [() => user.value?.id, canAccessNotifications],
+    ([, canRead]) => {
       clearUnreadNotifications()
       stopUnreadRefreshTimer()
+      if (canRead) {
+        void refreshUnreadNotifications()
+        startUnreadRefreshTimer()
+      }
     },
     { immediate: true },
   )
@@ -207,6 +213,7 @@ export function useAppLayoutState() {
     window.removeEventListener('resize', updateFooterHeight)
     if (resizeObserver) resizeObserver.disconnect()
     stopUnreadRefreshTimer()
+    clearUnreadNotifications()
     cleanupEasterEgg()
   })
 
@@ -230,6 +237,8 @@ export function useAppLayoutState() {
     homeContentCenterY,
     isLogged,
     canAccessAdmin,
+    canAccessNotifications,
+    accountLinks,
     defaultOpeneds,
     navLinks,
     drawerLinks,

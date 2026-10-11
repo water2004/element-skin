@@ -180,8 +180,10 @@
             :loading="pagination.isLoading.value"
             :disabled-prev="!pagination.canGoPrev.value"
             :disabled-next="!pagination.canGoNext.value"
+            :page-size="pagination.limit.value"
             @prev="handlePrevPage"
             @next="handleNextPage"
+            @page-size-change="handlePageSizeChange"
           />
         </div>
       </div>
@@ -217,8 +219,8 @@ const user = inject<Ref<UserType | null>>('user', ref(null))
 const isLogged = computed(() => !!user.value)
 
 const items = ref<Texture[]>([])
-const limit = 20
-const pagination = useCursorPagination<Texture>(limit)
+const pagination = useCursorPagination<Texture>(20)
+const limit = pagination.limit
 const loading = ref(false)
 const isDisabled = ref(false)
 const filterType = ref('')
@@ -246,7 +248,7 @@ async function fetchLibrary() {
   try {
     const params = {
       cursor: pagination.currentCursor.value,
-      limit: limit,
+      limit: limit.value,
       texture_type: filterType.value || undefined,
       q: activeSearchQuery.value || undefined,
       sort: sortBy.value,
@@ -323,6 +325,11 @@ function handleClearSearch() {
   activeSearchQuery.value = ''
   pagination.reset()
   fetchLibrary()
+}
+
+async function handlePageSizeChange(value: number) {
+  if (!pagination.setLimit(value)) return
+  await fetchLibrary()
 }
 
 async function addToWardrobe(item: Texture) {

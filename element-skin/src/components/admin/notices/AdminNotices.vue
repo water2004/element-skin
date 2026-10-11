@@ -102,8 +102,10 @@
           :loading="pagination.isLoading.value"
           :disabled-prev="!pagination.canGoPrev.value"
           :disabled-next="!pagination.canGoNext.value"
+          :page-size="pagination.limit.value"
           @prev="handlePrevPage"
           @next="handleNextPage"
+          @page-size-change="handlePageSizeChange"
         />
       </div>
     </UiCard>
@@ -162,8 +164,8 @@ import {
 
 const notices = ref<Notice[]>([])
 const status = ref<NoticeStatus>('all')
-const limit = 15
-const pagination = useCursorPagination<Notice>(limit)
+const pagination = useCursorPagination<Notice>(20)
+const limit = pagination.limit
 const contentDialogVisible = ref(false)
 const settingsDialogVisible = ref(false)
 const saving = ref(false)
@@ -305,7 +307,7 @@ async function loadNotices() {
   try {
     const res = await getAdminNotices({
       cursor: pagination.currentCursor.value,
-      limit,
+      limit: limit.value,
       type: 'announcement',
       status: status.value,
     })
@@ -345,6 +347,11 @@ async function handlePrevPage() {
 async function refreshFirstPage() {
   pagination.reset()
   await loadNotices()
+}
+
+async function handlePageSizeChange(value: number) {
+  if (!pagination.setLimit(value)) return
+  await refreshFirstPage()
 }
 
 onMounted(refreshFirstPage)

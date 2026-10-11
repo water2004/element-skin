@@ -38,8 +38,10 @@
           :loading="usersPagination.isLoading.value"
           :disabled-prev="!usersPagination.canGoPrev.value"
           :disabled-next="!usersPagination.canGoNext.value"
+          :page-size="usersPagination.limit.value"
           @prev="handleUsersPrevPage"
           @next="handleUsersNextPage"
+          @page-size-change="handleUsersPageSizeChange"
         />
       </div>
     </UiCard>
@@ -52,6 +54,7 @@
       :profiles-loading="profilesPagination.isLoading.value"
       :profiles-prev-disabled="!profilesPagination.canGoPrev.value"
       :profiles-next-disabled="!profilesPagination.canGoNext.value"
+      :profiles-page-size="profilesPagination.limit.value"
       :is-banned="currentUser ? isUserBanned(currentUser) : false"
       :ban-remaining="formatBanRemaining(currentUser?.banned_until)"
       :is-self="currentUser ? isCurrentUserSelf(currentUser) : false"
@@ -61,6 +64,7 @@
       :current-user-protected="Boolean(loggedInUser?.protected)"
       @profiles-prev="handleProfilesPrevPage"
       @profiles-next="handleProfilesNextPage"
+      @profiles-page-size-change="handleProfilesPageSizeChange"
       @grant-role="grantRole"
       @revoke-role="revokeRole"
       @transfer-protected-subject="transferProtected"
@@ -135,8 +139,8 @@ import {
 } from '@/components/admin/users/userListDisplay'
 
 const users = ref<User[]>([])
-const limit = 15
-const usersPagination = useCursorPagination<User>(limit)
+const usersPagination = useCursorPagination<User>(20)
+const limit = usersPagination.limit
 const loading = ref(false)
 const searchQuery = ref('')
 const activeSearchQuery = ref('') // 当前生效的搜索词（点击搜索按钮后才同步）
@@ -145,8 +149,8 @@ const currentUser = ref<User | null>(null)
 const currentPermissionState = ref<UserPermissionsResponse | null>(null)
 const permissionsLoading = ref(false)
 const userProfiles = ref<Profile[]>([])
-const profileLimit = 10
-const profilesPagination = useCursorPagination<Profile>(profileLimit)
+const profilesPagination = useCursorPagination<Profile>(20)
+const profileLimit = profilesPagination.limit
 const userDetailDialogVisible = ref(false)
 const resetPasswordDialogVisible = ref(false)
 const resetPasswordForm = ref({ new_password: '', confirm_password: '' })
@@ -161,7 +165,7 @@ const banning = ref(false)
 const presetDurations = banDurationPresets
 
 function buildSearchParams(extraParams: UserQueryParams = {}): UserQueryParams {
-  return buildUserSearchParams(activeSearchQuery.value, limit, extraParams)
+  return buildUserSearchParams(activeSearchQuery.value, limit.value, extraParams)
 }
 
 async function refreshUsers() {
@@ -208,6 +212,11 @@ async function handleUsersPrevPage() {
     users.value = res.data.items
     return res.data
   })
+}
+
+async function handleUsersPageSizeChange(value: number) {
+  if (!usersPagination.setLimit(value)) return
+  await refreshUsersFromFirst()
 }
 
 function handleSearch() {
@@ -267,7 +276,7 @@ async function fetchUserProfilesAdmin() {
   try {
     const res = await getUserProfiles(currentUser.value.id, {
       cursor: profilesPagination.currentCursor.value,
-      limit: profileLimit,
+      limit: profileLimit.value,
     })
     userProfiles.value = res.data.items
     profilesPagination.setPageData(res.data)
@@ -294,6 +303,11 @@ async function handleProfilesPrevPage() {
     userProfiles.value = res.data.items
     return res.data
   })
+}
+
+async function handleProfilesPageSizeChange(value: number) {
+  if (!profilesPagination.setLimit(value)) return
+  await fetchUserProfilesAdmin()
 }
 
 async function grantRole(roleId: string) {

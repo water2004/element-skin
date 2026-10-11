@@ -1,12 +1,30 @@
 <template>
   <div class="app-shell" :class="{ 'is-home-layout': isHome, 'is-auth-layout': isAuthPage }">
     <el-header class="layout-header-wrap" v-if="!isAuthPage">
-      <div class="layout-header">
-        <!-- Logo -->
-        <div class="logo" @click="go('/')">{{ siteName }}</div>
+      <div class="layout-header" ref="headerRef">
+        <div ref="headerBrandRef" class="header-brand">
+          <!-- Logo -->
+          <div class="logo" @click="go('/')">{{ siteName }}</div>
+
+          <div class="mobile-nav" v-if="authReady && isLogged">
+            <el-button
+              @click="drawer = true"
+              :icon="MenuIcon"
+              text
+              circle
+              class="mobile-menu-btn"
+              aria-label="打开导航菜单"
+            />
+          </div>
+        </div>
 
         <!-- Desktop Navigation -->
-        <div class="desktop-nav">
+        <div
+          ref="desktopNavRef"
+          class="desktop-nav"
+          :class="{ 'is-hidden': !showDesktopNav }"
+          :aria-hidden="!showDesktopNav"
+        >
           <el-menu
             mode="horizontal"
             :default-active="activeRoute"
@@ -43,7 +61,22 @@
           </el-menu>
         </div>
 
-        <div class="header-actions">
+        <div ref="headerActionsRef" class="header-actions">
+          <el-button
+            v-if="authReady && canAccessNotifications"
+            class="notification-toggle"
+            :icon="Bell"
+            circle
+            text
+            aria-label="通知中心"
+            @click="go('/notifications')"
+          >
+            <span
+              v-if="shouldShowNotificationBadge({ path: '/notifications' })"
+              class="notification-nav-dot"
+            />
+          </el-button>
+
           <!-- Theme Toggle -->
           <el-button
             class="theme-toggle"
@@ -53,23 +86,13 @@
             @click="toggleTheme"
           />
 
-          <!-- Mobile Nav Trigger -->
-          <div class="mobile-nav" v-if="authReady && isLogged">
-            <el-button
-              @click="drawer = true"
-              :icon="MenuIcon"
-              text
-              circle
-              class="mobile-menu-btn"
-            />
-          </div>
-
           <AccountMenu
             v-if="authReady && isLogged"
             :avatar-src="customAvatar || ''"
             :account-name="accountName"
             :role-label="accountRoleLabel"
             :can-access-admin="canAccessAdmin"
+            :links="accountLinks"
             @navigate="go"
             @logout="logout"
           />
@@ -86,9 +109,28 @@
     <!-- Mobile Drawer -->
     <el-drawer v-model="drawer" title="导航菜单" direction="ltr" size="280px" class="mobile-drawer">
       <el-menu :default-active="activeRoute" router @select="drawer = false" class="drawer-menu">
-        <template v-for="(item, index) in drawerLinks" :key="index">
+        <template v-for="(item, index) in drawerLinks" :key="item.index || item.path || index">
           <el-divider v-if="item.isDivider" class="nav-divider" />
-          <el-menu-item v-else :index="item.path">
+          <template v-else-if="item.type === 'group' && item.collapsible === false">
+            <div class="drawer-section-title">{{ item.title }}</div>
+            <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path!">
+              <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
+              <span>{{ child.title }}</span>
+              <span v-if="shouldShowNotificationBadge(child)" class="notification-nav-dot" />
+            </el-menu-item>
+          </template>
+          <el-sub-menu v-else-if="item.type === 'group'" :index="item.index || String(index)">
+            <template #title>
+              <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
+              <span>{{ item.title }}</span>
+            </template>
+            <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path!">
+              <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
+              <span>{{ child.title }}</span>
+              <span v-if="shouldShowNotificationBadge(child)" class="notification-nav-dot" />
+            </el-menu-item>
+          </el-sub-menu>
+          <el-menu-item v-else :index="item.path!">
             <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
             <span>{{ item.title }}</span>
             <span v-if="shouldShowNotificationBadge(item)" class="notification-nav-dot" />
@@ -124,7 +166,8 @@
 </template>
 
 <script setup lang="ts">
-import { Menu as MenuIcon, Moon, Sunny } from '@element-plus/icons-vue'
+import { Bell, Menu as MenuIcon, Moon, Sunny } from '@element-plus/icons-vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import AppFooter from '@/components/layout/AppFooter.vue'
 import AccountMenu from '@/components/layout/AccountMenu.vue'
 import { useAppLayoutState } from '@/components/layout/useAppLayoutState'
@@ -149,6 +192,8 @@ const {
   homeContentCenterY,
   isLogged,
   canAccessAdmin,
+  canAccessNotifications,
+  accountLinks,
   defaultOpeneds,
   navLinks,
   drawerLinks,
@@ -162,6 +207,58 @@ const {
   logout,
   shouldShowNotificationBadge,
 } = useAppLayoutState()
+
+const headerRef = ref<HTMLElement | null>(null)
+const headerBrandRef = ref<HTMLElement | null>(null)
+const headerActionsRef = ref<HTMLElement | null>(null)
+const desktopNavRef = ref<HTMLElement | null>(null)
+const showDesktopNav = ref(true)
+let navResizeObserver: ResizeObserver | null = null
+
+function updateDesktopNavVisibility() {
+  const header = headerRef.value
+  const brand = headerBrandRef.value
+  const actions = headerActionsRef.value
+  const container = desktopNavRef.value
+  const menu = container?.querySelector<HTMLElement>('.el-menu')
+  if (!header || !brand || !actions || !container || !menu) return
+
+  const headerRect = header.getBoundingClientRect()
+  const brandRect = brand.getBoundingClientRect()
+  const actionsRect = actions.getBoundingClientRect()
+  const navWidth = menu.getBoundingClientRect().width
+  const headerCenter = headerRect.left + headerRect.width / 2
+  const navLeft = headerCenter - navWidth / 2
+  const navRight = headerCenter + navWidth / 2
+  const safeGap = 12
+
+  showDesktopNav.value =
+    window.innerWidth > 768 &&
+    navLeft >= brandRect.right + safeGap &&
+    navRight <= actionsRect.left - safeGap
+}
+
+onMounted(() => {
+  const observer = new ResizeObserver(updateDesktopNavVisibility)
+  navResizeObserver = observer
+  watch(
+    [headerRef, headerBrandRef, headerActionsRef, desktopNavRef],
+    (elements) => {
+      observer.disconnect()
+      for (const element of elements) {
+        if (element) observer.observe(element)
+      }
+      updateDesktopNavVisibility()
+    },
+    { immediate: true, flush: 'post' },
+  )
+  window.addEventListener('resize', updateDesktopNavVisibility)
+})
+
+onUnmounted(() => {
+  navResizeObserver?.disconnect()
+  window.removeEventListener('resize', updateDesktopNavVisibility)
+})
 </script>
 
 <style>
@@ -254,6 +351,7 @@ const {
 .is-home-layout .layout-header .logo,
 .is-home-layout .layout-header :deep(.account-name),
 .is-home-layout .layout-header .theme-toggle,
+.is-home-layout .layout-header .notification-toggle,
 .is-home-layout .layout-header .mobile-menu-btn,
 .is-home-layout .layout-header :deep(.el-menu-item),
 .is-home-layout .layout-header :deep(.el-sub-menu__title) {
@@ -263,6 +361,7 @@ const {
 .is-home-layout .layout-header :deep(.account-trigger:hover),
 .is-home-layout .layout-header .logo:hover,
 .is-home-layout .layout-header .theme-toggle:hover,
+.is-home-layout .layout-header .notification-toggle:hover,
 .is-home-layout .layout-header .mobile-menu-btn:hover,
 .is-home-layout .layout-header :deep(.el-menu-item:hover),
 .is-home-layout .layout-header :deep(.el-menu-item.is-active),
@@ -305,11 +404,18 @@ const {
   color: var(--el-color-primary);
   font-weight: 600;
 }
+.drawer-section-title {
+  padding: 16px 20px 6px;
+  color: var(--color-text-light);
+  font-size: 12px;
+  font-weight: 600;
+}
 
 .layout-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
   height: 100%;
   gap: 12px;
 }
@@ -327,19 +433,37 @@ const {
   color: var(--el-color-primary);
 }
 
+.header-brand {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
 .desktop-nav {
-  flex-grow: 1;
-  min-width: 0;
   display: flex;
   justify-content: center;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
   height: 100%;
+}
+
+.desktop-nav.is-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mobile-nav {
+  display: block;
 }
 .desktop-nav .el-menu {
   border-bottom: none;
   height: 100%;
   background: transparent;
-  max-width: 100%;
-  overflow: hidden;
+  max-width: none;
+  overflow: visible;
 }
 
 .desktop-nav :deep(.nav-menu-entry) {
@@ -378,6 +502,17 @@ const {
   font-size: 20px;
   border-radius: 8px;
 }
+.notification-toggle {
+  position: relative;
+  font-size: 20px;
+  border-radius: 8px;
+}
+.notification-toggle .notification-nav-dot {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  margin: 0;
+}
 
 .app-main {
   --header-height: 64px;
@@ -406,47 +541,7 @@ const {
   width: 13px;
 }
 
-@media (max-width: 1440px) {
-  .desktop-nav :deep(.nav-priority-8) {
-    display: none;
-  }
-}
-
-@media (max-width: 1360px) {
-  .desktop-nav :deep(.nav-priority-7) {
-    display: none;
-  }
-}
-
-@media (max-width: 1280px) {
-  .desktop-nav :deep(.nav-priority-6) {
-    display: none;
-  }
-}
-
-@media (max-width: 1180px) {
-  .desktop-nav :deep(.nav-priority-5) {
-    display: none;
-  }
-}
-
-@media (max-width: 1060px) {
-  .desktop-nav :deep(.nav-priority-4) {
-    display: none;
-  }
-}
-
-@media (max-width: 940px) {
-  .desktop-nav :deep(.nav-priority-3) {
-    display: none;
-  }
-}
-
-@media (max-width: 840px) {
-  .desktop-nav :deep(.nav-priority-2) {
-    display: none;
-  }
-
+@media (max-width: 1100px) {
   :deep(.account-name) {
     display: none;
   }
@@ -454,7 +549,8 @@ const {
 
 @media (max-width: 768px) {
   .desktop-nav {
-    display: none;
+    visibility: hidden;
+    pointer-events: none;
   }
 }
 </style>

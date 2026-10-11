@@ -68,8 +68,10 @@
         :loading="pagination.isLoading.value"
         :disabled-prev="!pagination.canGoPrev.value"
         :disabled-next="!pagination.canGoNext.value"
+        :page-size="pagination.limit.value"
         @prev="handlePrevPage"
         @next="handleNextPage"
+        @page-size-change="handlePageSizeChange"
       />
     </div>
 
@@ -166,11 +168,9 @@ const user = inject<Ref<User | null>>('user', ref(null))
 const router = useRouter()
 
 const profiles = ref<Profile[]>([])
-const limit = 12
+const pagination = useCursorPagination<Profile>(20)
+const limit = pagination.limit
 const loading = ref(false)
-
-// 游标分页 composable
-const pagination = useCursorPagination<Profile>(limit)
 
 const showCreateRoleDialog = ref(false)
 const newRoleName = ref('')
@@ -317,7 +317,7 @@ async function fetchProfiles() {
   try {
     const params = {
       cursor: pagination.currentCursor.value,
-      limit: limit,
+      limit: limit.value,
     }
     const res = await getProfiles(params)
     profiles.value = res.data.items
@@ -347,6 +347,11 @@ async function handlePrevPage() {
     return res.data
   })
   window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+async function handlePageSizeChange(value: number) {
+  if (!pagination.setLimit(value)) return
+  await refreshFirstPage()
 }
 
 async function refreshFirstPage() {

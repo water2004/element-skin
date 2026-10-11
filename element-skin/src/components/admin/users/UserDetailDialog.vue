@@ -16,8 +16,10 @@
             :loading="profilesLoading"
             :disabled-prev="profilesPrevDisabled"
             :disabled-next="profilesNextDisabled"
+            :page-size="profilesPageSize"
             @prev="$emit('profiles-prev')"
             @next="$emit('profiles-next')"
+            @page-size-change="$emit('profiles-page-size-change', $event)"
           />
         </el-tab-pane>
 
@@ -76,6 +78,7 @@ defineProps<{
   profilesLoading: boolean
   profilesPrevDisabled: boolean
   profilesNextDisabled: boolean
+  profilesPageSize: number
   isBanned: boolean
   banRemaining: string
   isSelf: boolean
@@ -88,6 +91,7 @@ defineProps<{
 defineEmits<{
   'profiles-prev': []
   'profiles-next': []
+  'profiles-page-size-change': [value: number]
   'grant-role': [roleId: string]
   'revoke-role': [roleId: string]
   'transfer-protected-subject': []
