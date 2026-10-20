@@ -22,6 +22,14 @@ CREATE TABLE IF NOT EXISTS profiles (
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
+-- Audit the one-time case-insensitive profile name migration without rewriting identities.
+CREATE TABLE IF NOT EXISTS profile_name_case_migrations (
+    profile_id TEXT PRIMARY KEY,
+    old_name TEXT NOT NULL,
+    new_name TEXT NOT NULL,
+    migrated_at BIGINT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS site_refresh_tokens (
     token_hash TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,

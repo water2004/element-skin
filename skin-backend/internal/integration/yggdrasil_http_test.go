@@ -387,7 +387,7 @@ func TestYggdrasilPublicLookupAliasesAreRegisteredExactly(t *testing.T) {
 		{http.MethodGet, "/api/profiles/minecraft/Missing", nil, http.StatusNoContent, ""},
 		{http.MethodGet, "/users/profiles/minecraft/Missing", nil, http.StatusNoContent, ""},
 		{http.MethodPost, "/api/profiles/minecraft", []string{"Missing"}, http.StatusOK, "[]\n"},
-		{http.MethodGet, "/minecraft/profile/lookup/name/Missing", nil, http.StatusNoContent, ""},
+		{http.MethodGet, "/minecraft/profile/lookup/name/Missing", nil, http.StatusNotFound, "{\"error\":\"NOT_FOUND\",\"errorMessage\":\"Profile not found.\"}\n"},
 	}
 	for _, tc := range cases {
 		rec := doJSON(t, h, tc.method, tc.path, tc.body)

@@ -221,7 +221,7 @@ func TestFallbackLookupRoutesForwardExactRequests(t *testing.T) {
 	if err != nil || services == nil || string(services.Body) != `{"id":"services-id","name":"Name With Space"}` {
 		t.Fatalf("services lookup got resp=%#v err=%v", services, err)
 	}
-	bulk, err := fb.BulkLookup(ctx, []string{"Alex", "Steve"})
+	bulk, err := fb.BulkLookup(ctx, []string{"Alex", "Steve"}, fallbacksvc.AccountAPI)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -276,7 +276,7 @@ func TestFallbackLookupNamesMergesLocalAndFallbackProfilesExactly(t *testing.T) 
 	}
 	fb := newFallback(db, server.Client())
 
-	got, err := fb.LookupNames(ctx, []string{"RemoteLookup", "LocalLookup", "remoteSecond", "LOCALLOOKUP"})
+	got, err := fb.LookupNames(ctx, []string{"RemoteLookup", "LocalLookup", "remoteSecond", "LOCALLOOKUP"}, fallbacksvc.AccountAPI)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestFallbackLookupNamesMergesLocalAndFallbackProfilesExactly(t *testing.T) 
 		}
 	}
 
-	got, err = fb.LookupNames(ctx, []string{"LocalLookup"})
+	got, err = fb.LookupNames(ctx, []string{"LocalLookup"}, fallbacksvc.AccountAPI)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestFallbackSerialFailoverSkipsEmptyURLsAndRejectsMalformedBulk(t *testing.
 	if resp, err := fb.ServicesLookup(ctx, "Missing"); err != nil || resp != nil {
 		t.Fatalf("unconfigured services fallback=%#v err=%v; want nil, nil", resp, err)
 	}
-	if profiles, err := fb.BulkLookup(ctx, []string{"Missing"}); err != nil || profiles != nil {
+	if profiles, err := fb.BulkLookup(ctx, []string{"Missing"}, fallbacksvc.AccountAPI); err != nil || profiles != nil {
 		t.Fatalf("unconfigured bulk fallback=%#v err=%v; want nil, nil", profiles, err)
 	}
 
@@ -372,7 +372,7 @@ func TestFallbackSerialFailoverSkipsEmptyURLsAndRejectsMalformedBulk(t *testing.
 	if err != nil || services == nil || string(services.Body) != `{"id":"services-id","name":"ServicesName"}` {
 		t.Fatalf("empty-services URL failover=%#v err=%v; want exact second-endpoint response", services, err)
 	}
-	profiles, err := fb.BulkLookup(ctx, []string{"Malformed"})
+	profiles, err := fb.BulkLookup(ctx, []string{"Malformed"}, fallbacksvc.AccountAPI)
 	var syntaxErr *json.SyntaxError
 	if profiles != nil || !errors.As(err, &syntaxErr) || syntaxErr.Offset != 2 {
 		t.Fatalf("malformed bulk response=%#v err=%#v; want nil and JSON syntax error at offset 2", profiles, err)
