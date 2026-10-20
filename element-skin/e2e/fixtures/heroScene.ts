@@ -1,5 +1,9 @@
 import { createHeroScene } from '../../src/composables/useHeroScene'
-import { heroImage, heroNextImage, heroPanorama } from '../../src/composables/__tests__/fixtures/heroMedia'
+import {
+  heroImage,
+  heroNextImage,
+  heroPanorama,
+} from '../../src/composables/__tests__/fixtures/heroMedia'
 
 export interface HeroFrame {
   width: number
@@ -38,11 +42,12 @@ window.requestAnimationFrame = (callback) => {
 window.cancelAnimationFrame = (id) => callbacks.delete(id)
 
 const kind = params.get('kind')
-const items = (kind === 'panorama'
-  ? [heroPanorama]
-  : kind === 'carousel'
-    ? [heroImage, heroNextImage]
-    : [heroImage]
+const items = (
+  kind === 'panorama'
+    ? [heroPanorama]
+    : kind === 'carousel'
+      ? [heroImage, heroNextImage]
+      : [heroImage]
 ).map((item) => ({
   ...item,
   overlay_opacity_light: 0,
@@ -77,7 +82,12 @@ window.heroTest = {
             canvas,
             Math.floor(canvas.width * x),
             Math.floor(canvas.height / 2),
-            1, 1, index, 0, 1, 1,
+            1,
+            1,
+            index,
+            0,
+            1,
+            1,
           )
         }
         const data = ctx.getImageData(0, 0, 3, 1).data

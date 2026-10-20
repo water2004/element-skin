@@ -36,9 +36,10 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
 
   let target: HTMLCanvasElement | null = null
   let renderer: THREE.WebGLRenderer | null = null
-  let dpr = sceneDpr()
-  let cssW = 1
-  let cssH = 1
+  let dpr = 0
+  let cssW = 0
+  let cssH = 0
+  let resizePending = true
 
   const quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
   const compositeScene = new THREE.Scene()
@@ -219,15 +220,25 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     prepared.set(item.id, entry)
   }
 
-  function resize() {
-    if (!target || !renderer) return
+  function requestResize() {
+    resizePending = true
+  }
+
+  function applyResize() {
+    if (!target || !renderer) return false
+    const nextDpr = sceneDpr()
+    if (!resizePending && nextDpr === dpr) return false
+    resizePending = false
     const rect = target.getBoundingClientRect()
-    cssW = Math.max(Math.ceil(rect.width), 1)
-    cssH = Math.max(Math.ceil(rect.height), 1)
-    dpr = sceneDpr()
-    renderer.setPixelRatio(dpr)
-    renderer.setSize(cssW, cssH, false)
+    const nextW = Math.max(Math.ceil(rect.width), 1)
+    const nextH = Math.max(Math.ceil(rect.height), 1)
+    if (nextW === cssW && nextH === cssH && nextDpr === dpr) return false
+    cssW = nextW
+    cssH = nextH
+    dpr = nextDpr
+    renderer.setDrawingBufferSize(cssW, cssH, dpr)
     compositeUniforms.viewportAspect.value = cssW / cssH
+    return true
   }
 
   function renderPrepared(
@@ -348,7 +359,10 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
   function loop() {
     if (!running) return
     const now = performance.now()
-    if (now - lastFrameAt >= minFrameInterval) {
+    // Resizing clears the drawing buffer; redraw in this same frame even when
+    // the regular animation would be throttled.
+    const resized = applyResize()
+    if (resized || now - lastFrameAt >= minFrameInterval) {
       lastFrameAt = now
       render(now)
     }
@@ -357,13 +371,13 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
 
   function bindListeners() {
     if (listenersBound) return
-    window.addEventListener('resize', resize)
+    window.addEventListener('resize', requestResize)
     listenersBound = true
   }
 
   function unbindListeners() {
     if (!listenersBound) return
-    window.removeEventListener('resize', resize)
+    window.removeEventListener('resize', requestResize)
     listenersBound = false
   }
 
@@ -376,7 +390,10 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
       }
       if (canvas) {
         renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false })
-        resize()
+        cssW = 0
+        cssH = 0
+        dpr = 0
+        requestResize()
       }
     },
     setMedia(items) {
@@ -391,6 +408,7 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
       if (running) return
       running = true
       bindListeners()
+      requestResize()
       itemStart = performance.now()
       lastFrameAt = 0
       rafId = requestAnimationFrame(loop)

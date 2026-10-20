@@ -3,13 +3,13 @@ name: Frontend quality
 on:
   push:
     paths:
-      - 'element-skin/**'
-      - '.github/workflows/frontend-quality.yml'
+      - "element-skin/**"
+      - ".github/workflows/frontend-quality.yml"
   pull_request:
     branches: [main, dev]
     paths:
-      - 'element-skin/**'
-      - '.github/workflows/frontend-quality.yml'
+      - "element-skin/**"
+      - ".github/workflows/frontend-quality.yml"
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '24'
+          node-version: "24"
       - name: Install frontend dependencies
         run: npm install --no-package-lock
       - name: Test frontend

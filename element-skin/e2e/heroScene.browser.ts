@@ -58,7 +58,9 @@ for (const theme of ['light', 'dark']) {
     expect(errors).toEqual([])
   })
 
-  test(`panorama stays visible across desktop and narrow viewports (${theme})`, async ({ page }) => {
+  test(`panorama stays visible across desktop and narrow viewports (${theme})`, async ({
+    page,
+  }) => {
     await openScene(page, 'panorama', theme)
     const value = theme === 'dark' ? 188 : 255
     for (const [index, viewport] of resizeViewports.entries()) {
