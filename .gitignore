@@ -41,6 +41,8 @@ coverage/
 .coverage
 coverage.out
 cover*.out
+playwright-report/
+test-results/
 
 ### IDEs
 .vscode/

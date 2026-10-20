@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>首页背景缩放回归</title>
+    <style>
+      body {
+        margin: 0;
+        background: white;
+      }
+      .dark body {
+        background: #121212;
+      }
+      canvas {
+        position: fixed;
+        inset: 0;
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="hero"></canvas>
+    <script type="module" src="./heroScene.ts"></script>
+  </body>
+</html>
