@@ -59,11 +59,13 @@ func TestServicesAndProxyLookupRoutesPreserveDisplayNames(t *testing.T) {
 	}
 	legacy := httptest.NewRecorder()
 	router.ServeHTTP(legacy, httptest.NewRequest(http.MethodGet, "/api/publickeys", nil))
-	services := httptest.NewRecorder()
-	router.ServeHTTP(services, httptest.NewRequest(http.MethodGet, "/minecraftservices/publickeys", nil))
-	if services.Code != 200 || legacy.Code != 200 || services.Body.String() != legacy.Body.String() ||
-		!reflect.DeepEqual(services.Header(), legacy.Header()) {
-		t.Fatalf("public keys differ: services=%d %v %s legacy=%d %v %s", services.Code, services.Header(), services.Body, legacy.Code, legacy.Header(), legacy.Body)
+	for _, path := range []string{"/minecraftservices/publickeys", "/minecraftservices/publickeys/"} {
+		services := httptest.NewRecorder()
+		router.ServeHTTP(services, httptest.NewRequest(http.MethodGet, path, nil))
+		if services.Code != 200 || legacy.Code != 200 || services.Body.String() != legacy.Body.String() ||
+			!reflect.DeepEqual(services.Header(), legacy.Header()) {
+			t.Fatalf("public keys %s differ: services=%d %v %s legacy=%d %v %s", path, services.Code, services.Header(), services.Body, legacy.Code, legacy.Header(), legacy.Body)
+		}
 	}
 }
 

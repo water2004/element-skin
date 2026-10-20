@@ -70,7 +70,7 @@ ORDER BY profile_id;
 
 | 请求 | 本地/回退未找到 | 上游来源 |
 | --- | --- | --- |
-| `GET /minecraftservices/publickeys` | 不适用 | 复用现有公钥服务 |
+| `GET /minecraftservices/publickeys`（也支持结尾 `/`） | 不适用 | 复用现有公钥服务 |
 | `GET /minecraftservices/minecraft/profile/lookup/name/{playerName}` | 404 | `services_url` |
 | `POST /minecraftservices/minecraft/profile/lookup/bulk/byname` | 200，忽略未找到项 | `services_url` |
 | `GET /api/minecraft/profile/lookup/name/{playerName}` | 404 | `services_url` |
@@ -106,8 +106,8 @@ HTTP 测试覆盖公钥权限及响应一致性、两种代理路径、单名和
 运行后端全量测试与跨包覆盖率：
 
 ```text
-go test -p 2 -count=1 ./... -coverpkg=./... -covermode=atomic -coverprofile=coverage.out
-go tool cover -func=coverage.out
+go test -p 2 -count=1 ./... '-coverpkg=./...' '-covermode=atomic' '-coverprofile=coverage.out'
+go tool cover '-func=coverage.out'
 ```
 
 查询使用与唯一索引一致的表达式，新增查询没有逐名称数据库循环。

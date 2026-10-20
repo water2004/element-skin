@@ -28,6 +28,7 @@ func (r *Router) routes() {
 
 	r.handle("GET /", r.publicAuth(yggRoutes.Metadata, sitePublicRead))
 	r.handle("GET /minecraftservices/publickeys", r.publicAuth(yggRoutes.PublicKeys, sitePublicRead))
+	r.handle("GET /minecraftservices/publickeys/", r.publicAuth(yggRoutes.PublicKeys, sitePublicRead))
 	r.handle("GET /api/publickeys", r.publicAuth(yggRoutes.PublicKeys, sitePublicRead))
 	r.handle("GET /api/publickeys/", r.publicAuth(yggRoutes.PublicKeys, sitePublicRead))
 	r.handle("GET /v2/capabilities", r.publicAuth(r.Capabilities, sitePublicRead))

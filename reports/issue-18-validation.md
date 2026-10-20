@@ -25,13 +25,17 @@
 全量运行命令：
 
 ```text
-go test -p 2 -count=1 ./... -coverpkg=./... -covermode=atomic -coverprofile=<cache>/coverage.out
-go tool cover -func=<cache>/coverage.out
+go test -p 2 -count=1 ./... '-coverpkg=./...' '-covermode=atomic' '-coverprofile=D:/skin-fix/.cache/coverage.out'
+go tool cover '-func=D:/skin-fix/.cache/coverage.out'
 ```
 
-全量运行发现一处既有集成测试仍预期 Services 未找到返回 204，已按新契约修正。
-修正后完整复测 `internal/integration`，结果通过；其余模块结果与全局覆盖率待全量运行结束记录。
-跨所有者与皮肤保留的迁移测试补充后单独复测通过。
+最终全量运行退出码为 0，65 个测试包全部通过；跨包插桩后 `go tool cover`
+输出 `total: (statements) 90.1%`，达到 90% 门槛。
+`go vet ./...`、改动 Go 文件的 `gofmt` 检查及 `git diff --check` 均通过。
+本轮包含公钥接口带尾斜杠/不带尾斜杠路径、迁移、并发冲突及跨模块集成测试。
+
+PR 目标分支为 `dev`。仓库现有工作流仅监听 `dev` 推送、标签及面向 `main`
+的 PR，因此本 PR 不触发该工作流；以上结果来自本地完整验证。
 
 ## 查询计划与验收边界
 
