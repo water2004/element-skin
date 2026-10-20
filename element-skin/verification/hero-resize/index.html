@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Issue #19 · 本地验证</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        color: #e8edf3;
+        background: #10151c;
+        font:
+          14px/1.6 system-ui,
+          sans-serif;
+      }
+      header {
+        padding: 14px 22px;
+        border-bottom: 1px solid #354253;
+        background: #1a2330;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 18px;
+      }
+      p {
+        margin: 0 0 10px;
+        color: #aebdce;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 18px;
+        align-items: center;
+      }
+      label {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      select,
+      button,
+      a {
+        font: inherit;
+        border: 1px solid #52647a;
+        background: #273649;
+        color: #fff;
+        border-radius: 6px;
+        padding: 5px 10px;
+      }
+      button,
+      a {
+        cursor: pointer;
+        text-decoration: none;
+      }
+      button[aria-pressed='true'] {
+        background: #24675e;
+      }
+      input[type='range'] {
+        width: 160px;
+      }
+      #stage {
+        height: calc(100vh - 155px);
+        min-height: 420px;
+        padding: 16px;
+        overflow: auto;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+      }
+      iframe {
+        box-sizing: content-box;
+        border: 1px solid #52647a;
+        border-radius: 8px;
+        background: #fff;
+        flex: 0 0 auto;
+      }
+      output {
+        min-width: 100px;
+        color: #a6e5d6;
+        font-variant-numeric: tabular-nums;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Issue #19 · 首页背景本地验证</h1>
+      <p>
+        拖动宽度滑块或开启连续缩放，观察背景是否闪白/闪黑。素材切换会重新载入，缩放不会重置播放。
+      </p>
+      <div class="controls">
+        <label
+          >素材
+          <select id="media">
+            <option value="image">单张图片</option>
+            <option value="panorama">旋转全景</option>
+            <option value="carousel">图片 + 全景轮播</option>
+          </select></label
+        >
+        <label
+          >主题
+          <select id="theme">
+            <option value="light">浅色</option>
+            <option value="dark">深色</option>
+          </select></label
+        >
+        <label><input id="signedIn" type="checkbox" />模拟登录</label>
+        <button id="desktop">桌面</button><button id="mobile">窄屏</button>
+        <label>宽度 <input id="width" type="range" min="320" max="1600" value="1280" /></label>
+        <button id="sweep" aria-pressed="false">连续缩放</button>
+        <output id="size"></output>
+        <a id="direct" target="_blank" rel="noopener">打开独立首页</a>
+      </div>
+    </header>
+    <main id="stage"><iframe id="preview" title="实际首页预览"></iframe></main>
+    <script>
+      const frame = document.querySelector('#preview')
+      const stage = document.querySelector('#stage')
+      const width = document.querySelector('#width')
+      const sweep = document.querySelector('#sweep')
+      let sweeping = false
+      function source() {
+        return (
+          '/?' +
+          new URLSearchParams({
+            media: document.querySelector('#media').value,
+            theme: document.querySelector('#theme').value,
+            signedIn: document.querySelector('#signedIn').checked ? '1' : '0',
+          })
+        )
+      }
+      function reload() {
+        frame.src = source()
+        document.querySelector('#direct').href = source()
+      }
+      function setSize(value, height = Math.max(420, stage.clientHeight - 34)) {
+        frame.style.width = value + 'px'
+        frame.style.height = height + 'px'
+        width.value = value
+        document.querySelector('#size').value = value + ' × ' + height
+      }
+      for (const id of ['media', 'theme', 'signedIn'])
+        document.querySelector('#' + id).onchange = reload
+      width.oninput = () => setSize(Number(width.value))
+      document.querySelector('#desktop').onclick = () =>
+        setSize(Math.min(1280, stage.clientWidth - 34))
+      document.querySelector('#mobile').onclick = () => setSize(390, 844)
+      sweep.onclick = () => {
+        sweeping = !sweeping
+        sweep.setAttribute('aria-pressed', String(sweeping))
+        sweep.textContent = sweeping ? '停止缩放' : '连续缩放'
+      }
+      function tick(now) {
+        if (sweeping) {
+          const max = Math.max(400, Math.min(1440, stage.clientWidth - 34))
+          setSize(Math.round(390 + ((max - 390) * (1 + Math.sin(now / 700))) / 2))
+        }
+        requestAnimationFrame(tick)
+      }
+      setSize(Math.min(1280, stage.clientWidth - 34))
+      reload()
+      requestAnimationFrame(tick)
+    </script>
+  </body>
+</html>

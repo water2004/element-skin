@@ -51,3 +51,11 @@ jobs:
           name: hero-scene-browser-results
           path: element-skin/test-results/
           retention-days: 7
+      - name: Upload local verification package
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: issue-19-verification
+          path: element-skin/verification/hero-resize/dist/
+          if-no-files-found: error
+          retention-days: 30
