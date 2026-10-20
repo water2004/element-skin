@@ -11,6 +11,7 @@
     "build": "run-s type-check build-only",
     "build-fast": "npm run build-only",
     "test": "vitest run",
+    "test:browser": "playwright test",
     "test:coverage:oauth": "run-s test:coverage:oauth-api test:coverage:oauth-ui",
     "test:coverage:oauth-api": "vitest run src/api/__tests__/api.test.ts --coverage --coverage.include=src/api/oauth/apps.ts --coverage.thresholds.100 --coverage.reportsDirectory=coverage/oauth-api",
     "test:coverage:oauth-ui": "vitest run --config vitest.oauth-coverage.config.ts --coverage",
@@ -35,6 +36,7 @@
     "vue-router": "^4.6.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@tailwindcss/vite": "^4.3.1",
     "@tsconfig/node24": "^24.0.3",
     "@types/node": "^24.10.1",

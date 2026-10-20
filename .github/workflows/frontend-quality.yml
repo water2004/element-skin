@@ -1,0 +1,53 @@
+name: Frontend quality
+
+on:
+  push:
+    paths:
+      - 'element-skin/**'
+      - '.github/workflows/frontend-quality.yml'
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'element-skin/**'
+      - '.github/workflows/frontend-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: element-skin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install frontend dependencies
+        run: npm install --no-package-lock
+      - name: Test frontend
+        run: npm run test
+      - name: Build frontend
+        if: ${{ !cancelled() }}
+        run: npm run build
+      - name: Install Chromium
+        if: ${{ !cancelled() }}
+        run: npx playwright install --with-deps chromium
+      - name: Test hero scene in Chromium
+        if: ${{ !cancelled() }}
+        run: npm run test:browser
+      - name: Upload browser evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: hero-scene-browser-results
+          path: element-skin/test-results/
+          retention-days: 7
