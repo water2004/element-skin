@@ -557,7 +557,7 @@ var publicV2ResourceCases = []publicV2ResourceCase{
 	{name: "profiles by names", method: http.MethodPost, path: "/v2/minecraft/profiles/by-names", body: `{"names":[]}`, guestStatus: http.StatusOK, guestBody: "{\"items\":[]}\n"},
 }
 
-var publicSiteAuthPaths = []string{"/", "/api/publickeys", "/api/publickeys/"}
+var publicSiteAuthPaths = []string{"/minecraftservices/publickeys", "/", "/api/publickeys", "/api/publickeys/"}
 
 func (s *authCacheWriteFailStore) SetAuthUser(context.Context, redisstore.AuthUser, time.Duration) error {
 	s.setCalls++

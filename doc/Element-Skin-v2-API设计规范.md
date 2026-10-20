@@ -380,6 +380,10 @@ refresh token 和 userinfo 立即失效。
 | POST | `/v2/imports/remote-ygg/profiles/import` | `201`，角色标识表示 |
 | POST | `/v2/imports/remote-ygg/profiles/import-batch` | 批量导入结果 |
 
+`/v2/minecraft/profiles/by-name/{name}` 和 `/v2/minecraft/profiles/by-names` 按忽略大小写匹配角色名，返回保留显示大小写的名称。
+全站名称占用不允许不同角色使用同一名称的大小写变体；单个角色仅修改显示大小写不改变 UUID。
+升级时的自动重命名与记录见 [Minecraft Services 查询与角色名称](minecraft-services.md)。
+
 `GET /v2/public/settings` 同时公开注册交互必需的 `allow_register`、`require_invite`、
 `email_verify_enabled` 和 `email_suffix_policy`。邮箱后缀策略不分页，只返回当前生效名单：
 

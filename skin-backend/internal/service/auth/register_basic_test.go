@@ -35,6 +35,26 @@ func TestAuthRegisterCreatesFirstAdminAndOfflineProfileExactly(t *testing.T) {
 	}
 }
 
+func TestRegisterSkipsCaseVariantProfileNameWithoutChangingExistingIdentity(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	ctx := t.Context()
+	svc := newAuthService(db, testutil.TestConfig())
+	owner := testutil.CreateUser(t, db, "owner-case@test.com", "Password123", "OwnerCase", false)
+	existing := testutil.CreateProfile(t, db, owner.ID, "existing-case-id", "CASEPLAYER")
+	id, err := svc.Register(ctx, "caseplayer@test.com", "Password123", "NewCaseUser", "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profiles, err := db.Profiles.GetByUser(ctx, id, 10)
+	if err != nil || len(profiles) != 1 || profiles[0].Name != util.ProfileNameCandidate("caseplayer", 1) || profiles[0].UserID != id {
+		t.Fatalf("registered profiles=%#v err=%v", profiles, err)
+	}
+	got, err := db.Profiles.GetByID(ctx, existing.ID)
+	if err != nil || got == nil || !reflect.DeepEqual(*got, existing) {
+		t.Fatalf("existing identity changed: got=%#v want=%#v err=%v", got, existing, err)
+	}
+}
+
 func TestAuthRegisterRejectsPolicyFailuresWithoutCreatingUser(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := context.Background()

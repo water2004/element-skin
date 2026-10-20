@@ -77,7 +77,7 @@ func (h Handler) LookupName(w http.ResponseWriter, req *http.Request) {
 	}
 	if status == 204 {
 		var resp *fallbacksvc.FallbackResponse
-		if strings.HasPrefix(req.URL.Path, "/api/minecraft/profile/lookup/name/") || strings.HasPrefix(req.URL.Path, "/minecraft/profile/lookup/name/") {
+		if lookupAPI(req) == fallbacksvc.ServicesAPI {
 			resp, err = h.fallback.ServicesLookup(req.Context(), playerName)
 		} else {
 			resp, err = h.fallback.GetProfileByName(req.Context(), playerName)
@@ -89,6 +89,10 @@ func (h Handler) LookupName(w http.ResponseWriter, req *http.Request) {
 		if writeFallback(w, resp) {
 			return
 		}
+		if lookupAPI(req) == fallbacksvc.ServicesAPI {
+			util.Error(w, util.YggError{Status: 404, Code: "NOT_FOUND", Message: "Profile not found."})
+			return
+		}
 		w.WriteHeader(204)
 		return
 	}
@@ -98,13 +102,22 @@ func (h Handler) LookupName(w http.ResponseWriter, req *http.Request) {
 func (h Handler) LookupNames(w http.ResponseWriter, req *http.Request) {
 	var names []string
 	if err := shared.DecodeJSON(req, &names); err != nil {
-		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
+		util.Error(w, util.YggError{Status: 400, Code: "IllegalArgumentException", Message: "Expected an array of profile names."})
 		return
 	}
-	profiles, err := h.fallback.LookupNames(req.Context(), names)
+	profiles, err := h.fallback.LookupNames(req.Context(), names, lookupAPI(req))
 	if err != nil {
 		util.Error(w, err)
 		return
 	}
 	util.JSON(w, 200, profiles)
+}
+
+func lookupAPI(req *http.Request) fallbacksvc.LookupAPI {
+	if strings.HasPrefix(req.URL.Path, "/minecraftservices/minecraft/profile/lookup/") ||
+		strings.HasPrefix(req.URL.Path, "/api/minecraft/profile/lookup/") ||
+		strings.HasPrefix(req.URL.Path, "/minecraft/profile/lookup/") {
+		return fallbacksvc.ServicesAPI
+	}
+	return fallbacksvc.AccountAPI
 }

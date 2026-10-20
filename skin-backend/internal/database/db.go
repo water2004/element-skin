@@ -118,7 +118,18 @@ func (db *DB) Close() {
 }
 
 func (db *DB) Init(ctx context.Context) error {
-	if _, err := db.Pool.Exec(ctx, InitSQL); err != nil {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, InitSQL); err != nil {
+		return err
+	}
+	if err := migration.MigrateProfileNames(ctx, tx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 	return db.Permissions.SeedDefaults(ctx)

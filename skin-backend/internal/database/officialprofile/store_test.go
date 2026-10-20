@@ -149,7 +149,7 @@ func TestOfficialProfileStoreSyncSkipsConflictingNameAndPersistsOtherFields(t *t
 		t.Fatal(err)
 	}
 	profile := testutil.CreateProfile(t, db, user.ID, "0123456789abcdef0123456789abcdef", "BeforeSync")
-	_ = testutil.CreateProfile(t, db, user.ID, "rollback-conflict", "TakenName")
+	_ = testutil.CreateProfile(t, db, user.ID, "rollback-conflict", "takenname")
 	binding := model.OfficialProfileBinding{ID: "rollback-binding", IdentityID: identity.ID, ProfileID: profile.ID, RemoteUUID: "0123456789abcdef0123456789abcdef", RemoteName: "BeforeSync", RemoteSkinModel: "default", CreatedAt: 1, UpdatedAt: 1}
 	if err := db.OfficialProfiles.Create(ctx, officialstore.CreateInput{
 		Binding: binding, UserID: user.ID, ProfileNames: []string{"BeforeSync"}, ProfileModel: "default",
