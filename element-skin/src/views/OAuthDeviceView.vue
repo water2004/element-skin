@@ -1,6 +1,6 @@
 <template>
-  <div class="min-h-[calc(100vh-160px)] px-4 py-10">
-    <UiCard class="mx-auto max-w-3xl p-8">
+  <div class="flex-1 px-4 py-10">
+    <UiCard class="mx-auto max-w-3xl [--el-card-padding:1rem] sm:[--el-card-padding:2rem]">
       <div class="mb-6">
         <h1 class="m-0 text-2xl font-semibold text-[var(--color-heading)]">设备授权</h1>
         <p class="mt-2 mb-0 text-sm text-[var(--color-text-light)]">
@@ -9,7 +9,12 @@
       </div>
 
       <div class="flex gap-3">
-        <el-input v-model="userCode" maxlength="9" placeholder="ABCD-1234" @keyup.enter="loadDetails" />
+        <el-input
+          v-model="userCode"
+          maxlength="9"
+          placeholder="ABCD-1234"
+          @keyup.enter="loadDetails"
+        />
         <el-button type="primary" :loading="loading" @click="loadDetails">查询</el-button>
       </div>
 

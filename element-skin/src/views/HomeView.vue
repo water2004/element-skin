@@ -14,7 +14,18 @@ const siteSubtitle = ref(appStorage.siteSettings.getSiteSubtitle())
 const sessionStore = useSessionStore()
 const { user, authReady } = storeToRefs(sessionStore)
 const isLogged = computed(() => authReady.value && !!user.value)
+const homeActions = computed(() => {
+  if (!authReady.value) return []
+  return isLogged.value
+    ? [{ path: '/dashboard', label: '进入个人面板', variant: 'primary', showIcon: true }]
+    : [
+        { path: '/login', label: '登录账号', variant: 'primary', showIcon: false },
+        { path: '/register', label: '即刻注册', variant: 'secondary', showIcon: false },
+      ]
+})
 const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
+const hasEntered = ref(false)
+let entranceFrame = 0
 
 // Single source-of-truth renderer for the fixed hero background.
 const scene = createHeroScene()
@@ -22,6 +33,13 @@ const scene = createHeroScene()
 onMounted(async () => {
   scene.setTarget(bgCanvasRef.value)
   scene.start()
+
+  // 先绘制初始状态，再启动首页入场，避免冷启动初始化耗尽动画时间。
+  entranceFrame = requestAnimationFrame(() => {
+    entranceFrame = requestAnimationFrame(() => {
+      hasEntered.value = true
+    })
+  })
 
   // 加载站点配置
   try {
@@ -48,54 +66,36 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  cancelAnimationFrame(entranceFrame)
   scene.destroy()
 })
-
-function goDashboard() {
-  router.push('/dashboard')
-}
-function goLogin() {
-  router.push('/login')
-}
-function goRegister() {
-  router.push('/register')
-}
 </script>
 
 <template>
   <div class="home-container">
     <!-- Background is FIXED and outside of main content flow -->
     <canvas ref="bgCanvasRef" class="hero-bg-fixed" aria-hidden="true"></canvas>
-    <button
-      v-if="authReady && isLogged"
-      type="button"
-      class="home-fixed-button home-fixed-primary home-fixed-single probe-fade-in"
-      @click="goDashboard"
-    >
-      <el-icon class="home-fixed-icon"><User /></el-icon>
-      <span class="home-fixed-label">进入个人面板</span>
-    </button>
-    <button
-      v-else-if="authReady"
-      type="button"
-      class="home-fixed-button home-fixed-primary probe-fade-in"
-      @click="goLogin"
-    >
-      <span class="home-fixed-label">登录账号</span>
-    </button>
-    <button
-      v-if="authReady && !isLogged"
-      type="button"
-      class="home-fixed-button home-fixed-secondary probe-fade-in"
-      @click="goRegister"
-    >
-      <span class="home-fixed-label">即刻注册</span>
-    </button>
-    <!-- Main Content -->
-    <div class="hero-section">
-      <div class="hero-content home-title-fade-in">
+    <div class="hero-content" :class="{ 'is-entered': hasEntered }">
+      <div class="hero-copy">
         <h1 class="hero-title">{{ siteName }}</h1>
         <p class="hero-subtitle">{{ siteSubtitle }}</p>
+      </div>
+      <div class="hero-actions" :aria-busy="!authReady">
+        <template v-for="action in homeActions" :key="action.path">
+          <Transition appear name="home-action" :duration="400">
+            <button
+              type="button"
+              class="home-action"
+              :class="`home-action-${action.variant}`"
+              @click="router.push(action.path)"
+            >
+              <span class="home-action-content">
+                <el-icon v-if="action.showIcon"><User /></el-icon>
+                <span>{{ action.label }}</span>
+              </span>
+            </button>
+          </Transition>
+        </template>
       </div>
     </div>
   </div>
@@ -103,135 +103,31 @@ function goRegister() {
 
 <style scoped>
 .home-container {
-  --home-anchor-y: var(--home-content-center-y, calc(50vh + 32px));
-  --home-title-y: calc(var(--home-anchor-y) - 72px);
-  --home-action-top: calc(var(--home-anchor-y) + 20px);
-  --home-action-hover-top: calc(var(--home-action-top) - 4px);
+  position: relative;
+  flex: 1;
   width: 100%;
-  height: 100vh;
   display: flex;
-  flex-direction: column;
-  position: fixed;
-  inset: 0;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
 }
 
-/* FIXED Background logic — single canvas, drawn by the hero scene */
+/* Hero background is the only fixed layer — it is a backdrop, not layout */
 .hero-bg-fixed {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100vw;
   height: 100vh;
   z-index: 0;
   display: block;
 }
 
-.home-fixed-button {
-  position: fixed;
-  top: var(--home-action-top);
-  z-index: 10;
-  isolation: isolate;
-  overflow: hidden;
-  width: 148px;
-  height: 52px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  border-radius: 14px;
-  border: none;
-  background: var(--home-action-bg, rgba(255, 255, 255, 0.08));
-  backdrop-filter: blur(9px) saturate(180%);
-  -webkit-backdrop-filter: blur(9px) saturate(180%);
-  box-shadow:
-    0 14px 28px rgba(0, 0, 0, 0),
-    inset 0 0 0 1px var(--home-action-ring, rgba(255, 255, 255, 0.38)),
-    inset 0 1px 0 rgba(255, 255, 255, 0);
-  transition:
-    top 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-    box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer;
-  font: inherit;
-  appearance: none;
-  -webkit-appearance: none;
-}
-
-.home-fixed-icon,
-.home-fixed-label {
+.hero-content {
   position: relative;
   z-index: 1;
-}
-
-.home-fixed-icon {
-  flex: 0 0 auto;
-  font-size: 20px;
-}
-
-.home-fixed-button:hover {
-  box-shadow:
-    0 14px 28px rgba(0, 0, 0, 0.18),
-    inset 0 0 0 1px var(--home-action-ring, rgba(255, 255, 255, 0.38)),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-
-.home-fixed-primary {
-  left: calc(50vw - 156px);
-  --home-action-ring: rgba(64, 158, 255, 0.45);
-  --home-action-bg: rgba(64, 158, 255, 0.16);
-}
-
-.home-fixed-single {
-  left: calc(50vw - 97px);
-  width: 194px;
-}
-
-.home-fixed-secondary {
-  left: calc(50vw + 8px);
-  --home-action-ring: rgba(255, 255, 255, 0.34);
-  --home-action-bg: rgba(255, 255, 255, 0.12);
-}
-
-.home-fixed-primary:hover,
-.home-fixed-secondary:hover {
-  top: var(--home-action-hover-top);
-}
-
-.probe-fade-in {
-  animation: homeActionFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.home-title-fade-in {
-  animation: homeActionFadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-@keyframes homeActionFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.hero-section {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
-  color: #fff;
-  pointer-events: none;
-}
-
-.hero-content {
-  position: fixed;
-  left: 50%;
-  top: var(--home-title-y);
   width: min(800px, calc(100vw - 40px));
-  transform: translate(-50%, -50%);
   text-align: center;
+  color: #fff;
 }
 
 .hero-title {
@@ -241,6 +137,7 @@ function goRegister() {
   letter-spacing: -1.5px;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
 }
+
 .hero-subtitle {
   font-size: 20px;
   margin: 0 0 32px 0;
@@ -248,38 +145,116 @@ function goRegister() {
   font-weight: 400;
 }
 
-@media (max-width: 768px) {
-  .home-container {
-    --home-title-y: calc(var(--home-anchor-y) - 92px);
-    --home-action-top: calc(var(--home-anchor-y) + 2px);
-    --home-second-action-top: calc(var(--home-action-top) + 64px);
-    --home-action-hover-top: calc(var(--home-action-top) - 4px);
-    --home-second-action-hover-top: calc(var(--home-second-action-top) - 4px);
-  }
+.hero-actions {
+  display: flex;
+  min-height: 52px;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 
+.home-action {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 148px;
+  height: 52px;
+  padding: 0 24px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 14px;
+  border: none;
+  outline: none;
+  background: transparent;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.home-action::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--home-action-bg, rgba(255, 255, 255, 0.08));
+  backdrop-filter: blur(9px) saturate(180%);
+  -webkit-backdrop-filter: blur(9px) saturate(180%);
+  clip-path: inset(0 round 14px);
+  pointer-events: none;
+}
+
+.home-action:hover {
+  transform: translateY(-4px);
+}
+
+.home-action:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 4px;
+}
+
+.home-action-primary {
+  --home-action-bg: rgba(64, 158, 255, 0.16);
+}
+
+.home-action-secondary {
+  --home-action-bg: rgba(255, 255, 255, 0.12);
+}
+
+.home-action-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+/* 按钮整体位移与文字渐入由同一组入场状态驱动，毛玻璃保持不透明。 */
+.hero-copy {
+  opacity: 0;
+}
+
+.is-entered .hero-copy {
+  animation: homeContentEnter 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.home-action-enter-active {
+  transition:
+    translate 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.home-action-enter-active .home-action-content {
+  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.home-action-enter-from {
+  translate: 0 8px;
+}
+
+.home-action-enter-from .home-action-content {
+  opacity: 0;
+}
+
+@keyframes homeContentEnter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 768px) {
   .hero-title {
     font-size: 36px;
   }
-  .home-fixed-button {
-    left: 32px;
-    right: 32px;
-    width: auto;
+  .home-action {
     min-width: 0;
-  }
-  .home-fixed-primary {
-    top: var(--home-action-top);
-  }
-  .home-fixed-single {
-    left: 32px;
-  }
-  .home-fixed-secondary {
-    top: var(--home-second-action-top);
-  }
-  .home-fixed-primary:hover {
-    top: var(--home-action-hover-top);
-  }
-  .home-fixed-secondary:hover {
-    top: var(--home-second-action-hover-top);
   }
 }
 </style>

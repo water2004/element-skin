@@ -139,20 +139,12 @@
       </el-menu>
     </el-drawer>
 
-    <main
-      class="app-main"
-      :style="{
-        '--footer-height': footerHeight + 'px',
-        '--home-center-offset': homeCenterOffset,
-        '--home-content-center-y': homeContentCenterY,
-      }"
-    >
+    <main class="app-main">
       <slot />
     </main>
 
     <AppFooter
       v-if="showFooter"
-      ref="footerRef"
       :variant="isHome ? 'home' : 'standard'"
       :footer-text="footerText"
       :filing-icp="filingIcp"
@@ -186,10 +178,6 @@ const {
   filingIcpLink,
   filingMps,
   filingMpsLink,
-  footerHeight,
-  footerRef,
-  homeCenterOffset,
-  homeContentCenterY,
   isLogged,
   canAccessAdmin,
   canAccessNotifications,
@@ -212,7 +200,7 @@ const headerRef = ref<HTMLElement | null>(null)
 const headerBrandRef = ref<HTMLElement | null>(null)
 const headerActionsRef = ref<HTMLElement | null>(null)
 const desktopNavRef = ref<HTMLElement | null>(null)
-const showDesktopNav = ref(true)
+const showDesktopNav = ref(false)
 let navResizeObserver: ResizeObserver | null = null
 
 function updateDesktopNavVisibility() {
@@ -316,11 +304,9 @@ onUnmounted(() => {
   flex-direction: column;
 }
 
-/* Home Mode Shell */
+/* Home Mode Shell：整页固定一屏，页头/内容/footer 在流内分布 */
 .is-home-layout {
-  min-height: 100vh;
-  position: fixed;
-  inset: 0;
+  height: 100vh;
   overflow: hidden;
 }
 
@@ -336,10 +322,7 @@ onUnmounted(() => {
 }
 
 .is-home-layout .layout-header-wrap {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  position: relative;
   background: transparent;
   border-bottom: none;
   box-shadow: none;
@@ -447,7 +430,9 @@ onUnmounted(() => {
   left: 50%;
   transform: translateX(-50%);
   width: max-content;
+  max-width: 100%;
   height: 100%;
+  overflow: hidden;
 }
 
 .desktop-nav.is-hidden {
@@ -459,6 +444,7 @@ onUnmounted(() => {
   display: block;
 }
 .desktop-nav .el-menu {
+  flex-shrink: 0;
   border-bottom: none;
   height: 100%;
   background: transparent;
@@ -515,23 +501,18 @@ onUnmounted(() => {
 }
 
 .app-main {
-  --header-height: 64px;
   padding: 20px;
   flex: 1;
   display: flex;
   flex-direction: column;
   background-color: var(--color-background);
-  transition: padding 0.3s ease;
 }
 .is-home-layout .app-main {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
+  position: relative;
+  z-index: 1;
   padding: 0;
-  flex: none;
-  height: 100vh;
-  min-height: 100vh;
   background: transparent;
+  min-height: 0;
 }
 .is-auth-layout .app-main {
   padding: 0 !important;

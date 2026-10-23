@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-[calc(100vh-160px)] px-4 py-10">
+  <div class="flex-1 px-4 py-10">
     <UiCard class="mx-auto max-w-3xl [--el-card-padding:1rem] sm:[--el-card-padding:2rem]">
       <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>

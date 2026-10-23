@@ -377,6 +377,8 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
       if (canvas) {
         renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false })
         resize()
+        // 先完成合成器的首次绘制，避免初始化开销打断随后开始的文字动画。
+        renderer.render(compositeScene, quadCamera)
       }
     },
     setMedia(items) {

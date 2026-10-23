@@ -1,4 +1,4 @@
-import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, provide, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { getPublicSettings } from '@/api/public'
@@ -18,15 +18,12 @@ import {
   type DrawerLink,
   type NavLink,
 } from '@/components/layout/appNavigation'
-import type AppFooter from '@/components/layout/AppFooter.vue'
 import {
   cleanupEasterEgg,
   installEasterEggDevTools,
   refreshEasterEgg,
   setServerEasterEggConfig,
 } from '@/easter-eggs'
-
-const HOME_HEADER_HEIGHT = 64
 
 export function useAppLayoutState() {
   const { currentAvatarImg: customAvatar, initializeAvatar } = useAvatar()
@@ -48,10 +45,6 @@ export function useAppLayoutState() {
   const filingIcpLink = ref('')
   const filingMps = ref('')
   const filingMpsLink = ref('')
-  const footerHeight = ref(0)
-  const footerRef = ref<InstanceType<typeof AppFooter> | null>(null)
-  const homeCenterOffset = computed(() => `${(HOME_HEADER_HEIGHT - footerHeight.value) / 2}px`)
-  const homeContentCenterY = computed(() => `calc(50vh + ${homeCenterOffset.value})`)
 
   const isLogged = computed(() => !!user.value)
   const userPermissions = computed(() => user.value?.permissions || [])
@@ -88,16 +81,7 @@ export function useAppLayoutState() {
   )
   const accountName = computed(() => user.value?.display_name || user.value?.email || '用户')
 
-  let resizeObserver: ResizeObserver | null = null
   let unreadRefreshTimer: number | null = null
-
-  function updateFooterHeight() {
-    nextTick(() => {
-      if (footerRef.value?.rootElement)
-        footerHeight.value = footerRef.value.rootElement.offsetHeight
-      else footerHeight.value = 0
-    })
-  }
 
   function shouldShowNotificationBadge(item: NavLink | DrawerLink) {
     return (
@@ -143,10 +127,7 @@ export function useAppLayoutState() {
     { immediate: true },
   )
 
-  watch([() => route.path, footerText, filingIcp, filingMps], updateFooterHeight)
-
   provide('isDark', isDark)
-  provide('footerHeight', footerHeight)
 
   watch(
     [() => user.value?.id, canAccessNotifications],
@@ -184,23 +165,12 @@ export function useAppLayoutState() {
       if (res.data.filing_mps !== undefined) filingMps.value = res.data.filing_mps
       if (res.data.filing_mps_link !== undefined) filingMpsLink.value = res.data.filing_mps_link
       setServerEasterEggConfig(res.data.easter_eggs)
-      updateFooterHeight()
     } catch (e) {
       console.warn('Failed to load site settings:', e)
     }
-
-    if (window.ResizeObserver) {
-      resizeObserver = new ResizeObserver(() => updateFooterHeight())
-      nextTick(() => {
-        if (footerRef.value?.rootElement) resizeObserver!.observe(footerRef.value.rootElement)
-      })
-    }
-    window.addEventListener('resize', updateFooterHeight)
   })
 
   onUnmounted(() => {
-    window.removeEventListener('resize', updateFooterHeight)
-    if (resizeObserver) resizeObserver.disconnect()
     stopUnreadRefreshTimer()
     clearUnreadNotifications()
     cleanupEasterEgg()
@@ -220,10 +190,6 @@ export function useAppLayoutState() {
     filingIcpLink,
     filingMps,
     filingMpsLink,
-    footerHeight,
-    footerRef,
-    homeCenterOffset,
-    homeContentCenterY,
     isLogged,
     canAccessAdmin,
     canAccessNotifications,

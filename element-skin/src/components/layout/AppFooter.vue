@@ -1,9 +1,5 @@
 <template>
-  <footer
-    ref="rootElement"
-    class="footer-container"
-    :class="variant === 'home' ? 'footer-home' : 'footer-standard'"
-  >
+  <footer class="footer-container" :class="variant === 'home' ? 'footer-home' : 'footer-standard'">
     <div class="footer-content">
       <div class="footer-row">
         <span v-if="footerText" class="footer-text-item">{{ footerText }}</span>
@@ -31,8 +27,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-
 withDefaults(
   defineProps<{
     variant?: 'home' | 'standard'
@@ -53,17 +47,16 @@ withDefaults(
     filingMpsLink: '',
   },
 )
-
-const rootElement = ref<HTMLElement | null>(null)
-
-defineExpose({ rootElement })
 </script>
 
 <style scoped>
 .footer-container {
   width: 100%;
   padding: 8px 20px;
-  transition: var(--transition-base);
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease;
   flex-shrink: 0;
   position: relative;
   z-index: 10;
@@ -138,11 +131,6 @@ defineExpose({ rootElement })
 }
 
 .footer-home {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
   background: transparent !important;
   color: #ffffff !important;
   border-top: none !important;
