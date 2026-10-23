@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { computed, inject, ref, onMounted, onBeforeUnmount, type Ref } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { getPublicSettings, getPublicHomepageMedia } from '@/api/public'
-import type { User as UserType } from '@/api/types'
 import { createHeroScene } from '@/composables/useHeroScene'
 import { appStorage } from '@/storage'
+import { useSessionStore } from '@/stores/session'
 import { User } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const siteName = ref(appStorage.siteSettings.getSiteName())
 const siteSubtitle = ref(appStorage.siteSettings.getSiteSubtitle())
-const user = inject<Ref<UserType | null>>('user', ref(null))
-const authReady = inject<Ref<boolean>>('authReady', ref(false))
+const sessionStore = useSessionStore()
+const { user, authReady } = storeToRefs(sessionStore)
 const isLogged = computed(() => authReady.value && !!user.value)
 const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 

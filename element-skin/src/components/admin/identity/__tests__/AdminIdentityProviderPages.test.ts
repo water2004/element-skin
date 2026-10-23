@@ -3,6 +3,8 @@ import ElementPlus from 'element-plus'
 import { createMemoryHistory, createRouter, RouterView, type RouteRecordRaw } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminIdentityProvider, User } from '@/api/types'
+import { createPinia } from 'pinia'
+import { useSessionStore } from '@/stores/session'
 import AdminIdentityProviderForm from '../AdminIdentityProviderForm.vue'
 import AdminIdentityProviders from '../AdminIdentityProviders.vue'
 
@@ -186,7 +188,10 @@ async function mountPage(path: string, routes: RouteRecordRaw[], permissions: st
   const app = createApp({ render: () => h(RouterView) })
   app.use(router)
   app.use(ElementPlus)
-  app.provide('user', ref({ id: 'user-1', permissions } as unknown as User))
+  const pinia = createPinia()
+  app.use(pinia)
+  const session = useSessionStore(pinia)
+  session.user = { id: 'user-1', permissions } as unknown as User
   await router.push(path)
   await router.isReady()
   app.mount(host)

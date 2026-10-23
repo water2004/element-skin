@@ -195,7 +195,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, reactive, ref, watch, type Ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete, Key, Plus, Upload } from '@element-plus/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -214,7 +214,7 @@ import {
   type OAuthWebhookEndpoint,
   type OAuthWebhookEventDefinition,
 } from '@/api/oauth'
-import type { PermissionDefinition, User } from '@/api/types'
+import type { PermissionDefinition } from '@/api/types'
 import ActionBar from '@/components/common/ActionBar.vue'
 import PermissionTagPicker from '@/components/permissions/PermissionTagPicker.vue'
 import UiCard from '@/components/ui/UiCard.vue'
@@ -230,10 +230,12 @@ import {
   type WebhookEndpointForm,
 } from './oauthAppFormState'
 import OAuthWebhookEndpointEditor from './OAuthWebhookEndpointEditor.vue'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 
 const route = useRoute()
 const router = useRouter()
-const user = inject<Ref<User | null>>('user', ref(null))
+const { user } = storeToRefs(useSessionStore())
 const app = ref<OAuthClient | null>(null)
 const catalog = ref<PermissionDefinition[]>([])
 const webhookCatalog = ref<OAuthWebhookEventDefinition[]>([])

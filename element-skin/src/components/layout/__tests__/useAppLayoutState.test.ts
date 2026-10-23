@@ -1,8 +1,10 @@
-import { createApp, h, inject, nextTick } from 'vue'
+import { createApp, h, nextTick } from 'vue'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppLayoutState } from '../useAppLayoutState'
 import { useNotificationIndicator } from '@/composables/useNotificationIndicator'
+import { useSessionStore } from '@/stores/session'
 import { navigationCases } from './fixtures/navigationCases'
 
 const api = vi.hoisted(() => ({
@@ -52,20 +54,16 @@ async function mountLayoutState(permissions: string[]) {
   })
   await router.push('/')
   let state!: ReturnType<typeof useAppLayoutState>
-  let fetchMe!: () => Promise<void>
-  const child = {
-    setup() {
-      fetchMe = inject<() => Promise<void>>('fetchMe')!
-      return () => h('div')
-    },
-  }
+  const pinia = createPinia()
   const app = createApp({
     setup() {
       state = useAppLayoutState()
-      return () => h(child)
+      return () => h('div')
     },
   })
+  app.use(pinia)
   app.use(router)
+  const fetchMe = useSessionStore(pinia).fetchMe
   app.mount(document.createElement('div'))
   await flushState()
   return { state, fetchMe, unmount: () => app.unmount() }

@@ -148,8 +148,10 @@ import {
   clearProfileSkin,
   clearProfileCape,
 } from '@/api/profiles'
-import type { ExternalIdentity, OfficialProfileBinding, Profile, User } from '@/api/types'
+import type { ExternalIdentity, OfficialProfileBinding, Profile } from '@/api/types'
 import { getExternalIdentities } from '@/api/identity'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import {
   createOfficialProfileBinding,
   deleteOfficialProfileBinding,
@@ -161,9 +163,10 @@ import { getErrorMessage, isExternalIdentityReauthorizationRequired } from '@/ut
 const { setAvatar } = useAvatar()
 
 // Inject shared state from AppLayout
-const fetchMe = inject<() => Promise<void>>('fetchMe')
+const sessionStore = useSessionStore()
+const { fetchMe } = sessionStore
 const isDark = inject<Ref<boolean>>('isDark', ref(false))
-const user = inject<Ref<User | null>>('user', ref(null))
+const { user } = storeToRefs(sessionStore)
 
 const router = useRouter()
 
@@ -210,7 +213,7 @@ const {
 } = useRemoteYggProfileImport({
   async onImported() {
     await refreshFirstPage()
-    if (fetchMe) await fetchMe()
+    await fetchMe()
   },
 })
 
@@ -256,7 +259,7 @@ async function bindOfficialProfile(payload: { identity_id: string }) {
     showOfficialBindingDialog.value = false
     ElMessage.success('正版角色已绑定；可在角色详情中同步正版数据')
     await Promise.all([refreshFirstPage(), fetchOfficialResources()])
-    if (fetchMe) await fetchMe()
+    await fetchMe()
   } catch (e: unknown) {
     if (isExternalIdentityReauthorizationRequired(e)) {
       ElMessage.error('该 Microsoft 身份授权已失效，请前往身份管理页重新登录')
@@ -282,7 +285,7 @@ async function syncOfficialBinding(binding: OfficialProfileBinding) {
     }
     ElMessage.success('正版角色同步完成')
     await Promise.all([fetchProfiles(), fetchOfficialResources()])
-    if (fetchMe) await fetchMe()
+    await fetchMe()
   } catch (e: unknown) {
     if (e !== 'cancel' && e !== 'close') {
       if (isExternalIdentityReauthorizationRequired(e)) {
@@ -368,7 +371,7 @@ async function createRole() {
     showCreateRoleDialog.value = false
     ElMessage.success('创建成功')
     await refreshFirstPage()
-    if (fetchMe) fetchMe()
+    fetchMe()
   } catch (e: unknown) {
     ElMessage.error('创建失败: ' + getErrorMessage(e, '创建失败'))
   }
@@ -385,7 +388,7 @@ async function deleteRole(pid: string) {
     ElMessage.success('已删除')
     showPreviewDialog.value = false
     await Promise.all([refreshFirstPage(), fetchOfficialResources()])
-    if (fetchMe) fetchMe()
+    fetchMe()
   } catch (e: unknown) {
     if (e !== 'cancel' && e !== 'close') {
       ElMessage.error('删除失败')
@@ -408,7 +411,7 @@ async function updateRoleName(name: string) {
     selectedProfile.value.name = newName
     ElMessage.success('名称已修改')
     await fetchProfiles()
-    if (fetchMe) fetchMe()
+    fetchMe()
   } catch (e: unknown) {
     ElMessage.error('修改失败: ' + getErrorMessage(e, '修改失败'))
   }
@@ -425,7 +428,7 @@ async function clearRoleSkin(pid: string) {
     ElMessage.success('皮肤已清除')
     showPreviewDialog.value = false
     await fetchProfiles()
-    if (fetchMe) fetchMe()
+    fetchMe()
   } catch (e: unknown) {
     if (e !== 'cancel' && e !== 'close') {
       ElMessage.error('清除失败: ' + getErrorMessage(e, '清除失败'))
@@ -444,7 +447,7 @@ async function clearRoleCape(pid: string) {
     ElMessage.success('披风已清除')
     showPreviewDialog.value = false
     await fetchProfiles()
-    if (fetchMe) fetchMe()
+    fetchMe()
   } catch (e: unknown) {
     if (e !== 'cancel' && e !== 'close') {
       ElMessage.error('清除失败: ' + getErrorMessage(e, '清除失败'))

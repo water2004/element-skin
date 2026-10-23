@@ -1,8 +1,10 @@
 import { createApp, h, nextTick, ref } from 'vue'
 import ElementPlus, { ElMessageBox } from 'element-plus'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExternalIdentity, IdentityProvider, User } from '@/api/types'
+import { useSessionStore } from '@/stores/session'
 import DashboardIdentities from '../DashboardIdentities.vue'
 
 const identityApiMocks = vi.hoisted(() => ({
@@ -70,21 +72,20 @@ describe('DashboardIdentities', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const app = createApp({ render: () => h(DashboardIdentities) })
+    const pinia = createPinia()
+    app.use(pinia)
     app.use(router)
     app.use(ElementPlus)
-    app.provide(
-      'user',
-      ref({
-        id: 'user-1',
-        permissions: [
-          'external_identity.read.owned',
-          'external_identity.create.owned',
-          'external_identity.update.owned',
-          'external_identity.delete.owned',
-          'official_profile.read.owned',
-        ],
-      } as User),
-    )
+    useSessionStore(pinia).user = {
+      id: 'user-1',
+      permissions: [
+        'external_identity.read.owned',
+        'external_identity.create.owned',
+        'external_identity.update.owned',
+        'external_identity.delete.owned',
+        'official_profile.read.owned',
+      ],
+    } as User
     await router.push('/dashboard/identities')
     await router.isReady()
     app.mount(host)
@@ -117,19 +118,18 @@ describe('DashboardIdentities', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const app = createApp({ render: () => h(DashboardIdentities) })
+    const pinia = createPinia()
+    app.use(pinia)
     app.use(router)
     app.use(ElementPlus)
-    app.provide(
-      'user',
-      ref({
-        id: 'user-1',
-        permissions: [
-          'external_identity.read.owned',
-          'external_identity.delete.owned',
-          'official_profile.read.owned',
-        ],
-      } as User),
-    )
+    useSessionStore(pinia).user = {
+      id: 'user-1',
+      permissions: [
+        'external_identity.read.owned',
+        'external_identity.delete.owned',
+        'official_profile.read.owned',
+      ],
+    } as User
     await router.push('/dashboard/identities')
     await router.isReady()
     app.mount(host)

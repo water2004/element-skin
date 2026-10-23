@@ -169,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, type Ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Link, Refresh } from '@element-plus/icons-vue'
 import {
@@ -184,7 +184,9 @@ import {
   type OAuthClientStatus,
   type OAuthGrant,
 } from '@/api/oauth'
-import type { PermissionDefinition, User } from '@/api/types'
+import type { PermissionDefinition } from '@/api/types'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
@@ -192,7 +194,7 @@ import AdminOAuthAppDetailDialog from '@/components/admin/oauth/AdminOAuthAppDet
 import { getErrorMessage } from '@/utils/error'
 
 const status = ref<OAuthClientStatus | 'all'>('all')
-const user = inject<Ref<User | null>>('user', ref(null))
+const { user } = storeToRefs(useSessionStore())
 const permissionSet = computed(() => new Set(user.value?.permissions || []))
 const canReadApps = computed(() => permissionSet.value.has('oauth_app.read.any'))
 const canReviewApps = computed(() => permissionSet.value.has('oauth_app.review.any'))

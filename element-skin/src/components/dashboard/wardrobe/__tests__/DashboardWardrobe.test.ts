@@ -1,5 +1,6 @@
 import { createApp, defineComponent, h, nextTick } from 'vue'
 import ElementPlus from 'element-plus'
+import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Texture } from '@/api/types'
 import DashboardWardrobe from '../DashboardWardrobe.vue'
@@ -129,6 +130,7 @@ describe('DashboardWardrobe texture visibility', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const app = createApp({ render: () => h(DashboardWardrobe) })
+    app.use(createPinia())
     app.use(ElementPlus)
     app.mount(host)
     await flushUI()
@@ -320,6 +322,7 @@ function mountWardrobe() {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const app = createApp(DashboardWardrobe)
+  app.use(createPinia())
   app.use(ElementPlus)
   app.mount(host)
   return {

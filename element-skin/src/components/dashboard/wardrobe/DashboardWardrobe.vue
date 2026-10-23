@@ -111,10 +111,10 @@ import {
   applyTexture,
 } from '@/api/textures'
 import type { Profile, Texture } from '@/api/types'
+import { useSessionStore } from '@/stores/session'
 import { getErrorMessage } from '@/utils/error'
 
-// Inject shared state from AppLayout
-const fetchMe = inject<() => Promise<void>>('fetchMe')
+const { fetchMe } = useSessionStore()
 const isDark = inject<Ref<boolean>>('isDark', ref(false))
 
 const userProfiles = ref<Profile[]>([])
@@ -346,7 +346,7 @@ async function doApply() {
       texture_type: applyForm.value.texture_type,
     })
     ElMessage.success('已应用')
-    if (fetchMe) fetchMe()
+    fetchMe()
     fetchUserProfiles()
     fetchTextures()
   } catch (e: unknown) {

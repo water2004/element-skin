@@ -71,7 +71,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, type Ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -86,11 +86,13 @@ import {
   startIdentityAuthorization,
 } from '@/api/identity'
 import { getOfficialProfileBindings } from '@/api/official-profiles'
-import type { ExternalIdentity, IdentityProvider, OfficialProfileBinding, User } from '@/api/types'
+import type { ExternalIdentity, IdentityProvider, OfficialProfileBinding } from '@/api/types'
 import type { IdentityProviderGroup } from './viewTypes'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import { getApiErrorMessage, getErrorMessage, type ApiErrorDescriptor } from '@/utils/error'
 
-const user = inject<Ref<User | null>>('user', ref(null))
+const { user } = storeToRefs(useSessionStore())
 const route = useRoute()
 const router = useRouter()
 const loading = ref(false)

@@ -1,9 +1,9 @@
 import { computed, nextTick, onMounted, onUnmounted, provide, ref, watch } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { getPublicSettings } from '@/api/public'
-import { getMe } from '@/api/me'
 import { siteLogout } from '@/api/auth'
-import type { User as UserType } from '@/api/types'
+import { useSessionStore } from '@/stores/session'
 import { useAvatar } from '@/composables/useAvatar'
 import { useNotificationIndicator } from '@/composables/useNotificationIndicator'
 import { useTheme } from '@/composables/useTheme'
@@ -40,8 +40,8 @@ export function useAppLayoutState() {
   const isAuthPage = computed(() => ['/login', '/register', '/reset-password'].includes(route.path))
   const siteName = ref(appStorage.siteSettings.getSiteName())
   const enableSkinLibrary = ref(appStorage.siteSettings.getEnableSkinLibrary())
-  const user = ref<UserType | null>(null)
-  const authReady = ref(false)
+  const sessionStore = useSessionStore()
+  const { user, authReady } = storeToRefs(sessionStore)
   const drawer = ref(false)
   const footerText = ref('')
   const filingIcp = ref('')
@@ -127,7 +127,7 @@ export function useAppLayoutState() {
     try {
       await siteLogout()
     } catch {}
-    user.value = null
+    sessionStore.clearSession()
     clearUnreadNotifications()
     stopUnreadRefreshTimer()
     authReady.value = true
@@ -135,27 +135,16 @@ export function useAppLayoutState() {
     setTimeout(() => window.location.reload(), 100)
   }
 
-  async function fetchMe() {
-    try {
-      const res = await getMe()
-      user.value = res.data
-      if (res.data.avatar_hash) {
-        initializeAvatar(res.data.avatar_hash)
-      }
-    } catch {
-      user.value = null
-      clearUnreadNotifications()
-      stopUnreadRefreshTimer()
-    } finally {
-      authReady.value = true
-    }
-  }
+  watch(
+    () => user.value?.avatar_hash,
+    (hash) => {
+      if (hash) initializeAvatar(hash)
+    },
+    { immediate: true },
+  )
 
   watch([() => route.path, footerText, filingIcp, filingMps], updateFooterHeight)
 
-  provide('user', user)
-  provide('fetchMe', fetchMe)
-  provide('authReady', authReady)
   provide('isDark', isDark)
   provide('footerHeight', footerHeight)
 
@@ -177,7 +166,7 @@ export function useAppLayoutState() {
     initTheme()
     installEasterEggDevTools()
     void refreshEasterEgg()
-    void fetchMe()
+    void sessionStore.fetchMe()
     try {
       const res = await getPublicSettings()
       if (res.data.site_name) {

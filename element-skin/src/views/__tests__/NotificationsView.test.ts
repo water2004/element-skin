@@ -1,9 +1,11 @@
 import { createApp, h, nextTick, ref } from 'vue'
 import ElementPlus, { ElMessage } from 'element-plus'
+import { createPinia } from 'pinia'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { User } from '@/api/types'
 import NotificationsView from '../NotificationsView.vue'
+import { useSessionStore } from '@/stores/session'
 import { firstDetail, firstNotice, noticesPage, secondDetail } from './fixtures/notifications'
 
 const api = vi.hoisted(() => ({
@@ -45,7 +47,9 @@ async function mountNotices(path = '/notifications', permissions = ['notice.read
   const root = document.createElement('div')
   document.body.append(root)
   const app = createApp({ render: () => h(RouterView) })
-  app.provide('user', user).use(router).use(ElementPlus)
+  const pinia = createPinia()
+  app.use(pinia).use(router).use(ElementPlus)
+  useSessionStore(pinia).user = user.value
   app.mount(root)
   await flushUI()
   return {

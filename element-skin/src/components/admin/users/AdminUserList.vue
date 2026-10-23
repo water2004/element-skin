@@ -99,7 +99,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch, inject, type Ref } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, UserFilled } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
@@ -111,6 +111,8 @@ import ResetPasswordDialog from '@/components/admin/users/ResetPasswordDialog.vu
 import BanUserDialog from '@/components/admin/users/BanUserDialog.vue'
 import { getAvatarForHash } from '@/composables/useAvatar'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import {
   getUsers,
   getUser,
@@ -126,7 +128,6 @@ import {
   unbanUser as apiUnbanUser,
   resetUserPassword,
 } from '@/api/admin/users'
-import { getMe } from '@/api/me'
 import type { PermissionOverrideEffect, User, Profile, UserPermissionsResponse } from '@/api/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import {
@@ -440,14 +441,12 @@ async function unbanUser(user: User) {
 }
 
 async function refreshLoggedInUser() {
-  try {
-    const res = await getMe()
-    if (loggedInUser) loggedInUser.value = res.data
-  } catch {}
+  await sessionStore.fetchMe()
 }
 
-const loggedInUser = inject<Ref<User | null>>('user', ref(null))
-const isCurrentUserSelf = (user: User) => loggedInUser?.value?.id === user.id
+const sessionStore = useSessionStore()
+const { user: loggedInUser } = storeToRefs(sessionStore)
+const isCurrentUserSelf = (user: User) => loggedInUser.value?.id === user.id
 const formatBanUntilTime = () =>
   formatBanUntilTimeLabel(banDurationType.value, banPresetDuration.value, banCustomHours.value)
 

@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, inject, onMounted } from 'vue'
+import { reactive, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock, Right, Connection } from '@element-plus/icons-vue'
@@ -88,13 +88,14 @@ import { getPublicSettings } from '@/api/public'
 import { siteLogin } from '@/api/auth'
 import { getIdentityProviders, startIdentityAuthorization } from '@/api/identity'
 import type { IdentityProvider } from '@/api/types'
+import { useSessionStore } from '@/stores/session'
 import { getErrorMessage, getApiErrorMessage } from '@/utils/error'
 import { validateForm } from '@/utils/formValidation'
 import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
 const route = useRoute()
-const fetchMe = inject<() => Promise<void>>('fetchMe')
+const { fetchMe } = useSessionStore()
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 
@@ -158,7 +159,7 @@ async function login() {
     })
 
     // Cookie 已设置，刷新顶栏共享的登录状态，避免必须整页刷新
-    if (fetchMe) await fetchMe()
+    await fetchMe()
 
     ElMessage.success('登录成功！')
     await router.replace(loginReturnTarget())

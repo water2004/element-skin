@@ -172,7 +172,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, ref, watch, type Ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Edit, Plus, Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
@@ -185,14 +185,16 @@ import {
   type OAuthClientStatus,
   type OAuthGrant,
 } from '@/api/oauth'
-import type { PermissionDefinition, User } from '@/api/types'
+import type { PermissionDefinition } from '@/api/types'
 import ActionBar from '@/components/common/ActionBar.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import PermissionToneTag from '@/components/permissions/PermissionToneTag.vue'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import { getErrorMessage } from '@/utils/error'
 
 const router = useRouter()
-const user = inject<Ref<User | null>>('user', ref(null))
+const { user } = storeToRefs(useSessionStore())
 
 const apps = ref<OAuthClient[]>([])
 const grants = ref<OAuthGrant[]>([])

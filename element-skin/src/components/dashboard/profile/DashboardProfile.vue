@@ -154,7 +154,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, inject, type Ref } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Clock, Check, Delete, Message } from '@element-plus/icons-vue'
@@ -165,13 +165,15 @@ import type { User } from '@/api/types'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import EmailChangeDialog from './EmailChangeDialog.vue'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import { getErrorMessage } from '@/utils/error'
 
 const { currentAvatarImg: customAvatar } = useAvatar()
 
-// Inject shared state from AppLayout
-const user = inject<Ref<User | null>>('user', ref(null))
-const fetchMe = inject<() => Promise<void>>('fetchMe')
+const sessionStore = useSessionStore()
+const { user } = storeToRefs(sessionStore)
+const { fetchMe } = sessionStore
 
 const router = useRouter()
 const form = ref({
@@ -269,14 +271,14 @@ async function updateProfile() {
     }
     await patchMe(payload)
     ElMessage.success('信息修改成功')
-    if (fetchMe) fetchMe()
+    fetchMe()
   } catch (e: unknown) {
     ElMessage.error('保存失败: ' + getErrorMessage(e, '保存失败'))
   }
 }
 
 async function handleEmailChanged() {
-  await fetchMe?.()
+  await fetchMe()
 }
 
 async function confirmDeleteAccount() {

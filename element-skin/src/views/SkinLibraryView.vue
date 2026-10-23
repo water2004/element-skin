@@ -211,11 +211,13 @@ import UiViewerLayout from '@/components/ui/UiViewerLayout.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getPublicSkinLibrary } from '@/api/public'
 import { addToWardrobe as apiAddToWardrobe } from '@/api/textures'
-import type { Texture, User as UserType } from '@/api/types'
+import type { Texture } from '@/api/types'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import { getErrorMessage, getErrorStatus } from '@/utils/error'
 
 const isDark = inject<Ref<boolean>>('isDark', ref(false))
-const user = inject<Ref<UserType | null>>('user', ref(null))
+const { user } = storeToRefs(useSessionStore())
 const isLogged = computed(() => !!user.value)
 
 const items = ref<Texture[]>([])

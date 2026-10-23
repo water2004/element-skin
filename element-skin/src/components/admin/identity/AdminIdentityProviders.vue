@@ -121,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, onMounted, ref, type Ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Plus, Promotion } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
@@ -129,12 +129,14 @@ import ActionBar from '@/components/common/ActionBar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import { deleteIdentityProvider, getAdminIdentityProviders } from '@/api/admin/identity-providers'
-import type { AdminIdentityProvider, User } from '@/api/types'
+import type { AdminIdentityProvider } from '@/api/types'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import { getErrorMessage } from '@/utils/error'
 import { getOpenIDConfiguration, type OpenIDConfiguration } from '@/api/oauth'
 
 const router = useRouter()
-const user = inject<Ref<User | null>>('user', ref(null))
+const { user } = storeToRefs(useSessionStore())
 const providers = ref<AdminIdentityProvider[]>([])
 const loading = ref(false)
 const discovery = ref<OpenIDConfiguration | null>(null)

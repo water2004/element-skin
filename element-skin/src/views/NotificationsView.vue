@@ -162,20 +162,22 @@
 </template>
 
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import { dismissNotice, getNotice, getNotices } from '@/api/notices'
-import type { NoticeLevel, NoticeView, User } from '@/api/types'
+import type { NoticeLevel, NoticeView } from '@/api/types'
 import { useNotificationIndicator } from '@/composables/useNotificationIndicator'
+import { useSessionStore } from '@/stores/session'
+import { storeToRefs } from 'pinia'
 import { renderMarkdown } from '@/utils/markdown'
 
 const route = useRoute()
 const router = useRouter()
-const user = inject<Ref<User | null>>('user', ref(null))
+const { user } = storeToRefs(useSessionStore())
 const canDismissNotice = computed(() =>
   (user.value?.permissions ?? []).includes('notice.dismiss.owned'),
 )
