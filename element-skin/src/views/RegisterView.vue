@@ -324,7 +324,8 @@ async function register() {
   transition: color 0.3s ease;
 }
 
-:deep(.el-input__wrapper) {
+:deep(.el-input__wrapper),
+:deep(.el-select__wrapper) {
   height: 48px;
 }
 </style>
