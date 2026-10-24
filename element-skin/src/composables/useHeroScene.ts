@@ -42,8 +42,11 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
 
   const quadCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
   const compositeScene = new THREE.Scene()
-  const fallbackTexture = createFallbackTexture()
-  const fallbackCubeTexture = createFallbackCubeTexture()
+  const fallbackColor = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-home-background')
+    .trim()
+  const fallbackTexture = createFallbackTexture(fallbackColor)
+  const fallbackCubeTexture = createFallbackCubeTexture(fallbackColor)
   const compositeUniforms: {
     currentMap: { value: THREE.Texture }
     nextMap: { value: THREE.Texture }
@@ -71,7 +74,7 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
     currentRotation: { value: new THREE.Matrix3() },
     nextRotation: { value: new THREE.Matrix3() },
     transitionMix: { value: 0 },
-    overlayOpacity: { value: 0.45 },
+    overlayOpacity: { value: 0 },
   }
   const compositeMaterial = new THREE.ShaderMaterial({
     uniforms: compositeUniforms,
@@ -196,11 +199,18 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
       const entry: PreparedMedia = {
         item,
         kind: 'panorama',
-        texture: new THREE.CubeTexture(loadFlippedCubeFaces(sources, (f) => mediaUrl(item, f), (canvases) => {
-          entry.texture.image = canvases
-          entry.texture.needsUpdate = true
-          entry.ready = true
-        })),
+        texture: new THREE.CubeTexture(
+          loadFlippedCubeFaces(
+            sources,
+            (f) => mediaUrl(item, f),
+            fallbackColor,
+            (canvases) => {
+              entry.texture.image = canvases
+              entry.texture.needsUpdate = true
+              entry.ready = true
+            },
+          ),
+        ),
         ready: false,
       }
       entry.texture.colorSpace = THREE.SRGBColorSpace
@@ -334,7 +344,7 @@ export function createHeroScene(options: HeroSceneOptions = {}): HeroSceneContro
 
   function renderFallback() {
     if (!renderer) return
-    renderer.setClearColor(0x1a1a1a, 1)
+    renderer.setClearColor(fallbackColor, 1)
     renderer.clear()
   }
 
@@ -425,28 +435,28 @@ function sceneDpr() {
   return Math.min(Math.max(window.devicePixelRatio || 1, 1), 1.5)
 }
 
-function createFallbackTexture() {
-  const canvas = createSolidCanvas()
+function createFallbackTexture(color: string) {
+  const canvas = createSolidCanvas(color)
   const texture = new THREE.CanvasTexture(canvas)
   texture.colorSpace = THREE.SRGBColorSpace
   return texture
 }
 
-function createFallbackCubeTexture() {
-  const faces = Array.from({ length: 6 }, () => createSolidCanvas())
+function createFallbackCubeTexture(color: string) {
+  const faces = Array.from({ length: 6 }, () => createSolidCanvas(color))
   const texture = new THREE.CubeTexture(faces)
   texture.colorSpace = THREE.SRGBColorSpace
   texture.needsUpdate = true
   return texture
 }
 
-function createSolidCanvas() {
+function createSolidCanvas(color: string) {
   const canvas = document.createElement('canvas')
   canvas.width = 1
   canvas.height = 1
   const ctx = canvas.getContext('2d')
   if (ctx) {
-    ctx.fillStyle = '#1a1a1a'
+    ctx.fillStyle = color
     ctx.fillRect(0, 0, 1, 1)
   }
   return canvas
@@ -473,9 +483,10 @@ function flipCanvas(img: HTMLImageElement, flip: PanoramaFace['flip']): HTMLCanv
 function loadFlippedCubeFaces(
   faces: PanoramaFace[],
   buildUrl: (face: string) => string,
+  color: string,
   onReady: (canvases: HTMLCanvasElement[]) => void,
 ): HTMLCanvasElement[] {
-  const canvases = Array.from({ length: faces.length }, () => createSolidCanvas())
+  const canvases = Array.from({ length: faces.length }, () => createSolidCanvas(color))
   let loaded = 0
   faces.forEach((src, index) => {
     const img = new Image()

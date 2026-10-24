@@ -1,0 +1,33 @@
+/* 在 HTML head 内提前输出；首帧与应用样式共用这些底色变量。 */
+:root {
+  --vt-c-white: #ffffff;
+  --vt-c-black: #181818;
+  --vt-c-indigo: #2c3e50;
+  --color-background: var(--vt-c-white);
+  --color-text: var(--vt-c-indigo);
+  --color-home-background: #1a1a1a;
+  color-scheme: light;
+}
+
+:root.dark {
+  --color-background: var(--vt-c-black);
+  --color-text: rgba(235, 235, 235, 0.64);
+  color-scheme: dark;
+}
+
+html {
+  background: var(--color-background);
+  scrollbar-gutter: stable;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--color-text);
+  background: var(--color-background);
+}
+
+html.is-home-page,
+html.is-home-page body {
+  background: var(--color-home-background);
+}

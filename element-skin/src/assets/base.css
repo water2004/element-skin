@@ -1,14 +1,11 @@
 /* color palette from <https://github.com/vuejs/theme> */
+/* 首帧背景与基础颜色变量在 styles/appearance.css，由 Vite 提前内联。 */
 :root {
-  --vt-c-white: #ffffff;
   --vt-c-white-soft: #f8f8f8;
   --vt-c-white-mute: #f2f2f2;
 
-  --vt-c-black: #181818;
   --vt-c-black-soft: #222222;
   --vt-c-black-mute: #282828;
-
-  --vt-c-indigo: #2c3e50;
 
   --vt-c-divider-light-1: rgba(60, 60, 60, 0.29);
   --vt-c-divider-light-2: rgba(60, 60, 60, 0.12);
@@ -23,7 +20,6 @@
 
 /* semantic color variables for this project */
 :root {
-  --color-background: var(--vt-c-white);
   --color-background-soft: var(--vt-c-white-soft);
   --color-background-mute: var(--vt-c-white-mute);
 
@@ -31,7 +27,6 @@
   --color-border-hover: var(--vt-c-divider-light-1);
 
   --color-heading: var(--vt-c-text-light-1);
-  --color-text: var(--vt-c-text-light-1);
   --color-text-light: var(--vt-c-text-light-2);
 
   --color-card-background: var(--vt-c-white);
@@ -53,7 +48,6 @@
 
 /* Explicit dark mode class */
 html.dark {
-  --color-background: var(--vt-c-black);
   --color-background-soft: var(--vt-c-black-soft);
   --color-background-mute: var(--vt-c-black-mute);
 
@@ -61,35 +55,12 @@ html.dark {
   --color-border-hover: var(--vt-c-divider-dark-1);
 
   --color-heading: var(--vt-c-text-dark-1);
-  --color-text: var(--vt-c-text-dark-2);
   --color-text-light: rgba(235, 235, 235, 0.48);
 
   --color-card-background: var(--vt-c-black-soft);
   --color-header-background: rgba(24, 24, 24, 0.95);
   --color-popover-background: var(--vt-c-black-mute);
   --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%); /* Dark, subtle grey gradient */
-}
-
-@media (prefers-color-scheme: dark) {
-  /* Only apply if the user hasn't explicitly set light mode */
-  html:not(.light) {
-    /* Same variables as .dark */
-    --color-background: var(--vt-c-black);
-    --color-background-soft: var(--vt-c-black-soft);
-    --color-background-mute: var(--vt-c-black-mute);
-
-    --color-border: var(--vt-c-divider-dark-2);
-    --color-border-hover: var(--vt-c-divider-dark-1);
-
-    --color-heading: var(--vt-c-text-dark-1);
-    --color-text: var(--vt-c-text-dark-2);
-    --color-text-light: rgba(235, 235, 235, 0.48);
-
-    --color-card-background: var(--vt-c-black-soft);
-    --color-header-background: rgba(24, 24, 24, 0.95);
-    --color-popover-background: var(--vt-c-black-mute);
-    --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%); /* Dark, subtle grey gradient */
-  }
 }
 
 *,
@@ -100,14 +71,7 @@ html.dark {
   font-weight: normal;
 }
 
-html {
-  scrollbar-gutter: stable;
-}
-
 body {
-  min-height: 100vh;
-  color: var(--color-text);
-  background: var(--color-background);
   transition:
     color 0.5s,
     background-color 0.5s;

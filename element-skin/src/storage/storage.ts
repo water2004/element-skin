@@ -1,6 +1,7 @@
 import { normalizePageSize } from './pageSize'
+import { THEME_STORAGE_KEY, themeStorage } from './appearance'
 
-export type ColorTheme = 'dark' | 'light'
+export type { ColorTheme } from './appearance'
 
 const SITE_NAME_FALLBACK = '皮肤站'
 const SITE_SUBTITLE_FALLBACK = '简洁、高效、现代的 Minecraft 皮肤 management 站'
@@ -9,7 +10,7 @@ const localStorageKeys = {
   siteName: 'site_name_cache',
   siteSubtitle: 'site_subtitle_cache',
   enableSkinLibrary: 'enable_skin_library_cache',
-  theme: 'theme',
+  theme: THEME_STORAGE_KEY,
   easterEggDisabled: 'disableEasterEgg',
   pageSize: 'page_size_preference',
 } as const
@@ -92,18 +93,7 @@ export const appStorage = {
     },
   },
 
-  theme: {
-    get(): ColorTheme | null {
-      const value = getString('local', localStorageKeys.theme)
-      return value === 'dark' || value === 'light' ? value : null
-    },
-    set(value: ColorTheme): void {
-      setString('local', localStorageKeys.theme, value)
-    },
-    hasUserPreference(): boolean {
-      return this.get() !== null
-    },
-  },
+  theme: themeStorage,
 
   pageSize: {
     get(fallback = 20): number {

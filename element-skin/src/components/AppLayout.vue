@@ -253,10 +253,6 @@ onUnmounted(() => {
 </script>
 
 <style>
-html:has(.is-home-layout) {
-  background-color: #000;
-}
-
 .app-shell :where(.page-header) {
   display: flex;
   justify-content: space-between;

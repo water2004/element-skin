@@ -1,19 +1,20 @@
 import { onUnmounted, ref } from 'vue'
 
 import { appStorage } from '@/storage'
+import { applyTheme, resolveTheme } from '@/storage/appearance'
 
 export function useTheme() {
-  const isDark = ref(false)
+  const isDark = ref(resolveTheme() === 'dark')
   let mediaQuery: MediaQueryList | null = null
 
-  function applyTheme() {
-    document.documentElement.classList.toggle('dark', isDark.value)
+  function applyCurrentTheme() {
+    applyTheme(isDark.value ? 'dark' : 'light')
   }
 
   function handlePreferenceChange(event: MediaQueryListEvent) {
     if (!appStorage.theme.hasUserPreference()) {
       isDark.value = event.matches
-      applyTheme()
+      applyCurrentTheme()
     }
   }
 
@@ -30,17 +31,15 @@ export function useTheme() {
   }
 
   function initTheme() {
-    const savedTheme = appStorage.theme.get()
-    if (savedTheme) isDark.value = savedTheme === 'dark'
-    else isDark.value = window.matchMedia('(prefers-color-scheme: dark)').matches
-    applyTheme()
+    isDark.value = resolveTheme() === 'dark'
+    applyCurrentTheme()
     startSystemPreferenceWatcher()
   }
 
   function toggleTheme() {
     isDark.value = !isDark.value
     appStorage.theme.set(isDark.value ? 'dark' : 'light')
-    applyTheme()
+    applyCurrentTheme()
   }
 
   onUnmounted(stopSystemPreferenceWatcher)

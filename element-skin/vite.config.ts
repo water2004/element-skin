@@ -8,6 +8,7 @@ import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 
 import { isPathInside, resolveStaticAssetRequest } from './vite/staticAssets'
+import { appearanceBootstrap } from './vite/appearanceBootstrap'
 
 const isLowMemory = process.env.BUILD_MODE === 'low-memory'
 const appVersion = 'v4.0.1'
@@ -19,6 +20,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(appVersion),
   },
   plugins: [
+    appearanceBootstrap(),
     tailwindcss(),
     vue(),
     vueDevTools(),
