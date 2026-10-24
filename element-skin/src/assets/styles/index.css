@@ -3,5 +3,6 @@
    apply app-wide. Do NOT @import these files inside component <style scoped>
    blocks — that re-emits and re-scopes them per component, bloating the bundle. */
 
+@import './tokens.css';
 @import './animations.css' layer(components);
 @import './element-overrides.css';

@@ -8,8 +8,8 @@
 .card-actions {
   display: flex;
   flex-direction: row;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: var(--space-control-gap);
+  padding: var(--space-action-gap) var(--space-content-padding);
   border-top: 1px solid var(--color-border);
   background: var(--color-background-soft);
   align-items: center;

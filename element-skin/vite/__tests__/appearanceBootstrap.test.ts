@@ -48,8 +48,7 @@ it.each(['/', '/skin/'])(
       expect(document.documentElement.className).toBe('light')
       const rules = Array.from(document.styleSheets[0]!.cssRules) as CSSStyleRule[]
       const rootStyle = rules.find((rule) => rule.selectorText === ':root')!.style
-      expect(rootStyle.getPropertyValue('--vt-c-white')).toBe('#ffffff')
-      expect(rootStyle.getPropertyValue('--color-background')).toBe('var(--vt-c-white)')
+      expect(rootStyle.getPropertyValue('--color-background')).toBe('#ffffff')
       expect(rootStyle.getPropertyValue('color-scheme')).toBe('light')
       expect(rules.find((rule) => rule.selectorText === 'body')!.style.background).toBe(
         'var(--color-background)',

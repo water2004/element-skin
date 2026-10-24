@@ -1,17 +1,10 @@
 /* Global Animation Definitions */
 
-:root {
-  --transition-base: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-fast: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-smooth: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-bounce: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
 /* 1. Keyframes */
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(var(--motion-offset-content));
   }
   to {
     opacity: 1;
@@ -22,7 +15,7 @@
 @keyframes cardSlideIn {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(var(--motion-offset-card));
   }
   to {
     opacity: 1;
@@ -33,7 +26,7 @@
 @keyframes slideUp {
   from {
     opacity: 0;
-    transform: translateY(30px);
+    transform: translateY(var(--motion-offset-card));
   }
   to {
     opacity: 1;
@@ -43,23 +36,23 @@
 
 /* 2. Animation Classes */
 .animate-fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: fadeIn var(--motion-duration-smooth) var(--motion-easing-standard) both;
 }
 
 /* Fix: Added animation-delay and both fill mode for staggered entrance */
 .animate-card-slide {
-  animation: cardSlideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
-  animation-delay: calc(var(--delay-index, 0) * 0.05s);
+  animation: cardSlideIn var(--motion-duration-slow) var(--motion-easing-standard) both;
+  animation-delay: calc(var(--delay-index, 0) * var(--motion-stagger));
 }
 
 .animate-slide-up {
-  animation: slideUp 0.5s ease-out;
+  animation: slideUp var(--motion-duration-slow) ease-out;
 }
 
 /* 3. Reusable Transition/Transform Classes */
 .hover-lift {
-  transition: var(--transition-base);
+  transition: transform var(--motion-duration-base) var(--motion-easing-standard);
 }
 .hover-lift:hover:not(:disabled) {
-  transform: translateY(-4px);
+  transform: translateY(calc(-1 * var(--motion-offset-hover)));
 }

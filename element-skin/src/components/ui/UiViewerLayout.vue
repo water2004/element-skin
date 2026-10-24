@@ -22,7 +22,7 @@
   justify-content: center;
   min-height: 560px;
   background: var(--color-background-hero-light);
-  transition: background 0.3s ease;
+  transition: background var(--motion-duration-base) ease;
 }
 
 html.dark .ui-viewer-stage {
@@ -31,7 +31,7 @@ html.dark .ui-viewer-stage {
 
 .ui-viewer-info {
   background: var(--color-card-background);
-  padding: 24px;
+  padding: var(--space-panel-padding);
   display: flex;
   flex-direction: column;
   min-height: 560px;
@@ -53,7 +53,7 @@ html.dark .ui-viewer-stage {
     min-height: auto;
     border-left: 0;
     border-top: 1px solid var(--color-border);
-    padding: 16px;
+    padding: var(--space-content-padding);
   }
 }
 </style>

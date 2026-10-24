@@ -43,13 +43,15 @@ defineProps<{
   height: 56px;
   font-size: 26px;
   color: var(--el-color-primary);
-  background: rgba(64, 158, 255, 0.12);
-  border-radius: 16px;
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+  border-radius: var(--radius-card);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: var(--transition-base);
+  transition:
+    background-color var(--motion-duration-base) var(--motion-easing-standard),
+    color var(--motion-duration-base) var(--motion-easing-standard);
 }
 
 .page-header-text {
@@ -59,7 +61,7 @@ defineProps<{
 
 .page-header-text h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: var(--font-size-title);
   font-weight: 700;
   color: var(--color-heading);
   letter-spacing: -0.5px;
@@ -68,7 +70,7 @@ defineProps<{
 .page-header-text .subtitle {
   margin: 4px 0 0 0;
   color: var(--color-text-light);
-  font-size: 14px;
+  font-size: var(--font-size-description);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -77,7 +79,7 @@ defineProps<{
 .page-header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-action-gap);
   flex-shrink: 0;
   flex-wrap: wrap;
 }

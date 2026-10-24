@@ -1,8 +1,5 @@
 <template>
-  <el-button
-    v-bind="forwardedAttrs"
-    :class="rootClass"
-  >
+  <el-button v-bind="forwardedAttrs" :class="rootClass">
     <template v-if="iconSwap">
       <span class="ui-button-label"><slot /></span>
       <span class="ui-button-icon"><slot name="icon" /></span>
@@ -57,7 +54,7 @@ const rootClass = computed(() => [
 
 <style scoped>
 .ui-button {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--motion-duration-base) var(--motion-easing-standard);
 }
 
 .ui-button--gradient-primary,
@@ -69,8 +66,8 @@ const rootClass = computed(() => [
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  color: #fff !important;
+  gap: var(--space-control-gap);
+  color: var(--color-on-accent) !important;
   cursor: pointer;
 }
 
@@ -123,7 +120,7 @@ const rootClass = computed(() => [
 }
 
 .ui-button--soft-warning:hover {
-  color: #fff !important;
+  color: var(--color-on-accent) !important;
   background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%) !important;
   border-color: transparent !important;
   box-shadow: 0 6px 16px rgba(251, 140, 0, 0.18);
@@ -134,29 +131,24 @@ const rootClass = computed(() => [
   background: var(--color-card-background);
   border: 1px solid var(--color-border);
   color: var(--color-text);
-  border-radius: 8px;
-  padding: 8px 16px;
+  border-radius: var(--radius-control);
+  padding: var(--space-control-gap) var(--space-content-padding);
 }
 
 .ui-button--outline:hover {
   background: var(--color-background-soft);
-  border-color: var(--el-color-primary);
-  color: var(--el-color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .ui-button--outline-danger {
-  border-color: rgba(245, 108, 108, 0.4);
+  border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);
 }
 
 .ui-button--outline-danger:hover {
-  background: #fef0f0;
-  border-color: #f56c6c;
-  color: #f56c6c !important;
-}
-
-html.dark .ui-button--outline-danger:hover {
-  background: rgba(245, 108, 108, 0.15) !important;
-  color: #f56c6c !important;
+  background: var(--color-danger-hover-background);
+  border-color: var(--color-danger);
+  color: var(--color-danger) !important;
 }
 
 .is-icon-swap {
@@ -171,8 +163,8 @@ html.dark .ui-button--outline-danger:hover {
   width: 100%;
   height: 100%;
   transition:
-    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.3s;
+    transform var(--motion-duration-base) var(--motion-easing-bounce),
+    opacity var(--motion-duration-base);
 }
 
 .ui-button-icon {
@@ -187,8 +179,8 @@ html.dark .ui-button--outline-danger:hover {
   transform: translateY(100%) rotate(-90deg);
   opacity: 0;
   transition:
-    transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-    opacity 0.3s;
+    transform var(--motion-duration-base) var(--motion-easing-bounce),
+    opacity var(--motion-duration-base);
   font-size: 16px;
   pointer-events: none;
 }

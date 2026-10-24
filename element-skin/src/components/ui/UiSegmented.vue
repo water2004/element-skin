@@ -33,17 +33,20 @@ const rootClass = computed(() => ['ui-segmented', `ui-segmented--${props.variant
 
 <style>
 .ui-segmented--capsule .el-radio-button__inner {
-  background: var(--color-card-background);
+  background: var(--color-segmented-background);
   color: var(--color-text);
   border: 1px solid var(--color-border) !important;
   font-weight: 500;
-  transition: var(--transition-base);
+  transition:
+    background-color var(--motion-duration-base) var(--motion-easing-standard),
+    border-color var(--motion-duration-base) var(--motion-easing-standard),
+    color var(--motion-duration-base) var(--motion-easing-standard);
 }
 
 .ui-segmented--capsule .el-radio-button.is-active .el-radio-button__inner {
-  background-color: var(--el-color-primary) !important;
-  border-color: var(--el-color-primary) !important;
-  color: #fff !important;
+  background-color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-on-accent) !important;
 }
 
 .ui-segmented--modern .el-radio-button__inner {
@@ -51,29 +54,32 @@ const rootClass = computed(() => ['ui-segmented', `ui-segmented--${props.variant
   display: flex;
   align-items: center;
   padding: 0 30px;
-  border-radius: 8px !important;
-  margin-right: 12px;
+  border-radius: var(--radius-control) !important;
+  margin-right: var(--space-action-gap);
   border: 1px solid var(--color-border) !important;
-  background: var(--color-card-background);
+  background: var(--color-segmented-background);
   color: var(--color-text);
   box-shadow: none !important;
-  transition: var(--transition-base);
+  transition:
+    background-color var(--motion-duration-base) var(--motion-easing-standard),
+    border-color var(--motion-duration-base) var(--motion-easing-standard),
+    color var(--motion-duration-base) var(--motion-easing-standard);
 }
 
 .ui-segmented--modern .el-radio-button.is-active .el-radio-button__inner {
-  background-color: rgba(64, 158, 255, 0.1) !important;
-  color: var(--el-color-primary) !important;
-  border-color: var(--el-color-primary) !important;
+  background-color: var(--color-selection-background) !important;
+  color: var(--color-primary) !important;
+  border-color: var(--color-primary) !important;
 }
 
 html.dark .ui-segmented .el-radio-button__inner {
-  background: #1d1d1d !important;
+  background: var(--color-segmented-background) !important;
   color: var(--color-text);
   border-color: var(--color-border) !important;
 }
 
 html.dark .ui-segmented--modern .el-radio-button.is-active .el-radio-button__inner {
-  background-color: rgba(64, 158, 255, 0.2) !important;
-  color: #409eff !important;
+  background-color: var(--color-selection-background) !important;
+  color: var(--color-primary) !important;
 }
 </style>

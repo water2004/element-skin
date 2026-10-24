@@ -167,7 +167,9 @@ function handleWhitelistToggle(val: string | number | boolean) {
   border: 1px solid var(--color-border);
   padding: 16px;
   border-radius: 10px;
-  transition: var(--transition-base);
+  transition:
+    background-color var(--motion-duration-base) var(--motion-easing-standard),
+    border-color var(--motion-duration-base) var(--motion-easing-standard);
 }
 
 .feature-card-item.active {

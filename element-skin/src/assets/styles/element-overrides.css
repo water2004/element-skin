@@ -1,5 +1,29 @@
 /* Element Plus overrides. Keep this file unlayered so it can override Element Plus CSS. */
 
+/* :root.dark 的优先级高于库的 html.dark，防止深色主题覆盖应用映射。 */
+:root,
+:root.dark {
+  --el-bg-color-page: var(--color-background);
+  --el-bg-color: var(--color-card-background);
+  --el-bg-color-overlay: var(--color-popover-background);
+  --el-fill-color-blank: var(--color-card-background);
+  --el-text-color-disabled: var(--color-text-disabled);
+  --el-component-size-small: var(--control-height-small);
+  --el-component-size: var(--control-height-default);
+  --el-component-size-large: var(--control-height-large);
+}
+
+/* 库会在控件自身声明这些变量，仅在根元素赋值无法覆盖。 */
+.el-input,
+.el-textarea {
+  --el-input-bg-color: var(--color-card-background);
+  --el-input-text-color: var(--color-text);
+  --el-input-border-color: var(--color-border);
+  --el-input-hover-border-color: var(--color-border-hover);
+  --el-input-focus-border-color: var(--color-primary);
+  --el-input-placeholder-color: var(--color-text-light);
+}
+
 /* scrollbar-gutter 已预留滚动条空间，锁定页面时不再重复扣除 body 宽度。 */
 body.el-popup-parent--hidden {
   width: auto !important;
@@ -13,12 +37,12 @@ body.el-popup-parent--hidden {
 .el-input__wrapper,
 .el-textarea__inner {
   transition:
-    background-color 0.3s ease,
-    border-color 0.3s ease,
-    box-shadow 0.3s ease,
-    color 0.3s ease;
+    background-color var(--motion-duration-base) ease,
+    border-color var(--motion-duration-base) ease,
+    box-shadow var(--motion-duration-base) ease,
+    color var(--motion-duration-base) ease;
 }
 
 .el-button {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--motion-duration-base) var(--motion-easing-standard);
 }

@@ -1,0 +1,74 @@
+/* 未分层加载，确保应用主题映射可覆盖 Element Plus；首帧底色只在 appearance.css 定义。 */
+:root {
+  --color-background-soft: #f8f8f8;
+  --color-background-mute: #f2f2f2;
+  --color-border: rgba(60, 60, 60, 0.12);
+  --color-border-hover: rgba(60, 60, 60, 0.29);
+  --color-heading: var(--color-text);
+  --color-text-light: rgba(60, 60, 60, 0.66);
+  --color-text-disabled: #c0c4cc;
+  --color-card-background: var(--color-background);
+  --color-header-background: rgba(255, 255, 255, 0.95);
+  --color-popover-background: var(--color-background);
+  --color-segmented-background: var(--color-card-background);
+  --color-background-hero-light: linear-gradient(135deg, #f0f2f5 0%, #e0e5ec 100%);
+  --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%);
+
+  /* 状态色复用 Element Plus 调色板，结构色与控件映射由应用负责；两者不反向互引。 */
+  --color-primary: var(--el-color-primary);
+  --color-danger: var(--el-color-danger);
+  --color-on-accent: var(--el-color-white);
+  --color-selection-background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  --color-option-selected-background: color-mix(in srgb, var(--color-primary) 5%, transparent);
+  --color-danger-hover-background: #fef0f0;
+
+  --radius-control: 8px;
+  --radius-card: 16px;
+  --radius-dialog: 14px;
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.05);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.1);
+
+  --space-control-gap: 8px;
+  --space-action-gap: 12px;
+  --space-content-padding: 16px;
+  --space-panel-padding: 24px;
+  --space-card-padding: 20px;
+  --control-height-small: 24px;
+  --control-height-default: 32px;
+  --control-height-large: 40px;
+  --dialog-width-form: 500px;
+  --dialog-width-wide-form: 1120px;
+  --dialog-width-viewer: 800px;
+  --font-size-caption: 12px;
+  --font-size-description: 14px;
+  --font-size-body: 15px;
+  --font-size-title: 24px;
+
+  /* 本批沿用现有动效数值；入场协调、减少动态效果和装饰动作在 3.5 调整。 */
+  --motion-duration-fast: 200ms;
+  --motion-duration-base: 300ms;
+  --motion-duration-smooth: 400ms;
+  --motion-duration-slow: 500ms;
+  --motion-stagger: 50ms;
+  --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-easing-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --motion-offset-content: 10px;
+  --motion-offset-card: 30px;
+  --motion-offset-hover: 4px;
+}
+
+:root.dark {
+  --color-background-soft: #222222;
+  --color-background-mute: #282828;
+  --color-border: rgba(84, 84, 84, 0.48);
+  --color-border-hover: rgba(84, 84, 84, 0.65);
+  --color-heading: #ffffff;
+  --color-text-light: rgba(235, 235, 235, 0.48);
+  --color-text-disabled: #6c6e72;
+  --color-card-background: var(--color-background-soft);
+  --color-header-background: rgba(24, 24, 24, 0.95);
+  --color-popover-background: var(--color-background-mute);
+  --color-segmented-background: #1d1d1d;
+  --color-selection-background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --color-danger-hover-background: color-mix(in srgb, var(--color-danger) 15%, transparent);
+}

@@ -46,19 +46,18 @@ const rootClass = computed(() => ['ui-dialog', `ui-dialog--${props.variant}`, at
 
 <style>
 .ui-dialog {
+  border-radius: var(--radius-dialog) !important;
   overflow: hidden !important;
   border: 1px solid var(--color-border);
   background: var(--color-card-background);
 }
 
 .ui-dialog--form {
-  width: min(calc(100vw - 24px), 500px) !important;
-  border-radius: 14px !important;
+  width: min(calc(100vw - var(--space-panel-padding)), var(--dialog-width-form)) !important;
 }
 
 .ui-dialog--wide-form {
-  width: min(calc(100vw - 24px), 1120px) !important;
-  border-radius: 14px !important;
+  width: min(calc(100vw - var(--space-panel-padding)), var(--dialog-width-wide-form)) !important;
 }
 
 .ui-dialog--wide-form .el-dialog__body {
@@ -66,9 +65,8 @@ const rootClass = computed(() => ['ui-dialog', `ui-dialog--${props.variant}`, at
 }
 
 .ui-dialog--viewer {
-  width: min(calc(100vw - 24px), 800px) !important;
+  width: min(calc(100vw - var(--space-panel-padding)), var(--dialog-width-viewer)) !important;
   padding: 0 !important;
-  border-radius: 14px !important;
 }
 
 .ui-dialog--viewer .el-dialog__header {
@@ -83,27 +81,27 @@ const rootClass = computed(() => ['ui-dialog', `ui-dialog--${props.variant}`, at
 
 .ui-dialog--viewer .el-dialog__headerbtn {
   position: absolute;
-  top: 16px;
-  right: 16px;
+  top: var(--space-content-padding);
+  right: var(--space-content-padding);
   z-index: 1000;
-  width: 32px;
-  height: 32px;
+  width: var(--control-height-default);
+  height: var(--control-height-default);
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--color-background-soft);
   border-radius: 50%;
   border: 1px solid var(--color-border);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
 .ui-dialog--viewer .el-dialog__headerbtn:hover {
-  background: var(--el-color-primary);
-  border-color: var(--el-color-primary);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
 }
 
 .ui-dialog--viewer .el-dialog__headerbtn:hover .el-dialog__close {
-  color: #fff !important;
+  color: var(--color-on-accent) !important;
 }
 
 .ui-dialog--viewer .el-dialog__headerbtn .el-icon {

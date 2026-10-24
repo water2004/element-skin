@@ -5,13 +5,16 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{
-  align?: 'start' | 'center' | 'end'
-  full?: boolean
-}>(), {
-  align: 'end',
-  full: false,
-})
+withDefaults(
+  defineProps<{
+    align?: 'start' | 'center' | 'end'
+    full?: boolean
+  }>(),
+  {
+    align: 'end',
+    full: false,
+  },
+)
 </script>
 
 <style scoped>
@@ -19,7 +22,7 @@ withDefaults(defineProps<{
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: var(--space-action-gap);
   min-width: 0;
 }
 

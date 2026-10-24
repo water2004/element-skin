@@ -1,68 +1,4 @@
-/* color palette from <https://github.com/vuejs/theme> */
-/* 首帧背景与基础颜色变量在 styles/appearance.css，由 Vite 提前内联。 */
-:root {
-  --vt-c-white-soft: #f8f8f8;
-  --vt-c-white-mute: #f2f2f2;
-
-  --vt-c-black-soft: #222222;
-  --vt-c-black-mute: #282828;
-
-  --vt-c-divider-light-1: rgba(60, 60, 60, 0.29);
-  --vt-c-divider-light-2: rgba(60, 60, 60, 0.12);
-  --vt-c-divider-dark-1: rgba(84, 84, 84, 0.65);
-  --vt-c-divider-dark-2: rgba(84, 84, 84, 0.48);
-
-  --vt-c-text-light-1: var(--vt-c-indigo);
-  --vt-c-text-light-2: rgba(60, 60, 60, 0.66);
-  --vt-c-text-dark-1: var(--vt-c-white);
-  --vt-c-text-dark-2: rgba(235, 235, 235, 0.64);
-}
-
-/* semantic color variables for this project */
-:root {
-  --color-background-soft: var(--vt-c-white-soft);
-  --color-background-mute: var(--vt-c-white-mute);
-
-  --color-border: var(--vt-c-divider-light-2);
-  --color-border-hover: var(--vt-c-divider-light-1);
-
-  --color-heading: var(--vt-c-text-light-1);
-  --color-text-light: var(--vt-c-text-light-2);
-
-  --color-card-background: var(--vt-c-white);
-  --color-header-background: rgba(255, 255, 255, 0.95);
-  --color-popover-background: var(--vt-c-white);
-
-  --color-background-hero-light: linear-gradient(135deg, #f0f2f5 0%, #e0e5ec 100%); /* Light, subtle grey/blue gradient */
-  --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%); /* Dark, subtle grey gradient */
-
-  --section-gap: 160px;
-
-  --el-input-bg-color: var(--color-card-background);
-  --el-input-text-color: var(--color-text);
-  --el-input-border-color: var(--color-border);
-  --el-input-hover-border-color: var(--color-border-hover);
-  --el-input-placeholder-color: var(--color-text-light);
-  --el-fill-color-blank: var(--color-card-background);
-}
-
-/* Explicit dark mode class */
-html.dark {
-  --color-background-soft: var(--vt-c-black-soft);
-  --color-background-mute: var(--vt-c-black-mute);
-
-  --color-border: var(--vt-c-divider-dark-2);
-  --color-border-hover: var(--vt-c-divider-dark-1);
-
-  --color-heading: var(--vt-c-text-dark-1);
-  --color-text-light: rgba(235, 235, 235, 0.48);
-
-  --color-card-background: var(--vt-c-black-soft);
-  --color-header-background: rgba(24, 24, 24, 0.95);
-  --color-popover-background: var(--vt-c-black-mute);
-  --color-background-hero-dark: linear-gradient(135deg, #333333 0%, #1a1a1a 100%); /* Dark, subtle grey gradient */
-}
-
+/* 首帧变量在 appearance.css；共享设计变量在未分层的 tokens.css。 */
 *,
 *::before,
 *::after {
@@ -73,8 +9,8 @@ html.dark {
 
 body {
   transition:
-    color 0.5s,
-    background-color 0.5s;
+    color var(--motion-duration-slow),
+    background-color var(--motion-duration-slow);
   line-height: 1.6;
   font-family:
     Inter,
@@ -89,7 +25,7 @@ body {
     'Droid Sans',
     'Helvetica Neue',
     sans-serif;
-  font-size: 15px;
+  font-size: var(--font-size-body);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
