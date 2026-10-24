@@ -14,8 +14,7 @@
     <template #append>
       <el-select
         v-model="selectedSuffix"
-        class="w-[170px]"
-        filterable
+        class="w-[170px]!"
         placeholder="选择邮箱后缀"
         @change="emitAllowlistEmail"
       >
