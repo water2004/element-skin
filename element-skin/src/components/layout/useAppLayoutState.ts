@@ -26,7 +26,12 @@ import {
 } from '@/easter-eggs'
 
 export function useAppLayoutState() {
-  const { currentAvatarImg: customAvatar, initializeAvatar } = useAvatar()
+  const {
+    currentAvatarImg: customAvatar,
+    avatarHash,
+    isAvatarLoading,
+    initializeAvatar,
+  } = useAvatar()
   const { hasUnreadNotifications, refreshUnreadNotifications, clearUnreadNotifications } =
     useNotificationIndicator()
   const { isDark, initTheme, toggleTheme } = useTheme()
@@ -47,6 +52,7 @@ export function useAppLayoutState() {
   const filingMpsLink = ref('')
 
   const isLogged = computed(() => !!user.value)
+  const avatarConfigured = computed(() => !!(user.value?.avatar_hash || avatarHash.value))
   const userPermissions = computed(() => user.value?.permissions || [])
   const canAccessAdmin = computed(() => canAccessAdminPanel(userPermissions.value))
   const canAccessNotifications = computed(
@@ -120,9 +126,9 @@ export function useAppLayoutState() {
   }
 
   watch(
-    () => user.value?.avatar_hash,
-    (hash) => {
-      if (hash) initializeAvatar(hash)
+    [() => user.value?.id, () => user.value?.avatar_hash],
+    ([, hash]) => {
+      void initializeAvatar(hash)
     },
     { immediate: true },
   )
@@ -178,6 +184,8 @@ export function useAppLayoutState() {
 
   return {
     customAvatar,
+    avatarConfigured,
+    isAvatarLoading,
     isDark,
     toggleTheme,
     isHome,

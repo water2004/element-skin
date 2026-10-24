@@ -13,6 +13,8 @@ type SkinModel = 'default' | 'slim'
 // Global reactive state to ensure sync across components
 const currentAvatarImg = ref<string | null>(null)
 const avatarHash = ref<string | null>(null)
+const isAvatarLoading = ref(false)
+let avatarRequest = 0
 
 // Sequential generation queue — ensures only ONE WebGL context exists at a time
 let _generationQueue: Promise<unknown> = Promise.resolve()
@@ -69,9 +71,12 @@ function _doGenerateAvatar(hash: string, model: SkinModel = 'default'): Promise<
 
 /**
  * Get avatar image for any texture hash. Returns cached render result from IndexedDB
- * instantly, or generates sequentially (WebGL instances serialized via a promise queue).
+ * asynchronously, or generates sequentially (WebGL instances serialized via a promise queue).
  */
-export async function getAvatarForHash(hash: string | null | undefined, model: SkinModel = 'default'): Promise<string | null> {
+export async function getAvatarForHash(
+  hash: string | null | undefined,
+  model: SkinModel = 'default',
+): Promise<string | null> {
   if (!hash) return Promise.resolve(null)
 
   const cached = await getCachedImageUrl('avatar', avatarCacheKey(hash, model))
@@ -83,19 +88,28 @@ export async function getAvatarForHash(hash: string | null | undefined, model: S
 }
 
 export function useAvatar() {
-  async function initializeAvatar(hash: string | null | undefined, model: SkinModel = 'default'): Promise<void> {
+  async function initializeAvatar(
+    hash: string | null | undefined,
+    model: SkinModel = 'default',
+  ): Promise<void> {
+    const request = ++avatarRequest
     if (!hash) {
       currentAvatarImg.value = null
       avatarHash.value = null
+      isAvatarLoading.value = false
       return
     }
 
+    if (avatarHash.value !== hash) currentAvatarImg.value = null
     avatarHash.value = hash
-    const cached = await getCachedImageUrl('avatar', avatarCacheKey(hash, model))
-    if (cached) {
-      currentAvatarImg.value = cached
-    } else {
-      currentAvatarImg.value = await getAvatarForHash(hash, model)
+    isAvatarLoading.value = true
+    try {
+      const image = await getAvatarForHash(hash, model)
+      if (request === avatarRequest) currentAvatarImg.value = image
+    } catch {
+      if (request === avatarRequest) currentAvatarImg.value = null
+    } finally {
+      if (request === avatarRequest) isAvatarLoading.value = false
     }
   }
 
@@ -109,6 +123,7 @@ export function useAvatar() {
   return {
     currentAvatarImg,
     avatarHash,
+    isAvatarLoading,
     initializeAvatar,
     setAvatar,
   }

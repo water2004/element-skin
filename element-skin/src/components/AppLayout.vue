@@ -87,6 +87,8 @@
             <AccountMenu
               v-if="isLogged"
               :avatar-src="customAvatar || ''"
+              :avatar-configured="avatarConfigured"
+              :avatar-loading="isAvatarLoading"
               :account-name="accountName"
               :role-label="accountRoleLabel"
               :can-access-admin="canAccessAdmin"
@@ -165,6 +167,8 @@ import { useAppLayoutState } from '@/components/layout/useAppLayoutState'
 
 const {
   customAvatar,
+  avatarConfigured,
+  isAvatarLoading,
   isDark,
   toggleTheme,
   isHome,

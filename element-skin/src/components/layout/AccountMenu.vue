@@ -19,7 +19,9 @@
               'has-custom': hasCustomAvatar,
             },
           ]"
-          :src="avatarSrc"
+          :src="avatarImageSrc"
+          :aria-busy="avatarConfigured && avatarLoading"
+          @error="avatarImageFailed = true"
         >
           {{ hasCustomAvatar ? '' : avatarInitial }}
         </el-avatar>
@@ -40,7 +42,9 @@
               'has-custom': hasCustomAvatar,
             },
           ]"
-          :src="avatarSrc"
+          :src="avatarImageSrc"
+          :aria-busy="avatarConfigured && avatarLoading"
+          @error="avatarImageFailed = true"
         >
           {{ hasCustomAvatar ? '' : avatarInitial }}
         </el-avatar>
@@ -77,13 +81,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import UiButton from '@/components/ui/UiButton.vue'
 import type { AccountLink } from './appNavigation'
 
 const props = defineProps<{
   avatarSrc: string
+  avatarConfigured: boolean
+  avatarLoading: boolean
   accountName: string
   roleLabel: string
   canAccessAdmin: boolean
@@ -95,7 +101,18 @@ const emit = defineEmits<{
   logout: []
 }>()
 
-const hasCustomAvatar = computed(() => props.avatarSrc.length > 0)
+const avatarImageFailed = ref(false)
+watch([() => props.avatarSrc, () => props.avatarLoading], () => {
+  avatarImageFailed.value = false
+})
+const hasCustomAvatar = computed(
+  () =>
+    props.avatarConfigured &&
+    (props.avatarLoading || (!avatarImageFailed.value && !!props.avatarSrc)),
+)
+const avatarImageSrc = computed(() =>
+  hasCustomAvatar.value && !avatarImageFailed.value ? props.avatarSrc : '',
+)
 const avatarInitial = computed(() => (props.accountName || 'U').slice(0, 1).toUpperCase())
 </script>
 

@@ -60,6 +60,25 @@ afterEach(() => {
 })
 
 describe('responsive navigation lifecycle', () => {
+  it('does not flash initials when a session with a configured avatar becomes ready', async () => {
+    const mounted = await mountLayout('/', { authReady: false })
+    mounted.state.avatarConfigured.value = true
+    mounted.state.isAvatarLoading.value = true
+    mounted.state.authReady.value = true
+    await flushLayout()
+    const avatar = mounted.host.querySelector('.account-trigger .account-avatar')!
+    expect(avatar.textContent?.trim()).toBe('')
+    expect(avatar.classList.contains('el-avatar--square')).toBe(true)
+    expect(avatar.getAttribute('aria-busy')).toBe('true')
+    mounted.state.customAvatar.value = '/loaded-head.png'
+    mounted.state.isAvatarLoading.value = false
+    await flushLayout()
+    expect(mounted.host.querySelector('.account-trigger .account-avatar')).toBe(avatar)
+    expect(avatar.textContent?.trim()).toBe('')
+    expect(avatar.querySelector('img')?.getAttribute('src')).toBe('/loaded-head.png')
+    expect(avatar.classList.contains('el-avatar--square')).toBe(true)
+  })
+
   it('keeps the notification button icon-only as its unread indicator changes', async () => {
     const mounted = await mountLayout('/', { canAccessNotifications: true })
     const button = mounted.host.querySelector<HTMLButtonElement>('.notification-toggle')!
@@ -112,6 +131,7 @@ describe('responsive navigation lifecycle', () => {
     const account = mounted.host.querySelector('.account-trigger')
     const bell = mounted.host.querySelector('.notification-toggle')
     const theme = mounted.host.querySelector('.theme-toggle')
+    mounted.state.avatarConfigured.value = true
     mounted.state.customAvatar.value = '/avatar-loaded.png'
     mounted.state.isDark.value = true
     await flushLayout()
@@ -344,6 +364,8 @@ async function mountLayout(
   const unread = ref(false)
   const state = {
     customAvatar: ref(''),
+    avatarConfigured: ref(false),
+    isAvatarLoading: ref(false),
     isDark: ref(false),
     toggleTheme: vi.fn(),
     isHome: computed(() => router.currentRoute.value.path === '/'),

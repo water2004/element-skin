@@ -1,4 +1,5 @@
-import { computed, createApp, h, nextTick, ref } from 'vue'
+import { computed, createApp, h, nextTick, reactive, ref } from 'vue'
+import { ElAvatar } from 'element-plus'
 import { describe, expect, it, vi } from 'vitest'
 import AccountMenu from '../AccountMenu.vue'
 import { buildAccountLinks, buildDrawerLinks, canAccessAdmin } from '../appNavigation'
@@ -8,13 +9,14 @@ function mountMenu(initialPermissions: string[]) {
   const permissions = ref(initialPermissions)
   const navigate = vi.fn()
   const logout = vi.fn()
+  const avatar = reactive({ avatarSrc: '', avatarConfigured: false, avatarLoading: false })
   const root = document.createElement('div')
   const app = createApp({
     setup() {
       const links = computed(() => buildAccountLinks(permissions.value))
       return () =>
         h(AccountMenu, {
-          avatarSrc: '',
+          ...avatar,
           accountName: 'Permission test',
           roleLabel: '超级管理员',
           canAccessAdmin: canAccessAdmin(permissions.value),
@@ -28,14 +30,9 @@ function mountMenu(initialPermissions: string[]) {
     setup:
       (_, { slots }) =>
       () =>
-        h('div', slots.default?.()),
+        h('div', [slots.reference?.(), slots.default?.()]),
   })
-  app.component('el-avatar', {
-    setup:
-      (_, { slots }) =>
-      () =>
-        h('div', slots.default?.()),
-  })
+  app.component('el-avatar', ElAvatar)
   app.component('el-button', {
     setup:
       (_, { slots }) =>
@@ -43,10 +40,79 @@ function mountMenu(initialPermissions: string[]) {
         h('button', slots.default?.()),
   })
   app.mount(root)
-  return { root, permissions, navigate, logout, unmount: () => app.unmount() }
+  return { root, avatar, permissions, navigate, logout, unmount: () => app.unmount() }
 }
 
 describe('account navigation permissions', () => {
+  it('reserves square avatar slots until configured images arrive and handles image failure and retry', async () => {
+    const mounted = mountMenu([])
+    try {
+      mounted.avatar.avatarConfigured = true
+      mounted.avatar.avatarLoading = true
+      await nextTick()
+      const avatars = Array.from(mounted.root.querySelectorAll('.account-avatar'))
+      expect(avatars).toHaveLength(2)
+      for (const avatar of avatars) {
+        expect(avatar.classList.contains('el-avatar--square')).toBe(true)
+        expect(avatar.classList.contains('has-custom')).toBe(true)
+        expect(avatar.textContent?.trim()).toBe('')
+        expect(avatar.getAttribute('aria-busy')).toBe('true')
+      }
+      expect(avatars[0]!.classList.contains('el-avatar--small')).toBe(true)
+      expect((avatars[1] as HTMLElement).style.getPropertyValue('--el-avatar-size')).toBe('48px')
+
+      mounted.avatar.avatarSrc = '/head.png'
+      mounted.avatar.avatarLoading = false
+      await nextTick()
+      expect(Array.from(mounted.root.querySelectorAll('.account-avatar'))).toEqual(avatars)
+      expect(
+        Array.from(mounted.root.querySelectorAll('img'), (image) => image.getAttribute('src')),
+      ).toEqual(['/head.png', '/head.png'])
+      expect(avatars.map((avatar) => avatar.textContent?.trim())).toEqual(['', ''])
+
+      mounted.avatar.avatarLoading = true
+      await nextTick()
+      mounted.root.querySelector('img')!.dispatchEvent(new Event('error'))
+      await nextTick()
+      expect(mounted.root.querySelectorAll('img')).toHaveLength(0)
+      expect(avatars.map((avatar) => avatar.textContent?.trim())).toEqual(['', ''])
+      mounted.avatar.avatarLoading = false
+      await nextTick()
+      mounted.root.querySelector('img')!.dispatchEvent(new Event('error'))
+      await nextTick()
+      expect(mounted.root.querySelectorAll('img')).toHaveLength(0)
+      expect(avatars.map((avatar) => avatar.textContent?.trim())).toEqual(['P', 'P'])
+
+      mounted.avatar.avatarSrc = '/retry.png'
+      await nextTick()
+      expect(
+        Array.from(mounted.root.querySelectorAll('img'), (image) => image.getAttribute('src')),
+      ).toEqual(['/retry.png', '/retry.png'])
+      expect(avatars.map((avatar) => avatar.textContent?.trim())).toEqual(['', ''])
+    } finally {
+      mounted.unmount()
+    }
+  })
+
+  it('shows initials only for absent avatars or a completed render failure', async () => {
+    const mounted = mountMenu([])
+    try {
+      const avatars = Array.from(mounted.root.querySelectorAll('.account-avatar'))
+      expect(avatars.map((avatar) => avatar.textContent?.trim())).toEqual(['P', 'P'])
+      expect(avatars.every((avatar) => avatar.classList.contains('el-avatar--circle'))).toBe(true)
+      mounted.avatar.avatarConfigured = true
+      mounted.avatar.avatarLoading = true
+      await nextTick()
+      expect(avatars.map((avatar) => avatar.textContent?.trim())).toEqual(['', ''])
+      mounted.avatar.avatarLoading = false
+      await nextTick()
+      expect(avatars.map((avatar) => avatar.textContent?.trim())).toEqual(['P', 'P'])
+      expect(mounted.root.querySelectorAll('img')).toHaveLength(0)
+    } finally {
+      mounted.unmount()
+    }
+  })
+
   it.each(navigationCases)('matches account and drawer entries for $label', (testCase) => {
     const mounted = mountMenu(testCase.permissions)
     try {

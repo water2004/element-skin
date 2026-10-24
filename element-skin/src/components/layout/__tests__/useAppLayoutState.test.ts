@@ -12,13 +12,19 @@ const api = vi.hoisted(() => ({
   getPublicSettings: vi.fn(),
   getNotices: vi.fn(),
   siteLogout: vi.fn(),
+  initializeAvatar: vi.fn(),
 }))
 vi.mock('@/api/me', () => ({ getMe: api.getMe }))
 vi.mock('@/api/public', () => ({ getPublicSettings: api.getPublicSettings }))
 vi.mock('@/api/notices', () => ({ getNotices: api.getNotices }))
 vi.mock('@/api/auth', () => ({ siteLogout: api.siteLogout }))
 vi.mock('@/composables/useAvatar', () => ({
-  useAvatar: () => ({ currentAvatarImg: '', initializeAvatar: vi.fn() }),
+  useAvatar: () => ({
+    currentAvatarImg: '',
+    avatarHash: { value: null },
+    isAvatarLoading: false,
+    initializeAvatar: api.initializeAvatar,
+  }),
 }))
 vi.mock('@/composables/useTheme', () => ({
   useTheme: () => ({ isDark: false, initTheme: vi.fn(), toggleTheme: vi.fn() }),
@@ -63,13 +69,51 @@ async function mountLayoutState(permissions: string[]) {
   })
   app.use(pinia)
   app.use(router)
-  const fetchMe = useSessionStore(pinia).fetchMe
+  const session = useSessionStore(pinia)
+  const fetchMe = session.fetchMe
   app.mount(document.createElement('div'))
   await flushState()
-  return { state, fetchMe, unmount: () => app.unmount() }
+  return { state, session, fetchMe, unmount: () => app.unmount() }
 }
 
 describe('layout notification permissions', () => {
+  it('loads configured avatars, avoids unchanged reloads and clears them on account changes', async () => {
+    const mounted = await mountLayoutState([])
+    try {
+      api.initializeAvatar.mockClear()
+      api.getMe.mockResolvedValue({
+        data: { id: 'user-1', avatar_hash: 'custom-head', permissions: [] },
+      })
+      await mounted.fetchMe()
+      await flushState()
+      expect(mounted.state.avatarConfigured.value).toBe(true)
+      expect(api.initializeAvatar.mock.calls).toEqual([['custom-head']])
+
+      api.getMe.mockResolvedValue({
+        data: {
+          id: 'user-1',
+          avatar_hash: 'custom-head',
+          display_name: 'updated',
+          permissions: [],
+        },
+      })
+      await mounted.fetchMe()
+      await flushState()
+      expect(api.initializeAvatar.mock.calls).toEqual([['custom-head']])
+
+      api.getMe.mockResolvedValue({ data: { id: 'user-2', avatar_hash: null, permissions: [] } })
+      await mounted.fetchMe()
+      await flushState()
+      expect(mounted.state.avatarConfigured.value).toBe(false)
+      expect(api.initializeAvatar.mock.calls).toEqual([['custom-head'], [null]])
+      mounted.session.clearSession()
+      await flushState()
+      expect(api.initializeAvatar.mock.calls).toEqual([['custom-head'], [null], [undefined]])
+    } finally {
+      mounted.unmount()
+    }
+  })
+
   it.each(navigationCases)(
     'exposes only permitted links and polling for $label',
     async (testCase) => {
