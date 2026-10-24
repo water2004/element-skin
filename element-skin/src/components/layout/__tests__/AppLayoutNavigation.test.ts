@@ -8,6 +8,8 @@ import {
   viewportCases,
   type HeaderMeasurements,
 } from './fixtures/headerMeasurements'
+import { headerAccountLinks, headerSessions } from './fixtures/headerSessions'
+import type { AccountLink } from '@/components/layout/appNavigation'
 
 const mocks = vi.hoisted(() => ({ useAppLayoutState: vi.fn() }))
 vi.mock('@/components/layout/useAppLayoutState', () => mocks)
@@ -58,6 +60,93 @@ afterEach(() => {
 })
 
 describe('responsive navigation lifecycle', () => {
+  it.each(headerSessions)(
+    'reveals the complete action row together for $label',
+    async (session) => {
+      const mounted = await mountLayout('/', { ...session, authReady: false })
+      const actions = mounted.host.querySelector('.header-actions')!
+      expect(actions.getAttribute('aria-busy')).toBe('true')
+      expect(actions.childElementCount).toBe(0)
+      expect(mounted.host.querySelector('.mobile-menu-btn')).toBeNull()
+
+      mounted.state.authReady.value = true
+      await flushLayout()
+
+      expect(actions.getAttribute('aria-busy')).toBe('false')
+      expect(
+        Array.from(
+          actions.querySelectorAll(':scope > button'),
+          (button) => button.getAttribute('aria-label') || button.textContent?.trim(),
+        ),
+      ).toEqual(session.expectedButtons)
+      expect(actions.querySelector('.account-trigger') !== null).toBe(session.isLogged)
+      expect(mounted.host.querySelector('.mobile-menu-btn') !== null).toBe(session.isLogged)
+    },
+  )
+
+  it('keeps action nodes when avatar loading and theme changes complete', async () => {
+    const mounted = await mountLayout('/', { canAccessNotifications: true })
+    const account = mounted.host.querySelector('.account-trigger')
+    const bell = mounted.host.querySelector('.notification-toggle')
+    const theme = mounted.host.querySelector('.theme-toggle')
+    mounted.state.customAvatar.value = '/avatar-loaded.png'
+    mounted.state.isDark.value = true
+    await flushLayout()
+
+    expect(mounted.host.querySelector('.account-trigger')).toBe(account)
+    expect(mounted.host.querySelector('.notification-toggle')).toBe(bell)
+    expect(mounted.host.querySelector('.theme-toggle')).toBe(theme)
+    expect(theme?.getAttribute('aria-label')).toBe('切换浅色主题')
+    expect(account?.querySelector('img')?.getAttribute('src')).toBe('/avatar-loaded.png')
+  })
+
+  it('preserves the header and actions across home and standard routes', async () => {
+    const mounted = await mountLayout('/', { canAccessNotifications: true })
+    const header = mounted.host.querySelector('.layout-header-wrap')
+    const bell = mounted.host.querySelector('.notification-toggle')
+    const theme = mounted.host.querySelector('.theme-toggle')
+    const account = mounted.host.querySelector('.account-trigger')
+    for (const path of ['/notifications', '/dashboard/profile', '/']) {
+      await mounted.router.push(path)
+      await flushLayout()
+      expect(mounted.router.currentRoute.value.path).toBe(path)
+      expect(mounted.host.querySelector('.layout-header-wrap')).toBe(header)
+      expect(mounted.host.querySelector('.notification-toggle')).toBe(bell)
+      expect(mounted.host.querySelector('.theme-toggle')).toBe(theme)
+      expect(mounted.host.querySelector('.account-trigger')).toBe(account)
+    }
+  })
+
+  it('navigates through account links after notification and home route changes', async () => {
+    const mounted = await mountLayout('/', { canAccessNotifications: true })
+    mounted.state.accountLinks.value = headerAccountLinks
+    mounted.state.go.mockImplementation((path: string) => {
+      void mounted.router.push(path)
+    })
+    await flushLayout()
+
+    for (const source of ['/notifications', '/']) {
+      await mounted.router.push(source)
+      mounted.state.customAvatar.value = `/avatar-${source === '/' ? 'home' : 'notice'}.png`
+      mounted.state.accountLinks.value = headerAccountLinks.map((link) => ({ ...link }))
+      await flushLayout()
+      mounted.host.querySelector('.account-trigger')!.dispatchEvent(new MouseEvent('mouseenter'))
+      await vi.waitFor(() => {
+        expect(document.querySelector('.account-popover .account-actions')).not.toBeNull()
+      })
+
+      const profile = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('.account-popover button'),
+      ).find((button) => button.textContent?.trim() === '个人资料')!
+      expect(profile.disabled).toBe(false)
+      profile.click()
+      await vi.waitFor(() => {
+        expect(mounted.router.currentRoute.value.path).toBe('/dashboard/profile')
+      })
+    }
+    expect(mounted.state.go.mock.calls).toEqual([['/dashboard/profile'], ['/dashboard/profile']])
+  })
+
   it('observes navigation created after entering from a login page without a window resize', async () => {
     const mounted = await mountLayout('/login')
     expect(mounted.host.querySelector('.layout-header')).toBeNull()
@@ -209,10 +298,21 @@ async function flushLayout() {
   await nextTick()
 }
 
-async function mountLayout(path: string) {
+async function mountLayout(
+  path: string,
+  session: { authReady?: boolean; isLogged?: boolean; canAccessNotifications?: boolean } = {},
+) {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: ['/', '/login', '/register', '/reset-password'].map((route) => ({
+    routes: [
+      '/',
+      '/login',
+      '/register',
+      '/reset-password',
+      '/notifications',
+      '/dashboard/profile',
+      '/dashboard/identities',
+    ].map((route) => ({
       path: route,
       component: { render: () => null },
     })),
@@ -223,19 +323,21 @@ async function mountLayout(path: string) {
     isDark: ref(false),
     toggleTheme: vi.fn(),
     isHome: computed(() => router.currentRoute.value.path === '/'),
-    isAuthPage: computed(() => router.currentRoute.value.path !== '/'),
+    isAuthPage: computed(() =>
+      ['/login', '/register', '/reset-password'].includes(router.currentRoute.value.path),
+    ),
     siteName: ref('Navigation Test'),
-    authReady: ref(true),
+    authReady: ref(session.authReady ?? true),
     drawer: ref(false),
     footerText: ref(''),
     filingIcp: ref(''),
     filingIcpLink: ref(''),
     filingMps: ref(''),
     filingMpsLink: ref(''),
-    isLogged: ref(true),
+    isLogged: ref(session.isLogged ?? true),
     canAccessAdmin: ref(false),
-    canAccessNotifications: ref(false),
-    accountLinks: ref([]),
+    canAccessNotifications: ref(session.canAccessNotifications ?? false),
+    accountLinks: ref<AccountLink[]>([]),
     defaultOpeneds: ref([]),
     navLinks: ref([{ title: 'Home', path: '/' }]),
     drawerLinks: ref([]),

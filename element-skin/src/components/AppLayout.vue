@@ -61,46 +61,49 @@
           </el-menu>
         </div>
 
-        <div ref="headerActionsRef" class="header-actions">
-          <el-button
-            v-if="authReady && canAccessNotifications"
-            class="notification-toggle"
-            :icon="Bell"
-            circle
-            text
-            aria-label="通知中心"
-            @click="go('/notifications')"
-          >
-            <span
-              v-if="shouldShowNotificationBadge({ path: '/notifications' })"
-              class="notification-nav-dot"
+        <div ref="headerActionsRef" class="header-actions" :aria-busy="!authReady">
+          <template v-if="authReady">
+            <el-button
+              v-if="canAccessNotifications"
+              class="notification-toggle"
+              :icon="Bell"
+              circle
+              text
+              aria-label="通知中心"
+              @click="go('/notifications')"
+            >
+              <span
+                v-if="shouldShowNotificationBadge({ path: '/notifications' })"
+                class="notification-nav-dot"
+              />
+            </el-button>
+
+            <!-- Theme Toggle -->
+            <el-button
+              class="theme-toggle"
+              :icon="isDark ? Sunny : Moon"
+              circle
+              text
+              :aria-label="isDark ? '切换浅色主题' : '切换深色主题'"
+              @click="toggleTheme"
             />
-          </el-button>
 
-          <!-- Theme Toggle -->
-          <el-button
-            class="theme-toggle"
-            :icon="isDark ? Sunny : Moon"
-            circle
-            text
-            @click="toggleTheme"
-          />
+            <AccountMenu
+              v-if="isLogged"
+              :avatar-src="customAvatar || ''"
+              :account-name="accountName"
+              :role-label="accountRoleLabel"
+              :can-access-admin="canAccessAdmin"
+              :links="accountLinks"
+              @navigate="go"
+              @logout="logout"
+            />
 
-          <AccountMenu
-            v-if="authReady && isLogged"
-            :avatar-src="customAvatar || ''"
-            :account-name="accountName"
-            :role-label="accountRoleLabel"
-            :can-access-admin="canAccessAdmin"
-            :links="accountLinks"
-            @navigate="go"
-            @logout="logout"
-          />
-
-          <!-- Auth Buttons -->
-          <template v-if="authReady && !isLogged">
-            <el-button type="primary" @click="go('/login')">登录</el-button>
-            <el-button @click="go('/register')" class="hero-register-btn ml-2"> 注册 </el-button>
+            <!-- Auth Buttons -->
+            <template v-else>
+              <el-button type="primary" @click="go('/login')">登录</el-button>
+              <el-button @click="go('/register')" class="hero-register-btn"> 注册 </el-button>
+            </template>
           </template>
         </div>
       </div>
@@ -250,6 +253,10 @@ onUnmounted(() => {
 </script>
 
 <style>
+html:has(.is-home-layout) {
+  background-color: #000;
+}
+
 .app-shell :where(.page-header) {
   display: flex;
   justify-content: space-between;
@@ -482,7 +489,12 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 32px;
   flex-shrink: 0;
+}
+.header-actions > .el-button {
+  margin-left: 0;
+  transition-property: color, background-color, border-color, box-shadow;
 }
 .theme-toggle {
   font-size: 20px;

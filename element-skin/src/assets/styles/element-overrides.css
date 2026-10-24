@@ -1,5 +1,10 @@
 /* Element Plus overrides. Keep this file unlayered so it can override Element Plus CSS. */
 
+/* scrollbar-gutter 已预留滚动条空间，锁定页面时不再重复扣除 body 宽度。 */
+body.el-popup-parent--hidden {
+  width: auto !important;
+}
+
 .el-tag__content {
   display: flex;
   align-items: center;
