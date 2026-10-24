@@ -60,6 +60,29 @@ afterEach(() => {
 })
 
 describe('responsive navigation lifecycle', () => {
+  it('keeps the notification button icon-only as its unread indicator changes', async () => {
+    const mounted = await mountLayout('/', { canAccessNotifications: true })
+    const button = mounted.host.querySelector<HTMLButtonElement>('.notification-toggle')!
+    const theme = mounted.host.querySelector('.theme-toggle')!
+    const icon = button.querySelector('.el-icon')
+    button.focus()
+
+    for (const unread of [false, true, false]) {
+      mounted.unread.value = unread
+      await flushLayout()
+      expect(mounted.host.querySelector('.notification-toggle')).toBe(button)
+      expect(button.classList.contains('has-unread')).toBe(unread)
+      expect(button.getAttribute('aria-label')).toBe('通知中心')
+      expect(button.querySelector('.el-icon')).toBe(icon)
+      expect(Array.from(button.children)).toEqual([icon])
+      expect(button.querySelector('.el-icon + span')).toBeNull()
+      expect(Array.from(theme.children)).toEqual([theme.querySelector('.el-icon')])
+      expect(document.activeElement).toBe(button)
+    }
+    button.click()
+    expect(mounted.state.go).toHaveBeenCalledExactlyOnceWith('/notifications')
+  })
+
   it.each(headerSessions)(
     'reveals the complete action row together for $label',
     async (session) => {
@@ -318,6 +341,7 @@ async function mountLayout(
     })),
   })
   await router.push(path)
+  const unread = ref(false)
   const state = {
     customAvatar: ref(''),
     isDark: ref(false),
@@ -349,7 +373,8 @@ async function mountLayout(
     accountName: ref('Account'),
     go: vi.fn(),
     logout: vi.fn(),
-    shouldShowNotificationBadge: () => false,
+    shouldShowNotificationBadge: (item: { path?: string }) =>
+      unread.value && item.path === '/notifications',
   }
   mocks.useAppLayoutState.mockReturnValue(state)
   const host = document.createElement('div')
@@ -367,5 +392,5 @@ async function mountLayout(
     host.remove()
   }
   mountedLayouts.push(unmount)
-  return { router, host, state, unmount }
+  return { router, host, state, unread, unmount }
 }

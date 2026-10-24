@@ -66,17 +66,13 @@
             <el-button
               v-if="canAccessNotifications"
               class="notification-toggle"
+              :class="{ 'has-unread': shouldShowNotificationBadge({ path: '/notifications' }) }"
               :icon="Bell"
               circle
               text
               aria-label="通知中心"
               @click="go('/notifications')"
-            >
-              <span
-                v-if="shouldShowNotificationBadge({ path: '/notifications' })"
-                class="notification-nav-dot"
-              />
-            </el-button>
+            />
 
             <!-- Theme Toggle -->
             <el-button
@@ -468,7 +464,8 @@ onUnmounted(() => {
 .desktop-nav :deep(.el-sub-menu__title:hover) {
   color: var(--el-color-primary);
 }
-.notification-nav-dot {
+.notification-nav-dot,
+.notification-toggle.has-unread::after {
   width: 8px;
   height: 8px;
   margin-left: 2px;
@@ -477,7 +474,8 @@ onUnmounted(() => {
   box-shadow: 0 0 0 2px var(--color-header-background);
   flex-shrink: 0;
 }
-.is-home-layout .notification-nav-dot {
+.is-home-layout .notification-nav-dot,
+.is-home-layout .notification-toggle.has-unread::after {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.28);
 }
 
@@ -501,11 +499,13 @@ onUnmounted(() => {
   font-size: 20px;
   border-radius: 8px;
 }
-.notification-toggle .notification-nav-dot {
+.notification-toggle.has-unread::after {
+  content: '';
   position: absolute;
   top: 5px;
   right: 5px;
   margin: 0;
+  pointer-events: none;
 }
 
 .app-main {
