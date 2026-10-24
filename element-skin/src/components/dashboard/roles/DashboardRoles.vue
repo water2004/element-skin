@@ -11,30 +11,32 @@
         <UiButton
           v-if="canCreateOfficialBinding"
           size="large"
-          variant="gradient-success"
+          variant="secondary"
+          tone="success"
+          :icon="Link"
           class="role-header-button"
           @click="openOfficialBindingDialog"
         >
-          <el-icon><Link /></el-icon>
-          <span class="ml-2">绑定正版</span>
+          绑定正版
         </UiButton>
         <UiButton
           size="large"
           @click="showYggImportDialog = true"
-          variant="gradient-warning"
+          variant="secondary"
+          tone="warning"
+          :icon="Download"
           class="role-header-button"
         >
-          <el-icon><Download /></el-icon>
-          <span class="ml-2">导入皮肤站角色</span>
+          导入皮肤站角色
         </UiButton>
         <UiButton
           size="large"
           @click="showCreateRoleDialog = true"
-          variant="gradient-primary"
+          variant="primary"
+          :icon="Plus"
           class="role-header-button"
         >
-          <el-icon><Plus /></el-icon>
-          <span class="ml-2">新建角色</span>
+          新建角色
         </UiButton>
       </ActionBar>
     </div>
@@ -483,7 +485,6 @@ onMounted(async () => {
 <style scoped>
 .role-header-button {
   flex: 0 1 auto;
-  margin-left: 0 !important;
 }
 
 @media (max-width: 900px) {

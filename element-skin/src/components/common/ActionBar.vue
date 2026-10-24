@@ -1,5 +1,10 @@
 <template>
-  <div class="action-bar" :class="[`align-${align}`, { 'is-full': full }]">
+  <div
+    class="action-bar"
+    :class="[`align-${align}`, `mobile-align-${mobileAlign}`, { 'is-full': full }]"
+    :role="label ? 'group' : undefined"
+    :aria-label="label"
+  >
     <slot />
   </div>
 </template>
@@ -8,10 +13,14 @@
 withDefaults(
   defineProps<{
     align?: 'start' | 'center' | 'end'
+    mobileAlign?: 'start' | 'center' | 'end'
+    label?: string
     full?: boolean
   }>(),
   {
     align: 'end',
+    mobileAlign: 'start',
+    label: undefined,
     full: false,
   },
 )
@@ -47,9 +56,17 @@ withDefaults(
   margin-left: 0 !important;
 }
 
-@media (max-width: 900px) {
-  .action-bar {
+@media (max-width: 768px) {
+  .mobile-align-start {
+    justify-content: flex-start;
+  }
+
+  .mobile-align-center {
     justify-content: center;
+  }
+
+  .mobile-align-end {
+    justify-content: flex-end;
   }
 }
 </style>

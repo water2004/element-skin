@@ -71,7 +71,7 @@
 
     <div v-loading="loading" class="min-h-[220px]">
       <div v-if="providers.length" class="grid gap-4">
-        <UiCard v-for="provider in providers" :key="provider.id" hoverable>
+        <UiCard v-for="provider in providers" :key="provider.id">
           <div class="flex flex-col md:flex-row md:items-start gap-4">
             <div class="flex h-12 w-12 shrink-0 items-center justify-center">
               <img

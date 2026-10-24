@@ -61,9 +61,9 @@ export function start(): EasterEggCleanup {
         transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
 
-    html.easter-egg-halloween .el-button:not(.is-icon-swap) > span,
+    html.easter-egg-halloween .el-button:not(.ui-button) > span,
     html.easter-egg-halloween .el-button .el-button__text,
-    html.easter-egg-halloween .ui-button:not(.is-icon-swap) > *,
+    html.easter-egg-halloween .ui-button > span:not(.ui-button-spinner),
     html.easter-egg-halloween .home-fixed-button > .home-fixed-label {
       position: relative;
       z-index: 2;

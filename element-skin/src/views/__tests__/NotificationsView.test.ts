@@ -6,7 +6,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { User } from '@/api/types'
 import NotificationsView from '../NotificationsView.vue'
 import { useSessionStore } from '@/stores/session'
-import { firstDetail, firstNotice, noticesPage, secondDetail } from './fixtures/notifications'
+import {
+  firstDetail,
+  firstNotice,
+  linkedNotice,
+  noticesPage,
+  secondDetail,
+} from './fixtures/notifications'
 
 const api = vi.hoisted(() => ({
   getNotice: vi.fn(),
@@ -81,6 +87,75 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe('notification route and request boundaries', () => {
+  it('uses a semantic header and separate selection and dismissal controls', async () => {
+    const mounted = await mountNotices('/notifications', [
+      'notice.read.owned',
+      'notice.dismiss.owned',
+    ])
+    try {
+      expect(mounted.root.querySelector('header h1')?.textContent).toBe('通知中心')
+      expect(
+        mounted.root.querySelector('[role="group"][aria-label="通知筛选与操作"]'),
+      ).not.toBeNull()
+      expect(mounted.root.querySelectorAll('button button')).toHaveLength(0)
+      expect(mounted.root.querySelector('.ui-card--padding-none')).not.toBeNull()
+      expect(mounted.root.querySelector('.ui-card--padding-spacious')).not.toBeNull()
+      const push = vi.spyOn(mounted.router, 'push')
+      const firstRow = mounted.root.querySelector('.notification-item')!
+      firstRow.querySelector<HTMLButtonElement>('button[aria-current], button')!.click()
+      await flushUI()
+      expect(push).toHaveBeenCalledExactlyOnceWith('/notifications/notice-a')
+      expect(firstRow.querySelector('button')?.getAttribute('aria-current')).toBe('true')
+      expect(api.getNotice).toHaveBeenCalledExactlyOnceWith('notice-a')
+    } finally {
+      mounted.unmount()
+    }
+  })
+
+  it('blocks repeated refresh clicks until the list request finishes', async () => {
+    const mounted = await mountNotices()
+    const pending = deferred<{ data: typeof noticesPage }>()
+    try {
+      api.getNotices.mockReturnValueOnce(pending.promise)
+      const button = Array.from(mounted.root.querySelectorAll('button')).find(
+        (item) => item.textContent?.trim() === '刷新',
+      )!
+      button.click()
+      await nextTick()
+      expect(button.disabled).toBe(true)
+      expect(button.getAttribute('aria-busy')).toBe('true')
+      button.click()
+      expect(api.getNotices.mock.calls).toEqual([
+        [{ cursor: null, limit: 20, include_read: true }],
+        [{ cursor: null, limit: 20, include_read: true }],
+      ])
+      pending.resolve({ data: noticesPage })
+      await flushUI()
+      expect(button.disabled).toBe(false)
+      expect(mounted.root.querySelectorAll('.notification-item')).toHaveLength(2)
+    } finally {
+      pending.resolve({ data: noticesPage })
+      mounted.unmount()
+    }
+  })
+
+  it('does not select a notification when activating a link in its preview', async () => {
+    api.getNotices.mockResolvedValueOnce({ data: { ...noticesPage, items: [linkedNotice] } })
+    const mounted = await mountNotices()
+    try {
+      const push = vi.spyOn(mounted.router, 'push')
+      const link = mounted.root.querySelector<HTMLAnchorElement>('.notification-item a')!
+      expect(link.getAttribute('href')).toBe('#notice-link')
+      link.addEventListener('click', (event) => event.preventDefault())
+      link.click()
+      await flushUI()
+      expect(push).not.toHaveBeenCalled()
+      expect(api.getNotice).not.toHaveBeenCalled()
+      expect(mounted.router.currentRoute.value.path).toBe('/notifications')
+    } finally {
+      mounted.unmount()
+    }
+  })
   it('loads only the list until a detail is explicitly selected', async () => {
     const mounted = await mountNotices()
     try {
@@ -200,7 +275,7 @@ describe('notification route and request boundaries', () => {
       expect(mounted.root.querySelector('article')?.textContent).toContain(
         firstDetail.content_markdown,
       )
-      expect(mounted.root.querySelector('button .bg-\\[var\\(--color-border\\)\\]')).not.toBeNull()
+      expect(mounted.root.querySelector('.notification-item [aria-label="已读"]')).not.toBeNull()
     } finally {
       mounted.unmount()
     }
@@ -311,6 +386,7 @@ describe('notification route and request boundaries', () => {
       dismissButtons()[0]!.click()
       await flushUI()
       expect(api.dismissNotice).toHaveBeenCalledExactlyOnceWith('notice-a')
+      expect(api.getNotice).not.toHaveBeenCalled()
       mounted.user.value.permissions = ['notice.read.owned']
       await nextTick()
       expect(dismissButtons()).toHaveLength(0)

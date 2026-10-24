@@ -91,7 +91,7 @@ export function start(): EasterEggCleanup {
     }
 
     html.easter-egg-spring-festival .page-header-content h1,
-    html.easter-egg-spring-festival .page-header-text h2,
+    html.easter-egg-spring-festival .ui-page-header-title,
     html.easter-egg-spring-festival .hero-title {
       background: linear-gradient(135deg, var(--color-heading) 0%, #e86b3c 54%, #f4a62a 100%);
       -webkit-background-clip: text;
@@ -99,7 +99,6 @@ export function start(): EasterEggCleanup {
     }
 
     html.easter-egg-spring-festival .el-button--primary,
-    html.easter-egg-spring-festival .ui-button--gradient-primary,
     html.easter-egg-spring-festival .is-home-layout .home-fixed-button.home-fixed-primary,
     html.easter-egg-spring-festival .is-home-layout .header-actions .el-button--primary {
       background-image:
@@ -112,7 +111,6 @@ export function start(): EasterEggCleanup {
         inset 0 1px 0 rgba(255, 232, 150, 0.32) !important;
     }
 
-    html.easter-egg-spring-festival .ui-button--gradient-primary:hover:not(:disabled),
     html.easter-egg-spring-festival .el-button--primary:hover,
     html.easter-egg-spring-festival .is-home-layout .home-fixed-button.home-fixed-primary:hover {
       box-shadow:

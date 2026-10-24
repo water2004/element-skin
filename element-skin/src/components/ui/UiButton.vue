@@ -1,197 +1,132 @@
 <template>
-  <el-button v-bind="forwardedAttrs" :class="rootClass">
-    <template v-if="iconSwap">
-      <span class="ui-button-label"><slot /></span>
-      <span class="ui-button-icon"><slot name="icon" /></span>
+  <ElButton
+    v-bind="buttonAttrs()"
+    :class="['ui-button', attrs.class, { 'ui-button--icon-only': iconOnly }]"
+    :type="buttonType"
+    :plain="variant === 'secondary' && tone !== 'neutral'"
+    :text="variant === 'tertiary'"
+    :size="size"
+    :icon="iconOnly ? icon : undefined"
+    :loading="loading"
+    :disabled="disabled"
+    :aria-busy="loading || undefined"
+    @click="emit('click', $event)"
+  >
+    <template #loading>
+      <span class="ui-button-spinner" aria-hidden="true">
+        <ElIcon class="is-loading"><Loading /></ElIcon>
+      </span>
     </template>
-    <template v-else>
-      <slot />
+    <template v-if="!iconOnly && $slots.default" #default>
+      <span class="ui-button-content">
+        <ElIcon v-if="icon" aria-hidden="true"><component :is="icon" /></ElIcon>
+        <slot />
+      </span>
     </template>
-  </el-button>
+  </ElButton>
 </template>
 
 <script setup lang="ts">
 import { computed, useAttrs } from 'vue'
-
-const props = withDefaults(
-  defineProps<{
-    variant?:
-      | 'default'
-      | 'gradient-primary'
-      | 'gradient-success'
-      | 'gradient-warning'
-      | 'gradient-danger'
-      | 'soft-warning'
-      | 'outline'
-      | 'outline-danger'
-    iconSwap?: boolean
-  }>(),
-  {
-    variant: 'default',
-    iconSwap: false,
-  },
-)
-
-const variantClass = computed(() => `ui-button--${props.variant}`)
+import { ElButton, ElIcon, type ButtonProps } from 'element-plus'
+import { Loading } from '@element-plus/icons-vue'
 
 defineOptions({ inheritAttrs: false })
 
-const attrs = useAttrs()
+const props = withDefaults(
+  defineProps<{
+    variant?: 'primary' | 'secondary' | 'tertiary'
+    tone?: 'neutral' | 'primary' | 'success' | 'warning' | 'danger'
+    size?: ButtonProps['size']
+    icon?: ButtonProps['icon']
+    iconOnly?: boolean
+    loading?: boolean
+    disabled?: boolean
+  }>(),
+  {
+    variant: 'secondary',
+    tone: 'neutral',
+    size: 'default',
+    icon: undefined,
+    iconOnly: false,
+    loading: false,
+    disabled: false,
+  },
+)
 
-const forwardedAttrs = computed(() => {
+const emit = defineEmits<{ click: [event: MouseEvent] }>()
+const attrs = useAttrs()
+const buttonType = computed(() =>
+  props.tone !== 'neutral' ? props.tone : props.variant === 'primary' ? 'primary' : 'default',
+)
+
+// useAttrs 的值会随渲染更新，但不是可供 computed 跟踪的响应式来源。
+function buttonAttrs() {
   const rest = { ...attrs }
   delete rest.class
+  if (rest.tag === 'a' && (props.disabled || props.loading)) {
+    delete rest.href
+    rest['aria-disabled'] = true
+    rest.tabindex = -1
+  }
   return rest
-})
-
-const rootClass = computed(() => [
-  'ui-button',
-  variantClass.value,
-  attrs.class,
-  { 'is-icon-swap': props.iconSwap },
-])
+}
 </script>
 
 <style scoped>
 .ui-button {
-  transition: all var(--motion-duration-base) var(--motion-easing-standard);
+  --ui-button-height: var(--control-height-default);
+  position: relative;
+  height: var(--ui-button-height);
+  border-radius: var(--radius-control);
+  transition:
+    color var(--motion-duration-fast) var(--motion-easing-standard),
+    background-color var(--motion-duration-fast) var(--motion-easing-standard),
+    border-color var(--motion-duration-fast) var(--motion-easing-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
-.ui-button--gradient-primary,
-.ui-button--gradient-success,
-.ui-button--gradient-warning,
-.ui-button--gradient-danger {
-  border: none !important;
-  font-weight: 500;
+.ui-button.el-button--small {
+  --ui-button-height: var(--control-height-small);
+}
+
+.ui-button.el-button--large {
+  --ui-button-height: var(--control-height-large);
+}
+
+.ui-button:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.ui-button--icon-only {
+  width: var(--ui-button-height);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.ui-button-content {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--space-control-gap);
-  color: var(--color-on-accent) !important;
-  cursor: pointer;
 }
 
-.ui-button--gradient-primary:hover:not(:disabled),
-.ui-button--gradient-success:hover:not(:disabled),
-.ui-button--gradient-warning:hover:not(:disabled),
-.ui-button--gradient-danger:hover:not(:disabled),
-.ui-button--soft-warning:hover,
-.ui-button--outline:hover {
-  transform: translateY(-2px);
+.ui-button-content :deep(.el-icon + span) {
+  margin-left: 0;
 }
 
-.ui-button--gradient-primary {
-  background: linear-gradient(135deg, #409eff 0%, #5cadff 100%) !important;
+.ui-button.is-loading .ui-button-content {
+  opacity: 0;
 }
 
-.ui-button--gradient-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(64, 158, 255, 0.4);
-}
-
-.ui-button--gradient-success {
-  background: linear-gradient(135deg, #67c23a 0%, #85ce61 100%) !important;
-}
-
-.ui-button--gradient-success:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(103, 194, 58, 0.4);
-}
-
-.ui-button--gradient-warning {
-  background: linear-gradient(135deg, #e6a23c 0%, #eebe77 100%) !important;
-}
-
-.ui-button--gradient-warning:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(230, 162, 60, 0.4);
-}
-
-.ui-button--gradient-danger {
-  background: linear-gradient(135deg, #f56c6c 0%, #f78989 100%) !important;
-}
-
-.ui-button--gradient-danger:hover:not(:disabled) {
-  box-shadow: 0 6px 16px rgba(245, 108, 108, 0.25);
-}
-
-.ui-button--soft-warning {
-  color: var(--color-text);
-  border: 1px solid rgba(230, 162, 60, 0.3) !important;
-  background: rgba(230, 162, 60, 0.1) !important;
-  transition: all 0.25s ease;
-}
-
-.ui-button--soft-warning:hover {
-  color: var(--color-on-accent) !important;
-  background: linear-gradient(135deg, #ffa726 0%, #fb8c00 100%) !important;
-  border-color: transparent !important;
-  box-shadow: 0 6px 16px rgba(251, 140, 0, 0.18);
-}
-
-.ui-button--outline,
-.ui-button--outline-danger {
-  background: var(--color-card-background);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-  border-radius: var(--radius-control);
-  padding: var(--space-control-gap) var(--space-content-padding);
-}
-
-.ui-button--outline:hover {
-  background: var(--color-background-soft);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
-.ui-button--outline-danger {
-  border-color: color-mix(in srgb, var(--color-danger) 40%, transparent);
-}
-
-.ui-button--outline-danger:hover {
-  background: var(--color-danger-hover-background);
-  border-color: var(--color-danger);
-  color: var(--color-danger) !important;
-}
-
-.is-icon-swap {
-  position: relative;
-  overflow: hidden;
-}
-
-.ui-button-label {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  transition:
-    transform var(--motion-duration-base) var(--motion-easing-bounce),
-    opacity var(--motion-duration-base);
-}
-
-.ui-button-icon {
+.ui-button-spinner {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  transform: translateY(100%) rotate(-90deg);
-  opacity: 0;
-  transition:
-    transform var(--motion-duration-base) var(--motion-easing-bounce),
-    opacity var(--motion-duration-base);
-  font-size: 16px;
   pointer-events: none;
-}
-
-.is-icon-swap:hover .ui-button-label {
-  transform: translateY(-100%) scale(0.8);
-  opacity: 0;
-}
-
-.is-icon-swap:hover .ui-button-icon {
-  transform: translateY(0) rotate(0deg);
-  opacity: 1;
+  z-index: 1;
 }
 </style>

@@ -19,6 +19,7 @@
       <SearchBar
         class="flex-1 min-w-[260px]"
         v-model="searchQuery"
+        :loading="loading"
         placeholder="搜索哈希、材质名或上传者"
         @clear="handleClearSearch"
         @search="handleSearch"
@@ -83,9 +84,7 @@
           </div>
         </template>
         <template #actions="{ texture }">
-          <UiButton variant="gradient-primary" @click="openPreview(texture)"
-            ><el-icon><Edit /></el-icon><span>编辑</span></UiButton
-          >
+          <UiButton variant="primary" :icon="Edit" @click="openPreview(texture)">编辑</UiButton>
         </template>
       </TextureCard>
     </div>

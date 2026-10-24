@@ -18,20 +18,59 @@ through events.
 
 ## Common Components
 
+### `UiButton`
+
+Use `variant="primary | secondary | tertiary"` for the action hierarchy and
+`tone="neutral | primary | success | warning | danger"` for its meaning. Defaults
+are `secondary` and `neutral`. A primary neutral action uses the primary color;
+secondary colored actions are outlined; tertiary actions use text styling.
+
+```vue
+<UiButton variant="primary" :icon="Plus">新建</UiButton>
+<UiButton tone="danger">删除</UiButton>
+<UiButton variant="tertiary" :icon="Refresh" icon-only aria-label="刷新" />
+```
+
+`size`, `icon`, `iconOnly`, `loading`, and `disabled` are independent props. Icon-only
+buttons require an accessible name such as `aria-label` and do not render a label
+wrapper. Loading keeps the normal content in the layout and overlays a spinner;
+loading and disabled buttons do not emit clicks. Native attributes, including
+`native-type`, `tag="a"`, `href`, and event modifiers, are forwarded. Disabled or
+loading links have no active `href`.
+
+### `UiCard`
+
+`shadow="never | hover | always"` defaults to `never` and controls the actual
+shadow. `hoverable` is an explicit motion opt-in for interactive cards and does
+not override `shadow="never"`. Cards containing only independent buttons should
+not be marked `hoverable`.
+
+Use `padding="none | compact | default | spacious"` for the card body
+(0 / 16 / 20 / 24px). Avoid adding padding to both the card root and its body.
+
+### `PageHeader`
+
+Provide `title`, optional `subtitle`, and `icon` / `actions` slots. `level` selects
+the heading level (1, 2, or 3; default 1). Long text wraps. The actions slot uses
+`ActionBar`; optional `actionsLabel` supplies its accessible group name. The
+component owns its styles and does not depend on AppLayout's legacy header CSS.
+
 ### `ActionBar`
 
 Use this for page-header buttons and toolbar-style actions.
 
 ```vue
 <ActionBar full>
-  <UiButton variant="gradient-primary">新建</UiButton>
-  <el-button>导入</el-button>
+  <UiButton variant="primary">新建</UiButton>
+  <UiButton>导入</UiButton>
 </ActionBar>
 ```
 
 Props:
 
 - `align`: `start | center | end`, defaults to `end`.
+- `mobileAlign`: `start | center | end`, defaults to `start` at 768px and below.
+- `label`: optional accessible group name.
 - `full`: makes the action row occupy the full header row and wrap cleanly.
 
 Rules:
@@ -45,16 +84,17 @@ Rules:
 Use this for buttons at the bottom of entity cards.
 
 ```vue
-<CardActions>
-  <UiButton variant="gradient-danger">删除</UiButton>
-  <UiButton variant="soft-warning">清除</UiButton>
+<CardActions label="角色操作">
+  <UiButton tone="danger">删除</UiButton>
+  <UiButton variant="tertiary" tone="warning">清除皮肤</UiButton>
 </CardActions>
 ```
 
 Rules:
 
 - Do not duplicate card action flex styles in feature components.
-- Buttons automatically share width and wrap on narrow screens.
+- Buttons share width and wrap according to the available card width, including
+  narrow cards on a wide screen. `label` optionally names the action group.
 
 ### `SearchBar`
 
@@ -75,6 +115,10 @@ Rules:
 - Keep pagination reset and API calls in the parent page.
 - Use local layout classes only for width or placement.
 - Do not duplicate `.el-input-group__append` styling in pages.
+- `loading` blocks repeated searches while preserving the query; `disabled`
+  disables input and search. `label` supplies the input's accessible name.
+- Click and Enter emit one `search`; IME composition does not submit. Clearing
+  updates the model and emits `clear`, without implicitly starting a search.
 
 ## Texture Cards
 

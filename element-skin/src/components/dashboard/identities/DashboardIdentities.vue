@@ -10,12 +10,12 @@
       <UiButton
         v-if="canCreateIdentity"
         size="large"
-        variant="gradient-primary"
+        variant="primary"
+        :icon="Plus"
         :disabled="!linkProviders.length"
         @click="showAddIdentityDialog = true"
       >
-        <el-icon><Plus /></el-icon>
-        <span class="ml-2">添加身份</span>
+        添加身份
       </UiButton>
     </div>
 

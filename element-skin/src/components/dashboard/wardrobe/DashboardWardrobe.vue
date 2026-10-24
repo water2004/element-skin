@@ -7,9 +7,8 @@
           <p>管理并应用您的皮肤与披风纹理</p>
         </div>
       </div>
-      <UiButton @click="showUploadDialog = true" size="large" variant="gradient-primary">
-        <el-icon><Upload /></el-icon>
-        <span class="ml-2">上传纹理</span>
+      <UiButton @click="showUploadDialog = true" size="large" variant="primary" :icon="Upload">
+        上传纹理
       </UiButton>
     </div>
 

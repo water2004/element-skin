@@ -193,7 +193,7 @@ export function start(): EasterEggCleanup {
     }
 
     html.dark.easter-egg-mid-autumn .page-header-content h1,
-    html.dark.easter-egg-mid-autumn .page-header-text h2,
+    html.dark.easter-egg-mid-autumn .ui-page-header-title,
     html.dark.easter-egg-mid-autumn .hero-title {
       background: var(--mid-autumn-title);
       -webkit-background-clip: text;
@@ -201,7 +201,6 @@ export function start(): EasterEggCleanup {
     }
 
     html.dark.easter-egg-mid-autumn .el-button--primary,
-    html.dark.easter-egg-mid-autumn .ui-button--gradient-primary,
     html.dark.easter-egg-mid-autumn .is-home-layout .home-fixed-button.home-fixed-primary,
     html.dark.easter-egg-mid-autumn .is-home-layout .header-actions .el-button--primary {
       background-image:
@@ -215,7 +214,6 @@ export function start(): EasterEggCleanup {
     }
 
     html.dark.easter-egg-mid-autumn .el-button--primary:hover,
-    html.dark.easter-egg-mid-autumn .ui-button--gradient-primary:hover:not(:disabled),
     html.dark.easter-egg-mid-autumn .is-home-layout .home-fixed-button.home-fixed-primary:hover {
       border-color: rgba(255, 239, 183, 0.78) !important;
       box-shadow:

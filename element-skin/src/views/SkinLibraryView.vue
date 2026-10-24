@@ -18,6 +18,7 @@
         <ActionBar full align="center">
           <SearchBar
             v-model="searchQuery"
+            :loading="loading"
             placeholder="搜索哈希、材质名或上传者"
             @clear="handleClearSearch"
             @search="handleSearch"
@@ -83,12 +84,12 @@
             </template>
             <template #actions="{ texture }">
               <UiButton
-                variant="gradient-primary"
+                variant="primary"
+                :icon="Plus"
                 @click="addToWardrobe(texture)"
                 :disabled="!isLogged"
               >
-                <el-icon><Plus /></el-icon>
-                <span>添加到衣柜</span>
+                添加到衣柜
               </UiButton>
             </template>
           </TextureCard>
@@ -152,15 +153,14 @@
 
               <section class="mt-auto border-b-0 py-3.5">
                 <UiButton
-                  type="primary"
                   size="large"
-                  variant="gradient-primary"
+                  variant="primary"
+                  :icon="Plus"
                   class="w-full rounded-[12px] h-12"
                   @click="addToWardrobe(selectedItem)"
                   :disabled="!isLogged"
                 >
-                  <el-icon><Plus /></el-icon>
-                  <span class="ml-2">添加到我的衣柜</span>
+                  添加到我的衣柜
                 </UiButton>
                 <p
                   v-if="!isLogged"

@@ -1,61 +1,58 @@
 <template>
   <div class="flex flex-col animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div>
-          <h1>通知中心</h1>
-          <p>查看与你相关的站内消息和公告</p>
-        </div>
-      </div>
-      <div class="page-header-actions">
-        <UiSegmented v-model="readScope" @change="refreshFirstPage">
+    <PageHeader
+      title="通知中心"
+      subtitle="查看与你相关的站内消息和公告"
+      actions-label="通知筛选与操作"
+    >
+      <template #actions>
+        <UiSegmented v-model="readScope" aria-label="通知范围" @change="refreshFirstPage">
           <el-radio-button value="all">全部</el-radio-button>
           <el-radio-button value="unread">未读</el-radio-button>
         </UiSegmented>
         <el-tag size="large" type="info">全部通知</el-tag>
-        <el-button
-          :icon="Refresh"
-          :loading="loading"
-          plain
-          class="hover-lift"
-          @click="refreshFirstPage"
-        >
-          刷新
-        </el-button>
-      </div>
-    </div>
+        <UiButton :icon="Refresh" :loading="loading" @click="refreshFirstPage"> 刷新 </UiButton>
+      </template>
+    </PageHeader>
 
     <div
       class="grid grid-cols-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)]"
     >
-      <UiCard shadow="never" class="overflow-hidden">
+      <UiCard shadow="never" padding="none" class="overflow-hidden">
         <div
           ref="listScrollRef"
           class="flex max-h-[calc(100vh-190px)] min-h-[560px] flex-col overflow-auto lg:max-h-[calc(100vh-210px)]"
           v-loading="loading"
           element-loading-background="transparent"
         >
-          <button
+          <div
             v-for="notice in notices"
             :key="notice.id"
-            class="w-full border-b border-[var(--color-border)] px-4 py-3 text-left transition last:border-b-0"
+            class="notification-item w-full cursor-pointer border-b border-[var(--color-border)] px-4 py-3 text-left transition-colors last:border-b-0"
             :class="
               selectedId === notice.id
-                ? 'bg-[rgba(64,158,255,0.08)]'
+                ? 'bg-[var(--color-selection-background)]'
                 : 'bg-transparent hover:bg-[var(--color-background-soft)]'
             "
-            @click="selectNotice(notice.id)"
+            @click="selectNoticeFromRow($event, notice.id)"
           >
             <div class="flex items-start gap-3">
               <span
                 class="mt-2 h-2 w-2 shrink-0 rounded-full"
+                role="img"
+                :aria-label="notice.read ? '已读' : '未读'"
                 :class="notice.read ? 'bg-[var(--color-border)]' : 'bg-[var(--el-color-primary)]'"
               />
               <div class="min-w-0 flex-1">
                 <div class="flex items-center justify-between gap-3">
-                  <div class="truncate font-semibold text-[var(--color-heading)]">
+                  <button
+                    type="button"
+                    class="min-w-0 truncate text-left font-semibold text-[var(--color-heading)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--color-primary)]"
+                    :aria-current="selectedId === notice.id ? 'true' : undefined"
+                    @click.stop="selectNotice(notice.id)"
+                  >
                     {{ notice.title }}
-                  </div>
+                  </button>
                   <span class="shrink-0 text-xs text-[var(--color-text-light)]">
                     {{ formatShortDate(notice.created_at) }}
                   </span>
@@ -72,18 +69,18 @@
                       {{ levelLabel(notice.level) }}
                     </el-tag>
                   </div>
-                  <el-button
+                  <UiButton
                     v-if="notice.dismissible && canDismissNotice"
                     size="small"
-                    text
+                    variant="tertiary"
                     @click.stop="dismiss(notice.id)"
                   >
                     忽略
-                  </el-button>
+                  </UiButton>
                 </div>
               </div>
             </div>
-          </button>
+          </div>
 
           <el-empty v-if="!notices.length && !loading" class="my-auto" description="暂无通知" />
 
@@ -101,11 +98,12 @@
 
       <UiCard
         shadow="never"
+        padding="spacious"
         class="min-h-[560px]"
         v-loading="detailLoading"
         element-loading-background="transparent"
       >
-        <article v-if="selectedNotice" class="px-2 py-1 lg:px-4">
+        <article v-if="selectedNotice">
           <div class="mb-4 flex flex-wrap items-center gap-2">
             <el-tag v-if="selectedNotice.pinned" size="small" type="warning">置顶</el-tag>
             <el-tag size="small" type="info">{{ noticeTypeLabel(selectedNotice.type) }}</el-tag>
@@ -141,15 +139,15 @@
           </div>
 
           <div v-if="selectedNotice.link_url && selectedNotice.link_text" class="mt-8">
-            <el-button
-              type="primary"
+            <UiButton
+              variant="primary"
               tag="a"
               :href="selectedNotice.link_url"
               target="_blank"
               rel="noreferrer"
             >
               {{ selectedNotice.link_text }}
-            </el-button>
+            </UiButton>
           </div>
         </article>
 
@@ -168,6 +166,8 @@ import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { dismissNotice, getNotice, getNotices } from '@/api/notices'
 import type { NoticeLevel, NoticeView } from '@/api/types'
 import { useNotificationIndicator } from '@/composables/useNotificationIndicator'
@@ -290,6 +290,11 @@ async function loadDetail(id: string) {
 
 function selectNotice(id: string) {
   router.push(`/notifications/${id}`)
+}
+
+function selectNoticeFromRow(event: MouseEvent, id: string) {
+  if (event.target instanceof Element && event.target.closest('a')) return
+  selectNotice(id)
 }
 
 async function loadNotices() {

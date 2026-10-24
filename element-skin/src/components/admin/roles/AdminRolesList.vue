@@ -17,6 +17,7 @@
 
     <SearchBar
       v-model="searchQuery"
+      :loading="loading"
       placeholder="搜索角色名、邮箱或用户名"
       class="mb-6"
       @clear="handleClearSearch"

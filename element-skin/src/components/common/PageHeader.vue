@@ -1,102 +1,103 @@
 <template>
-  <div class="page-header">
-    <div class="page-header-content">
-      <div v-if="$slots.icon" class="page-header-icon"><slot name="icon" /></div>
-      <div class="page-header-text">
-        <h2>{{ title }}</h2>
-        <p v-if="subtitle" class="subtitle">{{ subtitle }}</p>
+  <header class="ui-page-header">
+    <div class="ui-page-header-content">
+      <div v-if="$slots.icon" class="ui-page-header-icon" aria-hidden="true">
+        <slot name="icon" />
+      </div>
+      <div class="ui-page-header-text">
+        <component :is="'h' + level" class="ui-page-header-title">{{ title }}</component>
+        <p v-if="subtitle" class="ui-page-header-subtitle">{{ subtitle }}</p>
       </div>
     </div>
-    <div v-if="$slots.actions" class="page-header-actions">
+    <ActionBar v-if="$slots.actions" class="ui-page-header-actions" :label="actionsLabel">
       <slot name="actions" />
-    </div>
-  </div>
+    </ActionBar>
+  </header>
 </template>
 
 <script setup lang="ts">
-defineProps<{
-  title: string
-  subtitle?: string
-}>()
+import ActionBar from './ActionBar.vue'
+
+withDefaults(
+  defineProps<{
+    title: string
+    subtitle?: string
+    level?: 1 | 2 | 3
+    actionsLabel?: string
+  }>(),
+  { subtitle: undefined, level: 1, actionsLabel: undefined },
+)
 </script>
 
 <style scoped>
-.page-header {
+.ui-page-header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 30px;
   gap: 20px;
   width: 100%;
 }
 
-.page-header-content {
+.ui-page-header-content {
   display: flex;
-  align-items: center;
-  gap: 18px;
-  flex: 1;
+  align-items: flex-start;
+  gap: var(--space-content-padding);
+  flex: 1 1 240px;
   min-width: 0;
 }
 
-.page-header-icon {
+.ui-page-header-icon {
   width: 56px;
   height: 56px;
   font-size: 26px;
-  color: var(--el-color-primary);
+  color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 12%, transparent);
   border-radius: var(--radius-card);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition:
-    background-color var(--motion-duration-base) var(--motion-easing-standard),
-    color var(--motion-duration-base) var(--motion-easing-standard);
 }
 
-.page-header-text {
-  flex: 1;
+.ui-page-header-text {
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.page-header-text h2 {
+.ui-page-header-title {
   margin: 0;
   font-size: var(--font-size-title);
   font-weight: 700;
+  line-height: 1.4;
   color: var(--color-heading);
-  letter-spacing: -0.5px;
 }
 
-.page-header-text .subtitle {
-  margin: 4px 0 0 0;
+.ui-page-header-subtitle {
+  margin: 4px 0 0;
   color: var(--color-text-light);
   font-size: var(--font-size-description);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.6;
 }
 
-.page-header-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-action-gap);
-  flex-shrink: 0;
-  flex-wrap: wrap;
+.ui-page-header-actions {
+  flex: 0 1 auto;
+  max-width: 100%;
 }
 
 @media (max-width: 768px) {
-  .page-header {
+  .ui-page-header {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 16px;
+    gap: var(--space-content-padding);
   }
 
-  .page-header-actions {
+  .ui-page-header-content {
+    flex-basis: auto;
     width: 100%;
-    justify-content: flex-start;
   }
 
-  .page-header-content {
+  .ui-page-header-actions {
     width: 100%;
   }
 }

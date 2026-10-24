@@ -37,43 +37,35 @@
         <div class="role-model">模型: {{ profile.model || 'default' }}</div>
       </div>
 
-      <CardActions>
+      <CardActions label="角色操作">
         <UiButton
-          variant="gradient-danger"
-          icon-swap
+          variant="secondary"
+          tone="danger"
+          :icon="Delete"
           size="default"
           @click.stop="$emit('delete', profile.id)"
         >
           删除
-          <template #icon>
-            <el-icon><Delete /></el-icon>
-          </template>
         </UiButton>
 
         <UiButton
           v-if="profile.skin_hash"
-          variant="soft-warning"
-          icon-swap
+          variant="tertiary"
+          tone="warning"
           size="default"
           @click.stop="$emit('clear-skin', profile.id)"
         >
-          皮肤
-          <template #icon>
-            <el-icon><Close /></el-icon>
-          </template>
+          清除皮肤
         </UiButton>
 
         <UiButton
           v-if="profile.cape_hash"
-          variant="soft-warning"
-          icon-swap
+          variant="tertiary"
+          tone="warning"
           size="default"
           @click.stop="$emit('clear-cape', profile.id)"
         >
-          披风
-          <template #icon>
-            <el-icon><Close /></el-icon>
-          </template>
+          清除披风
         </UiButton>
       </CardActions>
     </div>
@@ -81,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { Close, Delete } from '@element-plus/icons-vue'
+import { Delete } from '@element-plus/icons-vue'
 import type { OfficialProfileBinding, Profile } from '@/api/types'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CardActions from '@/components/common/CardActions.vue'

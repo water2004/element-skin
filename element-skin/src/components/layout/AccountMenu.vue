@@ -59,7 +59,7 @@
           <UiButton
             v-for="item in links"
             :key="item.path"
-            variant="outline"
+            variant="secondary"
             @click="emit('navigate', item.path)"
           >
             <span>{{ item.title }}</span>
@@ -67,12 +67,12 @@
         </template>
         <template v-if="canAccessAdmin">
           <div class="account-section-label">面板</div>
-          <UiButton variant="outline" @click="emit('navigate', '/admin')">
+          <UiButton variant="secondary" @click="emit('navigate', '/admin')">
             <span>管理面板</span>
           </UiButton>
         </template>
         <div class="account-action-separator" />
-        <UiButton variant="outline-danger" @click="emit('logout')">
+        <UiButton variant="secondary" tone="danger" @click="emit('logout')">
           <span>退出登录</span>
         </UiButton>
       </div>

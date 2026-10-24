@@ -16,11 +16,9 @@
 
   /* 状态色复用 Element Plus 调色板，结构色与控件映射由应用负责；两者不反向互引。 */
   --color-primary: var(--el-color-primary);
-  --color-danger: var(--el-color-danger);
   --color-on-accent: var(--el-color-white);
   --color-selection-background: color-mix(in srgb, var(--color-primary) 10%, transparent);
   --color-option-selected-background: color-mix(in srgb, var(--color-primary) 5%, transparent);
-  --color-danger-hover-background: #fef0f0;
 
   --radius-control: 8px;
   --radius-card: 16px;
@@ -51,7 +49,6 @@
   --motion-duration-slow: 500ms;
   --motion-stagger: 50ms;
   --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --motion-easing-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
   --motion-offset-content: 10px;
   --motion-offset-card: 30px;
   --motion-offset-hover: 4px;
@@ -70,5 +67,4 @@
   --color-popover-background: var(--color-background-mute);
   --color-segmented-background: #1d1d1d;
   --color-selection-background: color-mix(in srgb, var(--color-primary) 20%, transparent);
-  --color-danger-hover-background: color-mix(in srgb, var(--color-danger) 15%, transparent);
 }

@@ -1,40 +1,61 @@
 <template>
   <div class="search-bar-container">
-    <el-input
+    <ElInput
       v-model="query"
       :placeholder="placeholder"
+      :aria-label="label"
       clearable
       :size="size"
-      @clear="$emit('clear')"
-      @keyup.enter="$emit('search')"
+      :disabled="disabled"
+      @clear="emit('clear')"
+      @keyup.enter="search"
     >
-      <template #prefix>
-        <el-icon><Search /></el-icon>
-      </template>
+      <template #prefix
+        ><ElIcon><Search /></ElIcon
+      ></template>
       <template #append>
-        <el-button :icon="Search" @click="$emit('search')">搜索</el-button>
+        <UiButton
+          variant="primary"
+          :icon="Search"
+          :size="size"
+          :disabled="disabled"
+          :loading="loading"
+          @click="search"
+          >搜索</UiButton
+        >
       </template>
-    </el-input>
+    </ElInput>
   </div>
 </template>
 
 <script setup lang="ts">
+import { ElInput, ElIcon } from 'element-plus'
 import { Search } from '@element-plus/icons-vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const query = defineModel<string>({ required: true })
+const props = withDefaults(
+  defineProps<{
+    placeholder?: string
+    label?: string
+    size?: 'small' | 'default' | 'large'
+    disabled?: boolean
+    loading?: boolean
+  }>(),
+  {
+    placeholder: '搜索',
+    label: '搜索内容',
+    size: 'large',
+    disabled: false,
+    loading: false,
+  },
+)
+const emit = defineEmits<{ search: []; clear: [] }>()
 
-withDefaults(defineProps<{
-  placeholder?: string
-  size?: 'small' | 'default' | 'large'
-}>(), {
-  placeholder: '搜索',
-  size: 'large',
-})
-
-defineEmits<{
-  search: []
-  clear: []
-}>()
+function search(event: KeyboardEvent | MouseEvent) {
+  if (props.disabled || props.loading || ('isComposing' in event && event.isComposing)) return
+  emit('search')
+}
 </script>
 
 <style scoped>
@@ -43,36 +64,36 @@ defineEmits<{
   min-width: 0;
 }
 
-.search-bar-container :deep(.el-input-group) {
-  display: flex;
-  align-items: stretch;
+.search-bar-container :deep(.el-input) {
+  --el-input-border-radius: var(--radius-control);
 }
 
 .search-bar-container :deep(.el-input-group__append) {
-  background: var(--el-color-primary);
-  color: #fff;
-  border-color: var(--el-color-primary);
-  cursor: pointer;
-  padding: 0 20px;
-  display: flex;
-  align-items: center;
-  transition: all 0.3s ease;
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
-.search-bar-container :deep(.el-input-group__append:hover) {
-  background: var(--el-color-primary-light-3);
-  border-color: var(--el-color-primary-light-3);
-  opacity: 0.9;
-}
-
-.search-bar-container :deep(.el-input-group__append .el-button) {
-  border: none;
-  background: transparent;
-  color: inherit;
   padding: 0;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.search-bar-container :deep(.el-input-group__append button.ui-button) {
   margin: 0;
-  height: 100%;
+  height: auto;
+  align-self: stretch;
+  border-radius: 0;
+  color: var(--el-button-text-color);
+  background-color: var(--el-button-bg-color);
+  border-color: var(--el-button-border-color);
+}
+
+.search-bar-container :deep(.el-input-group__append button.ui-button:hover:not(:disabled)) {
+  color: var(--el-button-hover-text-color);
+  background-color: var(--el-button-hover-bg-color);
+  border-color: var(--el-button-hover-border-color);
+}
+
+.search-bar-container :deep(.el-input-group__append button.ui-button:disabled) {
+  color: var(--el-button-disabled-text-color);
+  background-color: var(--el-button-disabled-bg-color);
+  border-color: var(--el-button-disabled-border-color);
 }
 </style>

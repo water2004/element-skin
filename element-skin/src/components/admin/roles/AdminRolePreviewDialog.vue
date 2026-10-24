@@ -29,13 +29,26 @@
           >
             皮肤绑定
           </div>
-          <el-input :model-value="profile.skin_hash || '未绑定'" disabled>
-            <template #append>
-              <el-button :disabled="!profile.skin_hash" @click="$emit('clear-skin')"
-                >清除</el-button
-              >
-            </template>
-          </el-input>
+          <div class="flex flex-wrap items-center gap-2">
+            <div
+              aria-label="皮肤绑定"
+              class="min-w-0 flex-1 basis-40 rounded-lg bg-[var(--color-background-soft)] px-3 py-2 text-xs text-[var(--color-text-light)]"
+            >
+              <code v-if="profile.skin_hash" class="break-all select-text font-mono">{{
+                profile.skin_hash
+              }}</code>
+              <span v-else>未绑定</span>
+            </div>
+            <UiButton
+              variant="secondary"
+              tone="warning"
+              :disabled="!profile.skin_hash"
+              class="shrink-0"
+              @click="$emit('clear-skin')"
+            >
+              清除皮肤
+            </UiButton>
+          </div>
         </section>
 
         <section class="border-b border-[var(--color-border)] py-3.5">
@@ -44,13 +57,26 @@
           >
             披风绑定
           </div>
-          <el-input :model-value="profile.cape_hash || '未绑定'" disabled>
-            <template #append>
-              <el-button :disabled="!profile.cape_hash" @click="$emit('clear-cape')"
-                >清除</el-button
-              >
-            </template>
-          </el-input>
+          <div class="flex flex-wrap items-center gap-2">
+            <div
+              aria-label="披风绑定"
+              class="min-w-0 flex-1 basis-40 rounded-lg bg-[var(--color-background-soft)] px-3 py-2 text-xs text-[var(--color-text-light)]"
+            >
+              <code v-if="profile.cape_hash" class="break-all select-text font-mono">{{
+                profile.cape_hash
+              }}</code>
+              <span v-else>未绑定</span>
+            </div>
+            <UiButton
+              variant="secondary"
+              tone="warning"
+              :disabled="!profile.cape_hash"
+              class="shrink-0"
+              @click="$emit('clear-cape')"
+            >
+              清除披风
+            </UiButton>
+          </div>
         </section>
 
         <section class="mt-auto py-3.5">
@@ -67,6 +93,7 @@
 import type { Profile } from '@/api/types'
 import SkinViewer from '@/components/SkinViewer.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 import UiViewerLayout from '@/components/ui/UiViewerLayout.vue'
 
 const visible = defineModel<boolean>('visible', { required: true })

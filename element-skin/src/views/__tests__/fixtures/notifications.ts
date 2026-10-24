@@ -37,3 +37,7 @@ export const noticesPage: CursorPageResponse<NoticeView> = {
 }
 export const firstDetail: NoticeView = { ...firstNotice, read: true, read_at: 2000 }
 export const secondDetail: NoticeView = { ...secondNotice, read: true, read_at: 3000 }
+export const linkedNotice: NoticeView = {
+  ...firstNotice,
+  summary: '[查看文档](#notice-link)',
+}

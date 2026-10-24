@@ -7,7 +7,11 @@
     <div class="card-clip">
       <div
         class="role-preview"
-        :style="{ background: isDark ? 'var(--color-background-hero-dark)' : 'var(--color-background-hero-light)' }"
+        :style="{
+          background: isDark
+            ? 'var(--color-background-hero-dark)'
+            : 'var(--color-background-hero-light)',
+        }"
       >
         <SkinViewer
           v-if="profile.skin_hash"
@@ -23,14 +27,17 @@
 
       <div class="role-info">
         <div class="role-name">{{ profile.name }}</div>
-        <div class="role-owner">所属: {{ profile.owner_display_name || profile.owner_email || '-' }}</div>
-        <div class="role-model">模型: {{ profile.texture_model || profile.model || 'default' }}</div>
+        <div class="role-owner">
+          所属: {{ profile.owner_display_name || profile.owner_email || '-' }}
+        </div>
+        <div class="role-model">
+          模型: {{ profile.texture_model || profile.model || 'default' }}
+        </div>
       </div>
 
       <CardActions>
-        <UiButton variant="gradient-primary" @click="$emit('preview', profile)">
-          <el-icon><Edit /></el-icon>
-          <span>编辑</span>
+        <UiButton variant="primary" :icon="Edit" @click="$emit('preview', profile)">
+          编辑
         </UiButton>
       </CardActions>
     </div>
