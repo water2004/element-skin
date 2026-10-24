@@ -1,5 +1,11 @@
 <template>
-  <UiDialog v-model="visible" title="重设邮箱" :close-on-click-modal="false" @closed="reset">
+  <UiDialog
+    v-model="visible"
+    title="重设邮箱"
+    :busy="loading || codeLoading"
+    :dirty="!!form.email || !!form.code"
+    @closed="resetForm"
+  >
     <p class="mt-0 mb-6 text-sm leading-6 text-[var(--color-text-light)]">
       验证码将发送至新邮箱，验证成功后将立即替换当前账号邮箱。
     </p>
@@ -17,7 +23,15 @@
       <el-button type="primary" plain class="w-full" @click="loadPolicy">重新加载</el-button>
     </div>
 
-    <el-form v-else ref="formRef" :model="form" :rules="rules" label-position="top" size="large">
+    <el-form
+      v-else
+      ref="formRef"
+      :model="form"
+      :rules="rules"
+      :disabled="loading || codeLoading"
+      label-position="top"
+      size="large"
+    >
       <el-form-item label="新邮箱地址" prop="email">
         <EmailSuffixInput
           v-model="form.email"
@@ -37,7 +51,7 @@
           <el-button
             type="primary"
             plain
-            :disabled="countdown > 0"
+            :disabled="countdown > 0 || loading"
             :loading="codeLoading"
             class="min-w-[120px]"
             @click="sendCode"
@@ -48,12 +62,12 @@
       </el-form-item>
     </el-form>
 
-    <template #footer>
-      <el-button :disabled="loading" @click="visible = false">取消</el-button>
+    <template #footer="{ requestClose }">
+      <el-button :disabled="loading || codeLoading" @click="requestClose">取消</el-button>
       <el-button
         type="primary"
         :loading="loading"
-        :disabled="policyLoading || policyError"
+        :disabled="policyLoading || policyError || codeLoading"
         @click="submit"
       >
         确认重设
@@ -88,6 +102,8 @@ const policyLoading = ref(false)
 const policyError = ref(false)
 const emailSuffixPolicy = ref<PublicEmailSuffixPolicy>({ ...disabledEmailSuffixPolicy })
 let timer: ReturnType<typeof setInterval> | null = null
+let countdownEndsAt = 0
+let policyRequest = 0
 
 const form = reactive({
   email: '',
@@ -114,31 +130,41 @@ const rules: FormRules = {
 }
 
 async function loadPolicy() {
+  const request = ++policyRequest
   policyLoading.value = true
   policyError.value = false
   try {
     const response = await getPublicSettings()
+    if (request !== policyRequest || !visible.value) return
     if (!response.data.email_suffix_policy) throw new Error('email suffix policy is missing')
     emailSuffixPolicy.value = response.data.email_suffix_policy
   } catch (error) {
+    if (request !== policyRequest || !visible.value) return
     console.error('Failed to load email suffix policy', error)
     policyError.value = true
   } finally {
-    policyLoading.value = false
+    if (request === policyRequest) policyLoading.value = false
   }
 }
 
 async function sendCode() {
-  try {
-    if (!formRef.value) return
-    await formRef.value.validateField('email')
-  } catch {
-    ElMessage.warning('请先输入有效的新邮箱地址')
+  if (
+    codeLoading.value ||
+    loading.value ||
+    countdown.value > 0 ||
+    policyLoading.value ||
+    policyError.value
+  )
     return
-  }
-
+  if (!formRef.value) return
+  codeLoading.value = true
   try {
-    codeLoading.value = true
+    try {
+      await formRef.value.validateField('email')
+    } catch {
+      ElMessage.warning('请先输入有效的新邮箱地址')
+      return
+    }
     const response = await sendEmailChangeCode({ email: form.email })
     ElMessage.success('验证码已发送到新邮箱')
     startCountdown(Math.min(response.data.ttl, 60))
@@ -150,10 +176,10 @@ async function sendCode() {
 }
 
 async function submit() {
-  if (!(await validateForm(formRef.value))) return
-
+  if (loading.value || codeLoading.value || policyLoading.value || policyError.value) return
   loading.value = true
   try {
+    if (!(await validateForm(formRef.value))) return
     await changeEmail({ email: form.email, code: form.code })
     ElMessage.success('邮箱重设成功')
     visible.value = false
@@ -167,11 +193,14 @@ async function submit() {
 
 function startCountdown(seconds: number) {
   stopCountdown()
-  countdown.value = seconds
-  timer = setInterval(() => {
-    countdown.value--
-    if (countdown.value <= 0) stopCountdown()
-  }, 1000)
+  countdownEndsAt = Date.now() + Math.max(0, seconds) * 1000
+  updateCountdown()
+  if (countdown.value > 0) timer = setInterval(updateCountdown, 1000)
+}
+
+function updateCountdown() {
+  countdown.value = Math.max(0, Math.ceil((countdownEndsAt - Date.now()) / 1000))
+  if (countdown.value === 0) stopCountdown()
 }
 
 function stopCountdown() {
@@ -179,17 +208,27 @@ function stopCountdown() {
   timer = null
 }
 
-function reset() {
-  stopCountdown()
-  countdown.value = 0
+function resetForm() {
   form.email = ''
   form.code = ''
   formRef.value?.clearValidate()
 }
 
-onBeforeUnmount(stopCountdown)
-
-watch(visible, (open) => {
-  if (open) void loadPolicy()
+onBeforeUnmount(() => {
+  policyRequest++
+  stopCountdown()
 })
+
+watch(
+  visible,
+  (open) => {
+    if (open) {
+      resetForm()
+      void loadPolicy()
+    } else {
+      policyRequest++
+    }
+  },
+  { immediate: true },
+)
 </script>

@@ -96,6 +96,7 @@
     <CreateRoleDialog
       v-model:visible="showCreateRoleDialog"
       v-model:name="newRoleName"
+      :creating="creatingRole"
       @create="createRole"
     />
 
@@ -178,6 +179,7 @@ const limit = pagination.limit
 const loading = ref(false)
 
 const showCreateRoleDialog = ref(false)
+const creatingRole = ref(false)
 const newRoleName = ref('')
 
 const showPreviewDialog = ref(false)
@@ -365,8 +367,10 @@ async function refreshFirstPage() {
 }
 
 async function createRole() {
+  if (creatingRole.value) return
   const name = (newRoleName.value || '').trim()
   if (!name) return ElMessage.error('请输入角色名称')
+  creatingRole.value = true
   try {
     await createProfile({ name })
     newRoleName.value = ''
@@ -376,6 +380,8 @@ async function createRole() {
     fetchMe()
   } catch (e: unknown) {
     ElMessage.error('创建失败: ' + getErrorMessage(e, '创建失败'))
+  } finally {
+    creatingRole.value = false
   }
 }
 

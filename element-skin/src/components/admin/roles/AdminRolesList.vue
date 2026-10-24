@@ -61,9 +61,10 @@
       v-model:name="previewName"
       :profile="selectedProfile"
       :textures-url="texturesUrl"
+      :clearing-texture="clearingTexture"
       @rename="updateProfileName"
-      @clear-skin="clearProfileSkin"
-      @clear-cape="clearProfileCape"
+      @clear-skin="clearProfileTexture('skin')"
+      @clear-cape="clearProfileTexture('cape')"
       @delete="confirmDeleteRole"
     />
   </div>
@@ -103,6 +104,7 @@ const activeSearchQuery = ref('')
 const showPreview = ref(false)
 const selectedProfile = ref<Profile | null>(null)
 const previewName = ref('')
+const clearingTexture = ref<'skin' | 'cape' | null>(null)
 
 function buildSearchParams(extraParams: Record<string, unknown> = {}) {
   const params: Record<string, unknown> = { limit: limit.value, ...extraParams }
@@ -199,27 +201,42 @@ async function updateProfileName() {
   }
 }
 
-async function clearProfileSkin() {
-  const id = selectedProfile.value?.id
-  if (!id) return
+async function clearProfileTexture(type: 'skin' | 'cape') {
+  const target = selectedProfile.value
+  const field = type === 'skin' ? 'skin_hash' : 'cape_hash'
+  if (!target?.[field] || clearingTexture.value) return
+  const id = target.id
+  const label = type === 'skin' ? '皮肤' : '披风'
+  clearingTexture.value = type
   try {
-    await patchProfileSkin(id, { hash: null })
-    ElMessage.success('皮肤绑定已清除')
-    await refreshFromFirst()
-  } catch {
-    ElMessage.error('清除失败')
-  }
-}
-
-async function clearProfileCape() {
-  const id = selectedProfile.value?.id
-  if (!id) return
-  try {
-    await patchProfileCape(id, { hash: null })
-    ElMessage.success('披风绑定已清除')
-    await refreshFromFirst()
-  } catch {
-    ElMessage.error('清除失败')
+    try {
+      await ElMessageBox.confirm(
+        `确定清除角色「${target.name}」的${label}绑定吗？此操作只解除绑定，不删除材质。`,
+        `清除${label}`,
+        {
+          type: 'warning',
+          confirmButtonText: `清除${label}`,
+          cancelButtonText: '取消',
+          closeOnClickModal: false,
+          distinguishCancelAndClose: true,
+        },
+      )
+    } catch {
+      return
+    }
+    try {
+      const patch = type === 'skin' ? patchProfileSkin : patchProfileCape
+      await patch(id, { hash: null })
+      if (selectedProfile.value?.id === id) selectedProfile.value[field] = null
+      const row = profiles.value.find((profile) => profile.id === id)
+      if (row) row[field] = null
+      ElMessage.success(`${label}绑定已清除`)
+      await refreshFromFirst()
+    } catch {
+      ElMessage.error(`清除${label}绑定失败`)
+    }
+  } finally {
+    clearingTexture.value = null
   }
 }
 

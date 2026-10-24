@@ -115,8 +115,11 @@
       :create-mode="createMode"
       :form="form"
       :preview-html="previewHtml"
+      :dirty="hasChanges"
+      :saving="saving"
       @update:form="replaceForm"
       @continue="continueToSettings"
+      @closed="handleEditorClosed"
     />
 
     <NoticeSettingsDialog
@@ -124,9 +127,11 @@
       :create-mode="createMode"
       :saving="saving"
       :form="form"
+      :dirty="hasChanges"
       @update:form="replaceForm"
       @back="backToContent"
       @save="saveNotice"
+      @closed="handleEditorClosed"
     />
   </div>
 </template>
@@ -149,6 +154,7 @@ import {
 } from '@/api/admin/notices'
 import type { Notice, NoticeStatus } from '@/api/types'
 import { useCursorPagination } from '@/composables/useCursorPagination'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 import { getErrorMessage } from '@/utils/error'
 import { renderMarkdown } from '@/utils/markdown'
 import {
@@ -172,6 +178,7 @@ const saving = ref(false)
 const editingNotice = ref<Notice | null>(null)
 const createMode = ref(false)
 const form = reactive<NoticeDraft>(defaultNoticeDraft())
+const { hasChanges, capture, reset: resetSnapshot } = useDirtySnapshot(computed(() => form))
 const previewHtml = computed(() => renderMarkdown(form.content_markdown || ''))
 
 const levelLabel = noticeLevelLabel
@@ -182,6 +189,7 @@ function resetForm() {
 }
 
 function replaceForm(next: NoticeDraft) {
+  if (saving.value) return
   Object.assign(form, next)
 }
 
@@ -201,9 +209,11 @@ function lifecycleLabel(notice: Notice) {
 }
 
 function openCreateDialog() {
+  if (saving.value) return
   editingNotice.value = null
   createMode.value = true
   resetForm()
+  capture()
   contentDialogVisible.value = true
 }
 
@@ -211,6 +221,14 @@ function fillForm(notice: Notice) {
   editingNotice.value = notice
   createMode.value = false
   Object.assign(form, draftFromNotice(notice))
+  capture()
+}
+
+function handleEditorClosed() {
+  if (contentDialogVisible.value || settingsDialogVisible.value) return
+  resetForm()
+  resetSnapshot()
+  editingNotice.value = null
 }
 
 function openEditDialog(notice: Notice) {
@@ -236,6 +254,7 @@ function normalizedForm(): NoticeDraft {
 }
 
 function continueToSettings() {
+  if (saving.value) return
   const error = validateContent()
   if (error) {
     ElMessage.warning(error)
@@ -246,11 +265,13 @@ function continueToSettings() {
 }
 
 function backToContent() {
+  if (saving.value) return
   settingsDialogVisible.value = false
   contentDialogVisible.value = true
 }
 
 async function saveNotice() {
+  if (saving.value) return
   const contentError = validateContent()
   if (contentError) {
     settingsDialogVisible.value = false

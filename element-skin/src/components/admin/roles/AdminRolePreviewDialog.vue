@@ -1,5 +1,5 @@
 <template>
-  <UiDialog v-model="visible" destroy-on-close variant="viewer">
+  <UiDialog v-model="visible" destroy-on-close variant="viewer" :busy="!!clearingTexture">
     <UiViewerLayout v-if="profile">
       <template #stage>
         <SkinViewer
@@ -18,6 +18,7 @@
           <el-input
             v-model="name"
             placeholder="角色名称"
+            :disabled="!!clearingTexture"
             @blur="$emit('rename')"
             @keyup.enter="$emit('rename')"
           />
@@ -42,7 +43,8 @@
             <UiButton
               variant="secondary"
               tone="warning"
-              :disabled="!profile.skin_hash"
+              :disabled="!profile.skin_hash || !!clearingTexture"
+              :loading="clearingTexture === 'skin'"
               class="shrink-0"
               @click="$emit('clear-skin')"
             >
@@ -70,7 +72,8 @@
             <UiButton
               variant="secondary"
               tone="warning"
-              :disabled="!profile.cape_hash"
+              :disabled="!profile.cape_hash || !!clearingTexture"
+              :loading="clearingTexture === 'cape'"
               class="shrink-0"
               @click="$emit('clear-cape')"
             >
@@ -80,7 +83,13 @@
         </section>
 
         <section class="mt-auto py-3.5">
-          <el-button type="danger" plain class="w-full rounded-lg" @click="$emit('delete')">
+          <el-button
+            type="danger"
+            plain
+            class="w-full rounded-lg"
+            :disabled="!!clearingTexture"
+            @click="$emit('delete')"
+          >
             删除角色
           </el-button>
         </section>
@@ -102,6 +111,7 @@ const name = defineModel<string>('name', { required: true })
 defineProps<{
   profile: Profile | null
   texturesUrl: (hash: string | null | undefined) => string
+  clearingTexture: 'skin' | 'cape' | null
 }>()
 
 defineEmits<{

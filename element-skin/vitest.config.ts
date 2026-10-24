@@ -13,5 +13,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     restoreMocks: true,
+    // 让表单校验库经过 Vite 的模块互操作，与浏览器构建保持一致。
+    server: { deps: { inline: ['element-plus'] } },
   },
 })

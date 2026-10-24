@@ -3,10 +3,13 @@
     :model-value="modelValue"
     title="发布设置"
     variant="wide-form"
+    :dirty="dirty"
+    :busy="saving"
     @update:model-value="emit('update:modelValue', $event)"
+    @closed="emit('closed')"
   >
     <div class="max-h-[72vh] overflow-auto p-6">
-      <el-form label-position="top">
+      <el-form label-position="top" :disabled="saving">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <el-form-item label="级别">
             <el-select v-model="level">
@@ -63,10 +66,10 @@
       </el-form>
     </div>
 
-    <template #footer>
+    <template #footer="{ requestClose }">
       <div class="px-6 pb-6">
-        <el-button @click="emit('back')">返回编辑</el-button>
-        <el-button @click="emit('update:modelValue', false)">取消</el-button>
+        <el-button :disabled="saving" @click="emit('back')">返回编辑</el-button>
+        <el-button :disabled="saving" @click="requestClose">取消</el-button>
         <el-button type="primary" :loading="saving" @click="emit('save')">
           {{ createMode ? '创建公告' : '保存' }}
         </el-button>
@@ -85,6 +88,7 @@ const props = defineProps<{
   createMode: boolean
   saving: boolean
   form: NoticeDraft
+  dirty: boolean
 }>()
 
 const emit = defineEmits<{
@@ -92,6 +96,7 @@ const emit = defineEmits<{
   'update:form': [value: NoticeDraft]
   back: []
   save: []
+  closed: []
 }>()
 
 const level = draftField('level')

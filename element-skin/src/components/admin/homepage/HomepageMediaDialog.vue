@@ -1,11 +1,13 @@
 <template>
-  <el-dialog
+  <UiDialog
     v-model="visible"
     :title="itemDraft?.type === 'panorama' ? 'Panorama 配置' : '图片配置'"
-    width="720px"
+    class="[--dialog-width-form:720px]"
     destroy-on-close
-    append-to-body
   >
+    <p class="mt-0 mb-4 text-sm text-[var(--color-text-light)]">
+      修改保留在首页媒体配置中，关闭后请在父页面保存更改。
+    </p>
     <div v-if="itemDraft" class="detail-layout">
       <div class="detail-preview">
         <el-image
@@ -18,8 +20,13 @@
       </div>
 
       <el-form label-width="96px" class="detail-form">
-        <el-form-item label="文件名">
-          <el-input v-model="itemDraft.title" />
+        <el-form-item label="媒体名称">
+          <div class="w-full">
+            <el-input v-model="itemDraft.title" placeholder="用于识别这张首页媒体" />
+            <p class="mt-1 mb-0 text-xs leading-5 text-[var(--color-text-light)]">
+              仅用于管理，修改不会重命名文件。
+            </p>
+          </div>
         </el-form-item>
         <el-form-item label="类型">
           <el-tag :type="itemDraft.type === 'panorama' ? 'warning' : 'success'">
@@ -54,15 +61,16 @@
         </template>
       </el-form>
     </div>
-    <template #footer>
-      <el-button @click="visible = false">完成</el-button>
+    <template #footer="{ requestClose }">
+      <el-button @click="requestClose">完成</el-button>
     </template>
-  </el-dialog>
+  </UiDialog>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import type { HomepageMedia } from '@/api/types'
+import UiDialog from '@/components/ui/UiDialog.vue'
 
 type PanoramaField = keyof Pick<
   HomepageMedia,

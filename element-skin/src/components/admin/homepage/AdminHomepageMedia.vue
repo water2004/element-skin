@@ -187,14 +187,13 @@ function canRunResourceAction() {
 }
 
 async function saveChanges() {
-  if (!hasChanges.value) return
+  if (saving.value || !hasChanges.value) return
   saving.value = true
   try {
     savedItems.value = await saveHomepageMediaChanges(items.value, savedItems.value)
     ElMessage.success('配置已保存')
   } catch (e: unknown) {
     ElMessage.error(getErrorMessage(e, '保存失败'))
-    await fetchItems()
   } finally {
     saving.value = false
   }

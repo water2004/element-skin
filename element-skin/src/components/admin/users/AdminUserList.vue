@@ -385,6 +385,7 @@ function showResetPasswordDialog() {
 }
 
 async function confirmResetPassword() {
+  if (resetting.value) return
   const f = resetPasswordForm.value
   if (!f.new_password || f.new_password.length < 6) return ElMessage.error('密码长度不足')
   if (f.new_password !== f.confirm_password) return ElMessage.error('两次密码不一致')

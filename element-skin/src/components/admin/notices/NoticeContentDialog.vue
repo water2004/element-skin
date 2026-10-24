@@ -3,12 +3,15 @@
     :model-value="modelValue"
     :title="createMode ? '新建公告' : '编辑公告'"
     variant="wide-form"
+    :dirty="dirty"
+    :busy="saving"
     @update:model-value="emit('update:modelValue', $event)"
+    @closed="emit('closed')"
   >
     <div
       class="grid max-h-[72vh] grid-cols-1 gap-5 overflow-auto p-6 lg:grid-cols-[minmax(0,1fr)_420px]"
     >
-      <el-form label-position="top">
+      <el-form label-position="top" :disabled="saving">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
           <el-form-item label="标题">
             <el-input
@@ -86,10 +89,12 @@
       </aside>
     </div>
 
-    <template #footer>
+    <template #footer="{ requestClose }">
       <div class="px-6 pb-6">
-        <el-button @click="emit('update:modelValue', false)">取消</el-button>
-        <el-button type="primary" @click="emit('continue')">下一步：发布设置</el-button>
+        <el-button :disabled="saving" @click="requestClose">取消</el-button>
+        <el-button type="primary" :disabled="saving" @click="emit('continue')"
+          >下一步：发布设置</el-button
+        >
       </div>
     </template>
   </UiDialog>
@@ -107,12 +112,15 @@ const props = defineProps<{
   createMode: boolean
   form: NoticeDraft
   previewHtml: string
+  dirty: boolean
+  saving: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: boolean]
   'update:form': [value: NoticeDraft]
   continue: []
+  closed: []
 }>()
 
 const title = draftField('title')

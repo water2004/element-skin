@@ -48,6 +48,41 @@ not be marked `hoverable`.
 Use `padding="none | compact | default | spacious"` for the card body
 (0 / 16 / 20 / 24px). Avoid adding padding to both the card root and its body.
 
+### `UiDialog`
+
+Use the existing `form`, `wide-form`, or `viewer` variant for layout. `busy` blocks
+user dismissal during a critical operation; ordinary data loading need not block
+closing. `dirty` asks whether to discard unsaved edits on mask or Escape dismissal.
+Cancel and the close icon explicitly discard without another confirmation. The page owns the draft,
+baseline and actual reset; the dialog does not write data or store drafts.
+
+```vue
+<UiDialog v-model="visible" :busy="saving" :dirty="hasChanges" @closed="resetForm">
+  <!-- form -->
+  <template #footer="{ requestClose }">
+    <UiButton :disabled="saving" @click="requestClose">取消</UiButton>
+    <UiButton variant="primary" :loading="saving" @click="save">保存</UiButton>
+  </template>
+</UiDialog>
+```
+
+Mask, Escape, the close icon and `requestClose` share busy protection. `requestClose`
+is an explicit discard; `requestDismiss` (also exposed on the instance) checks dirty
+state before dismissal. Native
+`close-on-click-modal`, `close-on-press-escape`, `before-close` and dialog events
+remain available. Header slots receive the native title IDs and explicit `close`;
+the default/footer slots and component instance expose `requestClose`. Repeated
+close requests share one discard confirmation. A delayed confirmation from a
+previous opening cannot close a new opening or emit after unmount.
+
+Parent `visible = false` means an authorized programmatic transition (save
+success or next/back), so it intentionally bypasses discard checks. User cancel
+buttons must call `requestClose`. `closed` is emitted after leave only if the
+dialog is still closed, preventing old transitions from clearing new input.
+Sensitive forms also clear credentials on unmount. Parent-page drafts, such as
+homepage media, remain in their owner when the local editor closes; clearly
+label the parent save step instead of applying independent-form discard rules.
+
 ### `PageHeader`
 
 Provide `title`, optional `subtitle`, and `icon` / `actions` slots. `level` selects
