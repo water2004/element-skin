@@ -71,6 +71,7 @@
       v-model="showUploadDialog"
       v-model:form="uploadForm"
       :preview-url="previewUrl"
+      :uploading="uploading"
       @file-change="handleFileChange"
       @file-remove="handleFileRemove"
       @file-exceed="handleFileExceed"
@@ -139,6 +140,7 @@ const editingNoteValue = ref('')
 const isApplying = ref(false)
 
 const showUploadDialog = ref(false)
+const uploading = ref(false)
 const uploadForm = ref(createDefaultUploadForm())
 const uploadDialogRef = ref<InstanceType<typeof TextureUploadDialog> | null>(null)
 const previewUrl = ref<string | null>(null)
@@ -264,11 +266,13 @@ async function refreshFirstPage() {
 }
 
 function handleFileChange(file: UploadFile) {
+  if (uploading.value) return
   uploadForm.value.file = file.raw ?? null
   previewUrl.value = replaceLocalTextureUrl(previewUrl.value, uploadForm.value.file)
 }
 
 function handleFileRemove() {
+  if (uploading.value) return
   uploadForm.value.file = null
   previewUrl.value = replaceLocalTextureUrl(previewUrl.value, null)
 }
@@ -294,6 +298,7 @@ watch(showUploadDialog, (isOpen) => {
 })
 
 async function doUpload() {
+  if (uploading.value) return
   const file = uploadForm.value.file
   if (!file) return ElMessage.error('请选择文件')
   if (!uploadForm.value.texture_type) return ElMessage.error('请选择纹理类型')
@@ -307,6 +312,7 @@ async function doUpload() {
   formData.append('note', uploadForm.value.note || '')
   formData.append('is_public', uploadForm.value.is_public ? 'true' : 'false')
 
+  uploading.value = true
   try {
     await uploadTexture(formData)
     ElMessage.success('上传成功')
@@ -314,6 +320,8 @@ async function doUpload() {
     await refreshFirstPage()
   } catch (e: unknown) {
     ElMessage.error('上传失败: ' + getErrorMessage(e, '上传失败'))
+  } finally {
+    uploading.value = false
   }
 }
 

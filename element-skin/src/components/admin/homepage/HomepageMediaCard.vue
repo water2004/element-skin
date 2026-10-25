@@ -1,14 +1,16 @@
 <template>
   <article
     class="homepage-media-card"
+    :aria-disabled="disabled || undefined"
     :class="{
       'is-disabled': !item.enabled,
       'is-dirty': dirty,
       'is-dragging': dragging,
       'is-drag-over': dragOver,
+      'pointer-events-none': disabled,
     }"
     :data-homepage-media-id="item.id"
-    draggable="true"
+    :draggable="!disabled"
     @click="$emit('open')"
     @pointerdown="$emit('pressstart', $event)"
     @dragstart="$emit('dragstart', $event)"
@@ -20,10 +22,22 @@
     <div class="media-base">
       <div class="media-actions" @click.stop @dragstart.stop @pointerdown.stop>
         <label class="state-control">
-          <el-switch :model-value="item.enabled" @change="$emit('toggle-enabled')" />
+          <el-switch
+            :model-value="item.enabled"
+            :disabled="disabled"
+            @change="$emit('toggle-enabled')"
+          />
           <span>{{ item.enabled ? '启用' : '停用' }}</span>
         </label>
-        <el-button type="danger" :icon="Delete" circle plain @click="$emit('remove')" />
+        <el-button
+          type="danger"
+          :icon="Delete"
+          circle
+          plain
+          :disabled="disabled"
+          aria-label="删除媒体"
+          @click="$emit('remove')"
+        />
       </div>
     </div>
 
@@ -51,6 +65,7 @@ defineProps<{
   dirty: boolean
   dragging: boolean
   dragOver: boolean
+  disabled?: boolean
 }>()
 
 defineEmits<{

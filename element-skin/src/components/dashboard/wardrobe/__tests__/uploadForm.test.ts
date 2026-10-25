@@ -2,11 +2,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createDefaultUploadForm,
+  isTextureUploadDirty,
   disposeLocalTextureUrl,
   replaceLocalTextureUrl,
 } from '@/components/dashboard/wardrobe/uploadForm'
+import { uploadChanges } from './fixtures/uploadFormCases'
 
 describe('createDefaultUploadForm', () => {
+  it.each(uploadChanges)(
+    'tracks $field changes, including File values, and clears after reset',
+    ({ change }) => {
+      const form = createDefaultUploadForm()
+      expect(isTextureUploadDirty(form)).toBe(false)
+      Object.assign(form, change)
+      expect(isTextureUploadDirty(form)).toBe(true)
+      Object.assign(form, createDefaultUploadForm())
+      expect(isTextureUploadDirty(form)).toBe(false)
+    },
+  )
+
   it('returns exact default texture upload fields', () => {
     expect(createDefaultUploadForm()).toEqual({
       texture_type: 'skin',
@@ -43,9 +57,7 @@ describe('local texture preview url lifecycle', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
-    createObjectURL.mockImplementation(
-      (file: File) => `blob:${file.name}` as `${string}:${string}`,
-    )
+    createObjectURL.mockImplementation((file: File) => `blob:${file.name}` as `${string}:${string}`)
   })
 
   afterEach(() => {

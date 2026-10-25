@@ -4,28 +4,38 @@
       <template #icon><PictureFilled /></template>
       <template #actions>
         <ActionBar>
+          <DirtyTag :visible="hasChanges" :spaced="false" />
           <el-upload
             action="#"
             :http-request="uploadImage"
             :show-file-list="false"
             accept=".png,.jpg,.jpeg,.webp"
+            :disabled="busy"
           >
-            <el-button :icon="Upload" size="large" class="hover-lift">上传图片</el-button>
+            <el-button :icon="Upload" size="large" :disabled="busy" class="hover-lift"
+              >上传图片</el-button
+            >
           </el-upload>
           <el-upload
             action="#"
             :http-request="uploadPanorama"
             :show-file-list="false"
             accept=".zip"
+            :disabled="busy"
           >
-            <el-button :icon="Box" size="large" class="hover-lift">上传 Panorama</el-button>
+            <el-button :icon="Box" size="large" :disabled="busy" class="hover-lift"
+              >上传 Panorama</el-button
+            >
           </el-upload>
+          <el-button size="large" :disabled="busy || !hasChanges" @click="discardChanges">
+            放弃更改
+          </el-button>
           <el-button
             type="primary"
             :icon="Check"
             size="large"
             :loading="saving"
-            :disabled="loading || !hasChanges"
+            :disabled="busy || !hasChanges"
             class="hover-lift"
             @click="saveChanges"
           >
@@ -35,6 +45,13 @@
       </template>
     </PageHeader>
 
+    <p class="mt-0 mb-5 text-sm text-[var(--color-text-light)]">
+      编辑、启用和排序需保存配置后生效；上传与删除立即生效。有未保存更改时，请先保存或放弃，再上传或删除。
+    </p>
+    <p v-if="saveIncomplete" role="status" class="mb-5 text-sm text-[var(--el-color-warning)]">
+      保存未完成，已成功的部分不会回滚。可重试剩余更改；“放弃更改”只丢弃未保存部分。
+    </p>
+
     <TransitionGroup name="media-grid" tag="div" class="media-list" v-loading="loading">
       <HomepageMediaCard
         v-for="item in items"
@@ -42,10 +59,11 @@
         :item="item"
         :preview-url="previewUrl(item)"
         :dirty="isItemDirty(item.id)"
+        :disabled="busy"
         :dragging="draggingId === item.id"
         :drag-over="dragOverId === item.id && draggingId !== item.id"
         @open="openDetails(item)"
-        @toggle-enabled="item.enabled = !item.enabled"
+        @toggle-enabled="toggleEnabled(item)"
         @remove="remove(item)"
         @pressstart="startLongPress(item.id, $event)"
         @dragstart="startDrag(item.id, $event)"
@@ -63,6 +81,7 @@
     <HomepageMediaDialog
       v-model:visible="detailVisible"
       :item="selectedItem"
+      :busy="busy"
       :preview-url="selectedItem ? previewUrl(selectedItem) : ''"
       @update:item="updateSelectedItem"
     />
@@ -94,12 +113,18 @@ import { saveHomepageMediaChanges } from '@/components/admin/homepage/homepageMe
 import { useHomepageMediaDrag } from '@/components/admin/homepage/useHomepageMediaDrag'
 import ActionBar from '@/components/common/ActionBar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
+import DirtyTag from '@/components/common/DirtyTag.vue'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 import { getErrorMessage } from '@/utils/error'
 
 const items = ref<HomepageMedia[]>([])
 const savedItems = ref<HomepageMedia[]>([])
 const loading = ref(false)
 const saving = ref(false)
+const resourceBusy = ref(false)
+const saveIncomplete = ref(false)
+const writeBusy = computed(() => saving.value || resourceBusy.value)
+const busy = computed(() => loading.value || writeBusy.value)
 const detailVisible = ref(false)
 const selectedId = ref<string | null>(null)
 const {
@@ -118,6 +143,18 @@ const hasChanges = computed(
   () => homepageMediaSnapshot(items.value) !== homepageMediaSnapshot(savedItems.value),
 )
 const savedById = computed(() => new Map(savedItems.value.map((item) => [item.id, item])))
+useUnsavedChangesGuard({ dirty: hasChanges, busy: writeBusy })
+
+function discardChanges() {
+  if (busy.value) return
+  endDrag()
+  items.value = cloneHomepageMediaItems(savedItems.value)
+  saveIncomplete.value = false
+}
+
+function toggleEnabled(item: HomepageMedia) {
+  if (!busy.value) item.enabled = !item.enabled
+}
 
 function previewUrl(item: HomepageMedia) {
   return homepageMediaPreviewUrl(item, import.meta.env.BASE_URL)
@@ -144,56 +181,71 @@ function isItemDirty(id: string) {
 }
 
 function openDetails(item: HomepageMedia) {
-  if (consumeSuppressedClick()) return
+  if (busy.value || consumeSuppressedClick()) return
   selectedId.value = item.id
   detailVisible.value = true
 }
 
 function updateSelectedItem(updated: HomepageMedia) {
+  if (busy.value) return
   const item = items.value.find((candidate) => candidate.id === updated.id)
   if (item) Object.assign(item, normalizeHomepageMedia(updated))
 }
 
 async function uploadImage({ file }: UploadRequestOptions) {
   if (!canRunResourceAction()) return
+  resourceBusy.value = true
   const formData = new FormData()
   formData.append('file', file)
   try {
     await uploadHomepageImage(formData)
     ElMessage.success('图片已上传')
-    fetchItems()
+    await fetchItems()
   } catch (e: unknown) {
     ElMessage.error(getErrorMessage(e, '上传失败'))
+  } finally {
+    resourceBusy.value = false
   }
 }
 
 async function uploadPanorama({ file }: UploadRequestOptions) {
   if (!canRunResourceAction()) return
+  resourceBusy.value = true
   const formData = new FormData()
   formData.append('file', file)
   try {
     await uploadHomepagePanorama(formData)
     ElMessage.success('Panorama 已上传')
-    fetchItems()
+    await fetchItems()
   } catch (e: unknown) {
     ElMessage.error(getErrorMessage(e, '上传失败'))
+  } finally {
+    resourceBusy.value = false
   }
 }
 
 function canRunResourceAction() {
+  if (busy.value) return false
   if (!hasChanges.value) return true
-  ElMessage.warning('请先保存当前配置')
+  ElMessage.warning('请先保存或放弃当前配置，再上传或删除媒体')
   return false
 }
 
 async function saveChanges() {
-  if (saving.value || !hasChanges.value) return
+  if (busy.value || !hasChanges.value) return
+  endDrag()
   saving.value = true
   try {
-    savedItems.value = await saveHomepageMediaChanges(items.value, savedItems.value)
+    savedItems.value = await saveHomepageMediaChanges(items.value, savedItems.value, {
+      onProgress: (acknowledged) => {
+        savedItems.value = acknowledged
+      },
+    })
+    saveIncomplete.value = false
     ElMessage.success('配置已保存')
   } catch (e: unknown) {
-    ElMessage.error(getErrorMessage(e, '保存失败'))
+    saveIncomplete.value = true
+    ElMessage.error('保存未完成：' + getErrorMessage(e, '请重试'))
   } finally {
     saving.value = false
   }
@@ -201,16 +253,30 @@ async function saveChanges() {
 
 async function remove(item: HomepageMedia) {
   if (!canRunResourceAction()) return
+  resourceBusy.value = true
   try {
-    await ElMessageBox.confirm('确定要删除这个首页媒体吗？', '确认删除', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-    })
+    try {
+      await ElMessageBox.confirm(
+        `确定删除首页媒体“${item.title}”吗？此操作立即生效，无法通过放弃配置恢复。`,
+        '删除媒体',
+        {
+          type: 'warning',
+          confirmButtonText: '删除媒体',
+          cancelButtonText: '取消',
+          closeOnClickModal: false,
+        },
+      )
+    } catch {
+      return
+    }
     await deleteHomepageMedia(item.id)
     ElMessage.success('已删除')
-    fetchItems()
-  } catch {}
+    await fetchItems()
+  } catch (error: unknown) {
+    ElMessage.error(getErrorMessage(error, '删除媒体失败'))
+  } finally {
+    resourceBusy.value = false
+  }
 }
 
 onMounted(fetchItems)

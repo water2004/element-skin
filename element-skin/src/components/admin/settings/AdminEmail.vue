@@ -3,7 +3,13 @@
     <PageHeader title="邮件服务设置" subtitle="配置 SMTP 服务器以启用注册验证、找回密码等通知功能">
       <template #icon><Message /></template>
       <template #actions>
-        <el-button :icon="Refresh" plain @click="loadSettings" class="hover-lift">
+        <el-button
+          :icon="Refresh"
+          plain
+          :disabled="loading || isSaving"
+          @click="reloadSettings"
+          class="hover-lift"
+        >
           重新加载
         </el-button>
       </template>
@@ -22,13 +28,14 @@
             size="small"
             @click="saveSettings"
             :loading="saving"
+            :disabled="loading"
             class="hover-lift"
             >保存配置</el-button
           >
         </div>
       </template>
 
-      <el-form label-position="top" :model="emailSettings">
+      <el-form label-position="top" :model="emailSettings" :disabled="loading || saving">
         <div class="py-2">
           <div
             class="text-sm font-semibold text-[var(--color-text-light)] mb-5 pl-3 border-l-4 border-l-[var(--el-color-primary)]"
@@ -125,6 +132,7 @@
             type="primary"
             size="small"
             :loading="policySaving"
+            :disabled="loading"
             class="hover-lift"
             @click="saveEmailSuffixPolicy"
           >
@@ -133,7 +141,7 @@
         </div>
       </template>
 
-      <el-form label-position="top">
+      <el-form label-position="top" :disabled="loading || policySaving">
         <el-form-item label="名单模式">
           <el-radio-group v-model="emailSuffixPolicy.mode">
             <el-radio-button value="disabled">关闭名单过滤</el-radio-button>
@@ -225,6 +233,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import DirtyTag from '@/components/common/DirtyTag.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 
 const emailSettings = reactive({
   email_verify_enabled: false,
@@ -239,6 +248,8 @@ const emailSettings = reactive({
 
 const saving = ref(false)
 const policySaving = ref(false)
+const loading = ref(false)
+const isSaving = computed(() => saving.value || policySaving.value)
 const allowlistDraft = ref('')
 const denylistDraft = ref('')
 const emailSuffixPolicy = reactive<EmailSuffixPolicy>({
@@ -251,8 +262,23 @@ const settingsDirty = useDirtySnapshot(computed(() => emailSettings))
 const policyDirty = useDirtySnapshot(computed(() => emailSuffixPolicy))
 const hasSettingsChanges = settingsDirty.hasChanges
 const hasPolicyChanges = policyDirty.hasChanges
+const { confirmReload } = useUnsavedChangesGuard({
+  dirty: computed(
+    () =>
+      hasSettingsChanges.value ||
+      hasPolicyChanges.value ||
+      !!allowlistDraft.value ||
+      !!denylistDraft.value,
+  ),
+  busy: isSaving,
+})
+
+async function reloadSettings() {
+  if (!loading.value && (await confirmReload())) await loadSettings()
+}
 
 async function loadSettings() {
+  loading.value = true
   try {
     const [settingsResponse, policyResponse] = await Promise.all([
       getAdminSettingsGroup('email'),
@@ -263,10 +289,14 @@ async function loadSettings() {
       emailSettings.smtp_password = '' // Don't show password
     }
     Object.assign(emailSuffixPolicy, policyResponse.data)
+    allowlistDraft.value = ''
+    denylistDraft.value = ''
     settingsDirty.capture()
     policyDirty.capture()
   } catch {
     ElMessage.error('加载邮件设置失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -276,6 +306,7 @@ function normalizeSuffix(value: string) {
 }
 
 function addSuffix(list: 'allowlist' | 'denylist') {
+  if (loading.value || policySaving.value) return
   const draft = list === 'allowlist' ? allowlistDraft : denylistDraft
   const suffix = normalizeSuffix(draft.value)
   if (!/^@[^\s@]+\.[^\s@]+$/.test(suffix)) {
@@ -292,10 +323,12 @@ function addSuffix(list: 'allowlist' | 'denylist') {
 }
 
 function removeSuffix(list: 'allowlist' | 'denylist', suffix: string) {
+  if (loading.value || policySaving.value) return
   emailSuffixPolicy[list] = emailSuffixPolicy[list].filter((item) => item !== suffix)
 }
 
 async function saveEmailSuffixPolicy() {
+  if (loading.value || policySaving.value) return
   if (emailSuffixPolicy.mode === 'allowlist' && emailSuffixPolicy.allowlist.length === 0) {
     ElMessage.warning('启用白名单前至少需要添加一个邮箱后缀')
     return
@@ -319,6 +352,7 @@ async function saveEmailSuffixPolicy() {
 }
 
 async function saveSettings() {
+  if (loading.value || saving.value) return
   saving.value = true
   try {
     await saveAdminSettingsGroup('email', emailSettings)

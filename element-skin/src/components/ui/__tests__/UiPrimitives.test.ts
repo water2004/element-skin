@@ -1,5 +1,6 @@
 import { createApp, h, nextTick, reactive, type VNode } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
+import { ElCollapse, ElCollapseItem } from 'element-plus'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -22,6 +23,14 @@ beforeAll(() => {
     'utf8',
   )
   const tokensCss = readFileSync(path.join(projectRoot, 'src/assets/styles/tokens.css'), 'utf8')
+  const darkCss = readFileSync(
+    path.join(projectRoot, 'node_modules/element-plus/theme-chalk/dark/css-vars.css'),
+    'utf8',
+  )
+  const overridesCss = readFileSync(
+    path.join(projectRoot, 'src/assets/styles/element-overrides.css'),
+    'utf8',
+  )
   const buttonSource = readFileSync(
     path.join(projectRoot, 'src/components/ui/UiButton.vue'),
     'utf8',
@@ -47,7 +56,14 @@ beforeAll(() => {
     if (result.errors.length) throw result.errors[0]
     return result.code
   })
-  styles.textContent = [elementCss, appearanceCss, tokensCss, ...componentCss].join('\n')
+  styles.textContent = [
+    elementCss,
+    darkCss,
+    appearanceCss,
+    tokensCss,
+    overridesCss,
+    ...componentCss,
+  ].join('\n')
   document.head.append(styles)
 })
 afterAll(() => styles.remove())
@@ -215,6 +231,50 @@ describe('UiButton public behavior', () => {
 })
 
 describe('UiCard public behavior', () => {
+  it.each(['light', 'dark'])(
+    'keeps collapsed and expanded sections inside the %s card theme',
+    async (theme) => {
+      document.documentElement.classList.toggle('dark', theme === 'dark')
+      cleanup.push(() => document.documentElement.classList.remove('dark'))
+      const state = reactive({ expanded: [] as string[] })
+      const root = mount(() =>
+        h(UiCard, {}, () =>
+          h(
+            ElCollapse,
+            {
+              modelValue: state.expanded,
+              'onUpdate:modelValue': (value) => {
+                state.expanded = value as string[]
+              },
+            },
+            () => h(ElCollapseItem, { name: 'regulatory', title: '监管信息' }, () => '备案信息'),
+          ),
+        ),
+      )
+      const header = root.querySelector<HTMLButtonElement>('.el-collapse-item__header')!
+      const wrap = root.querySelector('.el-collapse-item__wrap')!
+      const content = root.querySelector('.el-collapse-item__content')!
+      expect(header.getAttribute('aria-expanded')).toBe('false')
+      expect(cssValue(header, 'background-color')).toBe('transparent')
+      expect(cssValue(wrap, 'background-color')).toBe('transparent')
+      expect(cssValue(header, 'color')).toBe(cssValue(header, '--color-heading'))
+      expect(cssValue(content, 'color')).toBe(cssValue(content, '--color-text'))
+      expect(cssValue(header, '--el-collapse-border-color')).toBe(
+        cssValue(header, '--color-border'),
+      )
+      header.click()
+      await nextTick()
+      expect(state.expanded).toEqual(['regulatory'])
+      expect(header.getAttribute('aria-expanded')).toBe('true')
+      expect(cssValue(header, 'background-color')).toBe('transparent')
+      expect(cssValue(wrap, 'background-color')).toBe('transparent')
+      header.click()
+      await nextTick()
+      expect(state.expanded).toEqual([])
+      expect(header.getAttribute('aria-expanded')).toBe('false')
+    },
+  )
+
   it.each(['never', 'hover', 'always'] as const)(
     'honors %s shadows independently of interactive motion',
     (shadow) => {

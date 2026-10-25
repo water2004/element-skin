@@ -65,9 +65,15 @@
     </UiCard>
 
     <!-- Create Invite Dialog -->
-    <UiDialog v-model="inviteDialogVisible" title="创建新邀请码">
+    <UiDialog
+      v-model="inviteDialogVisible"
+      title="创建新邀请码"
+      :busy="creating"
+      :dirty="hasChanges"
+      @closed="resetInviteForm"
+    >
       <div class="p-6">
-        <el-form label-position="top">
+        <el-form label-position="top" :disabled="creating">
           <el-form-item label="生成模式">
             <UiSegmented v-model="inviteMode">
               <el-radio-button value="auto">自动随机</el-radio-button>
@@ -91,7 +97,9 @@
               <span class="font-mono text-lg font-bold text-[var(--el-color-primary)]">{{
                 previewInviteCode
               }}</span>
-              <el-button link :icon="Refresh" @click="refreshPreview">换一个</el-button>
+              <el-button link :icon="Refresh" :disabled="creating" @click="refreshPreview"
+                >换一个</el-button
+              >
             </div>
           </el-form-item>
 
@@ -118,9 +126,9 @@
         </el-form>
       </div>
 
-      <template #footer>
+      <template #footer="{ requestClose }">
         <div class="px-6 pb-6">
-          <el-button @click="inviteDialogVisible = false">取消</el-button>
+          <el-button :disabled="creating" @click="requestClose">取消</el-button>
           <el-button
             type="primary"
             @click="confirmCreateInvite"
@@ -135,7 +143,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus, Delete, Ticket } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
@@ -147,6 +155,7 @@ import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import { getErrorMessage } from '@/utils/error'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const invites = ref<Invite[]>([])
 const pagination = useCursorPagination<Invite>(20)
@@ -159,6 +168,16 @@ const creating = ref(false)
 const inviteUsesMode = ref('limited')
 const inviteUses = ref(1)
 const inviteNote = ref('')
+const { hasChanges, capture } = useDirtySnapshot(
+  computed(() => ({
+    mode: inviteMode.value,
+    code: customInviteCode.value,
+    preview: previewInviteCode.value,
+    usesMode: inviteUsesMode.value,
+    uses: inviteUses.value,
+    note: inviteNote.value,
+  })),
+)
 
 function formatDate(ts: number | undefined) {
   return ts
@@ -217,13 +236,20 @@ function generateRandomCode() {
   )
 }
 
-function showInviteDialog() {
+function resetInviteForm() {
   inviteMode.value = 'auto'
   customInviteCode.value = ''
-  previewInviteCode.value = generateRandomCode()
+  previewInviteCode.value = ''
   inviteUsesMode.value = 'limited'
   inviteUses.value = 1
   inviteNote.value = ''
+}
+
+function showInviteDialog() {
+  if (creating.value) return
+  resetInviteForm()
+  refreshPreview()
+  capture()
   inviteDialogVisible.value = true
 }
 
@@ -248,6 +274,7 @@ const getRemainingColor = (row: Invite) => {
 }
 
 async function confirmCreateInvite() {
+  if (creating.value) return
   const code = inviteMode.value === 'auto' ? previewInviteCode.value : customInviteCode.value
   if (code.length === 0) return ElMessage.warning('请输入邀请码')
 

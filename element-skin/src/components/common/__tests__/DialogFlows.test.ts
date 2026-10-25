@@ -1,7 +1,7 @@
 import { createApp, defineComponent, h, nextTick, reactive, type VNode } from 'vue'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import { createPinia } from 'pinia'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { useSessionStore } from '@/stores/session'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import CreateRoleDialog from '@/components/dashboard/roles/CreateRoleDialog.vue'
@@ -12,6 +12,8 @@ import HomepageMediaDialog from '@/components/admin/homepage/HomepageMediaDialog
 import AdminHomepageMedia from '@/components/admin/homepage/AdminHomepageMedia.vue'
 import AdminNotices from '@/components/admin/notices/AdminNotices.vue'
 import AdminRolesList from '@/components/admin/roles/AdminRolesList.vue'
+import DashboardWardrobe from '@/components/dashboard/wardrobe/DashboardWardrobe.vue'
+import AdminSettings from '@/components/admin/settings/AdminSettings.vue'
 import {
   boundProfile,
   otherProfile,
@@ -21,6 +23,8 @@ import {
   noticeInput,
   expectedNoticeDraft,
   expectedMediaPatch,
+  uploadFileData,
+  siteSettingsGroups,
 } from './fixtures/dialogFlows'
 
 const api = vi.hoisted(() => ({
@@ -42,6 +46,13 @@ const api = vi.hoisted(() => ({
   listHomepageMedia: vi.fn(),
   patchHomepageMedia: vi.fn(),
   reorderHomepageMedia: vi.fn(),
+  uploadHomepageImage: vi.fn(),
+  uploadHomepagePanorama: vi.fn(),
+  deleteHomepageMedia: vi.fn(),
+  getTextures: vi.fn(),
+  uploadTexture: vi.fn(),
+  getAdminSettingsGroup: vi.fn(),
+  saveAdminSettingsGroup: vi.fn(),
 }))
 vi.mock('@/api/public', () => ({ getPublicSettings: api.getPublicSettings }))
 vi.mock('@/api/me', () => ({
@@ -75,10 +86,23 @@ vi.mock('@/api/admin/homepage-media', () => ({
   listHomepageMedia: api.listHomepageMedia,
   patchHomepageMedia: api.patchHomepageMedia,
   reorderHomepageMedia: api.reorderHomepageMedia,
-  uploadHomepageImage: vi.fn(),
-  uploadHomepagePanorama: vi.fn(),
-  deleteHomepageMedia: vi.fn(),
+  uploadHomepageImage: api.uploadHomepageImage,
+  uploadHomepagePanorama: api.uploadHomepagePanorama,
+  deleteHomepageMedia: api.deleteHomepageMedia,
 }))
+vi.mock('@/api/textures', () => ({
+  getTextures: api.getTextures,
+  uploadTexture: api.uploadTexture,
+  getTextureDetail: vi.fn(),
+  patchTexture: vi.fn(),
+  deleteTexture: vi.fn(),
+  applyTexture: vi.fn(),
+}))
+vi.mock('@/api/admin/settings', () => ({
+  getAdminSettingsGroup: api.getAdminSettingsGroup,
+  saveAdminSettingsGroup: api.saveAdminSettingsGroup,
+}))
+vi.mock('@/components/CapeViewer.vue', () => ({ default: { render: () => h('div', 'cape') } }))
 vi.mock('@/components/SkinViewer.vue', () => ({
   default: defineComponent({
     props: ['skinUrl', 'capeUrl'],
@@ -120,6 +144,12 @@ beforeEach(() => {
     data: { items: [structuredClone(mediaItem)] },
   }))
   api.patchHomepageMedia.mockResolvedValue({ data: { ...mediaItem, title: 'Edited Village' } })
+  api.getTextures.mockResolvedValue({
+    data: { items: [], has_next: false, next_cursor: null, page_size: 20 },
+  })
+  api.getAdminSettingsGroup.mockImplementation(async (group: keyof typeof siteSettingsGroups) => ({
+    data: structuredClone(siteSettingsGroups[group]),
+  }))
   vi.spyOn(ElMessage, 'success').mockImplementation(() => ({ close: vi.fn() }))
   vi.spyOn(ElMessage, 'error').mockImplementation(() => ({ close: vi.fn() }))
   vi.spyOn(ElMessage, 'warning').mockImplementation(() => ({ close: vi.fn() }))
@@ -159,11 +189,11 @@ function deferred<T>() {
 async function mount(render: () => VNode) {
   const host = document.createElement('div')
   document.body.append(host)
-  const app = createApp({ render })
+  const app = createApp({ render: () => h(RouterView) })
   const pinia = createPinia()
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component: { render: () => null } }],
+    routes: [{ path: '/', component: defineComponent({ render }) }],
   })
   await router.push('/')
   app.use(pinia).use(router).use(ElementPlus)
@@ -206,7 +236,222 @@ async function input(element: HTMLInputElement | HTMLTextAreaElement, value: str
   await nextTick()
 }
 
+async function selectUpload(root: ParentNode) {
+  const file = new File([uploadFileData.body], uploadFileData.name, { type: uploadFileData.type })
+  const picker = root.querySelector<HTMLInputElement>('input[type="file"]')!
+  Object.defineProperty(picker, 'files', { value: [file], configurable: true })
+  picker.dispatchEvent(new Event('change', { bubbles: true }))
+  await settle()
+  return file
+}
+
 describe('independent and sensitive form lifecycles', () => {
+  it('keeps site settings explicit, protects grouped writes, and confirms reload without losing a cancelled draft', async () => {
+    const pending = deferred<void>()
+    api.saveAdminSettingsGroup
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce({ data: {} })
+    const mounted = await mount(() => h(AdminSettings))
+    const site = mounted.host.querySelector<HTMLElement>('.ui-card')!
+    const name = site.querySelector<HTMLInputElement>('input[placeholder="皮肤站"]')!
+    await input(name, 'Updated Site')
+    expect(api.saveAdminSettingsGroup).not.toHaveBeenCalled()
+    expect(site.textContent).toContain('有未保存更改')
+    const confirm = vi
+      .spyOn(ElMessageBox, 'confirm')
+      .mockRejectedValueOnce('cancel')
+      .mockResolvedValueOnce('confirm')
+    button(mounted.host, '重新加载').click()
+    await settle()
+    expect(name.value).toBe('Updated Site')
+    expect(api.getAdminSettingsGroup).toHaveBeenCalledTimes(3)
+    button(site, '保存').click()
+    button(site, '保存').click()
+    await settle()
+    expect(api.saveAdminSettingsGroup).toHaveBeenCalledExactlyOnceWith('site', {
+      ...siteSettingsGroups.site,
+      site_name: 'Updated Site',
+    })
+    expect(name.disabled).toBe(true)
+    expect(button(mounted.host, '重新加载').disabled).toBe(true)
+    pending.reject(new Error('save failed'))
+    await settle()
+    expect(name.value).toBe('Updated Site')
+    expect(site.textContent).toContain('有未保存更改')
+    button(mounted.host, '重新加载').click()
+    await settle()
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(api.getAdminSettingsGroup).toHaveBeenCalledTimes(6)
+    expect(name.value).toBe(siteSettingsGroups.site.site_name)
+    expect(site.textContent).not.toContain('有未保存更改')
+  })
+
+  it('protects texture upload options and files on indirect exit, then clears the abandoned selection and preview', async () => {
+    const revoke = vi.fn()
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL() {
+          return 'blob:texture-test'
+        }
+        static revokeObjectURL = revoke
+      },
+    )
+    const confirm = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    const mounted = await mount(() => h(DashboardWardrobe))
+    button(mounted.host, '上传纹理').click()
+    await settle()
+    await input(
+      dialog().querySelector<HTMLInputElement>('input[placeholder="给这个纹理添加备注（可选）"]')!,
+      'Upload draft',
+    )
+    clickMask()
+    await settle()
+    expect(confirm).toHaveBeenCalledTimes(1)
+    expect(
+      dialog().querySelector<HTMLInputElement>('input[placeholder="给这个纹理添加备注（可选）"]')!
+        .value,
+    ).toBe('Upload draft')
+    await selectUpload(dialog())
+    expect(dialog().textContent).toContain(uploadFileData.name)
+    button(dialog(), '取消').click()
+    await settle()
+    expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:texture-test')
+    button(mounted.host, '上传纹理').click()
+    await settle()
+    expect(dialog().textContent).not.toContain(uploadFileData.name)
+    expect(
+      dialog().querySelector<HTMLInputElement>('input[placeholder="给这个纹理添加备注（可选）"]')!
+        .value,
+    ).toBe('')
+    expect(dialog().textContent).toContain('选择文件后即可在此预览')
+    expect(api.uploadTexture).not.toHaveBeenCalled()
+    expect(confirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('uploads once, blocks closure and field edits while writing, retains failure inputs, and cleans up after success', async () => {
+    const revoke = vi.fn()
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL() {
+          return 'blob:texture-test'
+        }
+        static revokeObjectURL = revoke
+      },
+    )
+    const confirm = vi.spyOn(ElMessageBox, 'confirm')
+    const pending = deferred<never>()
+    api.uploadTexture.mockReturnValueOnce(pending.promise).mockResolvedValueOnce({ data: {} })
+    const mounted = await mount(() => h(DashboardWardrobe))
+    button(mounted.host, '上传纹理').click()
+    await settle()
+    const file = await selectUpload(dialog())
+    button(dialog(), '确认上传').click()
+    button(dialog(), '确认上传').click()
+    await settle()
+    expect(api.uploadTexture).toHaveBeenCalledTimes(1)
+    const payload = api.uploadTexture.mock.calls[0]![0] as FormData
+    expect([...payload.keys()]).toEqual(['file', 'texture_type', 'model', 'note', 'is_public'])
+    expect(payload.get('file')).toBe(file)
+    expect(payload.get('texture_type')).toBe('skin')
+    expect(payload.get('model')).toBe('default')
+    expect(payload.get('note')).toBe('')
+    expect(payload.get('is_public')).toBe('false')
+    expect(button(dialog(), '取消').disabled).toBe(true)
+    expect([...dialog().querySelectorAll('input')].every((el) => el.disabled)).toBe(true)
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }),
+    )
+    clickMask()
+    await settle()
+    expect(dialog().textContent).toContain(uploadFileData.name)
+    expect(confirm).not.toHaveBeenCalled()
+    pending.reject(new Error('upload failed'))
+    await settle()
+    expect(ElMessage.error).toHaveBeenLastCalledWith('上传失败: upload failed')
+    expect(dialog().textContent).toContain(uploadFileData.name)
+    expect(revoke).not.toHaveBeenCalled()
+    button(dialog(), '确认上传').click()
+    await settle()
+    expect(api.uploadTexture).toHaveBeenCalledTimes(2)
+    expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:texture-test')
+    button(mounted.host, '上传纹理').click()
+    await settle()
+    expect(dialog().textContent).not.toContain(uploadFileData.name)
+  })
+
+  it('discards only the homepage draft without an API call and requires handling it before resource commands', async () => {
+    const confirm = vi.spyOn(ElMessageBox, 'confirm')
+    const mounted = await mount(() => h(AdminHomepageMedia))
+    const card = mounted.host.querySelector<HTMLElement>('[data-homepage-media-id="media-a"]')!
+    card.click()
+    await settle()
+    await input(dialog().querySelector('input')!, 'Edited Village')
+    button(dialog(), '返回配置').click()
+    await settle()
+    expect(
+      [...mounted.host.querySelectorAll('.el-tag')].map((tag) => tag.textContent?.trim()),
+    ).toContain('有未保存更改')
+    card.querySelector<HTMLButtonElement>('button[aria-label="删除媒体"]')!.click()
+    await selectUpload(mounted.host)
+    expect(ElMessage.warning).toHaveBeenCalledTimes(2)
+    expect(ElMessage.warning).toHaveBeenLastCalledWith('请先保存或放弃当前配置，再上传或删除媒体')
+    expect(api.deleteHomepageMedia).not.toHaveBeenCalled()
+    expect(api.uploadHomepageImage).not.toHaveBeenCalled()
+    expect(confirm).not.toHaveBeenCalled()
+    button(mounted.host, '放弃更改').click()
+    await settle()
+    expect(
+      [...mounted.host.querySelectorAll('.el-tag')].map((tag) => tag.textContent?.trim()),
+    ).not.toContain('有未保存更改')
+    expect(button(mounted.host, '保存配置').disabled).toBe(true)
+    card.click()
+    await settle()
+    expect(dialog().querySelector('input')!.value).toBe(mediaItem.title)
+    expect(api.patchHomepageMedia).not.toHaveBeenCalled()
+    expect(api.listHomepageMedia).toHaveBeenCalledTimes(1)
+  })
+
+  it('locks media configuration until upload and its reload settle, and reports delete failures', async () => {
+    const upload = deferred<void>()
+    const reload = deferred<{ data: { items: (typeof mediaItem)[] } }>()
+    api.uploadHomepageImage.mockReturnValueOnce(upload.promise)
+    api.listHomepageMedia
+      .mockReturnValueOnce({ data: { items: [structuredClone(mediaItem)] } })
+      .mockReturnValueOnce(reload.promise)
+    const mounted = await mount(() => h(AdminHomepageMedia))
+    await selectUpload(mounted.host)
+    const card = mounted.host.querySelector<HTMLElement>('[data-homepage-media-id="media-a"]')!
+    expect(card.draggable).toBe(false)
+    expect(card.querySelector<HTMLButtonElement>('button')!.disabled).toBe(true)
+    expect(button(mounted.host, '上传图片').disabled).toBe(true)
+    upload.resolve(undefined)
+    await settle()
+    expect(button(mounted.host, '上传图片').disabled).toBe(true)
+    reload.resolve({ data: { items: [structuredClone(mediaItem)] } })
+    await settle()
+    expect(card.draggable).toBe(true)
+    const confirm = vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
+    api.deleteHomepageMedia.mockRejectedValueOnce(new Error('delete failed'))
+    card.querySelector<HTMLButtonElement>('button[aria-label="删除媒体"]')!.click()
+    await settle()
+    expect(confirm).toHaveBeenCalledExactlyOnceWith(
+      '确定删除首页媒体“Village”吗？此操作立即生效，无法通过放弃配置恢复。',
+      '删除媒体',
+      {
+        type: 'warning',
+        confirmButtonText: '删除媒体',
+        cancelButtonText: '取消',
+        closeOnClickModal: false,
+      },
+    )
+    expect(api.deleteHomepageMedia).toHaveBeenCalledExactlyOnceWith('media-a')
+    expect(ElMessage.error).toHaveBeenLastCalledWith('delete failed')
+    expect(api.listHomepageMedia).toHaveBeenCalledTimes(2)
+    expect(button(mounted.host, '上传图片').disabled).toBe(false)
+  })
+
   it('creates one role request, retains input on API failure, and starts empty after success', async () => {
     const pending = deferred<never>()
     api.createProfile.mockReturnValueOnce(pending.promise).mockResolvedValueOnce({ data: {} })
@@ -360,13 +605,13 @@ describe('independent and sensitive form lifecycles', () => {
         'onUpdate:item': updated,
       }),
     )
-    expect(dialog().textContent).toContain('关闭后请在父页面保存更改')
+    expect(dialog().textContent).toContain('返回后点击“保存配置”才会生效')
     expect(dialog().textContent).toContain('媒体名称')
     expect(dialog().textContent).toContain('修改不会重命名文件')
     await input(dialog().querySelector('input')!, 'Edited Village')
     await settle()
     expect(updated).toHaveBeenLastCalledWith({ ...mediaItem, title: 'Edited Village' })
-    button(dialog(), '完成').click()
+    button(dialog(), '返回配置').click()
     await settle()
     expect(state.open).toBe(false)
     expect(state.item.title).toBe('Edited Village')
@@ -384,7 +629,7 @@ describe('independent and sensitive form lifecycles', () => {
     mounted.host.querySelector<HTMLElement>('[data-homepage-media-id="media-a"]')!.click()
     await settle()
     await input(dialog().querySelector('input')!, 'Edited Village')
-    button(dialog(), '完成').click()
+    button(dialog(), '返回配置').click()
     await settle()
     button(mounted.host, '保存配置').click()
     button(mounted.host, '保存配置').click()
@@ -392,13 +637,13 @@ describe('independent and sensitive form lifecycles', () => {
     expect(api.patchHomepageMedia).toHaveBeenCalledExactlyOnceWith('media-a', expectedMediaPatch)
     pending.reject(new Error('media save failed'))
     await settle()
-    expect(ElMessage.error).toHaveBeenLastCalledWith('media save failed')
+    expect(ElMessage.error).toHaveBeenLastCalledWith('保存未完成：media save failed')
     expect(api.listHomepageMedia).toHaveBeenCalledTimes(1)
     expect(button(mounted.host, '保存配置').disabled).toBe(false)
     mounted.host.querySelector<HTMLElement>('[data-homepage-media-id="media-a"]')!.click()
     await settle()
     expect(dialog().querySelector('input')!.value).toBe('Edited Village')
-    button(dialog(), '完成').click()
+    button(dialog(), '返回配置').click()
     await settle()
     button(mounted.host, '保存配置').click()
     await settle()

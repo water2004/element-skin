@@ -16,6 +16,17 @@ export function createDefaultUploadForm(): TextureUploadForm {
   }
 }
 
+export function isTextureUploadDirty(form: TextureUploadForm): boolean {
+  const initial = createDefaultUploadForm()
+  return (
+    form.file !== null ||
+    form.texture_type !== initial.texture_type ||
+    form.model !== initial.model ||
+    form.note !== initial.note ||
+    form.is_public !== initial.is_public
+  )
+}
+
 export function replaceLocalTextureUrl(current: string | null, file: File | null): string | null {
   if (current) URL.revokeObjectURL(current)
   return file ? URL.createObjectURL(file) : null

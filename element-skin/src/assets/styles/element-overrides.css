@@ -24,6 +24,15 @@
   --el-input-placeholder-color: var(--color-text-light);
 }
 
+/* 页内折叠区继承所在卡片背景，折叠／展开均使用应用语义色。 */
+.el-collapse {
+  --el-collapse-border-color: var(--color-border);
+  --el-collapse-header-bg-color: transparent;
+  --el-collapse-header-text-color: var(--color-heading);
+  --el-collapse-content-bg-color: transparent;
+  --el-collapse-content-text-color: var(--color-text);
+}
+
 /* scrollbar-gutter 已预留滚动条空间，锁定页面时不再重复扣除 body 宽度。 */
 body.el-popup-parent--hidden {
   width: auto !important;

@@ -126,7 +126,13 @@
     />
 
     <!-- 注销账号确认对话框 -->
-    <UiDialog v-model="showDeleteDialog" title="确认注销账号" :close-on-click-modal="false">
+    <UiDialog
+      v-model="showDeleteDialog"
+      title="确认注销账号"
+      :close-on-click-modal="false"
+      :busy="deletingAccount"
+      @closed="deleteConfirmText = ''"
+    >
       <el-alert
         title="警告：该操作不可逆！"
         type="error"
@@ -137,13 +143,19 @@
       <p class="text-sm text-[var(--el-text-color-secondary)]">
         请输入 <strong class="text-[var(--el-color-danger)]">注销账号</strong> 来确认操作：
       </p>
-      <el-input v-model="deleteConfirmText" placeholder="请输入：注销账号" class="mt-3" />
-      <template #footer>
-        <el-button @click="showDeleteDialog = false">取消</el-button>
+      <el-input
+        v-model="deleteConfirmText"
+        :disabled="deletingAccount"
+        placeholder="请输入：注销账号"
+        class="mt-3"
+      />
+      <template #footer="{ requestClose }">
+        <el-button :disabled="deletingAccount" @click="requestClose">取消</el-button>
         <el-button
           type="danger"
           @click="confirmDeleteAccount"
           :disabled="deleteConfirmText !== '注销账号'"
+          :loading="deletingAccount"
         >
           <el-icon><Delete /></el-icon>
           确认注销
@@ -154,7 +166,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Clock, Check, Delete, Message } from '@element-plus/icons-vue'
@@ -185,6 +197,10 @@ const form = ref({
 const showDeleteDialog = ref(false)
 const showEmailChangeDialog = ref(false)
 const deleteConfirmText = ref('')
+const deletingAccount = ref(false)
+onBeforeUnmount(() => {
+  deleteConfirmText.value = ''
+})
 const disableEasterEgg = ref(isEasterEggDisabled())
 
 const emailInitial = computed(() => {
@@ -282,14 +298,17 @@ async function handleEmailChanged() {
 }
 
 async function confirmDeleteAccount() {
+  if (deletingAccount.value || deleteConfirmText.value !== '注销账号') return
+  deletingAccount.value = true
   try {
     await deleteMe()
     ElMessage.success('账号已注销')
-    setTimeout(() => {
-      router.push('/')
-    }, 1000)
+    showDeleteDialog.value = false
+    await router.push('/')
   } catch (e: unknown) {
     ElMessage.error('注销失败: ' + getErrorMessage(e, '注销失败'))
+  } finally {
+    deletingAccount.value = false
   }
 }
 </script>

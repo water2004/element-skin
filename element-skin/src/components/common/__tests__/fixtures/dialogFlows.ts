@@ -36,6 +36,30 @@ export const mediaItem: HomepageMedia = {
   updated_at: 1000,
 }
 export const noticeInput = { title: '测试公告', summary: '公告摘要' }
+export const uploadFileData = { body: 'test image', name: 'test.png', type: 'image/png' }
+export const siteSettingsGroups = {
+  site: {
+    site_name: 'Test Site',
+    site_subtitle: 'Test subtitle',
+    require_invite: false,
+    allow_register: true,
+    enable_skin_library: true,
+    profile_uuid_mode: 'random',
+    max_texture_size: 1024,
+    footer_text: '',
+    filing_icp: '',
+    filing_icp_link: '',
+    filing_mps: '',
+    filing_mps_link: '',
+  },
+  security: {
+    rate_limit_enabled: true,
+    rate_limit_auth_attempts: 5,
+    rate_limit_auth_window: 15,
+    enable_strong_password_check: false,
+  },
+  auth: { jwt_expire_days: 7 },
+}
 export const expectedMediaPatch = {
   title: 'Edited Village',
   enabled: true,

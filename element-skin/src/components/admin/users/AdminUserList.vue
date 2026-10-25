@@ -407,11 +407,16 @@ async function confirmResetPassword() {
 }
 
 function showBanDialog() {
+  if (banning.value) return
+  banDurationType.value = 'preset'
+  banPresetDuration.value = 24
+  banCustomHours.value = 24
   banReason.value = ''
   banDialogVisible.value = true
 }
 
 async function confirmBanUser() {
+  if (banning.value) return
   if (!currentUser.value) return
   const reason = banReason.value.trim()
   if (!reason) return ElMessage.error('请填写封禁原因')

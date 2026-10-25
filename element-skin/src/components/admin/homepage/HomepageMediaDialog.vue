@@ -4,9 +4,10 @@
     :title="itemDraft?.type === 'panorama' ? 'Panorama 配置' : '图片配置'"
     class="[--dialog-width-form:720px]"
     destroy-on-close
+    :busy="busy"
   >
     <p class="mt-0 mb-4 text-sm text-[var(--color-text-light)]">
-      修改保留在首页媒体配置中，关闭后请在父页面保存更改。
+      此处修改暂存于页面，关闭不会丢弃。返回后点击“保存配置”才会生效。
     </p>
     <div v-if="itemDraft" class="detail-layout">
       <div class="detail-preview">
@@ -19,7 +20,7 @@
         />
       </div>
 
-      <el-form label-width="96px" class="detail-form">
+      <el-form label-width="96px" class="detail-form" :disabled="busy">
         <el-form-item label="媒体名称">
           <div class="w-full">
             <el-input v-model="itemDraft.title" placeholder="用于识别这张首页媒体" />
@@ -62,7 +63,7 @@
       </el-form>
     </div>
     <template #footer="{ requestClose }">
-      <el-button @click="requestClose">完成</el-button>
+      <el-button :disabled="busy" @click="requestClose">返回配置</el-button>
     </template>
   </UiDialog>
 </template>
@@ -80,6 +81,7 @@ type PanoramaField = keyof Pick<
 const props = defineProps<{
   item?: HomepageMedia
   previewUrl: string
+  busy?: boolean
 }>()
 
 const emit = defineEmits<{

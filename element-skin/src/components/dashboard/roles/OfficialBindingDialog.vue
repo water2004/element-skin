@@ -2,8 +2,10 @@
   <UiDialog
     v-model="visible"
     title="绑定正版角色"
-    :close-on-click-modal="false"
+    :busy="loading"
+    :dirty="hasChanges"
     :destroy-on-close="true"
+    @closed="selectedIdentityId = ''"
   >
     <div class="grid gap-5 py-2">
       <el-alert
@@ -14,7 +16,7 @@
         description="如果该 UUID 已属于您，将直接建立绑定；如果不存在，将自动创建角色；如果已属于其他用户，则会拒绝绑定。"
       />
 
-      <el-form v-if="availableMicrosoftIdentities.length" label-position="top">
+      <el-form v-if="availableMicrosoftIdentities.length" label-position="top" :disabled="loading">
         <el-form-item label="选择 Microsoft 账户" required>
           <el-select
             v-model="selectedIdentityId"
@@ -44,7 +46,9 @@
           {{ attentionMicrosoftIdentities.length }} 个 Microsoft
           身份当前不可用，需要重新连接或由管理员恢复提供方。
         </div>
-        <el-button link type="primary" @click="$emit('manage-identities')"> 管理身份 </el-button>
+        <el-button link type="primary" :disabled="loading" @click="$emit('manage-identities')">
+          管理身份
+        </el-button>
       </div>
 
       <el-empty
@@ -58,13 +62,15 @@
         "
         :image-size="72"
       >
-        <el-button type="primary" @click="$emit('manage-identities')">前往身份管理</el-button>
+        <el-button type="primary" :disabled="loading" @click="$emit('manage-identities')"
+          >前往身份管理</el-button
+        >
       </el-empty>
     </div>
 
-    <template #footer>
+    <template #footer="{ requestClose }">
       <ActionBar>
-        <el-button :disabled="loading" @click="visible = false">取消</el-button>
+        <el-button :disabled="loading" @click="requestClose">取消</el-button>
         <el-button
           type="primary"
           :loading="loading"
@@ -83,6 +89,7 @@ import { computed, ref, watch } from 'vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import ActionBar from '@/components/common/ActionBar.vue'
 import type { ExternalIdentity, OfficialProfileBinding } from '@/api/types'
+import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 
 const visible = defineModel<boolean>('visible', { required: true })
 const props = defineProps<{
@@ -96,6 +103,7 @@ const emit = defineEmits<{
 }>()
 
 const selectedIdentityId = ref('')
+const { hasChanges, capture } = useDirtySnapshot(selectedIdentityId)
 const microsoftIdentities = computed(() =>
   props.identities.filter((identity) => identity.provider_adapter === 'microsoft'),
 )
@@ -121,14 +129,17 @@ function identityLabel(identity: ExternalIdentity) {
 }
 
 function confirm() {
-  if (!selectedIdentityId.value) return
+  if (props.loading || !selectedIdentityId.value) return
   emit('confirm', { identity_id: selectedIdentityId.value })
 }
 
 watch(
   visible,
   (opened) => {
-    if (opened) selectedIdentityId.value = availableMicrosoftIdentities.value[0]?.id || ''
+    if (opened) {
+      selectedIdentityId.value = availableMicrosoftIdentities.value[0]?.id || ''
+      capture()
+    }
   },
   { immediate: true },
 )

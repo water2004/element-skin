@@ -214,6 +214,29 @@ These components emit intent events such as `grant-role`, `set-permission`, `sho
 
 ## Migration Checklist
 
+### Unsaved page changes
+
+Full-page forms use `useUnsavedChangesGuard({ dirty, busy })` in the route-owned
+page. `dirty` must reflect the actual draft and its last acknowledged baseline;
+`busy` covers writes, not ordinary reads. The helper confirms router navigation
+and object-param changes, shares a pending confirmation, blocks navigation during
+writes, and attaches `beforeunload` only while protection is needed. Same-object
+query/anchor navigation does not discard a draft. Pages that reload data must
+call `confirmReload()` before replacing their fields. A successful confirmation
+does not clear fields: navigation may still fail in another guard.
+
+Browser refresh, tab/window close, and address-bar navigation use the browser's
+native warning. Custom text and asynchronous saving are unavailable there. Do not
+persist credentials or automatically submit on unload.
+
+Homepage media is one parent-owned configuration draft: field changes, enabled
+state, and ordering wait for “保存配置”; the local editor's “返回配置”, close icon,
+mask and Escape preserve it. “放弃更改” discards only changes not acknowledged by
+the server. Upload/delete are immediate resource commands and require handling
+the draft first; partial save progress must advance the acknowledged baseline.
+
+### Existing component cleanup
+
 When cleaning another page:
 
 1. Move repeated toolbar/card action markup to `ActionBar` or `CardActions`.

@@ -257,6 +257,7 @@ async function fetchOfficialResources() {
 }
 
 async function bindOfficialProfile(payload: { identity_id: string }) {
+  if (bindingLoading.value) return
   try {
     bindingLoading.value = true
     await createOfficialProfileBinding(payload)

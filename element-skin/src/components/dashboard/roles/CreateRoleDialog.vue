@@ -9,7 +9,12 @@
   >
     <el-form label-width="100px" :disabled="creating">
       <el-form-item label="角色名称">
-        <el-input v-model="name" placeholder="请输入角色名称" maxlength="32" show-word-limit />
+        <div class="w-full">
+          <el-input v-model="name" placeholder="请输入角色名称" maxlength="16" show-word-limit />
+          <p class="mt-1 mb-0 text-xs leading-5 text-[var(--color-text-light)]">
+            1–16 个字符，仅限英文字母、数字和下划线。
+          </p>
+        </div>
       </el-form-item>
     </el-form>
     <template #footer="{ requestClose }">

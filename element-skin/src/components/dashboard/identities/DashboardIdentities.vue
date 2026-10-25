@@ -162,6 +162,7 @@ async function loadIdentityState() {
 }
 
 async function connectProvider(providerId: string) {
+  if (authorizingProviderId.value) return
   try {
     authorizingProviderId.value = providerId
     const response = await startIdentityAuthorization({ provider_id: providerId, intent: 'link' })

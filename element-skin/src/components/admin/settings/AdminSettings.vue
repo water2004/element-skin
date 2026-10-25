@@ -3,7 +3,13 @@
     <PageHeader title="站点设置" subtitle="管理站点基础配置、安全策略及第三方集成">
       <template #icon><Setting /></template>
       <template #actions>
-        <el-button :icon="Refresh" plain @click="loadAllSettings" class="hover-lift">
+        <el-button
+          :icon="Refresh"
+          plain
+          :disabled="isSaving || loading"
+          @click="reloadSettings"
+          class="hover-lift"
+        >
           重新加载
         </el-button>
       </template>
@@ -23,12 +29,13 @@
             size="small"
             @click="saveGroup('site')"
             :loading="saving.site"
+            :disabled="loading"
             class="hover-lift"
             >保存</el-button
           >
         </div>
       </template>
-      <el-form label-position="top" :model="settings.site">
+      <el-form label-position="top" :model="settings.site" :disabled="loading || saving.site">
         <el-row :gutter="20">
           <el-col :xs="24" :sm="8">
             <el-form-item label="允许新用户注册">
@@ -144,12 +151,17 @@
             size="small"
             @click="saveGroup('security')"
             :loading="saving.security"
+            :disabled="loading"
             class="hover-lift"
             >保存</el-button
           >
         </div>
       </template>
-      <el-form label-position="top" :model="settings.security">
+      <el-form
+        label-position="top"
+        :model="settings.security"
+        :disabled="loading || saving.security"
+      >
         <el-form-item label="强密码检查">
           <el-switch v-model="settings.security.enable_strong_password_check" />
           <span class="text-xs text-[var(--color-text-light)] leading-normal mt-1 block ml-4"
@@ -192,12 +204,13 @@
             size="small"
             @click="saveGroup('auth')"
             :loading="saving.auth"
+            :disabled="loading"
             class="hover-lift"
             >保存</el-button
           >
         </div>
       </template>
-      <el-form label-position="top" :model="settings.auth">
+      <el-form label-position="top" :model="settings.auth" :disabled="loading || saving.auth">
         <el-form-item label="令牌有效期 (天)">
           <el-input-number v-model="settings.auth.jwt_expire_days" :min="1" :max="365" />
           <p class="text-xs text-[var(--color-text-light)] leading-normal mt-1 block">
@@ -218,6 +231,7 @@ import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import DirtyTag from '@/components/common/DirtyTag.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 
 const settings = reactive({
   site: {
@@ -252,12 +266,26 @@ const saving = reactive({
 })
 
 const regulatoryCollapse = ref<string[]>([])
+const loading = ref(false)
 
 type SettingsGroup = 'site' | 'security' | 'auth'
 
 const siteDirty = useDirtySnapshot(computed(() => settings.site))
 const securityDirty = useDirtySnapshot(computed(() => settings.security))
 const authDirty = useDirtySnapshot(computed(() => settings.auth))
+const isSaving = computed(() => Object.values(saving).some(Boolean))
+const { confirmReload } = useUnsavedChangesGuard({
+  dirty: computed(
+    () =>
+      siteDirty.hasChanges.value || securityDirty.hasChanges.value || authDirty.hasChanges.value,
+  ),
+  busy: isSaving,
+})
+
+async function reloadSettings() {
+  if (loading.value) return
+  if (await confirmReload()) await loadAllSettings()
+}
 
 function hasGroupChanges(group: SettingsGroup) {
   if (group === 'site') return siteDirty.hasChanges.value
@@ -282,10 +310,16 @@ async function loadGroup(group: SettingsGroup) {
 }
 
 async function loadAllSettings() {
-  await Promise.all([loadGroup('site'), loadGroup('security'), loadGroup('auth')])
+  loading.value = true
+  try {
+    await Promise.all([loadGroup('site'), loadGroup('security'), loadGroup('auth')])
+  } finally {
+    loading.value = false
+  }
 }
 
 async function saveGroup(group: SettingsGroup) {
+  if (loading.value || saving[group]) return
   saving[group] = true
   try {
     await saveAdminSettingsGroup(group, settings[group])

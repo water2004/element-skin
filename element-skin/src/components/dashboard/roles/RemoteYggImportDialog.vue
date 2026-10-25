@@ -4,9 +4,11 @@
     title="从外部皮肤站导入角色"
     class="dialog-ygg-import"
     :before-close="beforeClose"
+    :busy="loading"
+    :dirty="!!apiUrl || !!username || !!password || step === 'select'"
   >
     <div v-if="step === 'input'">
-      <el-form label-position="top">
+      <el-form label-position="top" :disabled="loading">
         <el-form-item label="Yggdrasil API 地址">
           <el-input v-model="apiUrl" placeholder="https://skin.example.com/api/yggdrasil" />
           <div class="form-tip">通常以 /api/yggdrasil 结尾</div>
@@ -27,7 +29,11 @@
 
     <div v-else-if="step === 'select'">
       <p class="mb-4">请选择要导入的角色：</p>
-      <el-checkbox-group v-model="selectedProfiles" class="flex w-full flex-col gap-3">
+      <el-checkbox-group
+        v-model="selectedProfiles"
+        :disabled="loading"
+        class="flex w-full flex-col gap-3"
+      >
         <UiOptionCard
           v-for="profile in profiles"
           :key="profile.id"
@@ -43,9 +49,9 @@
       </el-checkbox-group>
     </div>
 
-    <template #footer>
+    <template #footer="{ requestClose }">
       <div class="dialog-footer">
-        <el-button :disabled="loading" @click="$emit('cancel')">取消</el-button>
+        <el-button :disabled="loading" @click="requestClose">取消</el-button>
         <el-button v-if="step === 'input'" type="primary" :loading="loading" @click="$emit('next')">
           下一步
         </el-button>

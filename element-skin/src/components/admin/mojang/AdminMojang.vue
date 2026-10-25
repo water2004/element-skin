@@ -209,6 +209,7 @@ import UiSegmented from '@/components/ui/UiSegmented.vue'
 import DirtyTag from '@/components/common/DirtyTag.vue'
 import { getErrorMessage } from '@/utils/error'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 
 const settings = ref<FallbackSettingsForm>({
   fallback_strategy: 'serial',
@@ -219,6 +220,10 @@ const saving = ref(false)
 const { hasChanges, capture } = useDirtySnapshot(
   computed(() => toFallbackSettingsPayload(settings.value, fallbacks.value)),
 )
+useUnsavedChangesGuard({
+  dirty: computed(() => hasChanges.value || fallbacks.value.some(hasWhitelistChanges)),
+  busy: saving,
+})
 
 async function fetchSettings() {
   try {
@@ -233,6 +238,7 @@ async function fetchSettings() {
 }
 
 async function saveSettings() {
+  if (saving.value) return
   const loading = ElLoading.service({
     text: '正在同步配置与白名单...',
     background: 'rgba(0, 0, 0, 0.7)',

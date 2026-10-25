@@ -4,8 +4,22 @@
       <template #icon><MagicStick /></template>
       <template #actions>
         <DirtyTag :visible="hasChanges" :spaced="false" />
-        <el-button :icon="Refresh" plain @click="loadSettings" class="hover-lift"> 重新加载 </el-button>
-        <el-button type="primary" :loading="saving" @click="saveSettings" class="hover-lift">
+        <el-button
+          :icon="Refresh"
+          plain
+          :disabled="loading || saving"
+          @click="reloadSettings"
+          class="hover-lift"
+        >
+          重新加载
+        </el-button>
+        <el-button
+          type="primary"
+          :loading="saving"
+          :disabled="loading"
+          @click="saveSettings"
+          class="hover-lift"
+        >
           保存
         </el-button>
       </template>
@@ -20,9 +34,7 @@
       description="这里配置的是服务端允许启用的彩蛋。客户端还会结合本地日期和用户个人设置，三者都满足时才会 lazy import 对应效果。"
     />
 
-    <div
-      class="mt-6 grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] max-sm:grid-cols-1 gap-4"
-    >
+    <div class="mt-6 grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] max-sm:grid-cols-1 gap-4">
       <UiCard
         v-for="egg in easterEggOptions"
         :key="egg.id"
@@ -35,13 +47,16 @@
             <el-icon><MagicStick /></el-icon>
           </div>
           <div class="flex-1 min-w-0">
-            <h3 class="m-0 mb-2 text-[17px] font-bold text-[var(--color-heading)]">{{ egg.name }}</h3>
+            <h3 class="m-0 mb-2 text-[17px] font-bold text-[var(--color-heading)]">
+              {{ egg.name }}
+            </h3>
             <p class="m-0 mb-3 text-[var(--color-text-light)] leading-normal">
               {{ egg.description }}
             </p>
             <div class="font-mono text-xs text-[var(--color-text-light)]">ID: {{ egg.id }}</div>
           </div>
           <el-switch
+            :disabled="loading || saving"
             :model-value="enabledIds.includes(egg.id)"
             @change="toggleEasterEgg(egg.id, Boolean($event))"
           />
@@ -61,13 +76,21 @@ import { availableEasterEggs } from '@/easter-eggs'
 import UiCard from '@/components/ui/UiCard.vue'
 import DirtyTag from '@/components/common/DirtyTag.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
+import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 
 const easterEggOptions = availableEasterEggs()
 const enabledIds = ref<string[]>([])
 const saving = ref(false)
+const loading = ref(false)
 const { hasChanges, capture } = useDirtySnapshot(computed(() => enabledIds.value))
+const { confirmReload } = useUnsavedChangesGuard({ dirty: hasChanges, busy: saving })
+
+async function reloadSettings() {
+  if (!loading.value && (await confirmReload())) await loadSettings()
+}
 
 async function loadSettings() {
+  loading.value = true
   try {
     const res = await getAdminSettingsGroup('easter_eggs')
     const enabled = res.data.easter_eggs_enabled
@@ -77,10 +100,13 @@ async function loadSettings() {
     capture()
   } catch {
     ElMessage.error('加载彩蛋设置失败')
+  } finally {
+    loading.value = false
   }
 }
 
 function toggleEasterEgg(id: string, enabled: boolean) {
+  if (loading.value || saving.value) return
   const exists = enabledIds.value.includes(id)
   if (enabled && !exists) {
     enabledIds.value = [...enabledIds.value, id]
@@ -90,6 +116,7 @@ function toggleEasterEgg(id: string, enabled: boolean) {
 }
 
 async function saveSettings() {
+  if (loading.value || saving.value) return
   saving.value = true
   try {
     await saveAdminSettingsGroup('easter_eggs', {

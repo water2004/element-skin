@@ -1,5 +1,5 @@
 <template>
-  <UiDialog v-model="visible" title="添加外部身份" :close-on-click-modal="false">
+  <UiDialog v-model="visible" title="添加外部身份" :busy="!!authorizingProviderId">
     <div class="grid gap-4">
       <p class="m-0 text-sm leading-6 text-[var(--color-text-light)]">
         选择身份提供方后会前往其登录页面。同一个提供方可以连接多个账号，已有身份不会被覆盖。
@@ -55,8 +55,8 @@
       <el-empty v-else description="管理员尚未开放可连接的身份提供方" :image-size="72" />
     </div>
 
-    <template #footer>
-      <el-button :disabled="!!authorizingProviderId" @click="visible = false">关闭</el-button>
+    <template #footer="{ requestClose }">
+      <el-button :disabled="!!authorizingProviderId" @click="requestClose">关闭</el-button>
     </template>
   </UiDialog>
 </template>

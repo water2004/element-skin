@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { saveHomepageMediaChanges } from '@/components/admin/homepage/homepageMediaSave'
 import {
   createHomepageMedia as media,
@@ -6,12 +6,86 @@ import {
 } from '@/components/admin/homepage/__tests__/fixtures/homepageMediaSaveFixtures'
 
 describe('homepage media incremental save', () => {
+  it('advances only successful fields after partial failure and retries only remaining changes', async () => {
+    const first = media({ id: 'first', title: 'First', sort_order: 0 })
+    const second = media({ id: 'second', title: 'Second', sort_order: 1 })
+    const changedSecond = { ...second, title: 'Second changed' }
+    const changedFirst = { ...first, title: 'First changed' }
+    const items = [changedSecond, changedFirst]
+    const secondResponse = { ...changedSecond, updated_at: 700 }
+    const firstResponse = { ...changedFirst, updated_at: 800 }
+    let acknowledged = [first, second]
+    const progress = vi.fn((saved) => {
+      acknowledged = saved
+    })
+    const failed = createHomepageMediaSaveGateway(
+      { second: secondResponse },
+      { patchFailureId: 'first' },
+    )
+    await expect(
+      saveHomepageMediaChanges(items, acknowledged, {
+        gateway: failed.gateway,
+        onProgress: progress,
+      }),
+    ).rejects.toThrow('patch failed: first')
+    expect(progress).toHaveBeenCalledExactlyOnceWith([first, secondResponse])
+    expect(acknowledged).toEqual([first, secondResponse])
+    expect(items).toEqual([secondResponse, changedFirst])
+    const retry = createHomepageMediaSaveGateway({ first: firstResponse })
+    const result = await saveHomepageMediaChanges(items, acknowledged, {
+      gateway: retry.gateway,
+      onProgress: progress,
+    })
+    expect(retry.calls).toEqual([
+      {
+        method: 'patch',
+        id: 'first',
+        body: {
+          title: 'First changed',
+          enabled: true,
+          duration_ms: 8000,
+          overlay_opacity_light: 0.2,
+          overlay_opacity_dark: 0.4,
+        },
+      },
+      { method: 'reorder', ids: ['second', 'first'] },
+    ])
+    expect(result).toEqual([secondResponse, firstResponse])
+    expect(acknowledged).toEqual(result)
+    expect(progress).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps acknowledged fields and original order when reorder fails so discard does not undo saved fields', async () => {
+    const first = media({ id: 'first', title: 'First', sort_order: 0 })
+    const second = media({ id: 'second', title: 'Second', sort_order: 1 })
+    const response = { ...second, title: 'Saved second', updated_at: 900 }
+    const items = [{ ...response }, { ...first }]
+    let acknowledged = [first, second]
+    const { gateway } = createHomepageMediaSaveGateway(
+      { second: response },
+      { reorderFailure: true },
+    )
+    await expect(
+      saveHomepageMediaChanges(items, acknowledged, {
+        gateway,
+        onProgress: (saved) => {
+          acknowledged = saved
+        },
+      }),
+    ).rejects.toThrow('reorder failed')
+    expect(acknowledged).toEqual([first, response])
+    expect(acknowledged[1]).not.toBe(items[0])
+    const retry = createHomepageMediaSaveGateway({})
+    await saveHomepageMediaChanges(items, acknowledged, { gateway: retry.gateway })
+    expect(retry.calls).toEqual([{ method: 'reorder', ids: ['second', 'first'] }])
+  })
+
   it('sends no requests and returns an independent snapshot when nothing changed', async () => {
     const items = [media(), media({ id: 'media-2', title: 'Forest', sort_order: 1 })]
     const savedItems = items.map((item) => ({ ...item }))
     const { calls, gateway } = createHomepageMediaSaveGateway({})
 
-    const snapshot = await saveHomepageMediaChanges(items, savedItems, gateway)
+    const snapshot = await saveHomepageMediaChanges(items, savedItems, { gateway })
 
     expect(calls).toEqual([])
     expect(snapshot).toEqual(items)
@@ -55,7 +129,7 @@ describe('homepage media incremental save', () => {
     const snapshot = await saveHomepageMediaChanges(
       [image, stable, panorama],
       [savedImage, savedStable, savedPanorama],
-      gateway,
+      { gateway },
     )
 
     expect(calls).toEqual([
@@ -105,7 +179,7 @@ describe('homepage media incremental save', () => {
     const items = [{ ...third }, { ...first }, { ...second }]
     const { calls, gateway } = createHomepageMediaSaveGateway({})
 
-    const snapshot = await saveHomepageMediaChanges(items, [first, second, third], gateway)
+    const snapshot = await saveHomepageMediaChanges(items, [first, second, third], { gateway })
 
     expect(calls).toEqual([{ method: 'reorder', ids: ['third', 'first', 'second'] }])
     expect(snapshot).toEqual(items)
@@ -119,7 +193,7 @@ describe('homepage media incremental save', () => {
     const items = [changedSecond, { ...savedFirst }]
     const { calls, gateway } = createHomepageMediaSaveGateway({ second: response })
 
-    const snapshot = await saveHomepageMediaChanges(items, [savedFirst, savedSecond], gateway)
+    const snapshot = await saveHomepageMediaChanges(items, [savedFirst, savedSecond], { gateway })
 
     expect(calls).toEqual([
       {
@@ -149,7 +223,9 @@ describe('homepage media incremental save', () => {
     )
 
     await expect(
-      saveHomepageMediaChanges([changedSecond, changedFirst], [savedFirst, savedSecond], gateway),
+      saveHomepageMediaChanges([changedSecond, changedFirst], [savedFirst, savedSecond], {
+        gateway,
+      }),
     ).rejects.toThrow('patch failed: second')
     expect(calls).toEqual([
       {
@@ -180,7 +256,7 @@ describe('homepage media incremental save', () => {
     )
 
     await expect(
-      saveHomepageMediaChanges(items, [savedFirst, savedSecond], gateway),
+      saveHomepageMediaChanges(items, [savedFirst, savedSecond], { gateway }),
     ).rejects.toThrow('reorder failed')
     expect(calls).toEqual([
       {

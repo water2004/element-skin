@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { getCurrentScope, onScopeDispose, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getRemoteYggProfiles, importRemoteYggProfiles } from '@/api/remote-ygg'
 import type { YggdrasilImportResult } from '@/api/types'
@@ -62,6 +62,7 @@ export function useRemoteYggProfileImport(deps: RemoteYggImportDeps = {}) {
   const notifyError = deps.error ?? ElMessage.error
 
   async function getYggProfiles() {
+    if (yggLoading.value) return
     if (!yggApiUrl.value || !yggUsername.value || !yggPassword.value) {
       notifyWarning('请填写完整信息')
       return
@@ -89,6 +90,7 @@ export function useRemoteYggProfileImport(deps: RemoteYggImportDeps = {}) {
   }
 
   async function importYggProfile() {
+    if (yggLoading.value) return
     const selectedProfiles = selectedRemoteYggProfiles(yggProfiles.value, selectedYggProfiles.value)
     if (selectedProfiles.length === 0) return
 
@@ -130,6 +132,8 @@ export function useRemoteYggProfileImport(deps: RemoteYggImportDeps = {}) {
     showYggImportDialog.value = false
     if (done && typeof done === 'function') done()
   }
+
+  if (getCurrentScope()) onScopeDispose(resetYggImport)
 
   return {
     showYggImportDialog,
