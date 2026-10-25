@@ -8,8 +8,8 @@
     @closed="clearPasswords"
   >
     <el-form label-position="top" :disabled="resetting">
-      <el-form-item label="新密码 (最少6位)">
-        <el-input v-model="newPassword" type="password" show-password />
+      <el-form-item label="新密码">
+        <el-input v-model="newPassword" type="password" placeholder="请输入新密码" show-password />
       </el-form-item>
       <el-form-item label="确认新密码">
         <el-input v-model="confirmPassword" type="password" show-password />

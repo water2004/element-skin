@@ -61,9 +61,21 @@ func (s Service) PublicSettings(ctx context.Context, actor permission.Actor) (ma
 }
 
 func currentPublicSettingsCache(cached map[string]any) bool {
-	_, hasInvite := cached["require_invite"]
-	_, hasEmailSuffixPolicy := cached["email_suffix_policy"]
-	return hasInvite && hasEmailSuffixPolicy
+	publicFields := [...]string{
+		"site_name", "site_subtitle", "site_url", "api_url",
+		"allow_register", "require_invite", "enable_skin_library", "email_verify_enabled",
+		"footer_text", "filing_icp", "filing_icp_link", "filing_mps", "filing_mps_link",
+		"easter_eggs", "mojang_status_urls", "email_suffix_policy",
+	}
+	if len(cached) != len(publicFields) {
+		return false
+	}
+	for _, key := range publicFields {
+		if _, ok := cached[key]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func (s Service) HomepageMedia(ctx context.Context, actor permission.Actor) ([]model.HomepageMedia, error) {

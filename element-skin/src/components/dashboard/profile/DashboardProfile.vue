@@ -262,10 +262,6 @@ async function updateProfile() {
         ElMessage.error('请输入旧密码')
         return
       }
-      if (form.value.new_password.length < 6) {
-        ElMessage.error('新密码长度不能少于6个字符')
-        return
-      }
       if (form.value.new_password !== form.value.confirm_password) {
         ElMessage.error('两次输入的新密码不一致')
         return
@@ -302,14 +298,17 @@ async function confirmDeleteAccount() {
   deletingAccount.value = true
   try {
     await deleteMe()
-    ElMessage.success('账号已注销')
-    showDeleteDialog.value = false
-    await router.push('/')
   } catch (e: unknown) {
     ElMessage.error('注销失败: ' + getErrorMessage(e, '注销失败'))
+    return
   } finally {
     deletingAccount.value = false
   }
+  showDeleteDialog.value = false
+  deleteConfirmText.value = ''
+  sessionStore.clearSession()
+  ElMessage.success('账号已注销')
+  await router.replace('/')
 }
 </script>
 

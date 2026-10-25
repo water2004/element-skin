@@ -108,7 +108,7 @@ describe('layout notification permissions', () => {
       expect(api.initializeAvatar.mock.calls).toEqual([['custom-head'], [null]])
       mounted.session.clearSession()
       await flushState()
-      expect(api.initializeAvatar.mock.calls).toEqual([['custom-head'], [null], [undefined]])
+      expect(api.initializeAvatar.mock.calls).toEqual([['custom-head'], [null], [null]])
     } finally {
       mounted.unmount()
     }

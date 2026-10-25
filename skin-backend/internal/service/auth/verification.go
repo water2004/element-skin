@@ -18,14 +18,12 @@ func (s Service) VerifyCode(ctx context.Context, email, code, typ string) (bool,
 
 func (s Service) ResetPassword(ctx context.Context, email, newPassword, code string) error {
 	settings := s.settings()
-	strong, err := settings.Get(ctx, "enable_strong_password_check", "false")
+	strong, err := settings.Bool(ctx, "enable_strong_password_check", false)
 	if err != nil {
 		return err
 	}
-	if strong == "true" {
-		if errs := util.ValidateStrongPassword(newPassword); len(errs) > 0 {
-			return util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": errs}}
-		}
+	if rules := util.ValidatePassword(newPassword, strong); len(rules) > 0 {
+		return util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": rules}}
 	}
 	enabled, err := settings.Get(ctx, "email_verify_enabled", "false")
 	if err != nil {

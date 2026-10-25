@@ -173,3 +173,87 @@ it('does not change the current avatar or dispatch a change event when saving fa
   expect(mocks.cache).toHaveBeenCalledTimes(1)
   expect(dispatch).not.toHaveBeenCalled()
 })
+
+it.each([null, 'new-account'])(
+  'ignores a pending avatar update after resetting the session to %s',
+  async (newHash) => {
+    const pending = deferred<unknown>()
+    mocks.patchMe.mockReturnValue(pending.promise)
+    mocks.cache.mockResolvedValue('blob:new-account')
+    const dispatch = vi.spyOn(window, 'dispatchEvent')
+    const avatar = useAvatar()
+    const updating = avatar.setAvatar('old-account')
+    await avatar.initializeAvatar(null)
+    if (newHash) await avatar.initializeAvatar(newHash)
+    pending.resolve({})
+    expect(await updating).toBe(false)
+    expect(avatar.avatarHash.value).toBe(newHash)
+    expect(avatar.currentAvatarImg.value).toBe(newHash ? 'blob:new-account' : null)
+    expect(avatar.isAvatarLoading.value).toBe(false)
+    expect(mocks.patchMe).toHaveBeenCalledExactlyOnceWith({ avatar_hash: 'old-account' })
+    expect(mocks.cache).toHaveBeenCalledTimes(newHash ? 1 : 0)
+    expect(dispatch).not.toHaveBeenCalled()
+  },
+)
+
+it.each(['older-first', 'newer-first'])(
+  'publishes only the latest avatar update when responses finish %s',
+  async (order) => {
+    const older = deferred<unknown>()
+    const newer = deferred<unknown>()
+    mocks.patchMe.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
+    mocks.cache.mockResolvedValue('blob:new-head')
+    const dispatch = vi.spyOn(window, 'dispatchEvent')
+    const avatar = useAvatar()
+    const first = avatar.setAvatar('old-head')
+    const second = avatar.setAvatar('new-head', 'slim')
+    if (order === 'older-first') {
+      older.resolve({})
+      expect(await first).toBe(false)
+      expect(mocks.cache).not.toHaveBeenCalled()
+      newer.resolve({})
+    } else {
+      newer.resolve({})
+      expect(await second).toBe(true)
+      older.resolve({})
+    }
+    expect(await first).toBe(false)
+    expect(await second).toBe(true)
+    expect(avatar.avatarHash.value).toBe('new-head')
+    expect(mocks.cache).toHaveBeenCalledExactlyOnceWith('avatar', 'avatar:new-head:slim:256x256')
+    expect(dispatch).toHaveBeenCalledTimes(1)
+    expect(dispatch.mock.calls[0]![0]).toMatchObject({ type: 'avatar-changed', detail: 'new-head' })
+  },
+)
+
+it('does not publish an avatar whose image arrives after session reset', async () => {
+  const cached = deferred<string | null>()
+  mocks.patchMe.mockResolvedValue({})
+  mocks.cache.mockReturnValue(cached.promise)
+  const dispatch = vi.spyOn(window, 'dispatchEvent')
+  const avatar = useAvatar()
+  const pending = avatar.setAvatar('old-head')
+  await Promise.resolve()
+  expect(avatar.isAvatarLoading.value).toBe(true)
+  await avatar.initializeAvatar(null)
+  cached.resolve('blob:old-head')
+  expect(await pending).toBe(false)
+  expect(avatar.avatarHash.value).toBeNull()
+  expect(avatar.currentAvatarImg.value).toBeNull()
+  expect(avatar.isAvatarLoading.value).toBe(false)
+  expect(dispatch).not.toHaveBeenCalled()
+})
+
+it('allows an existing lookup to finish after an unrelated update fails', async () => {
+  const cached = deferred<string | null>()
+  mocks.cache.mockReturnValue(cached.promise)
+  mocks.patchMe.mockRejectedValue(new Error('request failed'))
+  const avatar = useAvatar()
+  const pending = avatar.initializeAvatar('existing-head')
+  await expect(avatar.setAvatar('rejected-head')).rejects.toThrow('request failed')
+  cached.resolve('blob:existing-head')
+  await pending
+  expect(avatar.avatarHash.value).toBe('existing-head')
+  expect(avatar.currentAvatarImg.value).toBe('blob:existing-head')
+  expect(avatar.isAvatarLoading.value).toBe(false)
+})

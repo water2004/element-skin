@@ -52,6 +52,14 @@ func (s Settings) Int(ctx context.Context, key string, fallback int) (int, error
 	return n, nil
 }
 
+func (s Settings) Bool(ctx context.Context, key string, fallback bool) (bool, error) {
+	value, err := s.Get(ctx, key, strconv.FormatBool(fallback))
+	if err != nil {
+		return fallback, err
+	}
+	return settingBool(value), nil
+}
+
 func (s Settings) InvalidateCache(ctx context.Context) error {
 	return s.Redis.InvalidateSettings(ctx)
 }

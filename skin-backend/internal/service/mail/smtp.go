@@ -76,7 +76,7 @@ func (s SMTP) config(ctx context.Context) (smtpConfig, error) {
 	if err != nil {
 		return smtpConfig{}, err
 	}
-	sslRaw, err := s.Settings.Get(ctx, "smtp_ssl", "true")
+	sslEnabled, err := s.Settings.Bool(ctx, "smtp_ssl", true)
 	if err != nil {
 		return smtpConfig{}, err
 	}
@@ -99,7 +99,7 @@ func (s SMTP) config(ctx context.Context) (smtpConfig, error) {
 		username:    username,
 		password:    password,
 		sender:      *sender,
-		implicitTLS: sslRaw == "true" || sslRaw == "1",
+		implicitTLS: sslEnabled,
 	}, nil
 }
 

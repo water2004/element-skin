@@ -35,7 +35,7 @@
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="至少6个字符"
+            placeholder="请输入新密码"
             :prefix-icon="Lock"
             show-password
           />
@@ -95,10 +95,7 @@ const rules: FormRules = {
     { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' },
   ],
   code: [{ required: true, message: '请输入验证码' }],
-  password: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码至少需要6个字符', trigger: 'blur' },
-  ],
+  password: [{ required: true, message: '请输入新密码', trigger: 'blur' }],
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     {

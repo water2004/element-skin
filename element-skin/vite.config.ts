@@ -11,7 +11,7 @@ import { isPathInside, resolveStaticAssetRequest } from './vite/staticAssets'
 import { appearanceBootstrap } from './vite/appearanceBootstrap'
 
 const isLowMemory = process.env.BUILD_MODE === 'low-memory'
-const appVersion = 'v4.0.1'
+const appVersion = 'v4.1.0'
 
 // https://vite.dev/config/
 export default defineConfig({

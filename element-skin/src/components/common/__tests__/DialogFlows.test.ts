@@ -283,7 +283,7 @@ describe('independent and sensitive form lifecycles', () => {
     expect(confirm).toHaveBeenCalledTimes(2)
     expect(api.getAdminSettingsGroup).toHaveBeenCalledTimes(6)
     expect(name.value).toBe(siteSettingsGroups.site.site_name)
-    expect(site.textContent).not.toContain('有未保存更改')
+    await vi.waitFor(() => expect(site.textContent).not.toContain('有未保存更改'))
   })
 
   it('protects texture upload options and files on indirect exit, then clears the abandoned selection and preview', async () => {

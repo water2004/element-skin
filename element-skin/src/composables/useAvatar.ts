@@ -14,7 +14,8 @@ type SkinModel = 'default' | 'slim'
 const currentAvatarImg = ref<string | null>(null)
 const avatarHash = ref<string | null>(null)
 const isAvatarLoading = ref(false)
-let avatarRequest = 0
+let avatarGeneration = 0
+let avatarUpdateGeneration = 0
 
 // Sequential generation queue — ensures only ONE WebGL context exists at a time
 let _generationQueue: Promise<unknown> = Promise.resolve()
@@ -71,7 +72,7 @@ function _doGenerateAvatar(hash: string, model: SkinModel = 'default'): Promise<
 
 /**
  * Get avatar image for any texture hash. Returns cached render result from IndexedDB
- * asynchronously, or generates sequentially (WebGL instances serialized via a promise queue).
+ * instantly, or generates sequentially (WebGL instances serialized via a promise queue).
  */
 export async function getAvatarForHash(
   hash: string | null | undefined,
@@ -88,11 +89,11 @@ export async function getAvatarForHash(
 }
 
 export function useAvatar() {
-  async function initializeAvatar(
+  async function loadAvatar(
     hash: string | null | undefined,
-    model: SkinModel = 'default',
+    model: SkinModel,
+    generation: number,
   ): Promise<void> {
-    const request = ++avatarRequest
     if (!hash) {
       currentAvatarImg.value = null
       avatarHash.value = null
@@ -104,18 +105,33 @@ export function useAvatar() {
     avatarHash.value = hash
     isAvatarLoading.value = true
     try {
-      const image = await getAvatarForHash(hash, model)
-      if (request === avatarRequest) currentAvatarImg.value = image
+      const cached = await getCachedImageUrl('avatar', avatarCacheKey(hash, model))
+      if (generation !== avatarGeneration) return
+      const image = cached ?? (await getAvatarForHash(hash, model))
+      if (generation === avatarGeneration) currentAvatarImg.value = image
     } catch {
-      if (request === avatarRequest) currentAvatarImg.value = null
+      if (generation === avatarGeneration) currentAvatarImg.value = null
     } finally {
-      if (request === avatarRequest) isAvatarLoading.value = false
+      if (generation === avatarGeneration) isAvatarLoading.value = false
     }
   }
 
+  async function initializeAvatar(
+    hash: string | null | undefined,
+    model: SkinModel = 'default',
+  ): Promise<void> {
+    ++avatarUpdateGeneration
+    await loadAvatar(hash, model, ++avatarGeneration)
+  }
+
   async function setAvatar(hash: string | null, model: SkinModel = 'default'): Promise<boolean> {
+    // Session resets must invalidate updates that are still waiting for the API response.
+    const updateGeneration = ++avatarUpdateGeneration
     await patchMe({ avatar_hash: hash })
-    await initializeAvatar(hash, model)
+    if (updateGeneration !== avatarUpdateGeneration) return false
+    const generation = ++avatarGeneration
+    await loadAvatar(hash, model, generation)
+    if (generation !== avatarGeneration || updateGeneration !== avatarUpdateGeneration) return false
     window.dispatchEvent(new CustomEvent('avatar-changed', { detail: hash }))
     return true
   }

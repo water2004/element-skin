@@ -36,6 +36,10 @@ func ValidateFallbackEndpoints(value any) ([]fallback.Endpoint, error) {
 			}
 			seenIDs[id] = struct{}{}
 		}
+		enableHasJoined, err := fallbackBoolean(i+1, m, "enable_hasjoined", true)
+		if err != nil {
+			return nil, err
+		}
 		out = append(out, fallback.Endpoint{
 			ID:              id,
 			Priority:        intValue(m["priority"], i+1),
@@ -45,7 +49,7 @@ func ValidateFallbackEndpoints(value any) ([]fallback.Endpoint, error) {
 			CacheTTL:        normalized["cache_ttl"].(int),
 			SkinDomains:     normalized["skin_domains"].([]string),
 			EnableProfile:   normalized["enable_profile"].(bool),
-			EnableHasJoined: boolValue(valueOr(m["enable_hasjoined"], true)),
+			EnableHasJoined: enableHasJoined,
 			EnableWhitelist: normalized["enable_whitelist"].(bool),
 			Note:            strings.TrimSpace(fmt.Sprint(valueOr(m["note"], ""))),
 		})
@@ -92,14 +96,22 @@ func normalizeFallbackMap(idx int, m map[string]any) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	enableProfile, err := fallbackBoolean(idx, m, "enable_profile", true)
+	if err != nil {
+		return nil, err
+	}
+	enableWhitelist, err := fallbackBoolean(idx, m, "enable_whitelist", false)
+	if err != nil {
+		return nil, err
+	}
 	return map[string]any{
 		"session_url":      session,
 		"account_url":      account,
 		"services_url":     services,
 		"skin_domains":     domains,
 		"cache_ttl":        ttl,
-		"enable_profile":   boolValue(valueOr(m["enable_profile"], true)),
-		"enable_whitelist": boolValue(valueOr(m["enable_whitelist"], false)),
+		"enable_profile":   enableProfile,
+		"enable_whitelist": enableWhitelist,
 	}, nil
 }
 
@@ -123,19 +135,17 @@ func intValue(v any, fallback int) int {
 	return fallback
 }
 
-func boolValue(v any) bool {
-	switch x := v.(type) {
-	case bool:
-		return x
-	case string:
-		return settingBool(x)
-	case int:
-		return x != 0
-	case float64:
-		return x != 0
-	default:
-		return false
+func fallbackBoolean(idx int, values map[string]any, key string, fallback bool) (bool, error) {
+	value, present := values[key]
+	if !present {
+		return fallback, nil
 	}
+	enabled, err := booleanValue(key, value)
+	if apiErr, ok := err.(util.HTTPError); ok {
+		apiErr.Params["index"] = idx
+		return false, apiErr
+	}
+	return enabled, err
 }
 
 func normalizeDomains(idx int, value any) ([]string, error) {

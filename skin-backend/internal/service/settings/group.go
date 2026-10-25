@@ -86,6 +86,13 @@ func (s Settings) SaveGroup(ctx context.Context, group string, body map[string]a
 		if !allowed[key] {
 			continue
 		}
+		if isBooleanSetting(key) {
+			enabled, err := booleanValue(key, value)
+			if err != nil {
+				return err
+			}
+			value = strconv.FormatBool(enabled)
+		}
 		if key == "profile_uuid_mode" {
 			mode := fmt.Sprint(value)
 			if mode != "random" && mode != "offline" {

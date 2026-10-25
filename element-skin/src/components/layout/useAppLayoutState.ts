@@ -113,22 +113,25 @@ export function useAppLayoutState() {
     drawer.value = false
   }
 
+  function clearSessionState() {
+    sessionStore.clearSession()
+    stopUnreadRefreshTimer()
+    drawer.value = false
+  }
+
   async function logout() {
     try {
       await siteLogout()
     } catch {}
-    sessionStore.clearSession()
-    clearUnreadNotifications()
-    stopUnreadRefreshTimer()
-    authReady.value = true
-    void push('/')
-    setTimeout(() => window.location.reload(), 100)
+    clearSessionState()
+    await push('/')
+    window.location.reload()
   }
 
   watch(
     [() => user.value?.id, () => user.value?.avatar_hash],
     ([, hash]) => {
-      void initializeAvatar(hash)
+      if (user.value) void initializeAvatar(hash)
     },
     { immediate: true },
   )
@@ -213,6 +216,7 @@ export function useAppLayoutState() {
     accountName,
     go,
     logout,
+    clearSessionState,
     shouldShowNotificationBadge,
   }
 }

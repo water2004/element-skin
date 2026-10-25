@@ -69,6 +69,31 @@ PERMISSION_CATALOG_RESPONSE = {
     ]
 }
 
+PASSWORD_ERROR_RULES = [
+    ["required"],
+    ["min_length"],
+    ["max_length"],
+    ["composition"],
+    ["min_length", "composition"],
+    ["max_length", "composition"],
+]
+
+SETTING_VALUE_ERROR_CASES = [
+    {
+        "path": "/v2/admin/settings/security",
+        "body": {"enable_strong_password_check": "true"},
+        "params": {"key": "enable_strong_password_check", "expected_type": "boolean"},
+    },
+    {
+        "path": "/v2/admin/settings/fallback",
+        "body": {"fallbacks": [
+            {"session_url": "https://s1.example", "account_url": "https://a1.example", "services_url": "https://m1.example"},
+            {"session_url": "https://s2.example", "account_url": "https://a2.example", "services_url": "https://m2.example", "enable_hasjoined": 1},
+        ]},
+        "params": {"key": "enable_hasjoined", "expected_type": "boolean", "index": 2},
+    },
+]
+
 WEBHOOK_SIGNING_SECRET = "whsec_test_signing_secret"
 WEBHOOK_TIMESTAMP = 1_786_118_400_123
 WEBHOOK_PAYLOAD = {

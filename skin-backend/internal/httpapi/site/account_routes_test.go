@@ -40,6 +40,9 @@ func TestAccountRoutesMeAndAdminSelfDeleteExactResponses(t *testing.T) {
 	if rec.Code != http.StatusForbidden || rec.Body.String() != "{\"error\":{\"object\":\"protected_subject\",\"operation\":\"delete\",\"reason\":\"denied\"}}\n" {
 		t.Fatalf("protected subject self delete should be rejected exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
+	if cookies := rec.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("rejected deletion cleared cookies: %#v", cookies)
+	}
 	if got, err := db.Users.GetByID(req.Context(), adminUser.ID); err != nil || got == nil {
 		t.Fatalf("admin should still exist after rejected delete: user=%#v err=%v", got, err)
 	}
@@ -121,6 +124,16 @@ func TestAccountRoutesDeleteMeRemovesUserAndInvalidatesCacheExactly(t *testing.T
 	h.DeleteMe(rec, req)
 	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
 		t.Fatalf("delete me response mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	cookies := rec.Result().Cookies()
+	if len(cookies) != 2 {
+		t.Fatalf("deleted account cookie count=%d; want 2", len(cookies))
+	}
+	for i, name := range []string{"access_token", "refresh_token"} {
+		cookie := cookies[i]
+		if cookie.Name != name || cookie.Value != "" || cookie.Path != "/" || cookie.MaxAge != -1 || !cookie.HttpOnly || cookie.Secure || cookie.SameSite != http.SameSiteLaxMode {
+			t.Fatalf("deleted account cookie=%#v; want expired %s with session attributes", cookie, name)
+		}
 	}
 	if got, err := db.Users.GetByID(req.Context(), user.ID); err != nil || got != nil {
 		t.Fatalf("delete me should remove user row: user=%#v err=%v", got, err)
@@ -304,6 +317,9 @@ func TestAccountRoutesReturnExactErrorWhenAuthCacheInvalidationFails(t *testing.
 	h.DeleteMe(rec, req)
 	if rec.Code != http.StatusInternalServerError || rec.Body.String() != "{\"error\":{\"object\":\"server\",\"operation\":\"handle\",\"reason\":\"failed\"}}\n" {
 		t.Fatalf("delete invalidate failure mismatch: status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if cookies := rec.Result().Cookies(); len(cookies) != 0 {
+		t.Fatalf("failed deletion cleared cookies: %#v", cookies)
 	}
 	preserved, err := db.Users.GetByID(t.Context(), user.ID)
 	if err != nil || preserved == nil || preserved.DisplayName != "InvalidateChanged" || !util.VerifyPassword("NewPassword123", preserved.Password) {

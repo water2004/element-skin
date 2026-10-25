@@ -49,7 +49,7 @@ func NewWithRedis(cfg config.Config, db *database.DB, redis redisstore.Store, au
 		profiles:    profiles,
 		notices:     noticesvc.Service{DB: db},
 		perms:       permissionssvc.PermissionService{DB: db, Redis: redis},
-		accounts:    accountsvc.AccountService{DB: db, Redis: redis},
+		accounts:    accountsvc.AccountService{DB: db, Redis: redis, Settings: settings},
 		invites:     invitesvc.Service{DB: db},
 		textures:    texturesvc.LibraryService{DB: db, Settings: settings},
 		fallback:    fallbacksvc.Fallback{DB: db, Redis: redis, Settings: settings},

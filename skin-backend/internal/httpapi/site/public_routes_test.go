@@ -92,26 +92,33 @@ func TestPublicRoutesUseRedisCachedSettingsAndHomepageMediaExactly(t *testing.T)
 	db, _ := testutil.NewTestApp(t)
 	cfg := testutil.TestConfig()
 	cache := redisstore.NewMemoryStore()
-	if err := cache.SetPublicSettings(context.Background(), map[string]any{
-		"site_name":           "Cached Site",
-		"allow_register":      false,
-		"require_invite":      false,
-		"email_suffix_policy": map[string]any{"mode": "disabled", "suffixes": []string{}},
-		"mojang_status_urls":  map[string]any{"session": "cached-session"},
-		"cached_only_marker":  true,
-	}, time.Duration(cfg.PublicCacheTTL)*time.Second); err != nil {
+	h := site.NewWithRedis(cfg, db, cache, nil)
+	fresh := httptest.NewRecorder()
+	h.PublicSettings(fresh, publicRouteRequest(http.MethodGet, "/v2/public/settings", nil))
+	if fresh.Code != http.StatusOK {
+		t.Fatalf("fresh public settings: status=%d body=%q", fresh.Code, fresh.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(fresh.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	payload["site_name"] = "Cached Site"
+	payload["allow_register"] = false
+	payload["require_invite"] = false
+	wantSettings, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetPublicSettings(context.Background(), payload, time.Duration(cfg.PublicCacheTTL)*time.Second); err != nil {
 		t.Fatal(err)
 	}
 	if err := cache.SetPublicHomepageMedia(context.Background(), []model.HomepageMedia{{ID: "cached", Type: "image", StoragePath: "cached.webp", Enabled: true}}, time.Duration(cfg.PublicCacheTTL)*time.Second); err != nil {
 		t.Fatal(err)
 	}
-	h := site.NewWithRedis(cfg, db, cache, nil)
 
 	rec := httptest.NewRecorder()
 	h.PublicSettings(rec, publicRouteRequest(http.MethodGet, "/v2/public/settings", nil))
-	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"site_name":"Cached Site"`) ||
-		!strings.Contains(rec.Body.String(), `"require_invite":false`) ||
-		!strings.Contains(rec.Body.String(), `"cached_only_marker":true`) {
+	if rec.Code != http.StatusOK || rec.Body.String() != string(wantSettings)+"\n" {
 		t.Fatalf("public settings should return cached payload exactly: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
