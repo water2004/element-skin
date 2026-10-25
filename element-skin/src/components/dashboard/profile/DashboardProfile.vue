@@ -7,7 +7,7 @@
       </div>
     </div>
 
-    <UiCard class="max-w-[600px] mx-auto p-8 animate-card-slide profile-form-card">
+    <UiCard class="max-w-[600px] mx-auto p-8 profile-form-card">
       <div class="flex items-center gap-4">
         <el-avatar
           :shape="customAvatar ? 'square' : 'circle'"
@@ -318,12 +318,12 @@ async function confirmDeleteAccount() {
   color: #fff;
   font-weight: bold;
   font-size: 24px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.profile-avatar:hover {
-  transform: scale(1.1) rotate(5deg);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  transition:
+    color var(--motion-duration-base) var(--motion-easing-standard),
+    background-color var(--motion-duration-base) var(--motion-easing-standard),
+    border-color var(--motion-duration-base) var(--motion-easing-standard),
+    box-shadow var(--motion-duration-base) var(--motion-easing-standard),
+    opacity var(--motion-duration-base) var(--motion-easing-standard);
 }
 
 .profile-avatar.has-custom {
@@ -337,22 +337,14 @@ async function confirmDeleteAccount() {
 
 .profile-form-card :deep(.el-form-item__label) {
   color: var(--color-text);
-  transition: color 0.3s ease;
-}
-
-.profile-form-card :deep(.el-form-item) {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: color var(--motion-duration-base) ease;
 }
 
 .profile-form-card :deep(.el-divider__text) {
   background-color: var(--color-card-background);
   color: var(--color-heading);
   transition:
-    background-color 0.3s ease,
-    color 0.3s ease;
-}
-
-.profile-form-card :deep(.el-form-item:hover) {
-  transform: translateX(4px);
+    background-color var(--motion-duration-base) ease,
+    color var(--motion-duration-base) ease;
 }
 </style>

@@ -134,14 +134,14 @@ defineEmits<{
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   transition:
-    background-color 0.3s ease,
-    border-color 0.3s ease,
-    transform 0.3s ease,
-    box-shadow 0.3s ease;
+    background-color var(--motion-duration-base) ease,
+    border-color var(--motion-duration-base) ease,
+    transform var(--motion-duration-base) ease,
+    box-shadow var(--motion-duration-base) ease;
 }
 
 .role-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(calc(-1 * var(--motion-offset-hover)));
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 

@@ -132,7 +132,7 @@ const avatarInitial = computed(() => (props.accountName || 'U').slice(0, 1).toUp
   gap: 8px;
   padding: 6px 12px;
   border-radius: 20px;
-  transition: background-color 0.2s;
+  transition: background-color var(--motion-duration-fast);
 }
 
 .account-trigger:hover {

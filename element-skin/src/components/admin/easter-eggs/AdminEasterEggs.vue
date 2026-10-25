@@ -4,22 +4,10 @@
       <template #icon><MagicStick /></template>
       <template #actions>
         <DirtyTag :visible="hasChanges" :spaced="false" />
-        <el-button
-          :icon="Refresh"
-          plain
-          :disabled="loading || saving"
-          @click="reloadSettings"
-          class="hover-lift"
-        >
+        <el-button :icon="Refresh" plain :disabled="loading || saving" @click="reloadSettings">
           重新加载
         </el-button>
-        <el-button
-          type="primary"
-          :loading="saving"
-          :disabled="loading"
-          @click="saveSettings"
-          class="hover-lift"
-        >
+        <el-button type="primary" :loading="saving" :disabled="loading" @click="saveSettings">
           保存
         </el-button>
       </template>
@@ -137,18 +125,13 @@ onMounted(loadSettings)
 <style scoped>
 .easter-egg-card {
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    border-color var(--motion-duration-fast) ease,
+    box-shadow var(--motion-duration-fast) ease;
 }
 
 .easter-egg-card.active {
   border-color: rgba(64, 158, 255, 0.45);
   box-shadow: 0 10px 26px rgba(64, 158, 255, 0.08);
-}
-
-.easter-egg-card:hover {
-  transform: translateY(-2px);
 }
 
 .easter-egg-icon {

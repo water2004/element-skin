@@ -3,10 +3,8 @@
     <PageHeader title="邀请码管理" subtitle="创建并管理用于限制新用户注册的邀请码">
       <template #icon><Ticket /></template>
       <template #actions>
-        <el-button :icon="Refresh" @click="loadInvites" plain class="hover-lift">刷新</el-button>
-        <el-button type="primary" :icon="Plus" @click="showInviteDialog" class="hover-lift"
-          >创建邀请码</el-button
-        >
+        <el-button :icon="Refresh" @click="loadInvites" plain>刷新</el-button>
+        <el-button type="primary" :icon="Plus" @click="showInviteDialog">创建邀请码</el-button>
       </template>
     </PageHeader>
 
@@ -129,11 +127,7 @@
       <template #footer="{ requestClose }">
         <div class="px-6 pb-6">
           <el-button :disabled="creating" @click="requestClose">取消</el-button>
-          <el-button
-            type="primary"
-            @click="confirmCreateInvite"
-            :loading="creating"
-            class="hover-lift"
+          <el-button type="primary" @click="confirmCreateInvite" :loading="creating"
             >确认创建</el-button
           >
         </div>

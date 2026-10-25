@@ -3,13 +3,7 @@
     <PageHeader title="邮件服务设置" subtitle="配置 SMTP 服务器以启用注册验证、找回密码等通知功能">
       <template #icon><Message /></template>
       <template #actions>
-        <el-button
-          :icon="Refresh"
-          plain
-          :disabled="loading || isSaving"
-          @click="reloadSettings"
-          class="hover-lift"
-        >
+        <el-button :icon="Refresh" plain :disabled="loading || isSaving" @click="reloadSettings">
           重新加载
         </el-button>
       </template>
@@ -29,7 +23,6 @@
             @click="saveSettings"
             :loading="saving"
             :disabled="loading"
-            class="hover-lift"
             >保存配置</el-button
           >
         </div>
@@ -133,7 +126,6 @@
             size="small"
             :loading="policySaving"
             :disabled="loading"
-            class="hover-lift"
             @click="saveEmailSuffixPolicy"
           >
             保存策略

@@ -1,9 +1,9 @@
 <template>
   <div
-    class="flex items-center justify-center flex-1 p-5 bg-[var(--color-background-hero-light)] dark:bg-[var(--color-background-hero-dark)] transition-[background] duration-300"
+    class="flex items-center justify-center flex-1 p-5 bg-[var(--color-background-hero-light)] dark:bg-[var(--color-background-hero-dark)] transition-colors"
   >
     <div
-      class="w-full max-w-[440px] bg-[var(--color-card-background)] rounded-[16px] p-6 sm:p-10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] animate-slide-up border border-[var(--color-border)]"
+      class="w-full max-w-[440px] bg-[var(--color-card-background)] rounded-[16px] p-6 sm:p-10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] animate-fade-in border border-[var(--color-border)]"
     >
       <div class="text-center mb-8">
         <h1 class="m-0 mb-2 text-[28px] font-semibold text-[var(--color-heading)]">重置密码</h1>

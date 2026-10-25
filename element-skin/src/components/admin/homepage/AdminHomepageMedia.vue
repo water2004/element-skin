@@ -12,9 +12,7 @@
             accept=".png,.jpg,.jpeg,.webp"
             :disabled="busy"
           >
-            <el-button :icon="Upload" size="large" :disabled="busy" class="hover-lift"
-              >上传图片</el-button
-            >
+            <el-button :icon="Upload" size="large" :disabled="busy">上传图片</el-button>
           </el-upload>
           <el-upload
             action="#"
@@ -23,9 +21,7 @@
             accept=".zip"
             :disabled="busy"
           >
-            <el-button :icon="Box" size="large" :disabled="busy" class="hover-lift"
-              >上传 Panorama</el-button
-            >
+            <el-button :icon="Box" size="large" :disabled="busy">上传 Panorama</el-button>
           </el-upload>
           <el-button size="large" :disabled="busy || !hasChanges" @click="discardChanges">
             放弃更改
@@ -36,7 +32,6 @@
             size="large"
             :loading="saving"
             :disabled="busy || !hasChanges"
-            class="hover-lift"
             @click="saveChanges"
           >
             保存配置
@@ -291,7 +286,7 @@ onMounted(fetchItems)
 }
 .media-grid-move,
 :deep(.media-grid-move) {
-  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--motion-duration-base) var(--motion-easing-standard);
 }
 .empty-placeholder {
   padding: 40px 0;

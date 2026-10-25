@@ -10,12 +10,8 @@
           <el-option label="定时发布" value="scheduled" />
           <el-option label="已过期" value="expired" />
         </el-select>
-        <el-button :icon="Refresh" plain class="hover-lift" @click="refreshFirstPage"
-          >刷新</el-button
-        >
-        <el-button type="primary" :icon="Plus" class="hover-lift" @click="openCreateDialog">
-          新建公告
-        </el-button>
+        <el-button :icon="Refresh" plain @click="refreshFirstPage">刷新</el-button>
+        <el-button type="primary" :icon="Plus" @click="openCreateDialog"> 新建公告 </el-button>
       </template>
     </PageHeader>
 

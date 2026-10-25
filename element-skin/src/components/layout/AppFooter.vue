@@ -54,9 +54,9 @@ withDefaults(
   width: 100%;
   padding: 8px 20px;
   transition:
-    background-color 0.3s ease,
-    color 0.3s ease,
-    border-color 0.3s ease;
+    background-color var(--motion-duration-base) ease,
+    color var(--motion-duration-base) ease,
+    border-color var(--motion-duration-base) ease;
   flex-shrink: 0;
   position: relative;
   z-index: 10;
@@ -86,7 +86,12 @@ withDefaults(
   align-items: center;
   color: inherit;
   opacity: 0.7;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    color var(--motion-duration-base) var(--motion-easing-standard),
+    background-color var(--motion-duration-base) var(--motion-easing-standard),
+    border-color var(--motion-duration-base) var(--motion-easing-standard),
+    box-shadow var(--motion-duration-base) var(--motion-easing-standard),
+    opacity var(--motion-duration-base) var(--motion-easing-standard);
   text-decoration: none;
   padding: 4px 10px !important;
   border-radius: 6px;

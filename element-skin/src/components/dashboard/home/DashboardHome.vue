@@ -367,12 +367,6 @@ onBeforeUnmount(() => {
   min-width: 220px;
   min-height: 40px;
   padding: 0 20px;
-  transition: transform 0.2s;
-}
-
-.drag-btn:hover {
-  transform: translateY(-1px);
-  color: white;
 }
 
 .service-status-actions {

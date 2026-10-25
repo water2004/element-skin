@@ -92,9 +92,9 @@ defineEmits<{
   -webkit-touch-callout: none;
   touch-action: none;
   transition:
-    opacity 0.2s ease,
-    transform 0.2s ease,
-    filter 0.2s ease;
+    opacity var(--motion-duration-fast) ease,
+    transform var(--motion-duration-fast) ease,
+    filter var(--motion-duration-fast) ease;
 }
 .homepage-media-card:hover .media-cover,
 .homepage-media-card.is-drag-over .media-cover {
@@ -120,8 +120,8 @@ defineEmits<{
   border-radius: 8px;
   background: var(--color-card-background);
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color var(--motion-duration-fast) ease,
+    box-shadow var(--motion-duration-fast) ease;
 }
 .media-cover,
 .media-base {
@@ -138,8 +138,8 @@ defineEmits<{
   border-radius: 8px;
   background: var(--color-background-soft);
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
+    border-color var(--motion-duration-fast) ease,
+    box-shadow var(--motion-duration-fast) ease;
 }
 .media-image {
   width: 100%;
@@ -189,6 +189,12 @@ defineEmits<{
   .media-actions {
     height: 72px;
     padding: 18px 14px 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .homepage-media-card.is-dragging {
+    transform: none;
   }
 }
 </style>

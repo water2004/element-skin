@@ -240,6 +240,21 @@ mask and Escape preserve it. “放弃更改” discards only changes not acknow
 the server. Upload/delete are immediate resource commands and require handling
 the draft first; partial save progress must advance the acknowledged baseline.
 
+### Motion
+
+Use `animate-fade-in` for a content group and `animate-card-slide` for a standalone
+staggered card group. Page-owned entrances suppress nested card entrances. The
+shared keyframe uses `translate`, leaving `transform` available for explicit
+interaction; backwards fill covers delays without retaining a transform after
+entry. Motion timings and distances come from the shared tokens; Tailwind's
+default transitions and Element Plus durations use those tokens as well.
+
+Home copy and actions start from one `is-entered` state after the session is ready
+and two animation frames. Do not add an independent appear transition to buttons
+or fade their glass ancestor. Failed sessions still become ready; avatars and
+background media do not gate entrance. Reduced motion keeps content visible,
+removes entrance delay/displacement, and preserves loading and sorting feedback.
+
 ### Existing component cleanup
 
 When cleaning another page:

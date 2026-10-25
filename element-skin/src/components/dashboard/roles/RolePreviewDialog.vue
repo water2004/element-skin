@@ -218,14 +218,18 @@ function focusNameInput() {
   border-radius: 50% !important;
   background: transparent !important;
   border: none !important;
-  transition: all 0.2s ease !important;
+  transition:
+    color var(--motion-duration-fast) ease,
+    background-color var(--motion-duration-fast) ease,
+    border-color var(--motion-duration-fast) ease,
+    box-shadow var(--motion-duration-fast) ease,
+    opacity var(--motion-duration-fast) ease !important;
   flex-shrink: 0;
 }
 
-.title-action-button:hover {
+.title-action-button:is(:hover, :focus-visible) {
   background: var(--color-background-soft) !important;
   color: var(--el-color-primary) !important;
-  transform: scale(1.1);
 }
 
 .title-action-button .el-icon {
@@ -233,7 +237,7 @@ function focusNameInput() {
   color: var(--color-text-light);
 }
 
-.title-action-button:hover .el-icon {
+.title-action-button:is(:hover, :focus-visible) .el-icon {
   color: var(--el-color-primary);
 }
 
@@ -246,7 +250,7 @@ function focusNameInput() {
   background: transparent !important;
   padding: 0 !important;
   border: none !important;
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow var(--motion-duration-fast) ease;
 }
 
 .title-input-field :deep(.el-input__wrapper.is-focus) {

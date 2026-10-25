@@ -11,6 +11,8 @@
   --el-component-size-small: var(--control-height-small);
   --el-component-size: var(--control-height-default);
   --el-component-size-large: var(--control-height-large);
+  --el-transition-duration: var(--motion-duration-base);
+  --el-transition-duration-fast: var(--motion-duration-fast);
 }
 
 /* 库会在控件自身声明这些变量，仅在根元素赋值无法覆盖。 */
@@ -55,5 +57,10 @@ body.el-image-viewer-parent--hidden {
 }
 
 .el-button {
-  transition: all var(--motion-duration-base) var(--motion-easing-standard);
+  transition:
+    color var(--motion-duration-fast) var(--motion-easing-standard),
+    background-color var(--motion-duration-fast) var(--motion-easing-standard),
+    border-color var(--motion-duration-fast) var(--motion-easing-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
+    opacity var(--motion-duration-fast) var(--motion-easing-standard);
 }

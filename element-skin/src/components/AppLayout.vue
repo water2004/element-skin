@@ -274,7 +274,7 @@ onUnmounted(() => {
   margin: 0;
   color: var(--color-text-light);
   font-size: 16px;
-  transition: color 0.3s ease;
+  transition: color var(--motion-duration-base) ease;
 }
 
 .app-shell :where(.page-header-actions) {
@@ -296,7 +296,6 @@ onUnmounted(() => {
   justify-content: center;
   align-items: center;
   width: 100%;
-  animation: fadeIn 0.6s ease;
 }
 </style>
 
@@ -412,7 +411,7 @@ onUnmounted(() => {
   cursor: pointer;
   border-radius: 8px;
   padding: 4px 8px;
-  transition: background-color 0.2s;
+  transition: background-color var(--motion-duration-fast);
   flex-shrink: 0;
 }
 .logo:hover {
@@ -462,8 +461,8 @@ onUnmounted(() => {
 .desktop-nav :deep(.el-sub-menu__title) {
   border-bottom: 2px solid transparent;
   transition:
-    color 0.2s,
-    border-color 0.2s;
+    color var(--motion-duration-fast),
+    border-color var(--motion-duration-fast);
 }
 .desktop-nav :deep(.el-sub-menu__title:hover) {
   color: var(--el-color-primary);

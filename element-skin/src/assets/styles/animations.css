@@ -1,58 +1,36 @@
-/* Global Animation Definitions */
-
-/* 1. Keyframes */
-@keyframes fadeIn {
+/* 页面与卡片共用入场轨迹；translate 不占用交互反馈的 transform。 */
+@keyframes contentEnter {
   from {
     opacity: 0;
-    transform: translateY(var(--motion-offset-content));
+    translate: 0 var(--motion-enter-offset, var(--motion-offset-content));
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    translate: 0 0;
   }
 }
 
-@keyframes cardSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(var(--motion-offset-card));
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(var(--motion-offset-card));
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 2. Animation Classes */
 .animate-fade-in {
-  animation: fadeIn var(--motion-duration-smooth) var(--motion-easing-standard) both;
+  --motion-enter-offset: var(--motion-offset-content);
+  animation: contentEnter var(--motion-duration-smooth) var(--motion-easing-standard) backwards;
 }
 
-/* Fix: Added animation-delay and both fill mode for staggered entrance */
 .animate-card-slide {
-  animation: cardSlideIn var(--motion-duration-slow) var(--motion-easing-standard) both;
-  animation-delay: calc(var(--delay-index, 0) * var(--motion-stagger));
+  --motion-enter-offset: var(--motion-offset-card);
+  animation: contentEnter var(--motion-duration-slow) var(--motion-easing-standard) backwards;
+  animation-delay: calc(min(var(--delay-index, 0), 4) * var(--motion-stagger));
 }
 
-.animate-slide-up {
-  animation: slideUp var(--motion-duration-slow) ease-out;
+/* 整页已作为一组入场时，卡片不再叠加第二次位移和错峰。 */
+.animate-fade-in .animate-card-slide {
+  animation: none;
 }
 
-/* 3. Reusable Transition/Transform Classes */
-.hover-lift {
-  transition: transform var(--motion-duration-base) var(--motion-easing-standard);
-}
-.hover-lift:hover:not(:disabled) {
-  transform: translateY(calc(-1 * var(--motion-offset-hover)));
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-in,
+  .animate-card-slide {
+    animation: none !important;
+    opacity: 1;
+    translate: none;
+  }
 }

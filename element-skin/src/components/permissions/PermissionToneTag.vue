@@ -122,13 +122,13 @@ const toneClasses = computed(() => permissionToneClassMap[props.tone])
 const rootClasses = computed(() => {
   if (props.variant === 'category') {
     return [
-      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition',
-      'hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)]',
+      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ring-1 transition-colors',
+      'focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-background)]',
       props.active ? toneClasses.value.activeChip : toneClasses.value.chip,
     ]
   }
   return [
-    'inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ring-1 transition hover:-translate-y-px',
+    'inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ring-1 transition-colors',
     toneClasses.value.pill,
   ]
 })

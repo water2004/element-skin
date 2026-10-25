@@ -3,13 +3,7 @@
     <PageHeader title="角色管理" subtitle="浏览和管理全站所有用户的游戏角色与材质">
       <template #icon><UserFilled /></template>
       <template #actions>
-        <el-button
-          :icon="Refresh"
-          plain
-          :loading="loading"
-          @click="refreshFromFirst"
-          class="hover-lift"
-        >
+        <el-button :icon="Refresh" plain :loading="loading" @click="refreshFromFirst">
           刷新
         </el-button>
       </template>

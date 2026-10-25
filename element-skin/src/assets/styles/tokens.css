@@ -42,16 +42,19 @@
   --font-size-body: 15px;
   --font-size-title: 24px;
 
-  /* 本批沿用现有动效数值；入场协调、减少动态效果和装饰动作在 3.5 调整。 */
-  --motion-duration-fast: 200ms;
-  --motion-duration-base: 300ms;
-  --motion-duration-smooth: 400ms;
-  --motion-duration-slow: 500ms;
-  --motion-stagger: 50ms;
+  /* 控件反馈、内容入场和展示入场分级；同一组内容共用起点和时长。 */
+  --motion-duration-fast: 120ms;
+  --motion-duration-base: 180ms;
+  --motion-duration-smooth: 320ms;
+  --motion-duration-slow: 400ms;
+  --motion-stagger: 30ms;
   --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
-  --motion-offset-content: 10px;
-  --motion-offset-card: 30px;
-  --motion-offset-hover: 4px;
+  --motion-offset-content: 8px;
+  --motion-offset-card: 12px;
+  --motion-offset-hover: 2px;
+  /* Tailwind 默认过渡与组件库复用同一组时长及减少动态效果设置。 */
+  --default-transition-duration: var(--motion-duration-base);
+  --default-transition-timing-function: var(--motion-easing-standard);
 }
 
 :root.dark {
@@ -67,4 +70,17 @@
   --color-popover-background: var(--color-background-mute);
   --color-segmented-background: #1d1d1d;
   --color-selection-background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-duration-fast: 0ms;
+    --motion-duration-base: 0ms;
+    --motion-duration-smooth: 0ms;
+    --motion-duration-slow: 0ms;
+    --motion-stagger: 0ms;
+    --motion-offset-content: 0px;
+    --motion-offset-card: 0px;
+    --motion-offset-hover: 0px;
+  }
 }

@@ -7,13 +7,7 @@
       <template #icon><Connection /></template>
       <template #actions>
         <DirtyTag :visible="hasChanges" :spaced="false" />
-        <el-button
-          type="primary"
-          :icon="Check"
-          @click="saveSettings"
-          :loading="saving"
-          class="hover-lift"
-        >
+        <el-button type="primary" :icon="Check" @click="saveSettings" :loading="saving">
           保存更改
         </el-button>
       </template>
@@ -83,9 +77,7 @@
             <el-icon><List /></el-icon>
             <span>Fallback 服务链</span>
           </div>
-          <el-button size="small" :icon="Plus" @click="addFallback" plain class="hover-lift"
-            >添加端点</el-button
-          >
+          <el-button size="small" :icon="Plus" @click="addFallback" plain>添加端点</el-button>
         </div>
       </template>
 

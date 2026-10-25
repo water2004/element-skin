@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { getPublicSettings, getPublicHomepageMedia } from '@/api/public'
@@ -26,6 +26,29 @@ const homeActions = computed(() => {
 const bgCanvasRef = ref<HTMLCanvasElement | null>(null)
 const hasEntered = ref(false)
 let entranceFrame = 0
+let mounted = false
+
+function startEntrance() {
+  if (!mounted || !authReady.value || hasEntered.value || entranceFrame) return
+  entranceFrame = requestAnimationFrame(() => {
+    entranceFrame = requestAnimationFrame(() => {
+      entranceFrame = 0
+      if (mounted && authReady.value) hasEntered.value = true
+    })
+  })
+}
+
+watch(
+  authReady,
+  (ready) => {
+    if (ready) startEntrance()
+    else {
+      cancelAnimationFrame(entranceFrame)
+      entranceFrame = 0
+    }
+  },
+  { flush: 'post' },
+)
 
 // Single source-of-truth renderer for the fixed hero background.
 const scene = createHeroScene()
@@ -34,12 +57,9 @@ onMounted(async () => {
   scene.setTarget(bgCanvasRef.value)
   scene.start()
 
-  // 先绘制初始状态，再启动首页入场，避免冷启动初始化耗尽动画时间。
-  entranceFrame = requestAnimationFrame(() => {
-    entranceFrame = requestAnimationFrame(() => {
-      hasEntered.value = true
-    })
-  })
+  // 会话确定后整组进入同一绘制周期，不等待头像、通知或背景媒体。
+  mounted = true
+  startEntrance()
 
   // 加载站点配置
   try {
@@ -66,6 +86,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  mounted = false
   cancelAnimationFrame(entranceFrame)
   scene.destroy()
 })
@@ -82,19 +103,17 @@ onBeforeUnmount(() => {
       </div>
       <div class="hero-actions" :aria-busy="!authReady">
         <template v-for="action in homeActions" :key="action.path">
-          <Transition appear name="home-action" :duration="400">
-            <button
-              type="button"
-              class="home-action"
-              :class="`home-action-${action.variant}`"
-              @click="router.push(action.path)"
-            >
-              <span class="home-action-content">
-                <el-icon v-if="action.showIcon"><User /></el-icon>
-                <span>{{ action.label }}</span>
-              </span>
-            </button>
-          </Transition>
+          <button
+            type="button"
+            class="home-action"
+            :class="`home-action-${action.variant}`"
+            @click="router.push(action.path)"
+          >
+            <span class="home-action-content">
+              <el-icon v-if="action.showIcon"><User /></el-icon>
+              <span>{{ action.label }}</span>
+            </span>
+          </button>
         </template>
       </div>
     </div>
@@ -128,6 +147,8 @@ onBeforeUnmount(() => {
   width: min(800px, calc(100vw - 40px));
   text-align: center;
   color: #fff;
+  translate: 0 var(--motion-offset-content);
+  transition: translate var(--motion-duration-slow) var(--motion-easing-standard);
 }
 
 .hero-title {
@@ -169,7 +190,7 @@ onBeforeUnmount(() => {
   border: none;
   outline: none;
   background: transparent;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform var(--motion-duration-fast) var(--motion-easing-standard);
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
@@ -187,8 +208,8 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.home-action:hover {
-  transform: translateY(-4px);
+.home-action:is(:hover, :focus-visible) {
+  transform: translateY(calc(-1 * var(--motion-offset-hover)));
 }
 
 .home-action:focus-visible {
@@ -211,41 +232,31 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
-/* 按钮整体位移与文字渐入由同一组入场状态驱动，毛玻璃保持不透明。 */
-.hero-copy {
+/* 位移作用于同一流式容器；只对文案渐入，避免祖先 opacity 影响毛玻璃。 */
+.hero-copy,
+.home-action-content {
   opacity: 0;
+  transition: opacity var(--motion-duration-slow) var(--motion-easing-standard);
 }
 
-.is-entered .hero-copy {
-  animation: homeContentEnter 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
+.hero-content.is-entered {
+  translate: 0 0;
 }
 
-.home-action-enter-active {
-  transition:
-    translate 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.is-entered .hero-copy,
+.is-entered .home-action-content {
+  opacity: 1;
 }
 
-.home-action-enter-active .home-action-content {
-  transition: opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.home-action-enter-from {
-  translate: 0 8px;
-}
-
-.home-action-enter-from .home-action-content {
-  opacity: 0;
-}
-
-@keyframes homeContentEnter {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+@media (prefers-reduced-motion: reduce) {
+  .hero-content {
+    translate: none;
+    transition: none;
   }
-  to {
+  .hero-copy,
+  .home-action-content {
     opacity: 1;
-    transform: translateY(0);
+    transition: none;
   }
 }
 

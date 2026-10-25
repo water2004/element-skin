@@ -3,13 +3,7 @@
     <PageHeader title="站点设置" subtitle="管理站点基础配置、安全策略及第三方集成">
       <template #icon><Setting /></template>
       <template #actions>
-        <el-button
-          :icon="Refresh"
-          plain
-          :disabled="isSaving || loading"
-          @click="reloadSettings"
-          class="hover-lift"
-        >
+        <el-button :icon="Refresh" plain :disabled="isSaving || loading" @click="reloadSettings">
           重新加载
         </el-button>
       </template>
@@ -30,7 +24,6 @@
             @click="saveGroup('site')"
             :loading="saving.site"
             :disabled="loading"
-            class="hover-lift"
             >保存</el-button
           >
         </div>
@@ -152,7 +145,6 @@
             @click="saveGroup('security')"
             :loading="saving.security"
             :disabled="loading"
-            class="hover-lift"
             >保存</el-button
           >
         </div>
@@ -205,7 +197,6 @@
             @click="saveGroup('auth')"
             :loading="saving.auth"
             :disabled="loading"
-            class="hover-lift"
             >保存</el-button
           >
         </div>

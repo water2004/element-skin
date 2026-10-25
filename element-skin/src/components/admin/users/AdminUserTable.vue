@@ -65,6 +65,6 @@ const emit = defineEmits<{
 }
 
 .modern-table :deep(.el-table__row) {
-  transition: background-color 0.3s ease;
+  transition: background-color var(--motion-duration-base) ease;
 }
 </style>

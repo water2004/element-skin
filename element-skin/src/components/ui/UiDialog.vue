@@ -196,7 +196,12 @@ defineExpose({ requestClose, requestDismiss })
   background: var(--color-background-soft);
   border-radius: 50%;
   border: 1px solid var(--color-border);
-  transition: all var(--motion-duration-fast) var(--motion-easing-standard);
+  transition:
+    color var(--motion-duration-fast) var(--motion-easing-standard),
+    background-color var(--motion-duration-fast) var(--motion-easing-standard),
+    border-color var(--motion-duration-fast) var(--motion-easing-standard),
+    box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
+    opacity var(--motion-duration-fast) var(--motion-easing-standard);
 }
 
 .ui-dialog--viewer .el-dialog__headerbtn:hover {
