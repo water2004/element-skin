@@ -33,8 +33,10 @@
   --el-collapse-content-text-color: var(--color-text);
 }
 
-/* scrollbar-gutter 已预留滚动条空间，锁定页面时不再重复扣除 body 宽度。 */
-body.el-popup-parent--hidden {
+/* 根页面已预留 scrollbar-gutter；三类锁滚动入口均不再重复扣除 body 宽度。 */
+body.el-popup-parent--hidden,
+body.el-message-box-parent--hidden,
+body.el-image-viewer-parent--hidden {
   width: auto !important;
 }
 

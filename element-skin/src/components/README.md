@@ -216,6 +216,11 @@ These components emit intent events such as `grant-role`, `set-permission`, `sho
 
 ### Unsaved page changes
 
+The root reserves a stable scrollbar gutter. The shared Element Plus overrides
+neutralize body width compensation for popup, message-box and image-viewer lock
+classes together. Keep overflow locking and native cleanup; do not fix a single
+dialog by changing the page container width or disabling scroll protection.
+
 Full-page forms use `useUnsavedChangesGuard({ dirty, busy })` in the route-owned
 page. `dirty` must reflect the actual draft and its last acknowledged baseline;
 `busy` covers writes, not ordinary reads. The helper confirms router navigation
