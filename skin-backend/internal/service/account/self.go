@@ -137,6 +137,9 @@ func (s AccountService) ChangePasswordSelf(ctx context.Context, actor permission
 	if !util.VerifyPassword(oldPassword, u.Password) {
 		return util.HTTPError{Status: http.StatusForbidden, Object: "password", Operation: "verify", Reason: "invalid"}
 	}
+	if err := s.validatePassword(ctx, newPassword); err != nil {
+		return err
+	}
 	hash, err := util.HashPassword(newPassword)
 	if err != nil {
 		return err

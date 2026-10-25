@@ -14,7 +14,6 @@ export function register(data: {
   username: string
   invite?: string
   code?: string
-  identity_ticket?: string
 }): Promise<{ data: { id: string } }> {
   return client.post('/v2/auth/register', data)
 }

@@ -209,16 +209,14 @@ func TestLookupRoutesProtocolMissesAndBadBulkBodyExactly(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode bad bulk lookup body: %v body=%q", err, rec.Body.String())
 	}
-	descriptor, ok := body["error"].(map[string]any)
-	if !ok || len(descriptor) != 3 || descriptor["object"] != "request" ||
-		descriptor["operation"] != "decode" || descriptor["reason"] != "invalid" {
+	if len(body) != 2 || body["error"] != "IllegalArgumentException" || body["errorMessage"] != "Expected an array of profile names." {
 		t.Fatalf("bad bulk lookup body mismatch: %#v", body)
 	}
 
 	req = httptest.NewRequest(http.MethodPost, "/api/profiles/minecraft", strings.NewReader(`[`))
 	rec = httptest.NewRecorder()
 	h.LookupNames(rec, req)
-	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":{\"object\":\"request\",\"operation\":\"decode\",\"reason\":\"invalid\"}}\n" {
+	if rec.Code != http.StatusBadRequest || rec.Body.String() != "{\"error\":\"IllegalArgumentException\",\"errorMessage\":\"Expected an array of profile names.\"}\n" {
 		t.Fatalf("malformed bulk lookup body mismatch: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
@@ -248,8 +246,8 @@ func TestLookupRoutesFallbackMissesReturnExactNoContent(t *testing.T) {
 	req.SetPathValue("playerName", "MissingServices")
 	rec = httptest.NewRecorder()
 	h.LookupName(rec, req)
-	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
-		t.Fatalf("services lookup local+fallback miss should be exact 204 empty body: status=%d body=%q", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusNotFound || rec.Body.String() != "{\"error\":\"NOT_FOUND\",\"errorMessage\":\"Profile not found.\"}\n" {
+		t.Fatalf("services lookup local+fallback miss should be exact 404: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 }
 

@@ -24,7 +24,10 @@
     />
 
     <div class="min-h-[400px]" v-loading="loading" element-loading-background="transparent">
-      <div class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6" v-if="profiles.length > 0">
+      <div
+        class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
+        v-if="profiles.length > 0"
+      >
         <AdminRoleCard
           v-for="(profile, index) in profiles"
           :key="profile.id"
@@ -45,8 +48,10 @@
         :loading="profilesPagination.isLoading.value"
         :disabled-prev="!profilesPagination.canGoPrev.value"
         :disabled-next="!profilesPagination.canGoNext.value"
+        :page-size="profilesPagination.limit.value"
         @prev="handlePrevPage"
         @next="handleNextPage"
+        @page-size-change="handlePageSizeChange"
       />
     </div>
 
@@ -87,8 +92,8 @@ import { getErrorStatus } from '@/utils/error'
 const isDark = inject('isDark', ref(false))
 
 const profiles = ref<Profile[]>([])
-const limit = 20
-const profilesPagination = useCursorPagination<Profile>(limit)
+const profilesPagination = useCursorPagination<Profile>(20)
+const limit = profilesPagination.limit
 const loading = ref(false)
 const searchQuery = ref('')
 const activeSearchQuery = ref('')
@@ -99,7 +104,7 @@ const selectedProfile = ref<Profile | null>(null)
 const previewName = ref('')
 
 function buildSearchParams(extraParams: Record<string, unknown> = {}) {
-  const params: Record<string, unknown> = { limit, ...extraParams }
+  const params: Record<string, unknown> = { limit: limit.value, ...extraParams }
   if (activeSearchQuery.value) params.q = activeSearchQuery.value
   return params
 }
@@ -140,6 +145,11 @@ async function handlePrevPage() {
     profiles.value = res.data.items
     return res.data
   })
+}
+
+async function handlePageSizeChange(value: number) {
+  if (!profilesPagination.setLimit(value)) return
+  await refreshFromFirst()
 }
 
 function handleSearch() {

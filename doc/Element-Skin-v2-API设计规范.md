@@ -116,8 +116,8 @@ OIDC claim 只保存为外部身份资料，不替代本站账户字段，也不
 保存时必须读取并校验 `/.well-known/openid-configuration`，要求 discovery issuer 与配置值完全
 一致，并拒绝不安全的非 HTTPS 外部端点。更新时不提交 `client_secret` 表示保留原密钥。
 
-`login_enabled` 同时控制已有外部身份登录，以及尚未匹配身份继续完成本站注册；不再提供第二个
-“允许接续注册”开关。`link_enabled` 只控制已登录用户添加或重新连接身份。
+`login_enabled` 只控制已有外部身份的登录；未匹配身份的登录返回 `identity.login.not_linked`
+并引导用户先普通登录再绑定，不提供接续注册。`link_enabled` 只控制已登录用户添加或重新连接身份。
 
 OIDC callback 不由管理员配置。服务端按 `SERVER_API_URL`（或对应配置文件中的 `server.api_url`）
 派生并在公开、管理员 provider 列表响应的 `redirect_uri` 字段中返回：
@@ -159,7 +159,7 @@ Content-Type: application/json
 
 `intent` 仅允许：
 
-- `login`：公开登录或进入完整注册流程；
+- `login`：公开登录已绑定的外部身份；
 - `link`：为当前本站用户添加或重新授权身份，需要 `external_identity.create.owned`。
 
 `identity_id` 只允许用于 `link`。省略时表示在该 provider 下添加身份；传入时表示重新连接当前用户
@@ -191,31 +191,18 @@ GET /v2/auth/oidc/callback
 
 callback 会校验 state、nonce、PKCE、issuer、签名、audience 和 subject，并一次性消费 state。
 
-### 3.4 登录后没有本站账户
+### 3.4 登录时没有已绑定的本站账户
 
-若 `(provider_id, subject)` 已绑定，callback 签发本站 cookie 并跳转仪表盘。若未绑定且 provider
-允许登录，callback 只签发短期、一次性的 `identity_ticket`，然后跳转：
+若 `(provider_id, subject)` 已绑定，callback 签发本站 cookie 并跳转仪表盘（或原 `return_to`）。
+若未绑定，callback 返回稳定错误 `403 identity.login.not_linked`，并重定向：
 
 ```text
-/register?identity_ticket=...&provider_id=...
+/login?error_object=identity&error_operation=login&error_reason=not_linked&redirect=<return_to>
 ```
 
-它不会自动创建用户。注册仍提交完整本站表单：
-
-```json
-{
-  "email": "local@example.com",
-  "password": "local-password",
-  "username": "LocalName",
-  "code": "required-when-enabled",
-  "invite": "required-when-enabled",
-  "identity_ticket": "one-time-ticket"
-}
-```
-
-邮箱格式、密码、用户名唯一性、邮箱验证码、邀请注册和并发约束与普通注册完全相同。OIDC email、
-display name 或 email_verified 不补全也不覆盖这些字段。失败时 ticket、验证码和邀请码使用次数均不
-应被错误消费；成功时在同一注册事务中创建用户、权限主体、外部身份和长期凭据。
+登录页提示该外部身份尚未绑定本站账号，引导用户先使用邮箱密码完成普通登录，再到
+「控制台 → 外部身份」通过 `link` intent 显式绑定。OIDC 登录不创建账户、不签发注册票据，
+注册接口不接受任何外部身份字段。
 
 ### 3.5 外部 token 生命周期
 
@@ -393,8 +380,13 @@ refresh token 和 userinfo 立即失效。
 | POST | `/v2/imports/remote-ygg/profiles/import` | `201`，角色标识表示 |
 | POST | `/v2/imports/remote-ygg/profiles/import-batch` | 批量导入结果 |
 
+`/v2/minecraft/profiles/by-name/{name}` 和 `/v2/minecraft/profiles/by-names` 按忽略大小写匹配角色名，返回保留显示大小写的名称。
+全站名称占用不允许不同角色使用同一名称的大小写变体；单个角色仅修改显示大小写不改变 UUID。
+升级时的自动重命名与记录见 [Minecraft Services 查询与角色名称](minecraft-services.md)。
+
 `GET /v2/public/settings` 同时公开注册交互必需的 `allow_register`、`require_invite`、
-`email_verify_enabled` 和 `email_suffix_policy`。邮箱后缀策略不分页，只返回当前生效名单：
+`email_verify_enabled` 和 `email_suffix_policy`。
+邮箱后缀策略不分页，只返回当前生效名单：
 
 ```json
 {
@@ -408,6 +400,41 @@ refresh token 和 userinfo 立即失效。
 `mode` 只能是 `disabled`、`allowlist` 或 `denylist`。后缀按忽略大小写的字面后缀匹配；
 `@example.com` 不匹配 `@sub.example.com`。前端使用公开配置提前校验，后端仍在验证码签发和最终写入时
 重复执行同一策略。名单只限制注册和修改账户邮箱，不限制已有账户找回密码。
+
+密码注册、邮件找回、个人改密和管理员重置共用后端密码校验。四个入口始终要求密码非空，
+且 UTF-8 编码不超过 72 字节，不静默截断。开启 `enable_strong_password_check` 时，额外要求
+至少 8 个 Unicode 码点，并具有小写字母、大写字母、十进制数字、标点或符号四类中的至少三类。
+空格和没有大小写的文字不构成额外类别；emoji 属于符号类。关闭开关后不保留独立的 6 位下限。
+
+`enable_strong_password_check` 仅在后台 security 设置中管理，默认 `false`，不作为公开配置返回。
+管理设置读取与四个密码入口共用布尔解析：文本存储中仅字符串 `true` 表示开启，其他值表示关闭。
+前端只检查必填、确认密码一致等表单条件，不实现密码长度或组成策略。四个入口均由后端
+判定策略，失败返回 `400 password.validate.invalid`，在 `params.rules` 中保留全部失败规则。
+规则标识为 `required`、`max_length`、`min_length`、`composition`；前端按标识显示具体修改原因，
+不显示后端展示文本。请求入口已有的必填字段错误保留对应 `required` 三元组。
+规则失败或配置读取失败发生在密码哈希、验证码消耗、token 撤销和密码写入之前。
+
+公开设置 Redis 缓存继续使用原有的 `public:settings` 键，不引入新的版本键。
+security 更新仍使内部设置缓存失效，不再触发公开设置缓存失效。
+
+管理员设置 API 的布尔字段只接受 JSON 布尔值 `true`、`false`，不接受字符串、数字、`null`、
+数组或对象。此约束适用于 `allow_register`、`require_invite`、`enable_skin_library`、
+`rate_limit_enabled`、`email_verify_enabled`、`enable_strong_password_check`、`smtp_ssl`，以及
+fallback 端点的 `enable_profile`、`enable_hasjoined`、`enable_whitelist`。fallback 端点未提供
+这些字段时保留对应默认值；显式 `null` 不等于未提供字段。
+
+站点布尔设置写入数据库和内部 Redis 缓存时使用规范字符串 `true`、`false`；返回 API 和进入
+业务判断时使用布尔值。已有非规范文本不会被读取流程改写或迁移，字符串 `1` 不表示开启。
+非法输入返回 `400 setting_value.validate.invalid`，`params.key` 指明字段、
+`params.expected_type` 固定为 `boolean`；嵌套 fallback 字段另带从 1 开始的 `params.index`。
+整组参数验证成功后才开始数据库写入；校验失败不写入同请求的其他字段，也不失效现有缓存。
+
+`DELETE /v2/users/me` 成功后返回 `204` 空体，并清除 `access_token`、`refresh_token` 两个站点 Cookie。
+Cookie 保持 Path、HttpOnly、Secure 和 SameSite 属性；注销被拒绝或删除失败时不清除 Cookie。
+前端收到成功响应后通过共享的本地清理函数清空用户、头像与通知状态、停止通知轮询，并返回首页。
+注销成功后不再发起退出登录请求，也不依赖整页刷新。清理前已发起的用户、头像或通知请求即使
+迟到，也不得恢复旧会话状态；失败时保留当前页面和前端状态。数据库删除及凭据撤销由
+既有后端删除流程完成，不依赖前端追加请求。
 
 ### 6.5 OAuth app 与 grant 管理
 
@@ -534,7 +561,7 @@ provider 冲突均终止启动并保留旧设置。旧版没有持久化用户 r
 
 - OIDC discovery、issuer、nonce、PKCE、签名和回调 state 的成功及失败路径；
 - 同 provider 多身份、重复 subject、跨用户冲突、重新授权和并发刷新；
-- OIDC 未匹配账户时完整注册字段、验证码、邀请码、ticket 重放与失败回滚；
+- OIDC 未匹配账户时精确返回 `identity.login.not_linked`，不创建用户、身份或票据，state 保持一次性；
 - 外部 token 加密、Redis access 缓存、refresh 轮换和并发单航班；
 - refresh 被拒绝后的结构化状态、重新授权恢复，以及上游 `401` 强制刷新单次重试；
 - 指定 `identity_id` 的重新连接必须拒绝错误 subject，并验证失败后身份、凭据和缓存均不变；

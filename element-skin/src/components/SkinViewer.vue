@@ -51,11 +51,17 @@ const props = withDefaults(
   { capeUrl: null, model: 'default', width: 300, height: 400, isStatic: false }
 )
 
+const emit = defineEmits<{
+  error: [reason: unknown]
+}>()
+
 const container = ref<HTMLDivElement | null>(null)
 const snapshotUrl = ref<string | null>(null)
 let viewer: skinview3d.SkinViewer | null = null
+let generation = 0
 
 async function initViewer() {
+  const gen = ++generation
   if (viewer) {
     viewer.dispose()
     viewer = null
@@ -73,6 +79,8 @@ async function initViewer() {
   if (props.isStatic) {
     // 使用全局锁排队执行，防止 WebGL 上下文溢出
     globalRenderLock = globalRenderLock.then(async () => {
+      if (gen !== generation) return
+
       const cacheKey = skinSnapshotCacheKey({
         skinUrl: props.skinUrl,
         capeUrl: props.capeUrl,
@@ -84,6 +92,7 @@ async function initViewer() {
       // 再次检查快照是否已存在（防止重复渲染）
       if (snapshotUrl.value) return
       const cachedUrl = await getCachedImageUrl('viewer-snapshot', cacheKey)
+      if (gen !== generation) return
       if (cachedUrl) {
         snapshotUrl.value = cachedUrl
         return
@@ -113,10 +122,13 @@ async function initViewer() {
         // 等待资源加载
         await staticViewer.loadSkin(props.skinUrl, { model: props.model === 'slim' ? 'slim' : 'default' })
         if (props.capeUrl) await staticViewer.loadCape(props.capeUrl)
+        if (gen !== generation) return
 
         staticViewer.render()
         const blob = await canvasToBlob(tempCanvas)
+        if (gen !== generation) return
         const storedUrl = blob ? await setCachedImageUrl('viewer-snapshot', cacheKey, blob) : null
+        if (gen !== generation) return
         snapshotUrl.value = storedUrl ?? tempCanvas.toDataURL('image/png')
       } catch (e) {
         console.error('SkinViewer static render error:', e)
@@ -131,16 +143,34 @@ async function initViewer() {
   } else {
     // 交互模式逻辑
     await nextTick()
-    if (!container.value) return
+    if (gen !== generation || !container.value) return
     container.value.innerHTML = ''
 
     const canvas = document.createElement('canvas')
-    viewer = new skinview3d.SkinViewer({
+    const localViewer = new skinview3d.SkinViewer({
       canvas,
-      ...config,
+      width: props.width,
+      height: props.height,
+      model: props.model === 'slim' ? 'slim' : 'default',
     })
 
-    container.value.appendChild(viewer.canvas)
+    try {
+      await localViewer.loadSkin(props.skinUrl, { model: props.model === 'slim' ? 'slim' : 'default' })
+      if (gen !== generation) { localViewer.dispose(); return }
+      if (props.capeUrl) {
+        await localViewer.loadCape(props.capeUrl)
+        if (gen !== generation) { localViewer.dispose(); return }
+      }
+    } catch (e) {
+      localViewer.dispose()
+      if (gen === generation) emit('error', e)
+      return
+    }
+
+    if (gen !== generation || !container.value) { localViewer.dispose(); return }
+
+    viewer = localViewer
+    container.value.appendChild(localViewer.canvas)
     viewer.autoRotate = true
     viewer.autoRotateSpeed = 0.5
     viewer.zoom = 0.8
@@ -154,6 +184,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  generation++
   if (viewer) {
     viewer.dispose()
     viewer = null

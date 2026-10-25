@@ -50,12 +50,24 @@
         </div>
       </div>
       <div class="account-actions">
-        <UiButton variant="outline" @click="emit('navigate', '/dashboard')">
-          <span>个人面板</span>
-        </UiButton>
-        <UiButton v-if="canAccessAdmin" variant="outline" @click="emit('navigate', '/admin')">
-          <span>管理面板</span>
-        </UiButton>
+        <template v-if="links.length">
+          <div class="account-section-label">账户与应用</div>
+          <UiButton
+            v-for="item in links"
+            :key="item.path"
+            variant="outline"
+            @click="emit('navigate', item.path)"
+          >
+            <span>{{ item.title }}</span>
+          </UiButton>
+        </template>
+        <template v-if="canAccessAdmin">
+          <div class="account-section-label">面板</div>
+          <UiButton variant="outline" @click="emit('navigate', '/admin')">
+            <span>管理面板</span>
+          </UiButton>
+        </template>
+        <div class="account-action-separator" />
         <UiButton variant="outline-danger" @click="emit('logout')">
           <span>退出登录</span>
         </UiButton>
@@ -68,12 +80,14 @@
 import { computed } from 'vue'
 
 import UiButton from '@/components/ui/UiButton.vue'
+import type { AccountLink } from './appNavigation'
 
 const props = defineProps<{
   avatarSrc: string
   accountName: string
   roleLabel: string
   canAccessAdmin: boolean
+  links: readonly AccountLink[]
 }>()
 
 const emit = defineEmits<{
@@ -147,6 +161,18 @@ const avatarInitial = computed(() => (props.accountName || 'U').slice(0, 1).toUp
   flex-direction: column;
   gap: 8px;
   width: 100%;
+}
+
+.account-section-label {
+  margin: 4px 0 -2px;
+  color: var(--color-text-light);
+  font-size: 12px;
+}
+
+.account-action-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: var(--color-border);
 }
 
 .account-actions :deep(.el-button) {

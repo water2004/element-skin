@@ -1,29 +1,29 @@
 <template>
   <div class="cape-viewer-wrapper" :style="{ width: width + 'px', height: height + 'px' }">
     <!-- Static Image Mode -->
-    <img 
-      v-if="isStatic && snapshotUrl" 
-      :src="snapshotUrl" 
-      class="cape-snapshot" 
-      :style="{ width: width + 'px', height: height + 'px' }" 
+    <img
+      v-if="isStatic && snapshotUrl"
+      :src="snapshotUrl"
+      class="cape-snapshot"
+      :style="{ width: width + 'px', height: height + 'px' }"
     />
 
     <!-- Loading Placeholder -->
     <div v-if="isStatic && !snapshotUrl" class="cape-loader">
       <el-icon class="is-loading"><Loading /></el-icon>
     </div>
-    
+
     <!-- Interactive Canvas Mode -->
-    <div 
+    <div
       v-if="!isStatic"
-      ref="container" 
+      ref="container"
       class="cape-viewer-container"
       :style="{ width: width + 'px', height: height + 'px' }"
     ></div>
 
     <!-- Toggle Button for Cape/Elytra -->
     <div v-if="!isStatic" class="equipment-toggle">
-      <el-radio-group v-model="backEquipment" size="large" @change="handleEquipmentChange">
+      <el-radio-group v-model="backEquipment" size="large">
         <el-radio-button value="cape">披风</el-radio-button>
         <el-radio-button value="elytra">鞘翅</el-radio-button>
       </el-radio-group>
@@ -54,22 +54,22 @@ const props = withDefaults(
     height?: number
     isStatic?: boolean
   }>(),
-  { width: 200, height: 280, isStatic: false }
+  { width: 200, height: 280, isStatic: false },
 )
 
 const container = ref<HTMLDivElement | null>(null)
 const snapshotUrl = ref<string | null>(null)
 let viewer: skinview3d.SkinViewer | null = null
+let generation = 0
+
+const emit = defineEmits<{
+  error: [reason: unknown]
+}>()
 
 const backEquipment = ref<'cape' | 'elytra'>('cape')
 
-function handleEquipmentChange() {
-  if (viewer && !props.isStatic) {
-    viewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
-  }
-}
-
 async function initViewer() {
+  const gen = ++generation
   if (viewer) {
     viewer.dispose()
     viewer = null
@@ -83,6 +83,8 @@ async function initViewer() {
 
   if (props.isStatic) {
     globalCapeRenderLock = globalCapeRenderLock.then(async () => {
+      if (gen !== generation) return
+
       const cacheKey = capeSnapshotCacheKey({
         capeUrl: props.capeUrl,
         width: props.width,
@@ -91,6 +93,7 @@ async function initViewer() {
 
       if (snapshotUrl.value) return
       const cachedUrl = await getCachedImageUrl('viewer-snapshot', cacheKey)
+      if (gen !== generation) return
       if (cachedUrl) {
         snapshotUrl.value = cachedUrl
         return
@@ -115,9 +118,12 @@ async function initViewer() {
         staticViewer.zoom = 1.3
 
         await staticViewer.loadCape(props.capeUrl, { backEquipment: 'cape' })
+        if (gen !== generation) return
         staticViewer.render()
         const blob = await canvasToBlob(tempCanvas)
+        if (gen !== generation) return
         const storedUrl = blob ? await setCachedImageUrl('viewer-snapshot', cacheKey, blob) : null
+        if (gen !== generation) return
         snapshotUrl.value = storedUrl ?? tempCanvas.toDataURL('image/png')
       } catch (e) {
         console.error('CapeViewer static render error:', e)
@@ -131,16 +137,36 @@ async function initViewer() {
     await globalCapeRenderLock
   } else {
     await nextTick()
-    if (!container.value) return
+    if (gen !== generation || !container.value) return
     container.value.innerHTML = ''
 
     const canvas = document.createElement('canvas')
-    viewer = new skinview3d.SkinViewer({
+    const localViewer = new skinview3d.SkinViewer({
       canvas,
-      ...config,
+      width: props.width,
+      height: props.height,
     })
 
-    container.value.appendChild(viewer.canvas)
+    try {
+      await localViewer.loadCape(props.capeUrl, { makeVisible: false })
+      if (gen !== generation) {
+        localViewer.dispose()
+        return
+      }
+      localViewer.playerObject.backEquipment = backEquipment.value
+    } catch (e) {
+      localViewer.dispose()
+      if (gen === generation) emit('error', e)
+      return
+    }
+
+    if (gen !== generation || !container.value) {
+      localViewer.dispose()
+      return
+    }
+
+    viewer = localViewer
+    container.value.appendChild(localViewer.canvas)
     if (viewer.playerObject) {
       viewer.playerObject.skin.visible = false
     }
@@ -149,8 +175,6 @@ async function initViewer() {
     viewer.autoRotateSpeed = 0.5
     viewer.zoom = 1
     viewer.playerWrapper.position.y = 4
-
-    viewer.loadCape(props.capeUrl, { backEquipment: backEquipment.value })
   }
 }
 
@@ -159,6 +183,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  generation++
   if (viewer) {
     viewer.dispose()
     viewer = null
@@ -171,8 +196,14 @@ watch(
     snapshotUrl.value = null
     initViewer()
   },
-  { deep: true }
+  { deep: true },
 )
+
+watch(backEquipment, (value) => {
+  if (viewer && !props.isStatic) {
+    viewer.playerObject.backEquipment = value
+  }
+})
 </script>
 
 <style scoped>

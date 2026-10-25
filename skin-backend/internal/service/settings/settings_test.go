@@ -93,3 +93,58 @@ func TestSettingsIntUsesCacheTTLAndFallbacksExactly(t *testing.T) {
 		t.Fatalf("Int should return fallback for invalid stored number: got=%d err=%v", fallback, err)
 	}
 }
+
+func TestSettingsBoolMatchesManagementValuesAndPreservesErrors(t *testing.T) {
+	cache := redisstore.NewMemoryStore()
+	svc := settings.Settings{Redis: cache}
+	for _, tc := range []struct {
+		raw  string
+		want bool
+	}{
+		{"true", true},
+		{"1", false},
+		{"TRUE", false},
+		{" true ", false},
+		{"false", false},
+		{"0", false},
+		{"", false},
+		{"invalid", false},
+	} {
+		if err := cache.SetSetting(t.Context(), "enable_strong_password_check", tc.raw, time.Minute); err != nil {
+			t.Fatal(err)
+		}
+		got, err := svc.Bool(t.Context(), "enable_strong_password_check", true)
+		if err != nil || got != tc.want {
+			t.Fatalf("Bool(%q)=%t err=%v; want %t", tc.raw, got, err, tc.want)
+		}
+	}
+	cache.Err = errors.New("bool cache unavailable")
+	got, err := svc.Bool(t.Context(), "enable_strong_password_check", true)
+	if !got || !errors.Is(err, cache.Err) {
+		t.Fatalf("Bool cache failure=%t err=%v; want true and exact cache error", got, err)
+	}
+}
+
+func TestSettingsBoolUsesMissingValueFallbackAndInvalidation(t *testing.T) {
+	db, _ := testutil.NewTestApp(t)
+	cache := redisstore.NewMemoryStore()
+	svc := settings.Settings{DB: db, Redis: cache}
+	const key = "test_bool_fallback"
+	got, err := svc.Bool(t.Context(), key, true)
+	if err != nil || !got {
+		t.Fatalf("missing bool=%t err=%v; want true fallback", got, err)
+	}
+	if raw, err := cache.GetSetting(t.Context(), key); err != nil || raw != "true" {
+		t.Fatalf("cached fallback=%q err=%v; want true", raw, err)
+	}
+	if err := svc.InvalidateCache(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	got, err = svc.Bool(t.Context(), key, false)
+	if err != nil || got {
+		t.Fatalf("invalidated missing bool=%t err=%v; want false fallback", got, err)
+	}
+	if raw, err := cache.GetSetting(t.Context(), key); err != nil || raw != "false" {
+		t.Fatalf("cached refreshed fallback=%q err=%v; want false", raw, err)
+	}
+}

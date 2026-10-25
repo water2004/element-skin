@@ -12,7 +12,7 @@ import (
 )
 
 func (h Handler) Invites(w http.ResponseWriter, req *http.Request) {
-	res, err := h.invites.List(req.Context(), shared.CurrentActor(req), req.URL.Query().Get("cursor"), util.ClampLimit(req.URL.Query().Get("limit"), 15))
+	res, err := h.invites.List(req.Context(), shared.CurrentActor(req), req.URL.Query().Get("cursor"), util.ClampLimit(req.URL.Query().Get("limit")))
 	if err != nil {
 		util.Error(w, err)
 		return

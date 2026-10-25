@@ -13,5 +13,11 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     restoreMocks: true,
+    server: {
+      deps: {
+        // Transform Element Plus so async-validator uses the same default export as the browser.
+        inline: ['element-plus'],
+      },
+    },
   },
 })

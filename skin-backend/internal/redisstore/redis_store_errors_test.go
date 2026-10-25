@@ -10,7 +10,7 @@ import (
 func TestRedisStoreRejectsCorruptAndUnencodableJSON(t *testing.T) {
 	store, server := newTestRedisStore(t)
 	ctx := context.Background()
-	publicKey := store.key("public", "settings")
+	publicKey := store.key("public", publicSettingsCacheKey)
 	server.Set(publicKey, "{not-json")
 	if got, err := store.GetPublicSettings(ctx); err == nil || got != nil {
 		t.Fatalf("corrupt cached JSON should return a decode error: got=%#v err=%v", got, err)

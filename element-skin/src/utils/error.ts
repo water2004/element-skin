@@ -26,6 +26,8 @@ const exactMessages: Record<string, string> = {
   'rate_limit.check.exceeded': '请求过于频繁，请稍后再试',
   'identity.link.already_exists': '该外部身份已绑定到当前账户',
   'identity.link.conflict': '该外部身份已被其他账户绑定',
+  'identity.login.not_linked':
+    '该外部身份尚未绑定本站账号，请先使用账号密码登录，再到控制台的「外部身份」页进行绑定',
   'identity.authorize.required': '该外部身份需要重新授权',
   'identity.authorize.mismatch': '授权账户与已绑定身份不一致',
   'identity.authorize.denied': '外部身份授权已被拒绝',
@@ -42,6 +44,7 @@ const exactMessages: Record<string, string> = {
   'oauth_client.resolve.not_found': '第三方应用不存在',
   'oauth_grant.resolve.not_found': '应用授权不存在',
   'webhook_event.subscribe.denied': '应用权限不允许订阅该 Webhook 事件',
+  'setting_value.validate.invalid': '设置值类型不正确',
   'server.handle.failed': '服务器处理请求失败',
 }
 
@@ -105,12 +108,7 @@ export function getApiError(error: unknown): ApiErrorDescriptor | null {
   }
 }
 
-export function isApiError(
-  error: unknown,
-  object: string,
-  operation: string,
-  reason: string,
-) {
+export function isApiError(error: unknown, object: string, operation: string, reason: string) {
   const descriptor = getApiError(error)
   return (
     descriptor?.object === object &&
@@ -121,16 +119,19 @@ export function isApiError(
 
 function passwordPolicyMessage(params: Record<string, unknown> | undefined) {
   const rules = Array.isArray(params?.rules) ? params.rules : []
-  const labels: Record<string, string> = {
-    min_length: '至少 8 个字符',
-    lowercase: '包含小写字母',
-    uppercase: '包含大写字母',
-    number: '包含数字',
+  const messages: Record<string, string> = {
+    required: '请输入密码',
+    min_length: '密码至少需要8个字符',
+    max_length: '密码的UTF-8编码不能超过72字节',
+    composition: '密码需包含小写字母、大写字母、数字、标点或符号中的至少三类',
   }
-  const requirements = rules
-    .filter((rule): rule is string => typeof rule === 'string' && rule in labels)
-    .map((rule) => labels[rule])
-  return requirements.length > 0 ? `密码需要${requirements.join('、')}` : '密码不符合安全要求'
+  const reasons = rules
+    .filter(
+      (rule): rule is string =>
+        typeof rule === 'string' && Object.prototype.hasOwnProperty.call(messages, rule),
+    )
+    .map((rule) => messages[rule])
+  return reasons.length > 0 ? reasons.join('；') : '密码不符合安全要求'
 }
 
 export function getErrorMessage(error: unknown, fallback = '操作失败') {
@@ -162,13 +163,5 @@ export function getErrorStatus(error: unknown) {
 }
 
 export function isExternalIdentityReauthorizationRequired(error: unknown) {
-  return (
-    getErrorStatus(error) === 409 && isApiError(error, 'identity', 'authorize', 'required')
-  )
-}
-
-export function isValidationError(error: unknown) {
-  if (getApiError(error)?.operation === 'validate') return true
-  if (!isApiErrorLike(error)) return false
-  return typeof error.message === 'string' && error.message.includes('validate')
+  return getErrorStatus(error) === 409 && isApiError(error, 'identity', 'authorize', 'required')
 }

@@ -73,7 +73,7 @@
                     </el-tag>
                   </div>
                   <el-button
-                    v-if="notice.dismissible"
+                    v-if="notice.dismissible && canDismissNotice"
                     size="small"
                     text
                     @click.stop="dismiss(notice.id)"
@@ -162,22 +162,27 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import { dismissNotice, getNotice, getNotices } from '@/api/notices'
-import type { NoticeLevel, NoticeView } from '@/api/types'
+import type { NoticeLevel, NoticeView, User } from '@/api/types'
 import { useNotificationIndicator } from '@/composables/useNotificationIndicator'
 import { renderMarkdown } from '@/utils/markdown'
 
 const route = useRoute()
 const router = useRouter()
+const user = inject<Ref<User | null>>('user', ref(null))
+const canDismissNotice = computed(() =>
+  (user.value?.permissions ?? []).includes('notice.dismiss.owned'),
+)
 const notices = ref<NoticeView[]>([])
 const selectedNotice = ref<NoticeView | null>(null)
-const selectedId = computed(() => selectedNotice.value?.id || String(route.params.id || ''))
+const detailRouteId = computed(() => (typeof route.params.id === 'string' ? route.params.id : ''))
+const selectedId = computed(() => detailRouteId.value)
 const loading = ref(false)
 const detailLoading = ref(false)
 const loadingMore = ref(false)
@@ -189,6 +194,8 @@ const readScope = ref<'all' | 'unread'>('all')
 const limit = 20
 const { refreshUnreadNotifications } = useNotificationIndicator()
 let loadObserver: IntersectionObserver | null = null
+let detailRequest = 0
+let disposed = false
 const noticeTypeLabels: Record<string, string> = {
   announcement: '公告',
   system: '系统',
@@ -248,24 +255,34 @@ function formatLongDate(ts: number) {
   })
 }
 
+function clearDetail() {
+  detailRequest++
+  selectedNotice.value = null
+  detailLoading.value = false
+}
+
 async function loadDetail(id: string) {
   if (!id) {
-    selectedNotice.value = null
+    clearDetail()
     return
   }
+  const request = ++detailRequest
+  const isCurrent = () => !disposed && request === detailRequest && detailRouteId.value === id
   detailLoading.value = true
   try {
     const res = await getNotice(id)
+    if (!isCurrent()) return
     selectedNotice.value = res.data
     notices.value = notices.value.map((item) =>
       item.id === id ? { ...item, read: true, read_at: res.data.read_at } : item,
     )
     void refreshUnreadNotifications()
   } catch {
+    if (!isCurrent()) return
     selectedNotice.value = null
     ElMessage.error('加载通知详情失败')
   } finally {
-    detailLoading.value = false
+    if (isCurrent()) detailLoading.value = false
   }
 }
 
@@ -281,25 +298,16 @@ async function loadNotices() {
       limit,
       include_read: readScope.value === 'all',
     })
-    notices.value = res.data.items
+    if (disposed) return
+    notices.value = res.data.items.map((item) =>
+      item.id === selectedNotice.value?.id
+        ? { ...item, read: selectedNotice.value.read, read_at: selectedNotice.value.read_at }
+        : item,
+    )
     hasNext.value = res.data.has_next
     nextCursor.value = res.data.next_cursor
-
-    const routeID = String(route.params.id || '')
-    if (routeID) {
-      await loadDetail(routeID)
-    } else if (res.data.items.length > 0) {
-      const first = res.data.items[0]
-      if (first) {
-        selectedNotice.value = first
-        router.replace(`/notifications/${first.id}`)
-      }
-    } else {
-      selectedNotice.value = null
-      router.replace('/notifications')
-    }
   } catch {
-    ElMessage.error('加载通知失败')
+    if (!disposed) ElMessage.error('加载通知失败')
   } finally {
     loading.value = false
     await nextTick()
@@ -316,6 +324,7 @@ async function loadMoreNotices() {
       limit,
       include_read: readScope.value === 'all',
     })
+    if (disposed) return
     const existing = new Set(notices.value.map((notice) => notice.id))
     notices.value = notices.value.concat(
       res.data.items.filter((notice) => !existing.has(notice.id)),
@@ -323,13 +332,14 @@ async function loadMoreNotices() {
     hasNext.value = res.data.has_next
     nextCursor.value = res.data.next_cursor
   } catch {
-    ElMessage.error('加载更多通知失败')
+    if (!disposed) ElMessage.error('加载更多通知失败')
   } finally {
     loadingMore.value = false
   }
 }
 
 function ensureLoadObserver() {
+  if (disposed) return
   if (loadObserver) loadObserver.disconnect()
   if (!loadMoreRef.value || !listScrollRef.value) return
   loadObserver = new IntersectionObserver(
@@ -349,37 +359,41 @@ function ensureLoadObserver() {
 async function refreshFirstPage() {
   nextCursor.value = null
   hasNext.value = false
-  await loadNotices()
+  await Promise.all([loadNotices(), loadDetail(detailRouteId.value)])
 }
 
 async function dismiss(id: string) {
+  if (!canDismissNotice.value) return
   try {
     await dismissNotice(id)
+    if (disposed) return
     notices.value = notices.value.filter((item) => item.id !== id)
-    if (selectedNotice.value?.id === id) {
-      selectedNotice.value = notices.value[0] || null
-      if (selectedNotice.value) router.replace(`/notifications/${selectedNotice.value.id}`)
-      else router.replace('/notifications')
+    if (detailRouteId.value === id) {
+      clearDetail()
+      const next = notices.value[0]
+      void router.replace(next ? `/notifications/${next.id}` : '/notifications')
     }
     void refreshUnreadNotifications()
     ElMessage.success('已忽略')
   } catch {
-    ElMessage.error('忽略通知失败')
+    if (!disposed) ElMessage.error('忽略通知失败')
   }
 }
 
 watch(
-  () => route.params.id,
+  detailRouteId,
   (id) => {
-    if (typeof id === 'string' && id && id !== selectedNotice.value?.id) {
-      void loadDetail(id)
-    }
+    clearDetail()
+    if (id) void loadDetail(id)
   },
+  { flush: 'sync' },
 )
 
 onMounted(refreshFirstPage)
 
 onBeforeUnmount(() => {
+  disposed = true
+  clearDetail()
   if (loadObserver) {
     loadObserver.disconnect()
     loadObserver = null

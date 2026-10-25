@@ -68,8 +68,10 @@
         :loading="pagination.isLoading.value"
         :disabled-prev="!pagination.canGoPrev.value"
         :disabled-next="!pagination.canGoNext.value"
+        :page-size="pagination.limit.value"
         @prev="handlePrevPage"
         @next="handleNextPage"
+        @page-size-change="handlePageSizeChange"
       />
     </div>
 
@@ -166,11 +168,9 @@ const user = inject<Ref<User | null>>('user', ref(null))
 const router = useRouter()
 
 const profiles = ref<Profile[]>([])
-const limit = 12
+const pagination = useCursorPagination<Profile>(20)
+const limit = pagination.limit
 const loading = ref(false)
-
-// 游标分页 composable
-const pagination = useCursorPagination<Profile>(limit)
 
 const showCreateRoleDialog = ref(false)
 const newRoleName = ref('')
@@ -317,7 +317,7 @@ async function fetchProfiles() {
   try {
     const params = {
       cursor: pagination.currentCursor.value,
-      limit: limit,
+      limit: limit.value,
     }
     const res = await getProfiles(params)
     profiles.value = res.data.items
@@ -349,6 +349,11 @@ async function handlePrevPage() {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
+async function handlePageSizeChange(value: number) {
+  if (!pagination.setLimit(value)) return
+  await refreshFirstPage()
+}
+
 async function refreshFirstPage() {
   pagination.reset()
   await fetchProfiles()
@@ -371,13 +376,20 @@ async function createRole() {
 
 async function deleteRole(pid: string) {
   try {
+    await ElMessageBox.confirm('真的要删除吗？你将永久丢失此角色（真的很久）！', '删除角色', {
+      type: 'error',
+      confirmButtonText: '确认删除',
+      cancelButtonText: '取消',
+    })
     await deleteProfile(pid)
     ElMessage.success('已删除')
     showPreviewDialog.value = false
     await Promise.all([refreshFirstPage(), fetchOfficialResources()])
     if (fetchMe) fetchMe()
-  } catch {
-    ElMessage.error('删除失败')
+  } catch (e: unknown) {
+    if (e !== 'cancel' && e !== 'close') {
+      ElMessage.error('删除失败')
+    }
   }
 }
 
@@ -404,9 +416,9 @@ async function updateRoleName(name: string) {
 
 async function clearRoleSkin(pid: string) {
   try {
-    await ElMessageBox.confirm('确定要清除该角色的皮肤吗？', '确认清除', {
+    await ElMessageBox.confirm('确定要清除该角色的皮肤吗？此操作不可撤销。', '确认清除', {
       type: 'warning',
-      confirmButtonText: '确定清除',
+      confirmButtonText: '确认清除',
       cancelButtonText: '取消',
     })
     await clearProfileSkin(pid)
@@ -415,7 +427,7 @@ async function clearRoleSkin(pid: string) {
     await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e: unknown) {
-    if (e !== 'cancel') {
+    if (e !== 'cancel' && e !== 'close') {
       ElMessage.error('清除失败: ' + getErrorMessage(e, '清除失败'))
     }
   }
@@ -423,9 +435,9 @@ async function clearRoleSkin(pid: string) {
 
 async function clearRoleCape(pid: string) {
   try {
-    await ElMessageBox.confirm('确定要清除该角色的披风吗？', '确认清除', {
+    await ElMessageBox.confirm('确定要清除该角色的披风吗？此操作不可撤销。', '确认清除', {
       type: 'warning',
-      confirmButtonText: '确定清除',
+      confirmButtonText: '确认清除',
       cancelButtonText: '取消',
     })
     await clearProfileCape(pid)
@@ -434,7 +446,7 @@ async function clearRoleCape(pid: string) {
     await fetchProfiles()
     if (fetchMe) fetchMe()
   } catch (e: unknown) {
-    if (e !== 'cancel') {
+    if (e !== 'cancel' && e !== 'close') {
       ElMessage.error('清除失败: ' + getErrorMessage(e, '清除失败'))
     }
   }
@@ -450,9 +462,12 @@ async function setAsAvatar(profile: Profile) {
   })
 
   try {
-    await setAvatar(profile.skin_hash, profile.model === 'slim' ? 'slim' : 'default')
+    const updated = await setAvatar(
+      profile.skin_hash,
+      profile.model === 'slim' ? 'slim' : 'default',
+    )
     loadingMsg.close()
-    ElMessage.success('已设为头像')
+    if (updated) ElMessage.success('已设为头像')
   } catch (error) {
     loadingMsg.close()
     ElMessage.error('设置头像失败')

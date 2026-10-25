@@ -46,7 +46,11 @@ func (h Handler) AuthorizationCallback(w http.ResponseWriter, req *http.Request)
 	)
 	if err != nil {
 		if query, ok := authorizationErrorQuery(err); ok {
-			h.redirectToSite(w, req, "/dashboard/identities", query)
+			path := "/dashboard/identities"
+			if query.Get("error_reason") == "not_linked" {
+				path = "/login"
+			}
+			h.redirectToSite(w, req, path, query)
 			return
 		}
 		util.Error(w, err)
@@ -75,15 +79,6 @@ func (h Handler) AuthorizationCallback(w http.ResponseWriter, req *http.Request)
 			path = "/dashboard"
 		}
 		h.redirectToSite(w, req, path, nil)
-	case "registration":
-		query := url.Values{
-			"identity_ticket": []string{result.RegistrationTicket},
-			"provider_id":     []string{result.ProviderID},
-		}
-		if result.ReturnTo != "" {
-			query.Set("redirect", result.ReturnTo)
-		}
-		h.redirectToSite(w, req, "/register", query)
 	default:
 		util.Error(w, util.HTTPError{Status: http.StatusInternalServerError, Object: "identity", Operation: "authorize", Reason: "invalid"})
 	}
@@ -97,15 +92,22 @@ func authorizationErrorQuery(err error) (url.Values, bool) {
 	redirectable := (apiErr.Operation == "authorize" &&
 		(apiErr.Reason == "mismatch" || apiErr.Reason == "incomplete")) ||
 		(apiErr.Operation == "link" &&
-			(apiErr.Reason == "already_exists" || apiErr.Reason == "conflict"))
+			(apiErr.Reason == "already_exists" || apiErr.Reason == "conflict")) ||
+		(apiErr.Operation == "login" && apiErr.Reason == "not_linked")
 	if !redirectable {
 		return nil, false
 	}
-	return url.Values{
+	values := url.Values{
 		"error_object":    []string{apiErr.Object},
 		"error_operation": []string{apiErr.Operation},
 		"error_reason":    []string{apiErr.Reason},
-	}, true
+	}
+	if apiErr.Reason == "not_linked" {
+		if returnTo, ok := apiErr.Params["return_to"].(string); ok && returnTo != "" {
+			values.Set("redirect", returnTo)
+		}
+	}
+	return values, true
 }
 
 func (h Handler) redirectToSite(w http.ResponseWriter, req *http.Request, path string, query url.Values) {

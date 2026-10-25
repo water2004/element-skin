@@ -19,7 +19,6 @@ export function authApiCases(): ApiCase[] {
           username: 'NewUser',
           invite: 'INVITE',
           code: 'CODE1234',
-          identity_ticket: 'oidc-ticket',
         }),
       args: [
         '/v2/auth/register',
@@ -29,7 +28,6 @@ export function authApiCases(): ApiCase[] {
           username: 'NewUser',
           invite: 'INVITE',
           code: 'CODE1234',
-          identity_ticket: 'oidc-ticket',
         },
       ],
     },

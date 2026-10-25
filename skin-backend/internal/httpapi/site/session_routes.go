@@ -45,14 +45,13 @@ func (h Handler) Register(w http.ResponseWriter, req *http.Request) {
 		util.Error(w, util.HTTPError{Status: 400, Object: "request", Operation: "decode", Reason: "invalid"})
 		return
 	}
-	id, err := h.authSvc.RegisterWithIdentity(
+	id, err := h.authSvc.Register(
 		req.Context(),
 		body["email"],
 		body["password"],
 		body["username"],
 		body["invite"],
 		body["code"],
-		body["identity_ticket"],
 	)
 	if err != nil {
 		util.Error(w, err)

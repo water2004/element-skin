@@ -88,7 +88,8 @@ import { getPublicSettings } from '@/api/public'
 import { siteLogin } from '@/api/auth'
 import { getIdentityProviders, startIdentityAuthorization } from '@/api/identity'
 import type { IdentityProvider } from '@/api/types'
-import { getErrorMessage, isValidationError } from '@/utils/error'
+import { getErrorMessage, getApiErrorMessage } from '@/utils/error'
+import { validateForm } from '@/utils/formValidation'
 import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
@@ -107,6 +108,7 @@ const loginProviders = ref<IdentityProvider[]>([])
 const authorizingProviderId = ref('')
 
 onMounted(async () => {
+  handleRedirectedIdentityError()
   try {
     const res = await getPublicSettings()
     emailVerifyEnabled.value = res.data.email_verify_enabled ?? false
@@ -121,6 +123,21 @@ onMounted(async () => {
   }
 })
 
+function handleRedirectedIdentityError() {
+  const object = route.query.error_object
+  const operation = route.query.error_operation
+  const reason = route.query.error_reason
+  if (typeof object !== 'string' || typeof operation !== 'string' || typeof reason !== 'string') {
+    return
+  }
+  ElMessage.warning(getApiErrorMessage({ object, operation, reason }, '外部身份登录失败'))
+  const query = { ...route.query }
+  delete query.error_object
+  delete query.error_operation
+  delete query.error_reason
+  void router.replace({ query })
+}
+
 const rules: FormRules = {
   email: [
     { required: true, message: '请输入邮箱地址', trigger: 'blur' },
@@ -130,11 +147,10 @@ const rules: FormRules = {
 }
 
 async function login() {
-  try {
-    if (!formRef.value) return
-    await formRef.value.validate()
-    loading.value = true
+  if (!(await validateForm(formRef.value))) return
 
+  loading.value = true
+  try {
     // 使用站点登录接口（token 自动存入 HttpOnly Cookie）
     await siteLogin({
       email: form.email,
@@ -147,9 +163,7 @@ async function login() {
     ElMessage.success('登录成功！')
     await router.replace(loginReturnTarget())
   } catch (e: unknown) {
-    if (!isValidationError(e)) {
-      ElMessage.error('登录失败: ' + getErrorMessage(e, '登录失败'))
-    }
+    ElMessage.error('登录失败: ' + getErrorMessage(e, '登录失败'))
   } finally {
     loading.value = false
   }

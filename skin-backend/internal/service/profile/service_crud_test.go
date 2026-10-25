@@ -82,6 +82,10 @@ func TestProfilesRejectInvalidProfileInputsExactly(t *testing.T) {
 			_, err := svc.CreateProfile(ctx, testUserActor(user.ID), existing.Name, "default")
 			return err
 		}, 400, "profile_name.reserve.conflict"},
+		{"case variant create name", func() error {
+			_, err := svc.CreateProfile(ctx, testUserActor(user.ID), "existingsvc", "default")
+			return err
+		}, 400, "profile_name.reserve.conflict"},
 		{"empty update name", func() error {
 			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, "")
 		}, 400, "profile_name.validate.required"},
@@ -90,6 +94,9 @@ func TestProfilesRejectInvalidProfileInputsExactly(t *testing.T) {
 		}, 400, "profile_name.validate.invalid"},
 		{"duplicate update name", func() error {
 			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, existing.Name)
+		}, 400, "profile_name.reserve.conflict"},
+		{"case variant update name", func() error {
+			return svc.UpdateProfile(ctx, testUserActor(user.ID), target.ID, "EXISTINGSVC")
 		}, 400, "profile_name.reserve.conflict"},
 		{"foreign update", func() error {
 			return svc.UpdateProfile(ctx, testUserActor(user.ID), foreign.ID, "StolenProfileSvc")

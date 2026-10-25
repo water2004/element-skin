@@ -35,7 +35,7 @@
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="至少6个字符"
+            placeholder="请输入新密码"
             :prefix-icon="Lock"
             show-password
           />
@@ -72,7 +72,8 @@ import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Message, Lock, Ticket } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import { sendVerificationCode, resetPassword as apiResetPassword } from '@/api/auth'
-import { getErrorMessage, isValidationError } from '@/utils/error'
+import { getErrorMessage } from '@/utils/error'
+import { validateForm } from '@/utils/formValidation'
 
 const router = useRouter()
 const formRef = ref<FormInstance | null>(null)
@@ -94,10 +95,7 @@ const rules: FormRules = {
     { type: 'email', message: '请输入有效的邮箱地址', trigger: 'blur' },
   ],
   code: [{ required: true, message: '请输入验证码' }],
-  password: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码至少需要6个字符', trigger: 'blur' },
-  ],
+  password: [{ required: true, message: '请输入新密码', trigger: 'blur' }],
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     {
@@ -157,11 +155,10 @@ async function sendCode() {
 }
 
 async function resetPassword() {
-  try {
-    if (!formRef.value) return
-    await formRef.value.validate()
-    loading.value = true
+  if (!(await validateForm(formRef.value))) return
 
+  loading.value = true
+  try {
     await apiResetPassword({
       email: form.email,
       password: form.password,
@@ -173,9 +170,7 @@ async function resetPassword() {
       router.push('/login')
     }, 1500)
   } catch (e: unknown) {
-    if (!isValidationError(e)) {
-      ElMessage.error('重置失败: ' + getErrorMessage(e, '重置失败'))
-    }
+    ElMessage.error('重置失败: ' + getErrorMessage(e, '重置失败'))
   } finally {
     loading.value = false
   }

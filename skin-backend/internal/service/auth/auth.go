@@ -14,12 +14,9 @@ import (
 	"element-skin/backend/internal/model"
 	"element-skin/backend/internal/redisstore"
 	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
-	identitysvc "element-skin/backend/internal/service/identity"
 	settingssvc "element-skin/backend/internal/service/settings"
 	verificationsvc "element-skin/backend/internal/service/verification"
 	"element-skin/backend/internal/util"
-
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 type Service struct {
@@ -28,7 +25,6 @@ type Service struct {
 	Redis        redisstore.Store
 	Settings     settingssvc.Settings
 	Verification verificationsvc.Service
-	Identity     identitysvc.Service
 	EmailPolicy  emailpolicysvc.Service
 }
 
@@ -59,10 +55,6 @@ func (s Service) IssueSessionForUser(ctx context.Context, userID string) (map[st
 }
 
 func (s Service) Register(ctx context.Context, email, password, username, invite, code string) (string, error) {
-	return s.RegisterWithIdentity(ctx, email, password, username, invite, code, "")
-}
-
-func (s Service) RegisterWithIdentity(ctx context.Context, email, password, username, invite, code, identityTicket string) (string, error) {
 	email = strings.TrimSpace(email)
 	username = strings.TrimSpace(username)
 	if username == "" {
@@ -88,14 +80,12 @@ func (s Service) RegisterWithIdentity(ctx context.Context, email, password, user
 		return "", util.HTTPError{Status: 400, Object: "email", Operation: "register", Reason: "already_exists"}
 	}
 	settings := s.settings()
-	strong, err := settings.Get(ctx, "enable_strong_password_check", "false")
+	strong, err := settings.Bool(ctx, "enable_strong_password_check", false)
 	if err != nil {
 		return "", err
 	}
-	if strong == "true" {
-		if errs := util.ValidateStrongPassword(password); len(errs) > 0 {
-			return "", util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": errs}}
-		}
+	if rules := util.ValidatePassword(password, strong); len(rules) > 0 {
+		return "", util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": rules}}
 	}
 	allow, err := settings.Get(ctx, "allow_register", "true")
 	if err != nil {
@@ -163,10 +153,6 @@ func (s Service) RegisterWithIdentity(ctx context.Context, email, password, user
 		return "", err
 	}
 	u := model.User{ID: userID, Email: email, Password: hash, DisplayName: username}
-	var pending identitysvc.PendingRegistration
-	var externalIdentity *model.ExternalIdentity
-	var externalCredential *model.ExternalIdentityCredential
-	registrationConsumed := false
 	for attempt := 0; attempt < 100; attempt++ {
 		profileName := util.ProfileNameCandidate(base, attempt)
 		if existing, err := s.DB.Profiles.GetByName(ctx, profileName); err != nil {
@@ -187,25 +173,7 @@ func (s Service) RegisterWithIdentity(ctx context.Context, email, password, user
 			return "", util.HTTPError{Status: 400, Object: "profile_uuid", Operation: "reserve", Reason: "conflict"}
 		}
 		p := model.Profile{ID: profileID, UserID: userID, Name: profileName, TextureModel: "default"}
-		if identityTicket != "" && !registrationConsumed {
-			pending, err = s.Identity.ConsumeRegistration(ctx, identityTicket)
-			if err != nil {
-				return "", err
-			}
-			identityRecord, credentialRecord, err := s.Identity.RegistrationRecords(userID, pending)
-			if err != nil {
-				_ = s.Identity.RestoreRegistration(ctx, pending)
-				return "", err
-			}
-			externalIdentity = &identityRecord
-			externalCredential = &credentialRecord
-			registrationConsumed = true
-		}
-		if externalIdentity == nil {
-			err = s.DB.Users.CreateWithProfile(ctx, u, p, inviteCode, email)
-		} else {
-			err = s.DB.Users.CreateWithProfileAndIdentity(ctx, u, p, inviteCode, email, externalIdentity, externalCredential)
-		}
+		err = s.DB.Users.CreateWithProfile(ctx, u, p, inviteCode, email)
 		if profilestore.IsNameConflict(err) || (mode == "offline" && profilestore.IsIDConflict(err)) {
 			continue
 		}
@@ -219,13 +187,7 @@ func (s Service) RegisterWithIdentity(ctx context.Context, email, password, user
 			if verifiedEmail {
 				_ = s.Redis.DeleteVerificationCode(ctx, email, "register")
 			}
-			if externalIdentity != nil {
-				_ = s.Identity.CacheRegistrationAccess(ctx, externalIdentity.ID, pending.Tokens)
-			}
 			return userID, nil
-		}
-		if registrationConsumed {
-			_ = s.Identity.RestoreRegistration(ctx, pending)
 		}
 		if err == invitestore.ErrExhausted {
 			return "", util.HTTPError{Status: 400, Object: "invite", Operation: "consume", Reason: "exhausted"}
@@ -239,14 +201,7 @@ func (s Service) RegisterWithIdentity(ctx context.Context, email, password, user
 		if profilestore.IsIDConflict(err) {
 			return "", util.HTTPError{Status: 400, Object: "profile_uuid", Operation: "reserve", Reason: "conflict"}
 		}
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "external_identities_provider_id_subject_key" {
-			return "", util.HTTPError{Status: 409, Object: "identity", Operation: "link", Reason: "already_exists"}
-		}
 		return "", err
-	}
-	if registrationConsumed {
-		_ = s.Identity.RestoreRegistration(ctx, pending)
 	}
 	return "", util.HTTPError{Status: 500, Object: "profile_name", Operation: "allocate", Reason: "failed"}
 }

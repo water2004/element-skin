@@ -18,7 +18,7 @@ export const sitePageAccess: SitePageAccess[] = [
   },
   {
     path: '/notifications',
-    permissions: ['notice.read.owned', 'notice.dismiss.owned', 'notice.read.any'],
+    permissions: ['notice.read.owned'],
   },
   {
     path: '/dashboard/wardrobe',

@@ -5,6 +5,7 @@ import (
 	"element-skin/backend/internal/permission"
 	"element-skin/backend/internal/redisstore"
 	emailpolicysvc "element-skin/backend/internal/service/emailpolicy"
+	settingssvc "element-skin/backend/internal/service/settings"
 	verificationsvc "element-skin/backend/internal/service/verification"
 )
 
@@ -25,6 +26,7 @@ type AccountService struct {
 	Redis        redisstore.Store
 	Verification verificationsvc.Service
 	EmailPolicy  emailpolicysvc.Service
+	Settings     settingssvc.Settings
 }
 
 type BanUserInput struct {

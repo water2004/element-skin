@@ -8,7 +8,9 @@ import { useAvatar } from '@/composables/useAvatar'
 import { useNotificationIndicator } from '@/composables/useNotificationIndicator'
 import { useTheme } from '@/composables/useTheme'
 import { appStorage } from '@/storage'
+import { canAccessSitePath } from '@/permissions/sitePages'
 import {
+  buildAccountLinks,
   buildDefaultOpeneds,
   buildDrawerLinks,
   buildNavLinks,
@@ -54,6 +56,10 @@ export function useAppLayoutState() {
   const isLogged = computed(() => !!user.value)
   const userPermissions = computed(() => user.value?.permissions || [])
   const canAccessAdmin = computed(() => canAccessAdminPanel(userPermissions.value))
+  const canAccessNotifications = computed(
+    () => isLogged.value && canAccessSitePath('/notifications', userPermissions.value),
+  )
+  const accountLinks = computed(() => buildAccountLinks(userPermissions.value))
   const defaultOpeneds = computed(() => buildDefaultOpeneds(route.path))
   const navLinks = computed<NavLink[]>(() =>
     buildNavLinks({
@@ -84,22 +90,26 @@ export function useAppLayoutState() {
 
   let resizeObserver: ResizeObserver | null = null
   let unreadRefreshTimer: number | null = null
+  let sessionGeneration = 0
 
   function updateFooterHeight() {
     nextTick(() => {
-      if (footerRef.value?.rootElement) footerHeight.value = footerRef.value.rootElement.offsetHeight
+      if (footerRef.value?.rootElement)
+        footerHeight.value = footerRef.value.rootElement.offsetHeight
       else footerHeight.value = 0
     })
   }
 
   function shouldShowNotificationBadge(item: NavLink | DrawerLink) {
-    return item.path === '/notifications' && hasUnreadNotifications.value
+    return (
+      canAccessNotifications.value && item.path === '/notifications' && hasUnreadNotifications.value
+    )
   }
 
   function startUnreadRefreshTimer() {
     if (unreadRefreshTimer !== null) return
     unreadRefreshTimer = window.setInterval(() => {
-      if (isLogged.value) void refreshUnreadNotifications()
+      if (canAccessNotifications.value) void refreshUnreadNotifications()
     }, 60_000)
   }
 
@@ -114,33 +124,39 @@ export function useAppLayoutState() {
     drawer.value = false
   }
 
+  function clearSessionState() {
+    sessionGeneration++
+    user.value = null
+    void initializeAvatar(null)
+    clearUnreadNotifications()
+    stopUnreadRefreshTimer()
+    drawer.value = false
+    authReady.value = true
+  }
+
   async function logout() {
     try {
       await siteLogout()
     } catch {}
-    user.value = null
-    clearUnreadNotifications()
-    stopUnreadRefreshTimer()
-    authReady.value = true
-    void push('/')
-    setTimeout(() => window.location.reload(), 100)
+    clearSessionState()
+    await push('/')
+    window.location.reload()
   }
 
   async function fetchMe() {
+    const generation = sessionGeneration
     try {
       const res = await getMe()
+      if (generation !== sessionGeneration) return
       user.value = res.data
-      if (res.data.avatar_hash) {
-        initializeAvatar(res.data.avatar_hash)
-      }
-      void refreshUnreadNotifications()
-      startUnreadRefreshTimer()
+      void initializeAvatar(res.data.avatar_hash)
     } catch {
+      if (generation !== sessionGeneration) return
       user.value = null
       clearUnreadNotifications()
       stopUnreadRefreshTimer()
     } finally {
-      authReady.value = true
+      if (generation === sessionGeneration) authReady.value = true
     }
   }
 
@@ -148,20 +164,20 @@ export function useAppLayoutState() {
 
   provide('user', user)
   provide('fetchMe', fetchMe)
+  provide('clearSessionState', clearSessionState)
   provide('authReady', authReady)
   provide('isDark', isDark)
   provide('footerHeight', footerHeight)
 
   watch(
-    isLogged,
-    (logged) => {
-      if (logged) {
-        void refreshUnreadNotifications()
-        startUnreadRefreshTimer()
-        return
-      }
+    [() => user.value?.id, canAccessNotifications],
+    ([, canRead]) => {
       clearUnreadNotifications()
       stopUnreadRefreshTimer()
+      if (canRead) {
+        void refreshUnreadNotifications()
+        startUnreadRefreshTimer()
+      }
     },
     { immediate: true },
   )
@@ -207,6 +223,7 @@ export function useAppLayoutState() {
     window.removeEventListener('resize', updateFooterHeight)
     if (resizeObserver) resizeObserver.disconnect()
     stopUnreadRefreshTimer()
+    clearUnreadNotifications()
     cleanupEasterEgg()
   })
 
@@ -230,6 +247,8 @@ export function useAppLayoutState() {
     homeContentCenterY,
     isLogged,
     canAccessAdmin,
+    canAccessNotifications,
+    accountLinks,
     defaultOpeneds,
     navLinks,
     drawerLinks,
@@ -241,6 +260,7 @@ export function useAppLayoutState() {
     accountName,
     go,
     logout,
+    clearSessionState,
     shouldShowNotificationBadge,
   }
 }

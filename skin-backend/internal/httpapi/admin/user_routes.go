@@ -9,7 +9,7 @@ import (
 )
 
 func (h Handler) Users(w http.ResponseWriter, req *http.Request) {
-	res, err := h.accounts.ListUsers(req.Context(), shared.CurrentActor(req), req.URL.Query().Get("cursor"), util.ClampLimit(req.URL.Query().Get("limit"), 15), req.URL.Query().Get("q"))
+	res, err := h.accounts.ListUsers(req.Context(), shared.CurrentActor(req), req.URL.Query().Get("cursor"), util.ClampLimit(req.URL.Query().Get("limit")), req.URL.Query().Get("q"))
 	if err != nil {
 		util.Error(w, err)
 		return

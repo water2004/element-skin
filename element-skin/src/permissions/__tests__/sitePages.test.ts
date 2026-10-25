@@ -7,6 +7,14 @@ import {
 } from '../sitePages'
 
 describe('site page permission access', () => {
+  it('requires personal read permission for notification pages and details', () => {
+    expect(canAccessSitePath('/notifications', ['notice.read.owned'])).toBe(true)
+    expect(canAccessSitePath('/notifications/notice-1', ['notice.read.owned'])).toBe(true)
+    expect(canAccessSitePath('/notifications', ['notice.dismiss.owned'])).toBe(false)
+    expect(canAccessSitePath('/notifications/notice-1', ['notice.read.any'])).toBe(false)
+    expect(canAccessSitePath('/notifications', [])).toBe(false)
+  })
+
   it('allows only wardrobe pages for texture ownership permissions exactly', () => {
     const permissions = ['texture.read.owned']
 

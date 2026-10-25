@@ -305,7 +305,7 @@ func TestIdentityAuthorizationCancellationReturnsToIdentityManagementExactly(t *
 	}
 }
 
-func TestIdentityAuthorizationCallbackIssuesSessionAndRegistrationRedirectsExactly(t *testing.T) {
+func TestIdentityAuthorizationCallbackIssuesSessionAndRejectsUnlinkedLoginsExactly(t *testing.T) {
 	db, _ := testutil.NewTestApp(t)
 	ctx := t.Context()
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -403,29 +403,24 @@ func TestIdentityAuthorizationCallbackIssuesSessionAndRegistrationRedirectsExact
 		t.Fatalf("login callback identity=%#v err=%v", updated, err)
 	}
 
-	startRegistration := identityRouteRequest(http.MethodPost, "/v2/identity-authorizations",
-		`{"provider_id":"identity-route-real-callback","intent":"login","return_to":"/oauth/authorize?client_id=registration-client&state=registration-state"}`, permission.GuestActor())
-	registrationStartRecorder := httptest.NewRecorder()
-	h.StartAuthorization(registrationStartRecorder, startRegistration)
-	registrationAuthorizationURL := authorizationURLFromResponse(t, registrationStartRecorder)
+	startUnlinked := identityRouteRequest(http.MethodPost, "/v2/identity-authorizations",
+		`{"provider_id":"identity-route-real-callback","intent":"login","return_to":"/oauth/authorize?client_id=unlinked-client&state=unlinked-state"}`, permission.GuestActor())
+	unlinkedStartRecorder := httptest.NewRecorder()
+	h.StartAuthorization(unlinkedStartRecorder, startUnlinked)
+	unlinkedAuthorizationURL := authorizationURLFromResponse(t, unlinkedStartRecorder)
 	signedIDToken = signRouteIdentityToken(t, privateKey, keyID, server.URL, "callback-client",
-		registrationAuthorizationURL.Query().Get("nonce"), "new-route-subject", "New Route User")
-	registrationCallback := identityRouteRequest(http.MethodGet,
-		"/v2/auth/oidc/callback?code=registration-code&state="+url.QueryEscape(registrationAuthorizationURL.Query().Get("state")),
+		unlinkedAuthorizationURL.Query().Get("nonce"), "new-route-subject", "New Route User")
+	unlinkedCallback := identityRouteRequest(http.MethodGet,
+		"/v2/auth/oidc/callback?code=unlinked-code&state="+url.QueryEscape(unlinkedAuthorizationURL.Query().Get("state")),
 		"", permission.GuestActor())
-	registrationRecorder := httptest.NewRecorder()
-	h.AuthorizationCallback(registrationRecorder, registrationCallback)
-	location, err := url.Parse(registrationRecorder.Header().Get("Location"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if registrationRecorder.Code != http.StatusSeeOther || location.Scheme != "http" || location.Host != "test" ||
-		location.Path != "/register" || location.Query().Get("provider_id") != provider.ID ||
-		location.Query().Get("identity_ticket") == "" ||
-		location.Query().Get("redirect") != "/oauth/authorize?client_id=registration-client&state=registration-state" ||
-		len(registrationRecorder.Result().Cookies()) != 0 {
-		t.Fatalf("registration callback status=%d location=%q cookies=%#v", registrationRecorder.Code,
-			registrationRecorder.Header().Get("Location"), registrationRecorder.Result().Cookies())
+	unlinkedRecorder := httptest.NewRecorder()
+	h.AuthorizationCallback(unlinkedRecorder, unlinkedCallback)
+	wantLocation := "http://test/login?error_object=identity&error_operation=login&error_reason=not_linked" +
+		"&redirect=%2Foauth%2Fauthorize%3Fclient_id%3Dunlinked-client%26state%3Dunlinked-state"
+	if unlinkedRecorder.Code != http.StatusSeeOther || unlinkedRecorder.Header().Get("Location") != wantLocation ||
+		len(unlinkedRecorder.Result().Cookies()) != 0 {
+		t.Fatalf("unlinked callback status=%d location=%q cookies=%#v", unlinkedRecorder.Code,
+			unlinkedRecorder.Header().Get("Location"), unlinkedRecorder.Result().Cookies())
 	}
 	if tokenCalls != 2 || jwksCalls != 2 {
 		t.Fatalf("OIDC callback calls token=%d jwks=%d want 2/2", tokenCalls, jwksCalls)

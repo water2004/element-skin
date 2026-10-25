@@ -10,16 +10,6 @@
         <p class="m-0 text-sm text-[var(--color-text-light)]">创建一个新账号来开始使用</p>
       </div>
 
-      <el-alert
-        v-if="identityTicket"
-        type="success"
-        :closable="false"
-        show-icon
-        class="mb-6"
-        :title="identityProviderName ? `已验证 ${identityProviderName} 身份` : '外部身份验证已完成'"
-        description="仍需完整填写本站用户名、邮箱、密码，以及站点要求的验证码和邀请码。注册成功后该身份会绑定到新账户。"
-      />
-
       <el-skeleton v-if="settingsLoading" :rows="6" animated />
 
       <div v-else-if="settingsError" class="space-y-4">
@@ -47,6 +37,8 @@
         <el-form-item label="用户名" prop="username">
           <el-input
             v-model="form.username"
+            name="display_name"
+            autocomplete="nickname"
             placeholder="请输入用户名"
             :prefix-icon="User"
             @keyup.enter="register"
@@ -57,6 +49,9 @@
           <EmailSuffixInput
             v-model="form.email"
             :policy="emailSuffixPolicy"
+            name="email"
+            type="email"
+            autocomplete="username"
             placeholder="请输入邮箱地址"
             @enter="register"
           />
@@ -66,6 +61,8 @@
           <div class="flex gap-3 w-full">
             <el-input
               v-model="form.code"
+              name="verification_code"
+              autocomplete="one-time-code"
               placeholder="请输入验证码"
               :prefix-icon="Ticket"
               @keyup.enter="register"
@@ -87,7 +84,9 @@
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="至少6个字符"
+            name="password"
+            autocomplete="new-password"
+            placeholder="请输入密码"
             :prefix-icon="Lock"
             show-password
             @keyup.enter="register"
@@ -98,6 +97,8 @@
           <el-input
             v-model="form.confirmPassword"
             type="password"
+            name="password_confirmation"
+            autocomplete="new-password"
             placeholder="请再次输入密码"
             :prefix-icon="Lock"
             show-password
@@ -109,6 +110,8 @@
           <div class="w-full">
             <el-input
               v-model="form.invite"
+              name="invite_code"
+              autocomplete="off"
               placeholder="请输入管理员提供的邀请码"
               :prefix-icon="Ticket"
               @keyup.enter="register"
@@ -137,20 +140,18 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Lock, Ticket, UserFilled, User } from '@element-plus/icons-vue'
 import { getPublicSettings } from '@/api/public'
 import type { PublicEmailSuffixPolicy } from '@/api/types'
 import { sendVerificationCode, register as apiRegister } from '@/api/auth'
-import { getErrorMessage, isValidationError } from '@/utils/error'
-import { getIdentityProviders } from '@/api/identity'
+import { getErrorMessage } from '@/utils/error'
+import { validateForm } from '@/utils/formValidation'
 import EmailSuffixInput from '@/components/common/EmailSuffixInput.vue'
 import { disabledEmailSuffixPolicy, emailSuffixPolicyError } from '@/utils/emailSuffixPolicy'
-import { internalRedirectTarget } from '@/utils/internalRedirect'
 
 const router = useRouter()
-const route = useRoute()
 const formRef = ref<FormInstance | null>(null)
 const loading = ref(false)
 const settingsLoading = ref(true)
@@ -174,13 +175,6 @@ const emailSuffixPolicy = ref<PublicEmailSuffixPolicy>({
 const codeLoading = ref(false)
 const countdown = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
-const identityTicket = ref(
-  typeof route.query.identity_ticket === 'string' ? route.query.identity_ticket : '',
-)
-const identityProviderId =
-  typeof route.query.provider_id === 'string' ? route.query.provider_id : ''
-const identityProviderName = ref('')
-const loginReturnTo = internalRedirectTarget(route.query.redirect, '')
 
 const rules = computed<FormRules>(() => ({
   username: [
@@ -212,10 +206,7 @@ const rules = computed<FormRules>(() => ({
   invite: requireInvite.value
     ? [{ required: true, message: '请输入邀请码', trigger: ['blur', 'change'] }]
     : [],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少需要6个字符', trigger: 'blur' },
-  ],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   confirmPassword: [
     { required: true, message: '请再次输入密码', trigger: 'blur' },
     {
@@ -262,15 +253,6 @@ async function loadRegistrationSettings() {
 
 onMounted(async () => {
   await loadRegistrationSettings()
-  if (identityTicket.value && identityProviderId) {
-    try {
-      const providers = await getIdentityProviders()
-      identityProviderName.value =
-        providers.data.items.find((provider) => provider.id === identityProviderId)?.name || ''
-    } catch (e) {
-      console.error('Failed to resolve registration identity provider', e)
-    }
-  }
 })
 
 async function sendCode() {
@@ -305,18 +287,16 @@ async function sendCode() {
 }
 
 async function register() {
-  try {
-    if (!formRef.value) return
-    await formRef.value.validate()
-    loading.value = true
+  if (!(await validateForm(formRef.value))) return
 
+  loading.value = true
+  try {
     const payload = {
       username: form.username,
       email: form.email,
       password: form.password,
       code: form.code,
       ...(requireInvite.value ? { invite: form.invite } : {}),
-      ...(identityTicket.value ? { identity_ticket: identityTicket.value } : {}),
     }
 
     await apiRegister(payload)
@@ -324,15 +304,10 @@ async function register() {
 
     // 延迟跳转，让用户看到成功消息
     setTimeout(() => {
-      router.push({
-        path: '/login',
-        query: loginReturnTo ? { redirect: loginReturnTo } : {},
-      })
+      router.push('/login')
     }, 1500)
   } catch (e: unknown) {
-    if (!isValidationError(e)) {
-      ElMessage.error('注册失败: ' + getErrorMessage(e, '注册失败'))
-    }
+    ElMessage.error('注册失败: ' + getErrorMessage(e, '注册失败'))
   } finally {
     loading.value = false
   }
