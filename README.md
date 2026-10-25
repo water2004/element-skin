@@ -79,7 +79,11 @@ Webhook 的站点可以只运行主后端。已经配置 Webhook 订阅但没有
 
 v4 的自动数据库升级只支持从 v3.0.2 开始。v2.x、v3.0.0 和 v3.0.1 站点必须先升级到
 v3.0.2 并确认能够正常启动，再升级到当前版本。从 v3.0.0 至 v4.0.0 升级到 v4.0.1 时还必须执行
-材质哈希检查/修复；完整顺序和脚本用法见 [v4.0.1 Release Notes](RELEASE.md)。
+材质哈希检查/修复；完整顺序和脚本用法见 [v4.0.1 Release Notes](https://github.com/water2004/element-skin/releases/tag/v4.0.1)。
+
+从 v4.0.1 升级到 v4.1.0 时，角色名称将按忽略大小写的规则查询和判重，但存储与显示仍保留原始大小写。
+既有的大小写重名角色会在首次启动时自动追加数字后缀，UUID、归属和材质保持不变。
+升级前请停服备份；具体步骤见 [v4.1.0 Release Notes](RELEASE.md)。
 
 从 v3.0.2 升级时，后端会把已配置的 `microsoft_client_id` 和 `microsoft_client_secret` 一次性迁移为
 只开放绑定能力的 Microsoft OIDC provider。只有 provider 创建成功后才删除旧设置；失败时保留旧值
