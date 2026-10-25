@@ -462,9 +462,12 @@ async function setAsAvatar(profile: Profile) {
   })
 
   try {
-    await setAvatar(profile.skin_hash, profile.model === 'slim' ? 'slim' : 'default')
+    const updated = await setAvatar(
+      profile.skin_hash,
+      profile.model === 'slim' ? 'slim' : 'default',
+    )
     loadingMsg.close()
-    ElMessage.success('已设为头像')
+    if (updated) ElMessage.success('已设为头像')
   } catch (error) {
     loadingMsg.close()
     ElMessage.error('设置头像失败')

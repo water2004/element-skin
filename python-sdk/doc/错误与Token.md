@@ -46,6 +46,33 @@ except PermissionDenied as exc:
 
 `str(exc)` 返回便于日志使用的 `object.operation.reason`，不返回面向最终用户的文案。调用方应依据三个独立字段实现本地化与恢复动作，不解析该日志字符串。
 
+### 密码校验错误
+
+密码校验失败返回 HTTP `400`，错误三元组为 `password.validate.invalid`，具体原因放在 `params.rules`：
+
+```json
+{
+  "error": {
+    "object": "password",
+    "operation": "validate",
+    "reason": "invalid",
+    "params": {"rules": ["min_length", "composition"]}
+  }
+}
+```
+
+规则标识为 `required`（非空）、`max_length`（最多 72 个 UTF-8 字节）、`min_length`（至少 8 个 Unicode 码点）和 `composition`（小写、大写、十进制数字、标点或符号四类中至少三类）。长度下限和组成要求仅在强密码开关开启时应用；标点和符号合计为一类，空格和无大小写文字不增加类别。
+
+SDK 将响应映射为 `APIError`，原样保留 `exc.params["rules"]` 和 `exc.response_body`。调用方应处理全部失败规则，未知规则显示通用失败提示。密码策略由服务端判断，SDK 不获取强密码开关或重复实现校验。请求入口缺失必填字段时仍可能返回该入口的 `required` 三元组。
+
+### 布尔设置类型错误
+
+管理员设置 API 的开关必须传 Python `bool`，序列化为 JSON `true`／`false`。
+字符串 `"true"`、`"1"`、数字 `1`、`None` 等输入会返回 HTTP `400`、
+`setting_value.validate.invalid`。SDK 原样暴露 `params.key`、`params.expected_type`（`boolean`），
+fallback 端点字段还可能包含从 1 开始的 `params.index`。调用方应更正输入类型后再提交，
+不应把被拒绝的字符串当作已生效的开关。数据库的文本编码由服务端设置层负责。
+
 ## OAuth 错误
 
 OAuth 协议端点使用独立的 RFC 错误对象：

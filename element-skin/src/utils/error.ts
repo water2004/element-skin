@@ -44,6 +44,7 @@ const exactMessages: Record<string, string> = {
   'oauth_client.resolve.not_found': '第三方应用不存在',
   'oauth_grant.resolve.not_found': '应用授权不存在',
   'webhook_event.subscribe.denied': '应用权限不允许订阅该 Webhook 事件',
+  'setting_value.validate.invalid': '设置值类型不正确',
   'server.handle.failed': '服务器处理请求失败',
 }
 
@@ -118,16 +119,19 @@ export function isApiError(error: unknown, object: string, operation: string, re
 
 function passwordPolicyMessage(params: Record<string, unknown> | undefined) {
   const rules = Array.isArray(params?.rules) ? params.rules : []
-  const labels: Record<string, string> = {
-    min_length: '至少 8 个字符',
-    lowercase: '包含小写字母',
-    uppercase: '包含大写字母',
-    number: '包含数字',
+  const messages: Record<string, string> = {
+    required: '请输入密码',
+    min_length: '密码至少需要8个字符',
+    max_length: '密码的UTF-8编码不能超过72字节',
+    composition: '密码需包含小写字母、大写字母、数字、标点或符号中的至少三类',
   }
-  const requirements = rules
-    .filter((rule): rule is string => typeof rule === 'string' && rule in labels)
-    .map((rule) => labels[rule])
-  return requirements.length > 0 ? `密码需要${requirements.join('、')}` : '密码不符合安全要求'
+  const reasons = rules
+    .filter(
+      (rule): rule is string =>
+        typeof rule === 'string' && Object.prototype.hasOwnProperty.call(messages, rule),
+    )
+    .map((rule) => messages[rule])
+  return reasons.length > 0 ? reasons.join('；') : '密码不符合安全要求'
 }
 
 export function getErrorMessage(error: unknown, fallback = '操作失败') {

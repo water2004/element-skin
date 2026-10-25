@@ -80,14 +80,12 @@ func (s Service) Register(ctx context.Context, email, password, username, invite
 		return "", util.HTTPError{Status: 400, Object: "email", Operation: "register", Reason: "already_exists"}
 	}
 	settings := s.settings()
-	strong, err := settings.Get(ctx, "enable_strong_password_check", "false")
+	strong, err := settings.Bool(ctx, "enable_strong_password_check", false)
 	if err != nil {
 		return "", err
 	}
-	if strong == "true" {
-		if errs := util.ValidateStrongPassword(password); len(errs) > 0 {
-			return "", util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": errs}}
-		}
+	if rules := util.ValidatePassword(password, strong); len(rules) > 0 {
+		return "", util.HTTPError{Status: 400, Object: "password", Operation: "validate", Reason: "invalid", Params: map[string]any{"rules": rules}}
 	}
 	allow, err := settings.Get(ctx, "allow_register", "true")
 	if err != nil {

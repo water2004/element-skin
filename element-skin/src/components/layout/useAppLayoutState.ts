@@ -90,6 +90,7 @@ export function useAppLayoutState() {
 
   let resizeObserver: ResizeObserver | null = null
   let unreadRefreshTimer: number | null = null
+  let sessionGeneration = 0
 
   function updateFooterHeight() {
     nextTick(() => {
@@ -123,31 +124,39 @@ export function useAppLayoutState() {
     drawer.value = false
   }
 
+  function clearSessionState() {
+    sessionGeneration++
+    user.value = null
+    void initializeAvatar(null)
+    clearUnreadNotifications()
+    stopUnreadRefreshTimer()
+    drawer.value = false
+    authReady.value = true
+  }
+
   async function logout() {
     try {
       await siteLogout()
     } catch {}
-    user.value = null
-    clearUnreadNotifications()
-    stopUnreadRefreshTimer()
-    authReady.value = true
-    void push('/')
-    setTimeout(() => window.location.reload(), 100)
+    clearSessionState()
+    await push('/')
+    window.location.reload()
   }
 
   async function fetchMe() {
+    const generation = sessionGeneration
     try {
       const res = await getMe()
+      if (generation !== sessionGeneration) return
       user.value = res.data
-      if (res.data.avatar_hash) {
-        initializeAvatar(res.data.avatar_hash)
-      }
+      void initializeAvatar(res.data.avatar_hash)
     } catch {
+      if (generation !== sessionGeneration) return
       user.value = null
       clearUnreadNotifications()
       stopUnreadRefreshTimer()
     } finally {
-      authReady.value = true
+      if (generation === sessionGeneration) authReady.value = true
     }
   }
 
@@ -155,6 +164,7 @@ export function useAppLayoutState() {
 
   provide('user', user)
   provide('fetchMe', fetchMe)
+  provide('clearSessionState', clearSessionState)
   provide('authReady', authReady)
   provide('isDark', isDark)
   provide('footerHeight', footerHeight)
@@ -250,6 +260,7 @@ export function useAppLayoutState() {
     accountName,
     go,
     logout,
+    clearSessionState,
     shouldShowNotificationBadge,
   }
 }

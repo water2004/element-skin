@@ -7,6 +7,7 @@ from element_skin_sdk.exceptions import APIError, AuthenticationError, NotFound,
 from element_skin_sdk.http import HTTPClient
 
 from .conftest import RequestRecorder
+from .fixtures import PASSWORD_ERROR_RULES, SETTING_VALUE_ERROR_CASES
 
 
 def test_http_context_manager_returns_self_and_gets_json(response_json) -> None:
@@ -93,13 +94,14 @@ def test_http_error_mapping_for_plain_text_response() -> None:
     assert exc.value.response_body == "plain failure"
 
 
-def test_http_error_preserves_structured_params(response_json) -> None:
+@pytest.mark.parametrize("rules", PASSWORD_ERROR_RULES)
+def test_http_error_preserves_structured_params(response_json, rules: list[str]) -> None:
     payload = {
         "error": {
             "object": "password",
             "operation": "validate",
             "reason": "invalid",
-            "params": {"rules": ["min_length", "number"]},
+            "params": {"rules": rules},
         }
     }
     recorder = RequestRecorder(lambda request: response_json(payload, 400))
@@ -108,8 +110,40 @@ def test_http_error_preserves_structured_params(response_json) -> None:
     with pytest.raises(APIError) as exc:
         client.post("/v2/users/me/password")
 
-    assert exc.value.params == {"rules": ["min_length", "number"]}
+    assert type(exc.value) is APIError
+    assert exc.value.status_code == 400
+    assert (exc.value.object, exc.value.operation, exc.value.reason) == ("password", "validate", "invalid")
+    assert exc.value.params == {"rules": rules}
     assert exc.value.response_body == payload
+    assert [(request.method, request.path, request.json_body) for request in recorder.requests] == [
+        ("POST", "/v2/users/me/password", None),
+    ]
+
+
+@pytest.mark.parametrize("case", SETTING_VALUE_ERROR_CASES)
+def test_http_error_preserves_setting_boolean_type_params(response_json, case) -> None:
+    payload = {
+        "error": {
+            "object": "setting_value",
+            "operation": "validate",
+            "reason": "invalid",
+            "params": case["params"],
+        }
+    }
+    recorder = RequestRecorder(lambda request: response_json(payload, 400))
+    client = HTTPClient("https://skin.example.test", transport=recorder.transport())
+
+    with pytest.raises(APIError) as exc:
+        client.post(case["path"], json=case["body"])
+
+    assert type(exc.value) is APIError
+    assert exc.value.status_code == 400
+    assert (exc.value.object, exc.value.operation, exc.value.reason) == ("setting_value", "validate", "invalid")
+    assert exc.value.params == case["params"]
+    assert exc.value.response_body == payload
+    assert [(request.method, request.path, request.json_body) for request in recorder.requests] == [
+        ("POST", case["path"], case["body"]),
+    ]
 
 
 def test_http_oauth_error_uses_error_when_description_missing(response_json) -> None:

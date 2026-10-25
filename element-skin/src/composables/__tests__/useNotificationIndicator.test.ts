@@ -10,6 +10,39 @@ beforeEach(() => {
 })
 
 describe('unread notification request ownership', () => {
+  it('ignores a response after cleanup without starting another request', async () => {
+    const pending = Promise.withResolvers<unknown>()
+    api.getNotices.mockReturnValueOnce(pending.promise)
+    const indicator = useNotificationIndicator()
+    const refreshing = indicator.refreshUnreadNotifications()
+    expect(indicator.loadingUnreadNotifications.value).toBe(true)
+    indicator.clearUnreadNotifications()
+    pending.resolve({ data: { page_size: 1, has_next: true, items: [] } })
+    await refreshing
+    expect(indicator.hasUnreadNotifications.value).toBe(false)
+    expect(indicator.loadingUnreadNotifications.value).toBe(false)
+    expect(api.getNotices).toHaveBeenCalledExactlyOnceWith({ limit: 1, include_read: false })
+  })
+
+  it('preserves a new session badge when an old request later fails', async () => {
+    const pending = Promise.withResolvers<unknown>()
+    api.getNotices
+      .mockReturnValueOnce(pending.promise)
+      .mockResolvedValueOnce({ data: { page_size: 1, has_next: false, items: [] } })
+    const indicator = useNotificationIndicator()
+    const oldRefresh = indicator.refreshUnreadNotifications()
+    indicator.clearUnreadNotifications()
+    await indicator.refreshUnreadNotifications()
+    pending.reject(new Error('old request failed'))
+    await oldRefresh
+    expect(indicator.hasUnreadNotifications.value).toBe(true)
+    expect(indicator.loadingUnreadNotifications.value).toBe(false)
+    expect(api.getNotices.mock.calls).toEqual([
+      [{ limit: 1, include_read: false }],
+      [{ limit: 1, include_read: false }],
+    ])
+  })
+
   it.each(['success', 'failure'])(
     'ignores stale $s after clearing or switching users',
     async (outcome) => {
