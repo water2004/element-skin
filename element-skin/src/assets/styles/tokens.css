@@ -48,6 +48,7 @@
   --motion-duration-smooth: 320ms;
   --motion-duration-slow: 400ms;
   --motion-stagger: 30ms;
+  --motion-stagger-limit: 120ms;
   --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --motion-offset-content: 8px;
   --motion-offset-card: 12px;
@@ -79,6 +80,7 @@
     --motion-duration-smooth: 0ms;
     --motion-duration-slow: 0ms;
     --motion-stagger: 0ms;
+    --motion-stagger-limit: 0ms;
     --motion-offset-content: 0px;
     --motion-offset-card: 0px;
     --motion-offset-hover: 0px;

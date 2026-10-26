@@ -1,29 +1,31 @@
 <template>
-  <div class="w-full mx-auto py-5 animate-fade-in">
-    <PageHeader title="材质管理" subtitle="浏览和管理皮肤库中所有上传的材质">
-      <template #icon><Picture /></template>
-      <template #actions>
-        <el-button :icon="Refresh" plain :loading="loading" @click="refreshTexturesFromFirst">
-          刷新
-        </el-button>
-      </template>
-    </PageHeader>
+  <div class="w-full mx-auto py-5">
+    <div class="animate-fade-in">
+      <PageHeader title="材质管理" subtitle="浏览和管理皮肤库中所有上传的材质">
+        <template #icon><Picture /></template>
+        <template #actions>
+          <el-button :icon="Refresh" plain :loading="loading" @click="refreshTexturesFromFirst">
+            刷新
+          </el-button>
+        </template>
+      </PageHeader>
 
-    <div class="flex items-center gap-4 mb-6 flex-wrap">
-      <SearchBar
-        class="flex-1 min-w-[260px]"
-        v-model="searchQuery"
-        :loading="loading"
-        placeholder="搜索哈希、材质名或上传者"
-        @clear="handleClearSearch"
-        @search="handleSearch"
-      />
-      <div class="shrink-0">
-        <UiSegmented v-model="typeFilter" @change="handleTypeFilterChange">
-          <el-radio-button :value="null">全部</el-radio-button>
-          <el-radio-button value="skin">皮肤</el-radio-button>
-          <el-radio-button value="cape">披风</el-radio-button>
-        </UiSegmented>
+      <div class="flex items-center gap-4 mb-6 flex-wrap">
+        <SearchBar
+          class="flex-1 min-w-[260px]"
+          v-model="searchQuery"
+          :loading="loading"
+          placeholder="搜索哈希、材质名或上传者"
+          @clear="handleClearSearch"
+          @search="handleSearch"
+        />
+        <div class="shrink-0">
+          <UiSegmented v-model="typeFilter" @change="handleTypeFilterChange">
+            <el-radio-button :value="null">全部</el-radio-button>
+            <el-radio-button value="skin">皮肤</el-radio-button>
+            <el-radio-button value="cape">披风</el-radio-button>
+          </UiSegmented>
+        </div>
       </div>
     </div>
 
@@ -42,6 +44,7 @@
     <div
       v-else-if="textures.length > 0"
       class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
+      :style="{ '--motion-card-count': textures.length }"
     >
       <TextureCard
         v-for="(item, index) in textures"

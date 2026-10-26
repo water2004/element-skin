@@ -242,8 +242,12 @@ the draft first; partial save progress must advance the acknowledged baseline.
 
 ### Motion
 
-Use `animate-fade-in` for a content group and `animate-card-slide` for a standalone
-staggered card group. Page-owned entrances suppress nested card entrances. The
+Use `animate-fade-in` for a content group and `animate-card-slide` for individual
+cards. On card-list pages, animate the heading and toolbar together, as a sibling
+of the list; do not animate an ancestor of the cards. Cards enter when mounted,
+including after a delayed response. Put `--motion-card-count` on the grid and
+provide each card's delay index: the interval is at most 30ms, distributed across
+the batch within 120ms so later cards do not share one capped delay. The
 shared keyframe uses `translate`, leaving `transform` available for explicit
 interaction; backwards fill covers delays without retaining a transform after
 entry. Motion timings and distances come from the shared tokens; Tailwind's

@@ -18,12 +18,14 @@
 .animate-card-slide {
   --motion-enter-offset: var(--motion-offset-card);
   animation: contentEnter var(--motion-duration-slow) var(--motion-easing-standard) backwards;
-  animation-delay: calc(min(var(--delay-index, 0), 4) * var(--motion-stagger));
-}
-
-/* 整页已作为一组入场时，卡片不再叠加第二次位移和错峰。 */
-.animate-fade-in .animate-card-slide {
-  animation: none;
+  /* 按本批数量分配错峰，避免后排共用一个封顶延时，也不超过总等待上限。 */
+  animation-delay: calc(
+    var(--delay-index, 0) *
+      min(
+        var(--motion-stagger),
+        var(--motion-stagger-limit) / max(1, var(--motion-card-count, 5) - 1)
+      )
+  );
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -1,6 +1,6 @@
 <template>
-  <div class="wardrobe-section animate-fade-in">
-    <div class="page-header">
+  <div class="wardrobe-section">
+    <div class="page-header animate-fade-in">
       <div class="page-header-content">
         <div>
           <h1>我的衣柜</h1>
@@ -15,6 +15,7 @@
     <div class="min-h-[400px]" v-loading="loading" element-loading-background="transparent">
       <div
         class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
+        :style="{ '--motion-card-count': textures.length }"
         v-if="textures.length > 0"
       >
         <TextureCard

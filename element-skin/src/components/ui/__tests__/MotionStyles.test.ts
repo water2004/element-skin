@@ -1,8 +1,19 @@
-import { createApp, h } from 'vue'
-import { ElButton } from 'element-plus'
-import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { createApp, h, nextTick } from 'vue'
+import ElementPlus, { ElButton } from 'element-plus'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { installMotionStyles, motionCss } from '@/__tests__/helpers/motionStyles'
-import { contentEntrances } from './fixtures/motionCases'
+import AdminRolesList from '@/components/admin/roles/AdminRolesList.vue'
+import { cardMotionPage, contentEntrances } from './fixtures/motionCases'
+
+const api = vi.hoisted(() => ({ getAdminProfiles: vi.fn() }))
+vi.mock('@/api/admin/profiles', () => ({
+  getAdminProfiles: api.getAdminProfiles,
+  patchAdminProfile: vi.fn(),
+  deleteAdminProfile: vi.fn(),
+  patchProfileSkin: vi.fn(),
+  patchProfileCape: vi.fn(),
+}))
+vi.mock('@/components/SkinViewer.vue', () => ({ default: { render: () => h('div') } }))
 
 let styles: ReturnType<typeof installMotionStyles>
 const cleanup: Array<() => void> = []
@@ -69,16 +80,65 @@ describe('shared motion contracts', () => {
     expect(motionCss(positioned, 'transform')).toBe('translateX(-50%)')
   })
 
-  it('does not stack a card entrance inside an entering page', () => {
-    const page = document.createElement('div')
-    page.className = 'animate-fade-in'
-    const card = document.createElement('div')
-    card.className = 'animate-card-slide'
-    page.append(card)
-    document.body.append(page)
-    cleanup.push(() => page.remove())
-    expect(motionCss(page, 'animation')).toContain('contentEnter')
-    expect(motionCss(card, 'animation')).toBe('none')
-    expect(motionCss(card, 'opacity')).toBe('1')
-  })
+  it.each([false, true])(
+    'gives late cards their own entrance and retains them through refresh (reduced: %s)',
+    async (reduced) => {
+      const requests: Array<(page: typeof cardMotionPage) => void> = []
+      api.getAdminProfiles
+        .mockReset()
+        .mockImplementation(() => new Promise((resolve) => requests.push(resolve)))
+      if (reduced) cleanup.push(styles.reduce())
+      const host = document.createElement('div')
+      document.body.append(host)
+      const app = createApp(AdminRolesList)
+      app.use(ElementPlus).mount(host)
+      cleanup.push(() => {
+        app.unmount()
+        host.remove()
+      })
+      await nextTick()
+
+      const header = host.querySelector('.ui-page-header')!
+      const headerGroup = header.closest('.animate-fade-in')!
+      expect(motionCss(headerGroup, 'animation')).toBe(
+        reduced ? 'none' : 'contentEnter 320ms cubic-bezier(0.4,0,0.2,1) backwards',
+      )
+      expect(host.querySelectorAll('.admin-role-card')).toHaveLength(0)
+      expect(api.getAdminProfiles).toHaveBeenCalledExactlyOnceWith({ limit: 20, cursor: null })
+
+      requests.shift()!(structuredClone(cardMotionPage))
+      await vi.waitFor(() => expect(host.querySelectorAll('.admin-role-card')).toHaveLength(2))
+      const cards = [...host.querySelectorAll('.admin-role-card')]
+      expect(cards.map((card) => card.querySelector('.role-name')?.textContent)).toEqual([
+        'PlayerA',
+        'PlayerB',
+      ])
+      expect(cards.map((card) => motionCss(card, '--delay-index'))).toEqual(['0', '1'])
+      expect(motionCss(cards[0]!.parentElement!, '--motion-card-count')).toBe('2')
+      for (const card of cards) {
+        expect(card.parentElement!.closest('.animate-fade-in')).toBeNull()
+        expect(motionCss(card, 'animation')).toBe(
+          reduced ? 'none' : 'contentEnter 400ms cubic-bezier(0.4,0,0.2,1) backwards',
+        )
+        if (reduced) {
+          expect(motionCss(card, 'opacity')).toBe('1')
+          expect(motionCss(card, 'translate')).toBe('none')
+          expect(motionCss(card, '--motion-stagger-limit')).toBe('0ms')
+        }
+      }
+
+      const refresh = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+        (button) => button.textContent?.trim() === '刷新',
+      )!
+      refresh.click()
+      await nextTick()
+      expect(api.getAdminProfiles).toHaveBeenCalledTimes(2)
+      expect(host.querySelectorAll('.admin-role-card')[0]).toBe(cards[0])
+      requests.shift()!(structuredClone(cardMotionPage))
+      await nextTick()
+      expect(host.querySelectorAll('.admin-role-card')[0]).toBe(cards[0])
+      expect(host.querySelectorAll('.admin-role-card')[1]).toBe(cards[1])
+      expect(host.querySelector('.ui-page-header')).toBe(header)
+    },
+  )
 })

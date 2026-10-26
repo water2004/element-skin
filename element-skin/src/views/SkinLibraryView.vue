@@ -1,6 +1,6 @@
 <template>
-  <div class="skin-library-container animate-fade-in">
-    <div v-if="isDisabled" class="disabled-container">
+  <div class="skin-library-container">
+    <div v-if="isDisabled" class="disabled-container animate-fade-in">
       <el-empty description="皮肤库已关闭">
         <template #extra>
           <el-button type="primary" @click="$router.push('/')">返回首页</el-button>
@@ -8,7 +8,7 @@
       </el-empty>
     </div>
     <template v-else>
-      <div class="page-header">
+      <div class="page-header animate-fade-in">
         <div class="page-header-content">
           <div>
             <h1>皮肤库</h1>
@@ -47,6 +47,7 @@
       >
         <div
           class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
+          :style="{ '--motion-card-count': items.length }"
           v-if="items.length > 0"
         >
           <TextureCard

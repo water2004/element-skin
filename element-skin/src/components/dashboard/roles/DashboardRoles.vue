@@ -1,6 +1,6 @@
 <template>
-  <div class="roles-section animate-fade-in">
-    <div class="page-header">
+  <div class="roles-section">
+    <div class="page-header animate-fade-in">
       <div class="page-header-content">
         <div>
           <h1>角色管理</h1>
@@ -44,6 +44,7 @@
     <div class="min-h-[400px]" v-loading="loading" element-loading-background="transparent">
       <div
         class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
+        :style="{ '--motion-card-count': profiles.length }"
         v-if="profiles.length > 0"
       >
         <RoleCard

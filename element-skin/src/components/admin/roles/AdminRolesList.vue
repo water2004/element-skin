@@ -1,26 +1,29 @@
 <template>
-  <div class="w-full mx-auto py-5 animate-fade-in">
-    <PageHeader title="角色管理" subtitle="浏览和管理全站所有用户的游戏角色与材质">
-      <template #icon><UserFilled /></template>
-      <template #actions>
-        <el-button :icon="Refresh" plain :loading="loading" @click="refreshFromFirst">
-          刷新
-        </el-button>
-      </template>
-    </PageHeader>
+  <div class="w-full mx-auto py-5">
+    <div class="animate-fade-in">
+      <PageHeader title="角色管理" subtitle="浏览和管理全站所有用户的游戏角色与材质">
+        <template #icon><UserFilled /></template>
+        <template #actions>
+          <el-button :icon="Refresh" plain :loading="loading" @click="refreshFromFirst">
+            刷新
+          </el-button>
+        </template>
+      </PageHeader>
 
-    <SearchBar
-      v-model="searchQuery"
-      :loading="loading"
-      placeholder="搜索角色名、邮箱或用户名"
-      class="mb-6"
-      @clear="handleClearSearch"
-      @search="handleSearch"
-    />
+      <SearchBar
+        v-model="searchQuery"
+        :loading="loading"
+        placeholder="搜索角色名、邮箱或用户名"
+        class="mb-6"
+        @clear="handleClearSearch"
+        @search="handleSearch"
+      />
+    </div>
 
     <div class="min-h-[400px]" v-loading="loading" element-loading-background="transparent">
       <div
         class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
+        :style="{ '--motion-card-count': profiles.length }"
         v-if="profiles.length > 0"
       >
         <AdminRoleCard
