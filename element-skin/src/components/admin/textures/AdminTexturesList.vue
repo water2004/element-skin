@@ -29,64 +29,60 @@
       </div>
     </div>
 
-    <!-- Skeleton loading -->
-    <div v-if="isLoading" class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6">
-      <div v-for="n in 8" :key="n" class="skeleton-card">
-        <div class="skeleton-preview"></div>
-        <div class="skeleton-info">
-          <div class="skeleton-line"></div>
-          <div class="skeleton-line short"></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Card grid -->
     <div
-      v-else-if="textures.length > 0"
-      class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
-      :style="{ '--motion-card-count': textures.length }"
+      class="min-h-[400px]"
+      role="region"
+      aria-label="材质列表"
+      :aria-busy="loading"
+      v-loading="loading"
+      element-loading-background="transparent"
     >
-      <TextureCard
-        v-for="(item, index) in textures"
-        :key="item.hash"
-        :texture="item"
-        :delay-index="index % limit"
-        :is-dark="isDark"
-        :textures-url="texturesUrl"
-        :title="item.name || '未命名'"
-        show-type
-        @preview="openPreview"
+      <div
+        v-if="textures.length > 0"
+        class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
+        :style="{ '--motion-card-count': textures.length }"
       >
-        <template #info="{ texture }">
-          <div
-            class="inline-flex rounded-lg px-2.5 py-1 text-xs font-bold uppercase leading-none tracking-[0.5px]"
-            :class="
-              texture.type === 'skin'
-                ? 'bg-[rgba(64,158,255,0.1)] text-[#409eff]'
-                : 'bg-[rgba(103,194,58,0.1)] text-[#67c23a]'
-            "
-          >
-            {{ texture.type === 'skin' ? '皮肤' : '披风' }}
-          </div>
-          <div
-            class="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold text-[var(--color-heading)]"
-          >
-            {{ texture.name || '未命名' }}
-          </div>
-          <div
-            class="texture-uploader"
-            v-if="texture.uploader_display_name || texture.uploader_email"
-          >
-            {{ texture.uploader_display_name || texture.uploader_email }}
-          </div>
-        </template>
-        <template #actions="{ texture }">
-          <UiButton variant="primary" :icon="Edit" @click="openPreview(texture)">编辑</UiButton>
-        </template>
-      </TextureCard>
+        <TextureCard
+          v-for="(item, index) in textures"
+          :key="item.hash"
+          :texture="item"
+          :delay-index="index % limit"
+          :is-dark="isDark"
+          :textures-url="texturesUrl"
+          :title="item.name || '未命名'"
+          show-type
+          @preview="openPreview"
+        >
+          <template #info="{ texture }">
+            <div
+              class="inline-flex rounded-lg px-2.5 py-1 text-xs font-bold uppercase leading-none tracking-[0.5px]"
+              :class="
+                texture.type === 'skin'
+                  ? 'bg-[rgba(64,158,255,0.1)] text-[#409eff]'
+                  : 'bg-[rgba(103,194,58,0.1)] text-[#67c23a]'
+              "
+            >
+              {{ texture.type === 'skin' ? '皮肤' : '披风' }}
+            </div>
+            <div
+              class="max-w-full overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-semibold text-[var(--color-heading)]"
+            >
+              {{ texture.name || '未命名' }}
+            </div>
+            <div
+              class="texture-uploader"
+              v-if="texture.uploader_display_name || texture.uploader_email"
+            >
+              {{ texture.uploader_display_name || texture.uploader_email }}
+            </div>
+          </template>
+          <template #actions="{ texture }">
+            <UiButton variant="primary" :icon="Edit" @click="openPreview(texture)">编辑</UiButton>
+          </template>
+        </TextureCard>
+      </div>
+      <el-empty v-else-if="!loading" description="暂无材质数据" :image-size="80" />
     </div>
-
-    <el-empty v-else-if="!loading" description="暂无材质数据" :image-size="80" />
 
     <div class="pagination-container">
       <CursorPager
@@ -198,8 +194,7 @@ const isDark = inject<Ref<boolean>>('isDark', ref(false))
 const textures = ref<Texture[]>([])
 const pagination = useCursorPagination<Texture>(20)
 const limit = pagination.limit
-const loading = ref(false)
-const isLoading = ref(true)
+const loading = ref(true)
 const searchQuery = ref('')
 const activeSearchQuery = ref('')
 const typeFilter = ref<string | null>(null)
@@ -230,7 +225,6 @@ async function fetchTextures() {
   } finally {
     loading.value = false
     pagination.isLoading.value = false
-    isLoading.value = false
   }
 }
 
@@ -372,32 +366,5 @@ onMounted(refreshTexturesFromFirst)
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Skeleton loading */
-.skeleton-card {
-  pointer-events: none;
-  border: 1px solid var(--color-border);
-  border-radius: 16px;
-  background: var(--color-card-background);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-}
-.skeleton-preview {
-  height: 280px;
-  background: var(--el-skeleton-color, #e0e0e0);
-  border-radius: 8px 8px 0 0;
-}
-.skeleton-info {
-  padding: 12px;
-}
-.skeleton-line {
-  height: 14px;
-  background: var(--el-skeleton-color, #e0e0e0);
-  border-radius: 4px;
-  margin-bottom: 8px;
-}
-.skeleton-line.short {
-  width: 60%;
 }
 </style>

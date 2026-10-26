@@ -1,11 +1,17 @@
-import { createApp, h, nextTick } from 'vue'
-import ElementPlus, { ElButton } from 'element-plus'
+import { createApp, h, nextTick, ref } from 'vue'
+import ElementPlus, { ElButton, ElMessage } from 'element-plus'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { installMotionStyles, motionCss } from '@/__tests__/helpers/motionStyles'
 import AdminRolesList from '@/components/admin/roles/AdminRolesList.vue'
-import { cardMotionPage, contentEntrances } from './fixtures/motionCases'
+import AdminTexturesList from '@/components/admin/textures/AdminTexturesList.vue'
+import {
+  cardMotionPage,
+  contentEntrances,
+  textureMotionCases,
+  textureMotionPage,
+} from './fixtures/motionCases'
 
-const api = vi.hoisted(() => ({ getAdminProfiles: vi.fn() }))
+const api = vi.hoisted(() => ({ getAdminProfiles: vi.fn(), getAdminTextures: vi.fn() }))
 vi.mock('@/api/admin/profiles', () => ({
   getAdminProfiles: api.getAdminProfiles,
   patchAdminProfile: vi.fn(),
@@ -14,9 +20,27 @@ vi.mock('@/api/admin/profiles', () => ({
   patchProfileCape: vi.fn(),
 }))
 vi.mock('@/components/SkinViewer.vue', () => ({ default: { render: () => h('div') } }))
+vi.mock('@/api/admin/textures', () => ({
+  getAdminTextures: api.getAdminTextures,
+  patchAdminTexture: vi.fn(),
+  deleteAdminTexture: vi.fn(),
+}))
 
 let styles: ReturnType<typeof installMotionStyles>
 const cleanup: Array<() => void> = []
+
+async function mountTextures(dark = false) {
+  const host = document.createElement('div')
+  document.body.append(host)
+  const app = createApp(AdminTexturesList)
+  app.provide('isDark', ref(dark)).use(ElementPlus).mount(host)
+  cleanup.push(() => {
+    app.unmount()
+    host.remove()
+  })
+  await nextTick()
+  return host
+}
 beforeAll(() => {
   styles = installMotionStyles()
 })
@@ -141,4 +165,97 @@ describe('shared motion contracts', () => {
       expect(host.querySelector('.ui-page-header')).toBe(header)
     },
   )
+
+  it.each(textureMotionCases)(
+    'loads late textures without replacing the list region (dark: $dark, reduced: $reduced)',
+    async ({ dark, reduced }) => {
+      let resolve!: (page: typeof textureMotionPage) => void
+      api.getAdminTextures.mockReset().mockReturnValue(
+        new Promise((done) => {
+          resolve = done
+        }),
+      )
+      const originalDark = document.documentElement.classList.contains('dark')
+      document.documentElement.classList.toggle('dark', dark)
+      cleanup.push(() => document.documentElement.classList.toggle('dark', originalDark))
+      if (reduced) cleanup.push(styles.reduce())
+      const host = await mountTextures(dark)
+      const region = host.querySelector<HTMLElement>('[aria-label="材质列表"]')!
+
+      expect(region.getAttribute('aria-busy')).toBe('true')
+      expect(region.querySelector<HTMLElement>('.el-loading-mask')?.style.backgroundColor).toBe(
+        'transparent',
+      )
+      expect(host.querySelector('.skeleton-card')).toBeNull()
+      expect(host.textContent).not.toContain('暂无材质数据')
+      expect(api.getAdminTextures).toHaveBeenCalledExactlyOnceWith({ limit: 20, cursor: null })
+
+      resolve(structuredClone(textureMotionPage))
+      await vi.waitFor(() => expect(region.querySelectorAll('.texture-card')).toHaveLength(2))
+      expect(host.querySelector('[aria-label="材质列表"]')).toBe(region)
+      expect(region.getAttribute('aria-busy')).toBe('false')
+      expect(region.closest('.animate-fade-in')).toBeNull()
+      expect(region.textContent).toContain('MotionSkinA')
+      expect(region.textContent).toContain('MotionSkinB')
+      const cards = [...region.querySelectorAll('.texture-card')]
+      expect(cards.map((card) => motionCss(card, '--delay-index'))).toEqual(['0', '1'])
+      for (const card of cards) {
+        expect(motionCss(card, 'animation')).toBe(
+          reduced ? 'none' : 'contentEnter 400ms cubic-bezier(0.4,0,0.2,1) backwards',
+        )
+        if (reduced) {
+          expect(motionCss(card, 'opacity')).toBe('1')
+          expect(motionCss(card, 'translate')).toBe('none')
+        }
+      }
+    },
+  )
+
+  it('keeps existing textures and their list region when refresh fails', async () => {
+    api.getAdminTextures.mockReset().mockResolvedValueOnce(structuredClone(textureMotionPage))
+    const errorMessage = vi.spyOn(ElMessage, 'error').mockReturnValue({ close: vi.fn() })
+    const host = await mountTextures()
+    const region = host.querySelector<HTMLElement>('[aria-label="材质列表"]')!
+    await vi.waitFor(() => expect(region.querySelectorAll('.texture-card')).toHaveLength(2))
+    const cards = [...region.querySelectorAll('.texture-card')]
+    let reject!: (error: Error) => void
+    api.getAdminTextures.mockReturnValueOnce(
+      new Promise((_, fail) => {
+        reject = fail
+      }),
+    )
+    const refresh = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.trim() === '刷新',
+    )!
+    refresh.click()
+    await nextTick()
+    expect(region.getAttribute('aria-busy')).toBe('true')
+    expect(region.querySelectorAll('.texture-card')[0]).toBe(cards[0])
+    reject(new Error('refresh unavailable'))
+    await vi.waitFor(() => expect(region.getAttribute('aria-busy')).toBe('false'))
+    expect(api.getAdminTextures).toHaveBeenNthCalledWith(2, { limit: 20, cursor: null })
+    expect(errorMessage).toHaveBeenCalledExactlyOnceWith('加载材质列表失败')
+    expect(host.querySelector('[aria-label="材质列表"]')).toBe(region)
+    expect(region.querySelectorAll('.texture-card')[0]).toBe(cards[0])
+    expect(region.querySelectorAll('.texture-card')[1]).toBe(cards[1])
+    expect(region.textContent).not.toContain('暂无材质数据')
+  })
+
+  it('shows the texture empty state only after the first response confirms it', async () => {
+    let resolve!: (page: typeof textureMotionPage) => void
+    api.getAdminTextures.mockReset().mockReturnValue(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    const host = await mountTextures()
+    const region = host.querySelector('[aria-label="材质列表"]')!
+    expect(region.getAttribute('aria-busy')).toBe('true')
+    expect(region.textContent).not.toContain('暂无材质数据')
+    resolve({ data: { ...textureMotionPage.data, items: [] } })
+    await vi.waitFor(() => expect(region.textContent).toContain('暂无材质数据'))
+    expect(region.getAttribute('aria-busy')).toBe('false')
+    expect(region.querySelectorAll('.texture-card')).toHaveLength(0)
+    expect(host.querySelector('[aria-label="材质列表"]')).toBe(region)
+  })
 })
