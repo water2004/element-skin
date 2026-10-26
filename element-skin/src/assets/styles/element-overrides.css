@@ -35,7 +35,7 @@
   --el-collapse-content-text-color: var(--color-text);
 }
 
-/* 操作页已预留 scrollbar-gutter，首页固定一屏；锁滚动时均无需再次扣除 body 宽度。 */
+/* 操作页视口和首页 AppShell 各自预留滚动槽；锁滚动时无需再次扣除 body 宽度。 */
 body.el-popup-parent--hidden,
 body.el-message-box-parent--hidden,
 body.el-image-viewer-parent--hidden {

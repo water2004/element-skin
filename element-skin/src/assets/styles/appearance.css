@@ -17,7 +17,7 @@ html {
   scrollbar-gutter: stable;
 }
 
-/* 首页固定一屏，无需预留空滚动槽；操作页继续保留空间以稳定弹窗开关时的布局。 */
+/* 首页由 AppShell 保留同宽滚动槽；视口交给 fixed 背景完整绘制。 */
 html.is-home-page {
   scrollbar-gutter: auto;
 }

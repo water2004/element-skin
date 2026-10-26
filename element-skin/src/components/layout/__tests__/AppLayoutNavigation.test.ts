@@ -1,8 +1,12 @@
 import { createApp, computed, nextTick, ref } from 'vue'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import ElementPlus from 'element-plus'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { compileStyle, parse } from '@vue/compiler-sfc'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import AppLayout from '@/components/AppLayout.vue'
+import { applyPageAppearance } from '@/storage/appearance'
 import {
   headerMeasurements,
   viewportCases,
@@ -33,8 +37,30 @@ class TestResizeObserver {
 
 let measurements: HeaderMeasurements = headerMeasurements.desktop
 const mountedLayouts: Array<() => void> = []
+const styles = document.createElement('style')
+let originalRootClasses = ''
+
+beforeAll(() => {
+  const filename = path.join(process.cwd(), 'src/components/AppLayout.vue')
+  const { descriptor } = parse(readFileSync(filename, 'utf8'), { filename })
+  const id = (AppLayout as { __scopeId?: string }).__scopeId
+  if (!id) throw new Error('Missing AppLayout scope ID')
+  const componentStyles = descriptor.styles.map((block) => {
+    const result = compileStyle({ source: block.content, filename, id, scoped: block.scoped })
+    if (result.errors.length) throw result.errors[0]
+    return result.code
+  })
+  styles.textContent = [
+    readFileSync(path.join(process.cwd(), 'src/assets/styles/appearance.css'), 'utf8'),
+    ...componentStyles,
+  ].join('\n')
+  document.head.append(styles)
+})
+
+afterAll(() => styles.remove())
 
 beforeEach(() => {
+  originalRootClasses = document.documentElement.className
   vi.clearAllMocks()
   TestResizeObserver.instances = []
   vi.stubGlobal('ResizeObserver', TestResizeObserver)
@@ -57,9 +83,44 @@ afterEach(() => {
   for (const unmount of mountedLayouts.splice(0)) unmount()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  document.documentElement.className = originalRootClasses
 })
 
 describe('responsive navigation lifecycle', () => {
+  it.each(viewportCases)(
+    'keeps the reserved navigation width across home and operation pages at $label',
+    async ({ measurements: viewport, visible }) => {
+      measurements = viewport
+      vi.stubGlobal('innerWidth', viewport.viewport)
+      const mounted = await mountLayout('/')
+      const nav = mounted.host.querySelector('.desktop-nav')
+
+      for (const route of ['/', '/notifications', '/']) {
+        await mounted.router.push(route)
+        applyPageAppearance(route)
+        await flushLayout()
+        const { observer, elements } = navigation(mounted.host)
+        observer.resize(elements[0]!)
+        await flushLayout()
+        const shell = mounted.host.querySelector('.app-shell')!
+        if (route === '/') {
+          expect(
+            getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter'),
+          ).toBe('auto')
+          expect(getComputedStyle(shell).getPropertyValue('scrollbar-gutter')).toBe('stable')
+          expect(getComputedStyle(shell).overflow).toBe('hidden')
+        } else {
+          expect(
+            getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter'),
+          ).toBe('stable')
+          expect(getComputedStyle(shell).getPropertyValue('scrollbar-gutter')).not.toBe('stable')
+        }
+        expectNavigation(mounted.host, visible)
+        expect(mounted.host.querySelector('.desktop-nav')).toBe(nav)
+      }
+    },
+  )
+
   it('does not flash initials when a session with a configured avatar becomes ready', async () => {
     const mounted = await mountLayout('/', { authReady: false })
     mounted.state.avatarConfigured.value = true

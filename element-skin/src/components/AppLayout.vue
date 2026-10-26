@@ -310,6 +310,8 @@ onUnmounted(() => {
 .is-home-layout {
   height: 100vh;
   overflow: hidden;
+  /* 与操作页视口保留同宽的滚动槽，同时允许 fixed 背景覆盖整个视口。 */
+  scrollbar-gutter: stable;
 }
 
 .layout-header-wrap {

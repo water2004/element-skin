@@ -117,7 +117,7 @@ async function mountOverlay(kind: (typeof scrollLockOverlays)[number]['kind']) {
 }
 
 describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
-  it('reserves a gutter for operation pages and removes it on entering or returning home', () => {
+  it('reserves the viewport gutter on operation pages and releases it to the home background', () => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     applyPageAppearance('/')
     expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
@@ -133,7 +133,7 @@ describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
     )
   })
 
-  it('keeps a non-scrolling home page full width while opening and closing the navigation drawer', async () => {
+  it('keeps the home body width stable while opening and closing the navigation drawer', async () => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     applyPageAppearance('/')
     vi.spyOn(document.body, 'scrollHeight', 'get').mockReturnValue(classicScrollbar.viewportHeight)
