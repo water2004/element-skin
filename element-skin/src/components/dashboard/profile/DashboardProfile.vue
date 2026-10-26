@@ -323,7 +323,16 @@ async function confirmDeleteAccount() {
     background-color var(--motion-duration-base) var(--motion-easing-standard),
     border-color var(--motion-duration-base) var(--motion-easing-standard),
     box-shadow var(--motion-duration-base) var(--motion-easing-standard),
-    opacity var(--motion-duration-base) var(--motion-easing-standard);
+    opacity var(--motion-duration-base) var(--motion-easing-standard),
+    transform var(--motion-duration-smooth) var(--motion-easing-standard);
+}
+
+/* 个人资料展示头像保留刻意的悬停动效，触屏和减少动态效果时不启用。 */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .profile-avatar:hover {
+    transform: scale(1.1) rotate(5deg);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
+  }
 }
 
 .profile-avatar.has-custom {

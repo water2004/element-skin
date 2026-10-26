@@ -249,6 +249,10 @@ interaction; backwards fill covers delays without retaining a transform after
 entry. Motion timings and distances come from the shared tokens; Tailwind's
 default transitions and Element Plus durations use those tokens as well.
 
+The profile display avatar intentionally retains its hover scale and rotation
+when hover is supported and reduced motion is not requested. Keep this exception
+local to the profile avatar; ordinary form controls retain paint-only feedback.
+
 Home copy and actions start from one `is-entered` state after the session is ready
 and two animation frames. Do not add an independent appear transition to buttons
 or fade their glass ancestor. Failed sessions still become ready; avatars and
