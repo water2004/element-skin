@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import UiDialog from '../UiDialog.vue'
+import { applyPageAppearance } from '@/storage/appearance'
 import {
   classicScrollbar,
   overlayThemes,
@@ -15,6 +16,7 @@ const styles = document.createElement('style')
 const cleanup: Array<() => void> = []
 let originalWidth = ''
 let originalClasses = ''
+let originalRootClasses = ''
 
 beforeAll(() => {
   styles.textContent = [
@@ -32,6 +34,7 @@ afterAll(() => styles.remove())
 beforeEach(() => {
   originalWidth = document.body.style.width
   originalClasses = document.body.className
+  originalRootClasses = document.documentElement.className
   vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(
     classicScrollbar.viewportHeight,
   )
@@ -54,7 +57,7 @@ afterEach(async () => {
   await settle(250)
   document.body.style.width = originalWidth
   document.body.className = originalClasses
-  document.documentElement.classList.remove('dark')
+  document.documentElement.className = originalRootClasses
 })
 
 async function settle(delay = 30) {
@@ -114,6 +117,44 @@ async function mountOverlay(kind: (typeof scrollLockOverlays)[number]['kind']) {
 }
 
 describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
+  it('reserves a gutter for operation pages and removes it on entering or returning home', () => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    applyPageAppearance('/')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+      'auto',
+    )
+    applyPageAppearance('/dashboard/home')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+      'stable',
+    )
+    applyPageAppearance('/')
+    expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+      'auto',
+    )
+  })
+
+  it('keeps a non-scrolling home page full width while opening and closing the navigation drawer', async () => {
+    document.documentElement.classList.toggle('dark', theme === 'dark')
+    applyPageAppearance('/')
+    vi.spyOn(document.body, 'scrollHeight', 'get').mockReturnValue(classicScrollbar.viewportHeight)
+    const overlay = await mountOverlay('drawer')
+    const initialComputedWidth = getComputedStyle(document.body).width
+    expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+      'auto',
+    )
+    await overlay.show()
+    expect(document.body.classList.contains('el-popup-parent--hidden')).toBe(true)
+    expect(document.body.style.width).toBe(originalWidth)
+    expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
+    await overlay.close()
+    expect(document.body.classList.contains('el-popup-parent--hidden')).toBe(false)
+    expect(document.body.style.width).toBe(originalWidth)
+    expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
+    expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+      'auto',
+    )
+  })
+
   it.each(scrollLockOverlays)(
     'does not deduct the reserved gutter again for $kind and restores on close',
     async ({ kind, lockClass }) => {

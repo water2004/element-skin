@@ -17,6 +17,11 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* 首页固定一屏，无需预留空滚动槽；操作页继续保留空间以稳定弹窗开关时的布局。 */
+html.is-home-page {
+  scrollbar-gutter: auto;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
