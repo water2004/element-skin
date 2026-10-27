@@ -3,6 +3,7 @@
     v-if="dimensions && (!nonStandardOnly || (precision !== null && precision !== 1))"
     size="small"
     effect="dark"
+    round
     >{{ dimensions.width }}px</el-tag
   >
   <span v-else-if="!nonStandardOnly" class="text-sm text-[var(--color-text-light)]">{{
