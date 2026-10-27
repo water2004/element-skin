@@ -39,6 +39,7 @@ let measurements: HeaderMeasurements = headerMeasurements.desktop
 const mountedLayouts: Array<() => void> = []
 const styles = document.createElement('style')
 let originalRootClasses = ''
+let originalBodyClasses = ''
 
 beforeAll(() => {
   const filename = path.join(process.cwd(), 'src/components/AppLayout.vue')
@@ -52,6 +53,7 @@ beforeAll(() => {
   })
   styles.textContent = [
     readFileSync(path.join(process.cwd(), 'src/assets/styles/appearance.css'), 'utf8'),
+    readFileSync(path.join(process.cwd(), 'src/assets/styles/element-overrides.css'), 'utf8'),
     ...componentStyles,
   ].join('\n')
   document.head.append(styles)
@@ -61,6 +63,7 @@ afterAll(() => styles.remove())
 
 beforeEach(() => {
   originalRootClasses = document.documentElement.className
+  originalBodyClasses = document.body.className
   vi.clearAllMocks()
   TestResizeObserver.instances = []
   vi.stubGlobal('ResizeObserver', TestResizeObserver)
@@ -84,6 +87,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   document.documentElement.className = originalRootClasses
+  document.body.className = originalBodyClasses
 })
 
 describe('responsive navigation lifecycle', () => {
@@ -117,6 +121,21 @@ describe('responsive navigation lifecycle', () => {
         }
         expectNavigation(mounted.host, visible)
         expect(mounted.host.querySelector('.desktop-nav')).toBe(nav)
+
+        document.body.classList.add('el-popup-parent--hidden')
+        await flushLayout()
+        expect(
+          getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter'),
+        ).toBe('auto')
+        expect(getComputedStyle(shell).getPropertyValue('scrollbar-gutter')).toBe('stable')
+        expect(getComputedStyle(shell).overflow).toBe('hidden')
+        expectNavigation(mounted.host, visible)
+        expect(mounted.host.querySelector('.desktop-nav')).toBe(nav)
+        document.body.classList.remove('el-popup-parent--hidden')
+        await flushLayout()
+        expect(
+          getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter'),
+        ).toBe(route === '/' ? 'auto' : 'stable')
       }
     },
   )

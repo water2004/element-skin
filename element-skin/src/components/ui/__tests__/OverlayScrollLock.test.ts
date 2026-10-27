@@ -69,6 +69,7 @@ async function settle(delay = 30) {
 async function mountOverlay(kind: (typeof scrollLockOverlays)[number]['kind']) {
   const open = ref(false)
   const host = document.createElement('div')
+  host.className = 'app-shell'
   document.body.append(host)
   const app = createApp({
     render: () => {
@@ -113,7 +114,7 @@ async function mountOverlay(kind: (typeof scrollLockOverlays)[number]['kind']) {
     else open.value = false
     await settle(250)
   }
-  return { show, close }
+  return { show, close, shell: host }
 }
 
 describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
@@ -144,6 +145,7 @@ describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
     )
     await overlay.show()
     expect(document.body.classList.contains('el-popup-parent--hidden')).toBe(true)
+    expect(getComputedStyle(overlay.shell).getPropertyValue('scrollbar-gutter')).toBe('stable')
     expect(document.body.style.width).toBe(originalWidth)
     expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
     await overlay.close()
@@ -166,6 +168,12 @@ describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
       )
       await overlay.show()
       expect(document.body.classList.contains(lockClass)).toBe(true)
+      // 预留移入应用壳，视口不再有遮罩无法覆盖的原生空槽。
+      expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+        'auto',
+      )
+      expect(getComputedStyle(overlay.shell).getPropertyValue('scrollbar-gutter')).toBe('stable')
+      expect(getComputedStyle(overlay.shell).overflow).toBe('hidden')
       // 实际组件确实走到经典滚动条补偿分支；应用覆盖使布局仍沿用原有宽度。
       expect(document.body.style.width).toBe('calc(100% - 15px)')
       expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
@@ -174,6 +182,12 @@ describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
       expect(document.body.classList.contains(lockClass)).toBe(false)
       expect(document.body.style.width).toBe(originalWidth)
       expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
+      expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+        'stable',
+      )
+      expect(getComputedStyle(overlay.shell).getPropertyValue('scrollbar-gutter')).not.toBe(
+        'stable',
+      )
     },
   )
 
@@ -188,16 +202,27 @@ describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
       await nested.show()
       expect(document.body.classList.contains('el-popup-parent--hidden')).toBe(true)
       expect(document.body.classList.contains(lockClass)).toBe(true)
+      expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+        'auto',
+      )
+      expect(getComputedStyle(parent.shell).getPropertyValue('scrollbar-gutter')).toBe('stable')
       expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
       await nested.close()
       expect(document.body.classList.contains(lockClass)).toBe(false)
       expect(document.body.classList.contains('el-popup-parent--hidden')).toBe(true)
+      expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+        'auto',
+      )
+      expect(getComputedStyle(parent.shell).getPropertyValue('scrollbar-gutter')).toBe('stable')
       expect(getComputedStyle(document.body).overflow).toBe('hidden')
       expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
       await parent.close()
       expect(document.body.classList.contains('el-popup-parent--hidden')).toBe(false)
       expect(document.body.style.width).toBe(originalWidth)
       expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
+      expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+        'stable',
+      )
     },
   )
 
@@ -208,10 +233,17 @@ describe.each(overlayThemes)('%s overlay scroll locking', (theme) => {
     const initialComputedWidth = getComputedStyle(document.body).width
     await overlay.show()
     expect(document.body.classList.contains('el-message-box-parent--hidden')).toBe(true)
+    expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+      'auto',
+    )
+    expect(getComputedStyle(overlay.shell).getPropertyValue('scrollbar-gutter')).toBe('stable')
     expect(document.body.style.width).toBe(originalWidth)
     expect(getComputedStyle(document.body).width).toBe(initialComputedWidth)
     await overlay.close()
     expect(document.body.classList.contains('el-message-box-parent--hidden')).toBe(false)
+    expect(getComputedStyle(document.documentElement).getPropertyValue('scrollbar-gutter')).toBe(
+      'stable',
+    )
     expect(document.body.style.width).toBe(originalWidth)
   })
 })

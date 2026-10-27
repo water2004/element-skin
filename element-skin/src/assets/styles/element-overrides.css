@@ -35,7 +35,24 @@
   --el-collapse-content-text-color: var(--color-text);
 }
 
-/* 操作页视口和首页 AppShell 各自预留滚动槽；锁滚动时无需再次扣除 body 宽度。 */
+/* 锁滚动时将预留移入应用壳，使 fixed 浮层覆盖完整视口且内容宽度不变。 */
+html:has(
+  > body:is(
+      .el-popup-parent--hidden,
+      .el-message-box-parent--hidden,
+      .el-image-viewer-parent--hidden
+    )
+) {
+  scrollbar-gutter: auto;
+}
+
+body:is(.el-popup-parent--hidden, .el-message-box-parent--hidden, .el-image-viewer-parent--hidden)
+  .app-shell {
+  scrollbar-gutter: stable;
+  overflow: hidden;
+}
+
+/* 内容已保留原生槽宽，覆盖 Element Plus 的重复 body 扣宽。 */
 body.el-popup-parent--hidden,
 body.el-message-box-parent--hidden,
 body.el-image-viewer-parent--hidden {
