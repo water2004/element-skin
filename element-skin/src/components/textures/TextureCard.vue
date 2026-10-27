@@ -21,7 +21,7 @@
         :height="280"
         is-static
       />
-      <div class="absolute right-2 top-2">
+      <div class="absolute right-2 top-2 flex">
         <TextureResolutionTag :hash="texture.hash" :type="texture.type" non-standard-only />
       </div>
     </template>
