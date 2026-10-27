@@ -1,43 +1,26 @@
 import { createApp, h, nextTick, ref } from 'vue'
 import ElementPlus from 'element-plus'
-import { describe, expect, it } from 'vitest'
-import type { ExternalIdentity, OfficialProfileBinding, Profile } from '@/api/types'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ExternalIdentity, OfficialProfileBinding } from '@/api/types'
 import OfficialBindingDialog from '../OfficialBindingDialog.vue'
 import ProfileCard from '@/components/common/ProfileCard.vue'
 import RolePreviewDialog from '../RolePreviewDialog.vue'
 
-const profile: Profile = {
-  id: '0123456789abcdef0123456789abcdef',
-  name: 'RemoteSteve',
-  model: 'slim',
-  skin_hash: null,
-  cape_hash: null,
-}
+import { profile, binding } from './fixtures/officialBinding'
 
-const binding: OfficialProfileBinding = {
-  id: 'binding-1',
-  identity_id: 'identity-1',
-  profile_id: profile.id,
-  remote_uuid: profile.id,
-  remote_name: 'RemoteSteve',
-  remote_skin_url: '',
-  remote_cape_url: '',
-  remote_skin_model: 'slim',
-  created_at: 1000,
-  updated_at: 1000,
-  last_synced_at: null,
-  profile,
-  identity: {
-    id: 'identity-1',
-    label: 'Xbox account',
-    provider_id: 'microsoft-provider',
-    provider_name: 'Microsoft',
-    provider_adapter: 'microsoft',
-  },
-}
+vi.mock('@/components/SkinViewer.vue', () => ({ default: { render: () => h('div') } }))
+vi.mock('@/components/CapeViewer.vue', () => ({ default: { render: () => h('div') } }))
+
+const cleanup: Array<() => void> = []
+afterEach(() =>
+  cleanup
+    .splice(0)
+    .reverse()
+    .forEach((dispose) => dispose()),
+)
 
 describe('official profile binding UI', () => {
-  it('keeps role cards to a preview and name without commands or official badges', async () => {
+  it('keeps unbound role cards free of official badges and binding commands', async () => {
     const mounted = mountComponent(ProfileCard, {
       profile,
       delayIndex: 0,
@@ -87,6 +70,115 @@ describe('official profile binding UI', () => {
     expect(unbound).toEqual([binding])
     mounted.unmount()
   })
+
+  it('shows the shared official badge on a bound role card', async () => {
+    const mounted = mountComponent(ProfileCard, {
+      profile,
+      delayIndex: 0,
+      official: true,
+      texturesUrl: String,
+    })
+    await flushUI()
+    const badge = mounted.host.querySelector('.el-tag')!
+    expect(badge.textContent?.trim()).toBe('正版')
+    for (const token of ['el-tag--success', 'el-tag--dark', 'is-round', 'font-bold'])
+      expect(badge.classList.contains(token)).toBe(true)
+    expect(badge.classList.contains('el-tag--small')).toBe(false)
+    expect(buttonText(mounted.host)).toEqual([])
+  })
+
+  it('groups official information and its commands before common operations', async () => {
+    mountComponent(RolePreviewDialog, {
+      visible: true,
+      profile: { ...profile, skin_hash: 'skin', cape_hash: 'cape' },
+      texturesUrl: String,
+      officialBinding: binding,
+      officialState: 'ready',
+      busy: false,
+      revision: 1,
+      saveName: async () => true,
+      canRename: false,
+      canSetAvatar: true,
+      canClearTexture: true,
+      canDelete: true,
+      canSyncOfficialBinding: true,
+      canDeleteOfficialBinding: true,
+    })
+    await flushUI()
+    const dialog = document.body.querySelector<HTMLElement>('.ui-dialog--viewer')!
+    const official = dialog.querySelector<HTMLElement>('section[aria-label="正版绑定"]')!
+    const common = dialog.querySelector<HTMLElement>('section[aria-label="通用操作"]')!
+    expect(official.querySelector('h3')?.textContent).toBe('正版绑定')
+    const infoRow = official.querySelector('.flex-wrap')!
+    expect(infoRow.textContent?.replace(/\s+/g, '')).toBe('RemoteSteveXboxaccount正版')
+    expect(infoRow.querySelectorAll('.el-tag')).toHaveLength(1)
+    expect(
+      official.querySelector('[aria-label="查看完整正版 UUID，点击可展开"]')?.textContent?.trim(),
+    ).toBe('01234567...')
+    expect(buttonText(official).slice(-2)).toEqual(['同步正版数据', '解除绑定'])
+    expect(buttonText(common)).toEqual(['用作头像', '清除皮肤', '清除披风', '删除角色'])
+    expect(official.compareDocumentPosition(common) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+    expect(common.textContent).not.toContain('同步正版数据')
+  })
+
+  it.each([
+    { state: 'loading', text: '正版绑定加载中' },
+    { state: 'error', text: '正版绑定加载失败' },
+    { state: 'forbidden', text: '无权读取正版绑定' },
+  ])('does not present a stale binding as usable while $state', async ({ state, text }) => {
+    mountComponent(RolePreviewDialog, {
+      visible: true,
+      profile,
+      texturesUrl: String,
+      officialBinding: binding,
+      officialState: state,
+      busy: false,
+      revision: 1,
+      saveName: async () => true,
+      canRename: false,
+      canSetAvatar: false,
+      canClearTexture: false,
+      canDelete: false,
+      canSyncOfficialBinding: true,
+      canDeleteOfficialBinding: true,
+    })
+    await flushUI()
+    const section = document.body.querySelector('section[aria-label="正版绑定"]')!
+    expect(section.querySelector('[role="status"]')?.textContent?.trim()).toBe(text)
+    expect(section.querySelector('.el-tag')).toBeNull()
+    expect(section.querySelector('button')).toBeNull()
+  })
+
+  it.each([false, true])(
+    'preserves a readable binding without unauthorized commands (busy: %s)',
+    async (busy) => {
+      mountComponent(RolePreviewDialog, {
+        visible: true,
+        profile,
+        texturesUrl: String,
+        officialBinding: { ...binding, identity: { ...binding.identity, label: '' } },
+        officialState: 'ready',
+        busy,
+        revision: 1,
+        saveName: async () => true,
+        canRename: false,
+        canSetAvatar: false,
+        canClearTexture: false,
+        canDelete: false,
+        canSyncOfficialBinding: true,
+        canDeleteOfficialBinding: false,
+      })
+      await flushUI()
+      const section = document.body.querySelector<HTMLElement>('section[aria-label="正版绑定"]')!
+      expect(section.textContent).toContain('Microsoft')
+      expect(section.textContent).not.toContain('Xbox account')
+      expect(section.textContent).not.toContain('解除绑定')
+      expect(findButton(section, '同步正版数据').disabled).toBe(busy)
+      expect(section.querySelector('.el-tag--success')?.textContent).toBe('正版')
+    },
+  )
 
   it('offers only unbound usable Microsoft accounts and never asks for a local role', async () => {
     const identities: ExternalIdentity[] = [
@@ -149,13 +241,15 @@ function mountComponent(component: object, props: Record<string, unknown>) {
   app.use(ElementPlus)
   app.provide('isDark', ref(false))
   app.mount(host)
-  return {
-    host,
-    unmount: () => {
-      app.unmount()
-      host.remove()
-    },
+  let active = true
+  const unmount = () => {
+    if (!active) return
+    active = false
+    app.unmount()
+    host.remove()
   }
+  cleanup.push(unmount)
+  return { host, unmount }
 }
 
 function buttonText(root: HTMLElement) {

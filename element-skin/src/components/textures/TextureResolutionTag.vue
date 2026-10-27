@@ -1,9 +1,10 @@
 <template>
   <el-tag
     v-if="dimensions && (!nonStandardOnly || (precision !== null && precision !== 1))"
-    size="small"
+    size="default"
     effect="dark"
     round
+    class="font-bold"
     >{{ dimensions.width }}px</el-tag
   >
   <span v-else-if="!nonStandardOnly" class="text-sm text-[var(--color-text-light)]">{{

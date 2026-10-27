@@ -9,6 +9,7 @@ import DashboardWardrobe from '@/components/dashboard/wardrobe/DashboardWardrobe
 import DashboardRoles from '@/components/dashboard/roles/DashboardRoles.vue'
 import AdminRolesList from '@/components/admin/roles/AdminRolesList.vue'
 import AdminTexturesList from '@/components/admin/textures/AdminTexturesList.vue'
+import { binding as officialBinding } from '@/components/dashboard/roles/__tests__/fixtures/officialBinding'
 import {
   adminDeleteWarning,
   viewerProfile,
@@ -19,6 +20,8 @@ import {
 
 const api = vi.hoisted(() => ({
   getPublicSkinLibrary: vi.fn(),
+  getOfficialProfileBindings: vi.fn(),
+  getExternalIdentities: vi.fn(),
   getTextures: vi.fn(),
   getTextureDetail: vi.fn(),
   addToWardrobe: vi.fn(),
@@ -42,6 +45,13 @@ const api = vi.hoisted(() => ({
   deleteAdminTexture: vi.fn(),
   getMe: vi.fn(),
   setAvatar: vi.fn(),
+}))
+vi.mock('@/api/identity', () => ({ getExternalIdentities: api.getExternalIdentities }))
+vi.mock('@/api/official-profiles', () => ({
+  getOfficialProfileBindings: api.getOfficialProfileBindings,
+  createOfficialProfileBinding: vi.fn(),
+  syncOfficialProfileBinding: vi.fn(),
+  deleteOfficialProfileBinding: vi.fn(),
 }))
 vi.mock('@/api/public', () => ({ getPublicSkinLibrary: api.getPublicSkinLibrary }))
 vi.mock('@/api/textures', () => ({
@@ -124,6 +134,8 @@ beforeEach(() => {
       page_size: 20,
     },
   })
+  api.getOfficialProfileBindings.mockResolvedValue({ data: { items: [] } })
+  api.getExternalIdentities.mockResolvedValue({ data: { items: [] } })
   api.getPublicSkinLibrary.mockImplementation(texturePage)
   api.getTextures.mockImplementation(texturePage)
   api.getAdminTextures.mockImplementation(texturePage)
@@ -883,19 +895,44 @@ describe('personal role card shortcuts', () => {
     const { host } = await openPage('roles', rolePermissions, true, false)
     const card = host.querySelector<HTMLElement>('.role-card')!
     expect([...card.querySelectorAll('button')].map((el) => el.textContent?.trim())).toEqual([
-      '设为头像',
-      '清除皮肤',
-      '清除披风',
+      '头像',
+      '皮肤',
+      '披风',
     ])
-    button(card, '设为头像').click()
+    expect([...card.querySelectorAll('button')].map((el) => el.getAttribute('aria-label'))).toEqual(
+      ['设为头像', '清除皮肤', '清除披风'],
+    )
+    const avatar = button(card, '头像')
+    avatar.focus()
+    await flushUI()
+    expect(
+      document.getElementById(avatar.getAttribute('aria-describedby')!)?.textContent?.trim(),
+    ).toBe('设为头像')
+    for (const code of ['Enter', 'Space']) {
+      const key = new KeyboardEvent('keydown', {
+        code,
+        key: code === 'Space' ? ' ' : 'Enter',
+        bubbles: true,
+        cancelable: true,
+      })
+      avatar.dispatchEvent(key)
+      expect(key.defaultPrevented).toBe(false)
+    }
+    avatar.click()
     await flushUI()
     expect(api.setAvatar).toHaveBeenCalledExactlyOnceWith('viewer-skin', 'default')
     expect(dialog()).toBeUndefined()
-    button(card, '清除皮肤').click()
+    const skin = button(card, '皮肤')
+    skin.dispatchEvent(new MouseEvent('mouseenter'))
+    await flushUI()
+    expect(
+      document.getElementById(skin.getAttribute('aria-describedby')!)?.textContent?.trim(),
+    ).toBe('清除皮肤')
+    skin.click()
     await flushUI()
     expect(api.clearProfileSkin).toHaveBeenCalledExactlyOnceWith('viewer-profile')
     expect([...card.querySelectorAll('button')].map((el) => el.textContent?.trim())).toEqual([
-      '清除披风',
+      '披风',
     ])
     expect(dialog()).toBeUndefined()
     expect(api.deleteProfile).not.toHaveBeenCalled()
@@ -933,7 +970,7 @@ describe('personal role card shortcuts', () => {
     )
     const { host } = await openPage('roles', rolePermissions, true, false)
     const card = host.querySelector<HTMLElement>('.role-card')!
-    button(card, '清除披风').click()
+    button(card, '披风').click()
     await flushUI()
     expect(api.clearProfileCape).toHaveBeenCalledExactlyOnceWith('viewer-profile')
     for (const action of card.querySelectorAll<HTMLButtonElement>('button'))
@@ -950,7 +987,7 @@ describe('personal role card shortcuts', () => {
     })
     await flushUI()
     expect(ElMessage.error).toHaveBeenCalledExactlyOnceWith('没有执行此操作的权限')
-    expect(button(card, '清除披风').disabled).toBe(false)
+    expect(button(card, '披风').disabled).toBe(false)
     expect(button(host, '新建角色').disabled).toBe(false)
   })
 
@@ -962,12 +999,53 @@ describe('personal role card shortcuts', () => {
       }),
     )
     const { host, session } = await openPage('roles', rolePermissions, true, false)
-    button(host, '清除皮肤').click()
+    button(host, '皮肤').click()
     await nextTick()
     session.user!.permissions = ['profile.read.owned']
     confirm('confirm')
     await flushUI()
     expect(api.clearProfileSkin).not.toHaveBeenCalled()
     expect(api.deleteProfile).not.toHaveBeenCalled()
+  })
+})
+
+describe('official role card status', () => {
+  it('shows the official badge only after binding data is ready, and removes it when read access is lost', async () => {
+    let resolve!: (result: { data: { items: (typeof officialBinding)[] } }) => void
+    api.getOfficialProfileBindings.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    const { host, session } = await openPage(
+      'roles',
+      ['profile.read.owned', 'official_profile.read.owned'],
+      true,
+      false,
+    )
+    expect(host.querySelector('.role-card .el-tag--success')).toBeNull()
+    resolve({
+      data: {
+        items: [{ ...officialBinding, profile_id: viewerProfile.id, profile: viewerProfile }],
+      },
+    })
+    await flushUI()
+    expect(host.querySelector('.role-card .el-tag--success')?.textContent).toBe('正版')
+    session.user!.permissions = ['profile.read.owned']
+    await flushUI()
+    expect(host.querySelector('.role-card .el-tag--success')).toBeNull()
+  })
+
+  it('keeps a failed binding read distinct from an unbound role without showing an official badge', async () => {
+    api.getOfficialProfileBindings.mockRejectedValueOnce({ response: { status: 403 } })
+    const { host, detail } = await openPage('roles', [
+      'profile.read.owned',
+      'official_profile.read.owned',
+    ])
+    expect(host.querySelector('.role-card .el-tag--success')).toBeNull()
+    const official = detail.querySelector('section[aria-label="正版绑定"]')!
+    expect(official.textContent).toContain('正版绑定加载失败')
+    expect(official.querySelector('.el-tag')).toBeNull()
+    expect(official.querySelector('button')).toBeNull()
   })
 })

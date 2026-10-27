@@ -26,6 +26,13 @@
       <section class="flex flex-col items-start gap-4 border-b border-[var(--color-border)] py-5">
         <TextureModelTag :model="profile.model" />
         <ProfileIdentifiers :profile="profile" />
+      </section>
+      <section
+        v-if="officialState !== 'ready' || officialBinding"
+        aria-label="正版绑定"
+        class="flex flex-col items-start gap-4 border-b border-[var(--color-border)] py-5"
+      >
+        <h3 class="m-0 text-sm text-[var(--color-text-light)]">正版绑定</h3>
         <div
           v-if="officialState !== 'ready'"
           class="text-sm text-[var(--color-text-light)]"
@@ -40,72 +47,80 @@
           }}
         </div>
         <template v-else-if="officialBinding">
-          <span class="text-sm text-[var(--color-text-light)]">正版绑定</span>
-          <ViewerIdentity :name="officialBinding.remote_name" />
-          <span class="text-sm">{{
-            officialBinding.identity.label || officialBinding.identity.provider_name
-          }}</span>
+          <div class="flex w-full min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
+            <ViewerIdentity :name="officialBinding.remote_name" />
+            <span class="min-w-0 break-all text-sm text-[var(--color-text-light)]">{{
+              officialBinding.identity.label || officialBinding.identity.provider_name
+            }}</span>
+            <OfficialBindingTag class="shrink-0" />
+          </div>
           <IdentifierValue label="正版 UUID" :value="officialBinding.remote_uuid" />
+          <ActionBar v-if="canSyncOfficialBinding || canDeleteOfficialBinding" align="start">
+            <UiButton
+              v-if="canSyncOfficialBinding"
+              variant="secondary"
+              :disabled="blocked"
+              @click="$emit('sync-official', officialBinding)"
+              >同步正版数据</UiButton
+            >
+            <UiButton
+              v-if="canDeleteOfficialBinding"
+              variant="secondary"
+              tone="warning"
+              :disabled="blocked"
+              @click="$emit('unbind-official', officialBinding)"
+              >解除绑定</UiButton
+            >
+          </ActionBar>
         </template>
       </section>
-      <ActionBar align="start" class="py-5">
-        <UiButton
-          v-if="canSetAvatar && profile.skin_hash"
-          variant="secondary"
-          :disabled="blocked"
-          @click="$emit('set-avatar', profile)"
-          >用作头像</UiButton
-        >
-        <UiButton
-          v-if="canClearTexture && profile.skin_hash"
-          variant="secondary"
-          tone="warning"
-          :disabled="blocked"
-          @click="$emit('clear-skin', profile.id)"
-          >清除皮肤</UiButton
-        >
-        <UiButton
-          v-if="canClearTexture && profile.cape_hash"
-          variant="secondary"
-          tone="warning"
-          :disabled="blocked"
-          @click="$emit('clear-cape', profile.id)"
-          >清除披风</UiButton
-        >
-      </ActionBar>
-      <ActionBar v-if="officialState === 'ready' && officialBinding" align="start" class="pb-5">
-        <UiButton
-          v-if="canSyncOfficialBinding"
-          variant="secondary"
-          :disabled="blocked"
-          @click="$emit('sync-official', officialBinding)"
-          >同步正版数据</UiButton
-        >
-        <UiButton
-          v-if="canDeleteOfficialBinding"
-          variant="secondary"
-          tone="warning"
-          :disabled="blocked"
-          @click="$emit('unbind-official', officialBinding)"
-          >解除绑定</UiButton
-        >
-      </ActionBar>
-      <div v-if="canDelete" class="pb-5">
-        <UiButton
-          v-if="canDelete"
-          variant="secondary"
-          tone="danger"
-          :disabled="blocked"
-          @click="$emit('delete', profile.id)"
-          >删除角色</UiButton
-        >
-      </div>
+      <section
+        v-if="hasCommonActions || canDelete"
+        aria-label="通用操作"
+        class="flex flex-col items-start gap-5 py-5"
+      >
+        <ActionBar v-if="hasCommonActions" align="start">
+          <UiButton
+            v-if="canSetAvatar && profile.skin_hash"
+            variant="secondary"
+            :disabled="blocked"
+            @click="$emit('set-avatar', profile)"
+            >用作头像</UiButton
+          >
+          <UiButton
+            v-if="canClearTexture && profile.skin_hash"
+            variant="secondary"
+            tone="warning"
+            :disabled="blocked"
+            @click="$emit('clear-skin', profile.id)"
+            >清除皮肤</UiButton
+          >
+          <UiButton
+            v-if="canClearTexture && profile.cape_hash"
+            variant="secondary"
+            tone="warning"
+            :disabled="blocked"
+            @click="$emit('clear-cape', profile.id)"
+            >清除披风</UiButton
+          >
+        </ActionBar>
+        <div v-if="canDelete">
+          <UiButton
+            variant="secondary"
+            tone="danger"
+            :disabled="blocked"
+            @click="$emit('delete', profile.id)"
+            >删除角色</UiButton
+          >
+        </div>
+      </section>
     </UiViewerLayout>
   </UiDialog>
 </template>
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { OfficialProfileBinding, Profile } from '@/api/types'
+import OfficialBindingTag from '@/components/common/OfficialBindingTag.vue'
 import ProfilePreviewStage from '@/components/common/ProfilePreviewStage.vue'
 import ProfileIdentifiers from '@/components/common/ProfileIdentifiers.vue'
 import ViewerIdentity from '@/components/common/ViewerIdentity.vue'
@@ -134,6 +149,12 @@ const props = defineProps<{
   canDeleteOfficialBinding: boolean
 }>()
 const blocked = computed(() => props.busy || dirty.value)
+const hasCommonActions = computed(
+  () =>
+    !!props.profile &&
+    ((props.canSetAvatar && !!props.profile.skin_hash) ||
+      (props.canClearTexture && !!(props.profile.skin_hash || props.profile.cape_hash))),
+)
 defineEmits<{
   'set-avatar': [profile: Profile]
   'clear-skin': [profileId: string]

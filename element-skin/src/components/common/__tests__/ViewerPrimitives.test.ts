@@ -181,6 +181,8 @@ describe('viewer card and model semantics', () => {
     expect(host.textContent).not.toMatch(/slim|default|皮肤/)
     expect(host.querySelector('.el-tag')?.classList.contains('is-round')).toBe(true)
     expect(host.querySelector('.el-tag')?.classList.contains('el-tag--light')).toBe(true)
+    expect(host.querySelector('.el-tag')?.classList.contains('font-bold')).toBe(true)
+    expect(host.querySelector('.el-tag')?.classList.contains('el-tag--small')).toBe(false)
     expect(
       host
         .querySelector('.el-tag')
@@ -194,6 +196,8 @@ describe('viewer card and model semantics', () => {
     expect(dimensions).toHaveBeenLastCalledWith(hash, expect.any(Map))
     expect(host.querySelector('.el-tag')?.textContent).toBe('128px')
     expect(host.querySelector('.el-tag')?.classList.contains('el-tag--dark')).toBe(true)
+    expect(host.querySelector('.el-tag')?.classList.contains('font-bold')).toBe(true)
+    expect(host.querySelector('.el-tag')?.classList.contains('el-tag--small')).toBe(false)
     expect(host.querySelector('.el-tooltip__trigger')).toBeNull()
   })
 
