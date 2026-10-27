@@ -20,24 +20,32 @@
       />
     </div>
 
-    <div class="min-h-[400px]" v-loading="loading" element-loading-background="transparent">
+    <div
+      class="min-h-[400px]"
+      v-loading="loading || sessionPending"
+      element-loading-background="transparent"
+    >
       <div
         class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
         :style="{ '--motion-card-count': profiles.length }"
         v-if="profiles.length > 0"
       >
-        <AdminRoleCard
+        <ProfileCard
           v-for="(profile, index) in profiles"
           :key="profile.id"
           :profile="profile"
           :delay-index="index % limit"
-          :is-dark="isDark"
+          admin
           :textures-url="texturesUrl"
           @preview="openPreview"
         />
       </div>
 
-      <el-empty v-else-if="!loading" description="暂无角色数据" :image-size="80" />
+      <el-empty
+        v-else-if="!loading && !sessionPending"
+        :description="listError || (canRead ? '暂无角色数据' : '无权读取角色列表')"
+        :image-size="80"
+      />
     </div>
 
     <div class="pagination-container" v-if="profiles.length > 0">
@@ -55,13 +63,14 @@
 
     <AdminRolePreviewDialog
       v-model:visible="showPreview"
-      v-model:name="previewName"
+      v-model:dirty="viewer.dirty.value"
+      :busy="viewer.busy.value"
+      :revision="viewer.revision.value"
+      :save-name="updateProfileName"
       :profile="selectedProfile"
       :textures-url="texturesUrl"
-      :clearing-texture="clearingTexture"
       :can-update="canUpdate"
       :can-delete="canDelete"
-      @rename="updateProfileName"
       @clear-skin="clearProfileTexture('skin')"
       @clear-cape="clearProfileTexture('cape')"
       @delete="confirmDeleteRole"
@@ -70,12 +79,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, inject } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, UserFilled } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import SearchBar from '@/components/common/SearchBar.vue'
-import AdminRoleCard from '@/components/admin/roles/AdminRoleCard.vue'
+import ProfileCard from '@/components/common/ProfileCard.vue'
 import AdminRolePreviewDialog from '@/components/admin/roles/AdminRolePreviewDialog.vue'
 import { textureAssetUrl as texturesUrl } from '@/components/textures/textureAssets'
 import { useCursorPagination } from '@/composables/useCursorPagination'
@@ -88,11 +97,12 @@ import {
 } from '@/api/admin/profiles'
 import PageHeader from '@/components/common/PageHeader.vue'
 import type { Profile } from '@/api/types'
-import { getErrorStatus } from '@/utils/error'
+import { useViewerSession } from '@/composables/useViewerSession'
 import { useSessionStore } from '@/stores/session'
 
-const isDark = inject('isDark', ref(false))
 const session = useSessionStore()
+const sessionPending = computed(() => !session.authReady && !session.user)
+const canRead = computed(() => session.user?.permissions?.includes('profile.read.any') ?? false)
 const canUpdate = computed(() => session.user?.permissions?.includes('profile.update.any') ?? false)
 const canDelete = computed(() => session.user?.permissions?.includes('profile.delete.any') ?? false)
 
@@ -100,14 +110,18 @@ const profiles = ref<Profile[]>([])
 const profilesPagination = useCursorPagination<Profile>(20)
 const limit = profilesPagination.limit
 const loading = ref(false)
+const listError = ref('')
+let listRequest = 0
 const searchQuery = ref('')
 const activeSearchQuery = ref('')
 
 // Preview dialog
 const showPreview = ref(false)
 const selectedProfile = ref<Profile | null>(null)
-const previewName = ref('')
-const clearingTexture = ref<'skin' | 'cape' | null>(null)
+const viewer = useViewerSession(
+  showPreview,
+  computed(() => selectedProfile.value?.id || ''),
+)
 
 function buildSearchParams(extraParams: Record<string, unknown> = {}) {
   const params: Record<string, unknown> = { limit: limit.value, ...extraParams }
@@ -116,28 +130,42 @@ function buildSearchParams(extraParams: Record<string, unknown> = {}) {
 }
 
 async function refreshProfiles() {
+  if (!canRead.value) {
+    loading.value = false
+    return
+  }
+  listError.value = ''
+  const request = ++listRequest
+  const actorId = session.user?.id
+  const active = viewer.snapshot()
+  const current = () => active() && request === listRequest && actorId === session.user?.id
   loading.value = true
   profilesPagination.isLoading.value = true
   try {
     const res = await getAdminProfiles(
       buildSearchParams({ cursor: profilesPagination.currentCursor.value }),
     )
+    if (!current()) return
     profiles.value = res.data.items
     profilesPagination.setPageData(res.data)
   } catch {
+    if (!current()) return
+    listError.value = '加载角色列表失败'
     ElMessage.error('加载角色列表失败')
   } finally {
-    loading.value = false
-    profilesPagination.isLoading.value = false
+    if (request === listRequest) loading.value = false
+    if (request === listRequest) profilesPagination.isLoading.value = false
   }
 }
 
 async function refreshFromFirst() {
+  if (!(await viewer.allowChange())) return
   profilesPagination.reset()
   await refreshProfiles()
 }
 
 async function handleNextPage() {
+  if (!(await viewer.allowChange())) return
   await profilesPagination.goToNextPage(async (cursor, pageLimit) => {
     const res = await getAdminProfiles(buildSearchParams({ cursor, limit: pageLimit }))
     profiles.value = res.data.items
@@ -146,6 +174,7 @@ async function handleNextPage() {
 }
 
 async function handlePrevPage() {
+  if (!(await viewer.allowChange())) return
   await profilesPagination.goToPrevPage(async (cursor, pageLimit) => {
     const res = await getAdminProfiles(buildSearchParams({ cursor, limit: pageLimit }))
     profiles.value = res.data.items
@@ -154,17 +183,20 @@ async function handlePrevPage() {
 }
 
 async function handlePageSizeChange(value: number) {
+  if (!(await viewer.allowChange())) return
   if (!profilesPagination.setLimit(value)) return
   await refreshFromFirst()
 }
 
-function handleSearch() {
+async function handleSearch() {
+  if (!(await viewer.allowChange())) return
   activeSearchQuery.value = searchQuery.value.trim()
   profilesPagination.reset()
   refreshProfiles()
 }
 
-function handleClearSearch() {
+async function handleClearSearch() {
+  if (!(await viewer.allowChange())) return
   searchQuery.value = ''
   activeSearchQuery.value = ''
   profilesPagination.reset()
@@ -173,83 +205,64 @@ function handleClearSearch() {
 
 // ---- Preview dialog functions ----
 
-function openPreview(profile: Profile) {
+async function openPreview(profile: Profile) {
+  if (!canRead.value || !(await viewer.allowChange())) return
   selectedProfile.value = profile
-  previewName.value = profile.name || ''
   showPreview.value = true
 }
 
-async function updateProfileName() {
-  if (!canUpdate.value) return
-  if (!selectedProfile.value) return
-  const newName = previewName.value.trim()
-  if (!newName) {
-    ElMessage.error('角色名不能为空')
-    previewName.value = selectedProfile.value.name || ''
-    return
-  }
-  if (newName === selectedProfile.value.name) return
+function updateLocalProfile(target: Profile, patch: Partial<Profile>) {
+  Object.assign(target, patch)
+  const row = profiles.value.find((item) => item.id === target.id)
+  if (row) Object.assign(row, patch)
+}
 
-  try {
-    await patchAdminProfile(selectedProfile.value.id, { name: newName })
-    selectedProfile.value.name = newName
-    ElMessage.success('角色名称已更新')
-    await refreshFromFirst()
-  } catch (e: unknown) {
-    if (getErrorStatus(e) === 409) {
-      ElMessage.error('角色名已存在，请使用其他名称')
-    } else {
-      ElMessage.error('更新角色名失败')
-    }
-    previewName.value = selectedProfile.value.name || ''
-  }
+async function updateProfileName(value: string): Promise<boolean> {
+  const target = selectedProfile.value
+  const name = value.trim()
+  if (!canUpdate.value || !canRead.value || !target || !name || name === target.name) return false
+  return viewer.run(
+    async (current) => {
+      await patchAdminProfile(target.id, { name })
+      if (!current()) return false
+      updateLocalProfile(target, { name })
+      ElMessage.success('角色名称已更新')
+    },
+    '更新角色名失败',
+    true,
+  )
 }
 
 async function clearProfileTexture(type: 'skin' | 'cape') {
-  if (!canUpdate.value) return
   const target = selectedProfile.value
   const field = type === 'skin' ? 'skin_hash' : 'cape_hash'
-  if (!target?.[field] || clearingTexture.value) return
-  const id = target.id
+  if (!canRead.value || !canUpdate.value || !target?.[field]) return
   const label = type === 'skin' ? '皮肤' : '披风'
-  clearingTexture.value = type
-  try {
-    try {
-      await ElMessageBox.confirm(
-        `确定清除角色「${target.name}」的${label}绑定吗？此操作只解除绑定，不删除材质。`,
-        `清除${label}`,
-        {
-          type: 'warning',
-          confirmButtonText: `清除${label}`,
-          cancelButtonText: '取消',
-          closeOnClickModal: false,
-          distinguishCancelAndClose: true,
-        },
-      )
-    } catch {
-      return
-    }
-    try {
-      if (!canUpdate.value) return
-      const patch = type === 'skin' ? patchProfileSkin : patchProfileCape
-      await patch(id, { hash: null })
-      if (selectedProfile.value?.id === id) selectedProfile.value[field] = null
-      const row = profiles.value.find((profile) => profile.id === id)
-      if (row) row[field] = null
-      ElMessage.success(`${label}绑定已清除`)
-      await refreshFromFirst()
-    } catch {
-      ElMessage.error(`清除${label}绑定失败`)
-    }
-  } finally {
-    clearingTexture.value = null
-  }
+  await viewer.run(async (current) => {
+    await ElMessageBox.confirm(
+      `确定清除角色「${target.name}」的${label}绑定吗？此操作只解除绑定，不删除材质。`,
+      `清除${label}`,
+      {
+        type: 'warning',
+        confirmButtonText: `清除${label}`,
+        cancelButtonText: '取消',
+        closeOnClickModal: false,
+        distinguishCancelAndClose: true,
+      },
+    )
+    if (!current() || !canUpdate.value || !canRead.value) return false
+    const patch = type === 'skin' ? patchProfileSkin : patchProfileCape
+    await patch(target.id, { hash: null })
+    if (!current()) return false
+    updateLocalProfile(target, { [field]: null })
+    ElMessage.success(`${label}绑定已清除`)
+  }, `清除${label}绑定失败`)
 }
 
 async function confirmDeleteRole() {
-  if (!selectedProfile.value || !canDelete.value) return
   const target = selectedProfile.value
-  try {
+  if (!target || !canDelete.value || !canRead.value) return
+  await viewer.run(async (current) => {
     await ElMessageBox.confirm(
       `确定删除角色「${target.name}」？角色记录将永久删除，该用户衣柜中的材质仍会保留。`,
       '删除角色',
@@ -257,17 +270,30 @@ async function confirmDeleteRole() {
         type: 'warning',
         confirmButtonText: '删除',
         cancelButtonText: '取消',
+        closeOnClickModal: false,
+        distinguishCancelAndClose: true,
       },
     )
-    if (!canDelete.value) return
+    if (!current() || !canDelete.value || !canRead.value) return false
     await deleteAdminProfile(target.id)
-    ElMessage.success('角色已删除')
+    if (!current()) return false
+    profiles.value = profiles.value.filter((row) => row.id !== target.id)
     showPreview.value = false
-    await refreshFromFirst()
-  } catch {
-    // User cancelled or error
-  }
+    ElMessage.success('角色已删除')
+  }, '删除角色失败')
 }
 
-onMounted(refreshFromFirst)
+watch(
+  [() => session.user?.id, canRead],
+  ([id, allowed], previous) => {
+    if (previous && (previous[0] !== id || !allowed)) {
+      showPreview.value = false
+      selectedProfile.value = null
+      profiles.value = []
+    }
+    if (allowed) void refreshFromFirst()
+    else loading.value = false
+  },
+  { immediate: true },
+)
 </script>

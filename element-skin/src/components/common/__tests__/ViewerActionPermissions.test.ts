@@ -1,6 +1,6 @@
 import { createApp, defineComponent, h, nextTick, type Component } from 'vue'
 import { createPinia } from 'pinia'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSessionStore } from '@/stores/session'
@@ -76,7 +76,7 @@ vi.mock('@/api/admin/textures', () => ({
 vi.mock('@/api/me', () => ({ getMe: api.getMe }))
 vi.mock('@/composables/useAvatar', () => ({ useAvatar: () => ({ setAvatar: api.setAvatar }) }))
 vi.mock('@/components/textures/textureAssets', () => ({
-  cacheSkinTextureWidths: vi.fn(),
+  cacheTextureWidth: vi.fn().mockResolvedValue(64),
   textureAssetUrl: (hash: string) => `/textures/${hash}.png`,
 }))
 vi.mock('@/components/SkinViewer.vue', () => ({ default: { render: () => h('div') } }))
@@ -150,6 +150,9 @@ beforeEach(() => {
   ]) {
     method.mockResolvedValue({ data: undefined })
   }
+  api.patchTexture.mockImplementation((_hash, _type, patch) =>
+    Promise.resolve({ data: { ...structuredClone(viewerTexture), ...patch } }),
+  )
   api.setAvatar.mockResolvedValue(true)
   vi.spyOn(ElMessage, 'success').mockImplementation(() => ({ close: vi.fn() }))
   vi.spyOn(ElMessage, 'error').mockImplementation(() => ({ close: vi.fn() }))
@@ -178,32 +181,49 @@ async function flushUI() {
   await new Promise((resolve) => setTimeout(resolve, 40))
   await nextTick()
 }
-async function openPage(page: Page, permissions: string[], loggedIn = true) {
+async function openPage(
+  page: Page,
+  permissions: string[],
+  loggedIn = true,
+  shouldOpen = true,
+  authReady = true,
+) {
   const host = document.createElement('div')
   document.body.append(host)
   const pinia = createPinia()
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: [{ path: '/', component: { render: () => h('div') } }],
+    routes: [
+      { path: '/', component: pages[page] as Component },
+      { path: '/other', component: { render: () => h('div', 'Other page') } },
+    ],
   })
   await router.push('/')
-  const app = createApp(pages[page] as Component)
+  const app = createApp({ render: () => h(RouterView) })
     .use(pinia)
     .use(router)
     .use(ElementPlus)
   const session = useSessionStore(pinia)
   session.user = loggedIn ? { id: 'viewer-user', email: 'viewer@example.com', permissions } : null
+  api.getMe.mockImplementation(() =>
+    Promise.resolve({
+      data: { ...session.user, permissions: [...(session.user?.permissions || [])] },
+    }),
+  )
+  session.authReady = authReady
   app.mount(host)
   cleanup.push(() => {
     app.unmount()
     host.remove()
   })
   await flushUI()
-  if (page === 'roles') host.querySelector<HTMLElement>('.role-card')!.click()
-  else if (page === 'adminRoles') button(host, '查看详情').click()
-  else button(host, '打开材质').click()
+  if (shouldOpen) {
+    if (page === 'roles') host.querySelector<HTMLElement>('.role-card')!.click()
+    else if (page === 'adminRoles') host.querySelector<HTMLElement>('.admin-role-card')!.click()
+    else button(host, '打开材质').click()
+  }
   await flushUI()
-  return { host, session, detail: dialog() }
+  return { host, session, router, detail: dialog() }
 }
 function dialog() {
   return [...document.querySelectorAll<HTMLElement>('.ui-dialog--viewer')].find(
@@ -218,11 +238,15 @@ function button(root: ParentNode, text: string) {
   return result
 }
 async function rename(detail: HTMLElement, name: string, event: 'blur' | 'change') {
+  detail.querySelector<HTMLButtonElement>('h2 button')!.click()
+  await nextTick()
   const input = detail.querySelector<HTMLInputElement>('input')!
   input.value = name
   input.dispatchEvent(new Event('input', { bubbles: true }))
   await nextTick()
   input.dispatchEvent(new Event(event, { bubbles: true }))
+  await nextTick()
+  button(detail, '保存名称').click()
   await flushUI()
 }
 
@@ -261,24 +285,26 @@ describe('viewer action permissions and scope', () => {
     },
   )
 
-  it('shows a login hint to guests without a collectible command', async () => {
+  it('keeps guest details read-only without a collectible command', async () => {
     const { detail } = await openPage('library', [], false)
-    expect(detail.textContent).toContain('登录后可按账号权限收藏此纹理')
+    expect(detail.querySelector('h2')?.textContent).toBe('Ocean')
     expect(
       [...detail.querySelectorAll('button')].map((el) => el.textContent?.trim()),
-    ).not.toContain('添加到我的衣柜')
+    ).not.toContain('添加到衣柜')
   })
   it('requires wardrobe add permission even for a logged-in user or a stale button', async () => {
     const { detail, session } = await openPage('library', ['wardrobe_entry.add.owned'])
-    button(detail, '添加到我的衣柜').click()
+    button(detail, '添加到衣柜').click()
     await flushUI()
     expect(api.addToWardrobe).toHaveBeenCalledExactlyOnceWith('viewer-skin', 'skin')
-    const stale = button(detail, '添加到我的衣柜')
+    const stale = button(detail, '添加到衣柜')
     session.user!.permissions = ['texture.read.public']
     stale.click()
     await flushUI()
     expect(api.addToWardrobe).toHaveBeenCalledTimes(1)
-    expect(detail.textContent).toContain('当前账号没有添加到衣柜的权限')
+    expect(
+      [...detail.querySelectorAll('button')].map((el) => el.textContent?.trim()),
+    ).not.toContain('添加到衣柜')
   })
   it('allows wardrobe metadata without granting visibility, apply, or delete', async () => {
     const { detail } = await openPage('wardrobe', [
@@ -335,6 +361,7 @@ describe('viewer action permissions and scope', () => {
         cancelButtonText: '取消',
         type: 'warning',
         confirmButtonClass: 'el-button--danger',
+        closeOnClickModal: false,
         distinguishCancelAndClose: true,
       },
     )
@@ -380,7 +407,13 @@ describe('viewer action permissions and scope', () => {
     expect(ElMessageBox.confirm).toHaveBeenCalledExactlyOnceWith(
       '确定清除该角色的皮肤绑定？此操作只解除绑定，不删除衣柜或皮肤库中的材质。',
       '清除皮肤',
-      { type: 'warning', confirmButtonText: '确认清除', cancelButtonText: '取消' },
+      {
+        type: 'warning',
+        confirmButtonText: '确认清除',
+        cancelButtonText: '取消',
+        closeOnClickModal: false,
+        distinguishCancelAndClose: true,
+      },
     )
     expect(api.clearProfileSkin).toHaveBeenCalledExactlyOnceWith('viewer-profile')
     expect(api.deleteTexture).not.toHaveBeenCalled()
@@ -393,7 +426,7 @@ describe('viewer action permissions and scope', () => {
     expect(api.setAvatar).toHaveBeenCalledExactlyOnceWith('viewer-skin', 'default')
     expect(detail.querySelector('.title-input-field')).toBeNull()
     expect(detail.textContent).not.toContain('清除皮肤')
-    expect(detail.textContent).not.toContain('删除此角色')
+    expect(detail.textContent).not.toContain('删除角色')
   })
   it('does not substitute owned permissions for administrative operations', async () => {
     const { detail } = await openPage('adminTextures', [
@@ -406,12 +439,12 @@ describe('viewer action permissions and scope', () => {
     expect(detail.textContent).not.toContain('强制下架')
     expect(api.patchAdminTexture).not.toHaveBeenCalled()
   })
-  it('shows metadata impact and uses only the metadata admin permission', async () => {
+  it('uses metadata admin permission without explanatory copy in the viewer', async () => {
     const { detail } = await openPage('adminTextures', [
       'texture.read.any',
       'texture.update_metadata.any',
     ])
-    expect(detail.textContent).toContain('名称与模型会同步到所有用户对应的衣柜记录')
+    expect(detail.textContent).not.toContain('名称与模型会同步到所有用户对应的衣柜记录')
     await rename(detail, 'Global note', 'blur')
     expect(api.patchAdminTexture).toHaveBeenCalledExactlyOnceWith('viewer-skin', {
       type: 'skin',
@@ -429,6 +462,8 @@ describe('viewer action permissions and scope', () => {
       confirmButtonText: '确认下架',
       cancelButtonText: '取消',
       type: 'warning',
+      closeOnClickModal: false,
+      distinguishCancelAndClose: true,
     })
     expect(api.deleteAdminTexture).toHaveBeenCalledExactlyOnceWith('viewer-skin', {
       force: true,
@@ -457,7 +492,7 @@ describe('viewer action permissions and scope', () => {
     button(detail, '清除披风').click()
     await flushUI()
     expect(api.patchProfileCape).toHaveBeenCalledExactlyOnceWith('viewer-profile', { hash: null })
-    expect(detail.querySelector('[aria-label="披风绑定"]')?.textContent).toContain('未绑定')
+    expect(detail.textContent).not.toContain('披风 Hash')
     expect(api.deleteAdminProfile).not.toHaveBeenCalled()
   })
 
@@ -479,14 +514,358 @@ describe('viewer action permissions and scope', () => {
 
   it('requires owned delete permission for personal role deletion', async () => {
     const { detail } = await openPage('roles', ['profile.read.owned', 'profile.delete.owned'])
-    button(detail, '删除此角色').click()
+    button(detail, '删除角色').click()
     await flushUI()
     expect(ElMessageBox.confirm).toHaveBeenCalledExactlyOnceWith(
       '确定删除此角色？角色记录将永久删除，衣柜中的材质仍会保留。',
       '删除角色',
-      { type: 'error', confirmButtonText: '确认删除', cancelButtonText: '取消' },
+      {
+        type: 'error',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+        closeOnClickModal: false,
+        distinguishCancelAndClose: true,
+      },
     )
     expect(api.deleteProfile).toHaveBeenCalledExactlyOnceWith('viewer-profile')
     expect(api.deleteTexture).not.toHaveBeenCalled()
   })
+})
+
+describe('viewer name drafts and write protection', () => {
+  async function edit(detail: HTMLElement, name: string) {
+    detail.querySelector<HTMLButtonElement>('h2 button')!.click()
+    await nextTick()
+    const input = detail.querySelector<HTMLInputElement>('input')!
+    input.value = name
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    await nextTick()
+    return input
+  }
+
+  it('keeps blur local, blocks other writes with a draft and cancels only the name', async () => {
+    const { detail } = await openPage('roles', [
+      'profile.read.owned',
+      'profile.update.owned',
+      'texture.clear.owned',
+      'profile.delete.owned',
+      'account.update.self',
+    ])
+    expect(detail.querySelector('form')).toBeNull()
+    const input = await edit(detail, 'Draft')
+    input.dispatchEvent(new Event('change', { bubbles: true }))
+    input.dispatchEvent(new Event('blur', { bubbles: true }))
+    await flushUI()
+    expect(api.patchProfile).not.toHaveBeenCalled()
+    for (const label of ['用作头像', '清除皮肤', '清除披风', '删除角色'])
+      expect(button(detail, label).disabled).toBe(true)
+    button(detail, '取消').click()
+    await flushUI()
+    expect(detail.querySelector('h2')?.textContent?.trim()).toBe('Player')
+    expect(detail.querySelector('form')).toBeNull()
+    expect(button(detail, '清除皮肤').disabled).toBe(false)
+    expect(dialog()).toBe(detail)
+  })
+
+  it('does not dirty or send an unchanged name and ignores IME Enter', async () => {
+    const { detail } = await openPage('roles', [
+      'profile.read.owned',
+      'profile.update.owned',
+      'texture.clear.owned',
+    ])
+    const input = await edit(detail, 'Player')
+    expect(button(detail, '保存名称').disabled).toBe(true)
+    expect(button(detail, '清除皮肤').disabled).toBe(false)
+    input.value = 'NewName'
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }),
+    )
+    await flushUI()
+    expect(api.patchProfile).not.toHaveBeenCalled()
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+    )
+    await flushUI()
+    expect(detail.querySelector('form')).toBeNull()
+    expect(dialog()).toBe(detail)
+    expect(ElMessageBox.confirm).not.toHaveBeenCalled()
+  })
+
+  it('saves once, locks close and navigation while pending, and updates the captured role', async () => {
+    let resolve!: (result: { data: void }) => void
+    api.patchProfile.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    const { detail, router, host } = await openPage('roles', [
+      'profile.read.owned',
+      'profile.update.owned',
+      'texture.clear.owned',
+    ])
+    const input = await edit(detail, 'Saved')
+    button(detail, '保存名称').click()
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    await nextTick()
+    expect(api.patchProfile).toHaveBeenCalledExactlyOnceWith('viewer-profile', { name: 'Saved' })
+    expect(input.disabled).toBe(true)
+    expect(button(detail, '取消').disabled).toBe(true)
+    detail.querySelector<HTMLButtonElement>('[aria-label="关闭此对话框"]')!.click()
+    await router.push('/other')
+    expect(router.currentRoute.value.path).toBe('/')
+    expect(dialog()).toBe(detail)
+    resolve({ data: undefined })
+    await flushUI()
+    expect(detail.querySelector('form')).toBeNull()
+    expect(detail.querySelector('h2')?.textContent?.trim()).toBe('Saved')
+    expect(host.querySelector('.role-card')?.textContent).toContain('Saved')
+    expect(button(detail, '清除皮肤').disabled).toBe(false)
+  })
+
+  it('retains a failed draft and releases the lock for repair or retry', async () => {
+    api.patchAdminProfile.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { error: { object: 'profile_name', operation: 'reserve', reason: 'conflict' } },
+      },
+    })
+    const { detail } = await openPage('adminRoles', ['profile.read.any', 'profile.update.any'])
+    const input = await edit(detail, 'Taken')
+    button(detail, '保存名称').click()
+    await flushUI()
+    expect(input.value).toBe('Taken')
+    expect(input.disabled).toBe(false)
+    expect(detail.querySelector('[role="alert"]')?.textContent).toContain('名称未保存')
+    expect(button(detail, '清除皮肤').disabled).toBe(true)
+    expect(ElMessage.error).toHaveBeenCalledExactlyOnceWith('角色名已被占用')
+    button(detail, '保存名称').click()
+    await flushUI()
+    expect(api.patchAdminProfile).toHaveBeenCalledTimes(2)
+    expect(detail.querySelector('h2')?.textContent?.trim()).toBe('Taken')
+  })
+
+  it('asks on outer Esc but discards directly on main X', async () => {
+    const { detail } = await openPage('roles', ['profile.read.owned', 'profile.update.owned'])
+    await edit(detail, 'Discard')
+    button(detail, '保存名称').focus()
+    // Move outside the local editor so this is an outer dismissal.
+    detail.focus()
+    vi.mocked(ElMessageBox.confirm).mockRejectedValueOnce('cancel')
+    detail.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }),
+    )
+    await flushUI()
+    expect(ElMessageBox.confirm).toHaveBeenCalledWith(
+      '当前修改尚未保存，确定放弃吗？',
+      '放弃修改',
+      expect.objectContaining({ cancelButtonText: '继续编辑', closeOnClickModal: false }),
+    )
+    expect(detail.querySelector<HTMLInputElement>('input')?.value).toBe('Discard')
+    detail.querySelector<HTMLButtonElement>('[aria-label="关闭此对话框"]')!.click()
+    await flushUI()
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(dialog()).toBeUndefined())
+  })
+
+  it('hides confirmed absent bindings and clear actions without deleting the role or closing', async () => {
+    const { detail } = await openPage('roles', ['profile.read.owned', 'texture.clear.owned'])
+    button(detail, '清除皮肤').click()
+    await flushUI()
+    expect(detail.textContent).not.toContain('皮肤 Hash')
+    expect([...detail.querySelectorAll('button')].map((b) => b.textContent?.trim())).not.toContain(
+      '清除皮肤',
+    )
+    expect(dialog()).toBe(detail)
+    expect(api.deleteProfile).not.toHaveBeenCalled()
+    expect(api.deleteTexture).not.toHaveBeenCalled()
+  })
+
+  it('does not enable writes when the wardrobe detail read fails', async () => {
+    api.getTextureDetail.mockRejectedValueOnce(new Error('offline'))
+    const { detail } = await openPage('wardrobe', [
+      'texture.read.owned',
+      'texture.update_metadata.owned',
+      'texture.update_visibility.owned',
+      'texture.delete.owned',
+    ])
+    expect(detail.querySelector('[role="alert"]')?.textContent).toContain('获取详情失败')
+    expect(detail.querySelector('h2 button')).toBeNull()
+    expect(detail.querySelector('.el-switch')).toBeNull()
+    expect([...detail.querySelectorAll('button')].map((b) => b.textContent?.trim())).not.toContain(
+      '删除纹理',
+    )
+    expect(api.patchTexture).not.toHaveBeenCalled()
+  })
+
+  it('ignores the wardrobe read from a closed earlier session', async () => {
+    let resolve!: (result: { data: typeof viewerTexture }) => void
+    api.getTextureDetail.mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    const { detail, host } = await openPage('wardrobe', [
+      'texture.read.owned',
+      'texture.update_metadata.owned',
+    ])
+    detail.querySelector<HTMLButtonElement>('[aria-label="关闭此对话框"]')!.click()
+    await flushUI()
+    button(host, '打开材质').click()
+    await flushUI()
+    const next = dialog()
+    expect(next.querySelector('h2')?.textContent?.trim()).toBe('Ocean')
+    resolve({ data: { ...viewerTexture, note: 'Stale' } })
+    await flushUI()
+    expect(next.querySelector('h2')?.textContent?.trim()).toBe('Ocean')
+  })
+})
+
+describe('viewer read and failed command boundaries', () => {
+  it.each([
+    {
+      page: 'wardrobe' as const,
+      permission: 'texture.update_metadata.owned',
+      read: api.getTextures,
+      label: '无权读取衣柜',
+    },
+    {
+      page: 'roles' as const,
+      permission: 'profile.update.owned',
+      read: api.getProfiles,
+      label: '无权读取角色列表',
+    },
+    {
+      page: 'adminRoles' as const,
+      permission: 'profile.update.any',
+      read: api.getAdminProfiles,
+      label: '无权读取角色列表',
+    },
+    {
+      page: 'adminTextures' as const,
+      permission: 'texture.update_metadata.any',
+      read: api.getAdminTextures,
+      label: '无权读取材质列表',
+    },
+  ])(
+    'does not infer $page read access from write permission',
+    async ({ page, permission, read, label }) => {
+      const { host } = await openPage(page, [permission], true, false)
+      expect(read).not.toHaveBeenCalled()
+      expect(host.textContent).toContain(label)
+      expect(dialog()).toBeUndefined()
+    },
+  )
+
+  it('distinguishes a disabled public library from permission denial', async () => {
+    api.getPublicSkinLibrary.mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: { error: { object: 'permission', operation: 'check', reason: 'denied' } },
+      },
+    })
+    const { host } = await openPage('library', [], true, false)
+    expect(host.textContent).not.toContain('皮肤库已关闭')
+    expect(host.textContent).toContain('没有执行此操作的权限')
+    expect(host.textContent).not.toContain('库中暂无公开材质')
+  })
+
+  it('keeps a failed model change at its confirmed value', async () => {
+    api.patchAdminTexture.mockRejectedValueOnce({
+      response: {
+        status: 400,
+        data: { error: { object: 'texture', operation: 'update', reason: 'invalid' } },
+      },
+    })
+    const { detail } = await openPage('adminTextures', [
+      'texture.read.any',
+      'texture.update_metadata.any',
+    ])
+    const slim = detail.querySelector<HTMLInputElement>('input[value="slim"]')!
+    slim.click()
+    await flushUI()
+    expect(api.patchAdminTexture).toHaveBeenCalledExactlyOnceWith('viewer-skin', {
+      type: 'skin',
+      model: 'slim',
+    })
+    expect(detail.querySelector<HTMLInputElement>('input[value="default"]')!.checked).toBe(true)
+    expect(slim.checked).toBe(false)
+    expect(ElMessage.error).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports a failed admin takedown and retains the original record and dialog', async () => {
+    api.deleteAdminTexture.mockRejectedValueOnce({
+      response: {
+        status: 403,
+        data: { error: { object: 'permission', operation: 'check', reason: 'denied' } },
+      },
+    })
+    const { detail, host } = await openPage('adminTextures', [
+      'texture.read.any',
+      'texture.delete.any',
+    ])
+    button(detail, '强制下架').click()
+    await flushUI()
+    expect(api.deleteAdminTexture).toHaveBeenCalledExactlyOnceWith('viewer-skin', {
+      force: true,
+      type: 'skin',
+    })
+    expect(ElMessage.error).toHaveBeenCalledExactlyOnceWith('没有执行此操作的权限')
+    expect(button(detail, '强制下架').disabled).toBe(false)
+    expect(dialog()).toBe(detail)
+    expect(button(host, '打开材质')).toBeDefined()
+  })
+})
+
+describe('session restoration on direct page refresh', () => {
+  it.each([
+    {
+      page: 'wardrobe' as const,
+      permission: 'texture.read.owned',
+      read: api.getTextures,
+      card: '打开材质',
+    },
+    {
+      page: 'roles' as const,
+      permission: 'profile.read.owned',
+      read: api.getProfiles,
+      card: 'Player',
+    },
+    {
+      page: 'adminRoles' as const,
+      permission: 'profile.read.any',
+      read: api.getAdminProfiles,
+      card: 'Player',
+    },
+    {
+      page: 'adminTextures' as const,
+      permission: 'texture.read.any',
+      read: api.getAdminTextures,
+      card: '打开材质',
+    },
+    {
+      page: 'library' as const,
+      permission: 'texture.read.public',
+      read: api.getPublicSkinLibrary,
+      card: '打开材质',
+    },
+  ])(
+    'loads $page when the authenticated session arrives after mount',
+    async ({ page, permission, read, card }) => {
+      const { host, session } = await openPage(page, [], false, false, false)
+      expect(read).not.toHaveBeenCalled()
+      expect(host.textContent).not.toMatch(
+        /还没有纹理|还没有角色|暂无材质数据|暂无角色数据|库中暂无公开材质/,
+      )
+      session.user = {
+        id: 'restored-user',
+        email: 'restored@example.com',
+        permissions: [permission],
+      }
+      session.authReady = true
+      await flushUI()
+      expect(read).toHaveBeenCalledTimes(1)
+      expect(host.textContent).toContain(card)
+    },
+  )
 })

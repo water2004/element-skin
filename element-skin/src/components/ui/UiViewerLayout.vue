@@ -12,11 +12,12 @@
 <style scoped>
 .ui-viewer-layout {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   min-height: 560px;
 }
 
 .ui-viewer-stage {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -30,6 +31,7 @@ html.dark .ui-viewer-stage {
 }
 
 .ui-viewer-info {
+  min-width: 0;
   background: var(--color-card-background);
   padding: var(--space-panel-padding);
   display: flex;

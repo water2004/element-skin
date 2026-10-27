@@ -21,7 +21,7 @@ const profileApiMocks = vi.hoisted(() => ({
 vi.mock('@/api/textures', () => textureApiMocks)
 vi.mock('@/api/profiles', () => profileApiMocks)
 vi.mock('@/components/textures/textureAssets', () => ({
-  cacheSkinTextureWidths: vi.fn(),
+  cacheTextureWidth: vi.fn().mockResolvedValue(64),
   textureAssetUrl: vi.fn((hash: string) => `/static/textures/${hash}.png`),
 }))
 vi.mock('@/components/common/CursorPager.vue', () => ({
@@ -115,7 +115,9 @@ beforeEach(() => {
     },
   })
   textureApiMocks.getTextureDetail.mockResolvedValue({ data: { ...texture } })
-  textureApiMocks.patchTexture.mockResolvedValue({ data: undefined })
+  textureApiMocks.patchTexture.mockImplementation((_hash, _type, patch) =>
+    Promise.resolve({ data: { ...texture, ...patch, is_public: patch.is_public ? 1 : 0 } }),
+  )
   profileApiMocks.getProfiles.mockResolvedValue({
     data: {
       items: [],

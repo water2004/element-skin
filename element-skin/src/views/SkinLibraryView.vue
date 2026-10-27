@@ -42,7 +42,7 @@
 
       <div
         class="library-grid-container"
-        v-loading="loading"
+        v-loading="loading || sessionPending"
         element-loading-background="transparent"
       >
         <div
@@ -52,35 +52,20 @@
         >
           <TextureCard
             v-for="(item, index) in items"
-            :key="item.hash"
+            :key="item.hash + item.type"
             :texture="item"
             :delay-index="index % 20"
-            :is-dark="isDark"
             :textures-url="texturesUrl"
-            :resolution="textureResolutions.get(item.hash)"
             :title="item.name || '未命名材质'"
             @preview="openPreviewDialog"
           >
             <template #info="{ texture }">
-              <div class="texture-title">{{ item.name || '未命名材质' }}</div>
-              <div class="texture-meta-info">
-                <span class="uploader-name" v-if="texture.uploader_name">
-                  <el-icon><User /></el-icon>
-                  {{ texture.uploader_name }}
-                </span>
-                <span class="meta-separator" v-if="texture.uploader_name">·</span>
-                <span class="texture-date">
-                  {{ formatDate(texture.created_at) }}
-                </span>
-                <span class="meta-separator">·</span>
-                <el-tooltip content="使用次数" placement="top">
-                  <span
-                    class="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-xs leading-none"
-                  >
-                    <span aria-hidden="true" class="text-[15px] leading-none">♡</span>
-                    <span class="tabular-nums">{{ texture.usage_count || 0 }}</span>
-                  </span>
-                </el-tooltip>
+              <div
+                class="flex w-full min-w-0 items-center justify-center gap-2 text-[var(--color-text-light)]"
+              >
+                <ViewerIdentity :name="texture.uploader_name" />
+                <TextureModelTag :type="texture.type" :model="texture.model" />
+                <TextureFavorites :count="texture.usage_count" />
               </div>
             </template>
             <template #actions="{ texture }">
@@ -88,7 +73,8 @@
                 v-if="canAddToWardrobe"
                 variant="primary"
                 :icon="Plus"
-                @click="addToWardrobe(texture)"
+                :disabled="viewer.busy.value"
+                @click.stop="addToWardrobe(texture)"
               >
                 添加到衣柜
               </UiButton>
@@ -96,81 +82,52 @@
           </TextureCard>
         </div>
 
-        <el-empty v-else-if="!loading" description="库中暂无公开材质" />
+        <el-empty
+          v-else-if="!loading && !sessionPending"
+          :description="listError || '库中暂无公开材质'"
+        />
 
-        <!-- 预览对话框 -->
-        <UiDialog v-model="showPreviewDialog" destroy-on-close variant="viewer">
+        <UiDialog
+          v-model="showPreviewDialog"
+          destroy-on-close
+          variant="viewer"
+          :busy="viewer.busy.value"
+          title="材质详情"
+        >
           <UiViewerLayout v-if="selectedItem">
-            <template #stage>
-              <TexturePreviewStage :texture="selectedItem" :textures-url="texturesUrl" />
-            </template>
-
-            <div class="flex min-h-0 flex-1 flex-col">
-              <section class="border-b border-[var(--color-border)] py-3.5">
-                <div class="flex items-center gap-2 pr-12">
-                  <h2
-                    class="m-0 bg-gradient-to-br from-[var(--color-heading)] to-[var(--el-text-color-secondary)] bg-clip-text text-2xl font-bold text-transparent"
-                  >
-                    {{ selectedItem.name || '未命名纹理' }}
-                  </h2>
-                </div>
-              </section>
-
-              <section class="border-b border-[var(--color-border)] py-3.5">
-                <div class="flex items-center gap-2 pr-12">
-                  <span
-                    class="inline-flex h-7 max-w-full items-center rounded-full border border-[var(--color-border)] bg-[var(--color-background-soft)] px-3 text-xs whitespace-nowrap text-[var(--color-text)] transition"
-                    >{{ textureResolutions.get(selectedItem.hash) || '--' }}px</span
-                  >
-                  <span
-                    class="inline-flex h-7 max-w-full items-center rounded-full border border-[var(--color-border)] bg-[var(--color-background-soft)] px-3 text-xs whitespace-nowrap text-[var(--color-text)] transition"
-                  >
-                    {{ selectedItem.type === 'skin' ? '皮肤' : '披风' }}
-                  </span>
-                </div>
-                <div
-                  class="mt-3 break-all rounded bg-[var(--color-background-soft)] px-2 py-1 font-mono text-[11px] text-[var(--el-text-color-secondary)]"
-                >
-                  HASH: {{ selectedItem.hash }}
-                </div>
-              </section>
-
-              <section
-                class="border-b border-[var(--color-border)] py-3.5"
-                v-if="selectedItem.uploader_name"
+            <template #stage
+              ><TexturePreviewStage :texture="selectedItem" :textures-url="texturesUrl"
+            /></template>
+            <h2 class="m-0 break-all pr-12 text-2xl font-bold text-[var(--color-heading)]">
+              {{ selectedItem.name || '未命名材质' }}
+            </h2>
+            <section
+              class="flex flex-col items-start gap-4 border-b border-[var(--color-border)] py-5"
+            >
+              <div class="flex flex-wrap gap-2">
+                <TextureResolutionTag :hash="selectedItem.hash" /><TextureModelTag
+                  :type="selectedItem.type"
+                  :model="selectedItem.model"
+                />
+              </div>
+              <div class="flex flex-wrap items-center gap-3">
+                <span class="text-sm text-[var(--color-text-light)]">上传者</span
+                ><ViewerIdentity :name="selectedItem.uploader_name" />
+              </div>
+              <span class="text-sm text-[var(--color-text-light)]"
+                >上传日期：{{ formatDate(selectedItem.created_at) || '未知' }}</span
               >
-                <div
-                  class="mb-2.5 text-xs font-bold uppercase tracking-[0.5px] text-[var(--color-text-light)]"
-                >
-                  上传者
-                </div>
-                <div
-                  class="flex items-center gap-2 text-[15px] text-[var(--color-heading)] font-medium"
-                >
-                  <el-icon><User /></el-icon>
-                  <span>{{ selectedItem.uploader_name }}</span>
-                </div>
-              </section>
-
-              <section class="mt-auto border-b-0 py-3.5">
-                <UiButton
-                  v-if="canAddToWardrobe"
-                  size="large"
-                  variant="primary"
-                  :icon="Plus"
-                  class="w-full rounded-[12px] h-12"
-                  @click="addToWardrobe(selectedItem)"
-                >
-                  添加到我的衣柜
-                </UiButton>
-                <p
-                  v-if="!canAddToWardrobe"
-                  class="text-center text-[13px] text-[var(--el-text-color-secondary)] mt-3"
-                >
-                  {{ isLogged ? '当前账号没有添加到衣柜的权限' : '登录后可按账号权限收藏此纹理' }}
-                </p>
-              </section>
-            </div>
+              <TextureFavorites :count="selectedItem.usage_count" />
+            </section>
+            <ActionBar v-if="canAddToWardrobe" align="start" class="py-5">
+              <UiButton
+                variant="primary"
+                :icon="Plus"
+                :disabled="viewer.busy.value"
+                @click="addToWardrobe(selectedItem)"
+                >添加到衣柜</UiButton
+              >
+            </ActionBar>
           </UiViewerLayout>
         </UiDialog>
 
@@ -193,33 +150,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject, computed, type Ref } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, User } from '@element-plus/icons-vue'
+import { Plus } from '@element-plus/icons-vue'
 import ActionBar from '@/components/common/ActionBar.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import SearchBar from '@/components/common/SearchBar.vue'
 import TextureCard from '@/components/textures/TextureCard.vue'
 import TexturePreviewStage from '@/components/textures/TexturePreviewStage.vue'
-import {
-  cacheSkinTextureWidths,
-  textureAssetUrl as texturesUrl,
-} from '@/components/textures/textureAssets'
+import { textureAssetUrl as texturesUrl } from '@/components/textures/textureAssets'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import UiViewerLayout from '@/components/ui/UiViewerLayout.vue'
+import ViewerIdentity from '@/components/common/ViewerIdentity.vue'
+import TextureModelTag from '@/components/textures/TextureModelTag.vue'
+import TextureFavorites from '@/components/textures/TextureFavorites.vue'
+import TextureResolutionTag from '@/components/textures/TextureResolutionTag.vue'
+import { useViewerSession } from '@/composables/useViewerSession'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getPublicSkinLibrary } from '@/api/public'
 import { addToWardrobe as apiAddToWardrobe } from '@/api/textures'
 import type { Texture } from '@/api/types'
 import { useSessionStore } from '@/stores/session'
 import { storeToRefs } from 'pinia'
-import { getErrorMessage, getErrorStatus } from '@/utils/error'
+import { getErrorMessage, getApiError } from '@/utils/error'
 
-const isDark = inject<Ref<boolean>>('isDark', ref(false))
-const { user } = storeToRefs(useSessionStore())
-const isLogged = computed(() => !!user.value)
+const session = useSessionStore()
+const { user } = storeToRefs(session)
+const sessionPending = computed(() => !session.authReady && !user.value)
 const canAddToWardrobe = computed(() =>
   user.value?.permissions?.includes('wardrobe_entry.add.owned'),
 )
@@ -228,16 +187,23 @@ const items = ref<Texture[]>([])
 const pagination = useCursorPagination<Texture>(20)
 const limit = pagination.limit
 const loading = ref(false)
+const listError = ref('')
+let listRequest = 0
 const isDisabled = ref(false)
 const filterType = ref('')
 const sortBy = ref<'latest' | 'most_used'>('latest')
 const searchQuery = ref('')
 const activeSearchQuery = ref('')
-const textureResolutions = ref(new Map<string, number>())
 const showPreviewDialog = ref(false)
 const selectedItem = ref<Texture | null>(null)
 
-function openPreviewDialog(item: Texture) {
+const viewer = useViewerSession(
+  showPreviewDialog,
+  computed(() => (selectedItem.value ? selectedItem.value.hash + selectedItem.value.type : '')),
+)
+
+async function openPreviewDialog(item: Texture) {
+  if (!(await viewer.allowChange())) return
   selectedItem.value = item
   showPreviewDialog.value = true
 }
@@ -249,6 +215,11 @@ function formatDate(ts: number | undefined) {
 }
 
 async function fetchLibrary() {
+  listError.value = ''
+  const request = ++listRequest
+  const actorId = session.user?.id
+  const active = viewer.snapshot()
+  const current = () => active() && request === listRequest && actorId === session.user?.id
   loading.value = true
   pagination.isLoading.value = true
   try {
@@ -260,23 +231,27 @@ async function fetchLibrary() {
       sort: sortBy.value,
     }
     const res = await getPublicSkinLibrary(params)
+    if (!current()) return
     items.value = res.data.items
     pagination.setPageData(res.data)
-    void cacheSkinTextureWidths(items.value, textureResolutions.value)
   } catch (e: unknown) {
+    if (!current()) return
     console.error('Fetch library error:', e)
-    if (getErrorStatus(e) === 403) {
+    const descriptor = getApiError(e)
+    if (descriptor?.object === 'texture_library' && descriptor.reason === 'disabled') {
       isDisabled.value = true
     } else {
-      ElMessage.error('加载皮肤库失败')
+      listError.value = getErrorMessage(e, '加载皮肤库失败')
+      ElMessage.error(listError.value)
     }
   } finally {
-    loading.value = false
-    pagination.isLoading.value = false
+    if (request === listRequest) loading.value = false
+    if (request === listRequest) pagination.isLoading.value = false
   }
 }
 
 async function handleNextPage() {
+  if (!(await viewer.allowChange())) return
   await pagination.goToNextPage(async (cursor, pageLimit) => {
     const params = {
       cursor,
@@ -289,11 +264,11 @@ async function handleNextPage() {
     items.value = res.data.items
     return res.data
   })
-  void cacheSkinTextureWidths(items.value, textureResolutions.value)
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function handlePrevPage() {
+  if (!(await viewer.allowChange())) return
   await pagination.goToPrevPage(async (cursor, pageLimit) => {
     const params = {
       cursor,
@@ -306,27 +281,30 @@ async function handlePrevPage() {
     items.value = res.data.items
     return res.data
   })
-  void cacheSkinTextureWidths(items.value, textureResolutions.value)
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function handleFilterChange() {
+  if (!(await viewer.allowChange())) return
   pagination.reset()
   await fetchLibrary()
 }
 
 async function handleSortChange() {
+  if (!(await viewer.allowChange())) return
   pagination.reset()
   await fetchLibrary()
 }
 
-function handleSearch() {
+async function handleSearch() {
+  if (!(await viewer.allowChange())) return
   activeSearchQuery.value = searchQuery.value.trim()
   pagination.reset()
   fetchLibrary()
 }
 
-function handleClearSearch() {
+async function handleClearSearch() {
+  if (!(await viewer.allowChange())) return
   searchQuery.value = ''
   activeSearchQuery.value = ''
   pagination.reset()
@@ -334,23 +312,26 @@ function handleClearSearch() {
 }
 
 async function handlePageSizeChange(value: number) {
+  if (!(await viewer.allowChange())) return
   if (!pagination.setLimit(value)) return
   await fetchLibrary()
 }
 
 async function addToWardrobe(item: Texture) {
   if (!canAddToWardrobe.value) return
-  try {
+  await viewer.run(async (current) => {
     await apiAddToWardrobe(item.hash, item.type)
-    ElMessage.success('已成功添加到我的衣柜')
-  } catch (e: unknown) {
-    ElMessage.error('添加失败: ' + getErrorMessage(e, '添加失败'))
-  }
+    if (current()) ElMessage.success('已加入我的衣柜')
+  }, '添加失败')
 }
 
-onMounted(() => {
-  fetchLibrary()
-})
+watch(
+  [() => user.value?.id, () => session.authReady],
+  () => {
+    if (!sessionPending.value) void fetchLibrary()
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
@@ -368,43 +349,6 @@ onMounted(() => {
 
 .library-grid-container {
   min-height: 400px;
-}
-
-.texture-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--color-heading);
-  margin-bottom: 6px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.texture-meta-info {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: var(--color-text-light);
-}
-
-.meta-separator {
-  opacity: 0.5;
-}
-
-.uploader-name {
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  max-width: 100px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.texture-date {
-  font-size: 12px;
 }
 
 .skin-library-container .page-header {

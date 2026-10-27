@@ -18,7 +18,11 @@
       </UiButton>
     </div>
 
-    <div class="min-h-[400px]" v-loading="loading" element-loading-background="transparent">
+    <div
+      class="min-h-[400px]"
+      v-loading="loading || sessionPending"
+      element-loading-background="transparent"
+    >
       <div
         class="grid grid-cols-[repeat(auto-fill,240px)] justify-center gap-6"
         :style="{ '--motion-card-count': textures.length }"
@@ -29,17 +33,17 @@
           :key="tex.hash + tex.type"
           :texture="tex"
           :delay-index="index % limit"
-          :is-dark="isDark"
           :textures-url="texturesUrl"
-          :resolution="textureResolutions.get(tex.hash)"
-          :title="tex.note || '未命名纹理'"
-          show-type
+          :title="tex.note || '未命名材质'"
           @preview="openDetailDialog"
         >
         </TextureCard>
       </div>
 
-      <el-empty v-else-if="!loading" description="还没有纹理，快去上传吧！" />
+      <el-empty
+        v-else-if="!loading && !sessionPending"
+        :description="listError || (canRead ? '还没有纹理，快去上传吧！' : '无权读取衣柜')"
+      />
     </div>
 
     <div class="pagination-container">
@@ -58,19 +62,23 @@
 
     <TextureDetailDialog
       v-model="showDetailDialog"
-      v-model:texture="selectedTexture"
-      v-model:note="editingNoteValue"
+      :texture="selectedTexture"
+      v-model:dirty="viewer.dirty.value"
+      :busy="viewer.busy.value"
+      :revision="viewer.revision.value"
+      :save-name="updateNote"
+      :ready="detailReady"
+      :error="detailError"
       v-model:profile-id="applyForm.profile_id"
       :is-loading="isDetailLoading"
-      :is-applying="isApplying"
       :can-edit-metadata="canEditMetadata"
       :can-edit-visibility="canEditVisibility"
       :can-apply="canApply"
       :can-delete="canDelete"
       :profiles="userProfiles"
-      :resolution="selectedTexture ? textureResolutions.get(selectedTexture.hash) : undefined"
+      :profiles-loading="profilesLoading"
+      :profiles-error="profilesError"
       :textures-url="texturesUrl"
-      @update-note="updateNote"
       @update-model="updateModel"
       @update-public="updateIsPublic"
       @apply="doApply"
@@ -92,10 +100,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, onUnmounted, inject } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
-import type { Ref } from 'vue'
 import { Upload } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import TextureDetailDialog from '@/components/dashboard/wardrobe/TextureDetailDialog.vue'
@@ -106,10 +113,8 @@ import {
   replaceLocalTextureUrl,
 } from '@/components/dashboard/wardrobe/uploadForm'
 import TextureCard from '@/components/textures/TextureCard.vue'
-import {
-  cacheSkinTextureWidths,
-  textureAssetUrl as texturesUrl,
-} from '@/components/textures/textureAssets'
+import { textureAssetUrl as texturesUrl } from '@/components/textures/textureAssets'
+import { useViewerSession } from '@/composables/useViewerSession'
 import UiButton from '@/components/ui/UiButton.vue'
 import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getProfiles } from '@/api/profiles'
@@ -128,6 +133,8 @@ import { getErrorMessage } from '@/utils/error'
 const session = useSessionStore()
 const { fetchMe } = session
 const permissions = computed(() => new Set(session.user?.permissions || []))
+const sessionPending = computed(() => !session.authReady && !session.user)
+const canRead = computed(() => permissions.value.has('texture.read.owned'))
 const canUpload = computed(() => permissions.value.has('texture.create.owned'))
 const canEditMetadata = computed(() => permissions.value.has('texture.update_metadata.owned'))
 const canEditVisibility = computed(() => permissions.value.has('texture.update_visibility.owned'))
@@ -135,17 +142,37 @@ const canDelete = computed(() => permissions.value.has('texture.delete.owned'))
 const canApply = computed(
   () => permissions.value.has('texture.apply.owned') && permissions.value.has('profile.read.owned'),
 )
-const isDark = inject<Ref<boolean>>('isDark', ref(false))
 
 const userProfiles = ref<Profile[]>([])
+const profilesLoading = ref(false)
+const profilesError = ref('')
+let profilesGeneration = 0
 const fetchUserProfiles = async () => {
   if (!canApply.value) return
+  const generation = ++profilesGeneration
+  profilesLoading.value = true
+  profilesError.value = ''
   try {
-    // Fetch all profiles for the dropdown (use a large limit if needed, or implement search)
-    const res = await getProfiles({ limit: 100 })
-    userProfiles.value = res.data.items
-  } catch (e) {
-    console.error('Failed to fetch profiles for wardrobe:', e)
+    const all: Profile[] = []
+    const seen = new Set<string>()
+    let cursor: string | undefined
+    do {
+      const res = await getProfiles({ limit: 100, ...(cursor ? { cursor } : {}) })
+      all.push(...res.data.items)
+      if (!res.data.has_next) break
+      const next = res.data.next_cursor
+      if (!next || seen.has(next)) throw new Error('角色分页游标无效')
+      seen.add(next)
+      cursor = next
+    } while (true)
+    if (generation === profilesGeneration && canApply.value) userProfiles.value = all
+  } catch {
+    if (generation === profilesGeneration) {
+      userProfiles.value = []
+      profilesError.value = '角色列表加载失败，请重新打开详情重试'
+    }
+  } finally {
+    if (generation === profilesGeneration) profilesLoading.value = false
   }
 }
 
@@ -153,12 +180,19 @@ const textures = ref<Texture[]>([])
 const pagination = useCursorPagination<Texture>(20)
 const limit = pagination.limit
 const loading = ref(false)
-const textureResolutions = ref(new Map<string, number>())
+const listError = ref('')
+let listRequest = 0
 const showDetailDialog = ref(false)
 const selectedTexture = ref<Texture | null>(null)
 const isDetailLoading = ref(false)
-const editingNoteValue = ref('')
-const isApplying = ref(false)
+const detailReady = ref(false)
+const detailError = ref('')
+const viewer = useViewerSession(
+  showDetailDialog,
+  computed(() =>
+    selectedTexture.value ? selectedTexture.value.hash + selectedTexture.value.type : '',
+  ),
+)
 
 const showUploadDialog = ref(false)
 const uploading = ref(false)
@@ -168,78 +202,103 @@ const previewUrl = ref<string | null>(null)
 const applyForm = ref({ profile_id: '', texture_type: '', hash: '' })
 
 async function openDetailDialog(tex: Texture) {
-  selectedTexture.value = { ...tex, is_public: 2 }
-  editingNoteValue.value = tex.note || ''
-  applyForm.value.hash = tex.hash
-  applyForm.value.texture_type = tex.type
-  applyForm.value.profile_id = ''
-
+  if (!canRead.value || !(await viewer.allowChange())) return
+  selectedTexture.value = { ...tex }
+  applyForm.value = { hash: tex.hash, texture_type: tex.type, profile_id: '' }
   showDetailDialog.value = true
+  detailReady.value = false
+  detailError.value = ''
   isDetailLoading.value = true
-
+  const current = viewer.snapshot()
+  void fetchUserProfiles()
   try {
     const res = await getTextureDetail(tex.hash, tex.type)
+    if (!current() || !showDetailDialog.value || !canRead.value) return
     selectedTexture.value = res.data
-    editingNoteValue.value = res.data.note || ''
-  } catch (e) {
-    console.error('Fetch texture detail error:', e)
-    ElMessage.error('获取详情失败')
+    detailReady.value = true
+  } catch {
+    if (current()) detailError.value = '获取详情失败，请关闭后重试'
   } finally {
-    isDetailLoading.value = false
+    if (current()) isDetailLoading.value = false
   }
 }
 
-async function updateNote() {
-  if (!canEditMetadata.value) return
-  if (!selectedTexture.value || isDetailLoading.value) return
-  const tex = selectedTexture.value
-  const updated = editingNoteValue.value.trim()
-  if (updated === (tex.note || '')) return
-
-  try {
-    await patchTexture(tex.hash, tex.type, { note: updated })
-    tex.note = updated
-    const localTex = textures.value.find((t) => t.hash === tex.hash && t.type === tex.type)
-    if (localTex) localTex.note = updated
-    ElMessage.success('备注已更新')
-  } catch {
-    ElMessage.error('更新备注失败')
-  }
+function updateLocalTexture(target: Texture, patch: Partial<Texture>) {
+  Object.assign(target, patch)
+  const row = textures.value.find((t) => t.hash === target.hash && t.type === target.type)
+  if (row) Object.assign(row, patch)
 }
 
-async function updateModel(val: string | number | boolean | null | undefined) {
-  if (!canEditMetadata.value) return
-  if (!selectedTexture.value || isDetailLoading.value) return
-  const tex = selectedTexture.value
-  try {
-    await patchTexture(tex.hash, tex.type, { model: String(val) })
-    tex.model = String(val)
-    const localTex = textures.value.find((t) => t.hash === tex.hash && t.type === tex.type)
-    if (localTex) localTex.model = String(val)
-    ElMessage.success(`模型已切换为 ${val === 'slim' ? '纤细' : '普通'}`)
-  } catch {
-    ElMessage.error('切换模型失败')
-  }
+async function updateNote(value: string): Promise<boolean> {
+  const target = selectedTexture.value
+  const note = value.trim()
+  if (
+    !canRead.value ||
+    !canEditMetadata.value ||
+    !detailReady.value ||
+    !target ||
+    note === (target.note || '')
+  )
+    return false
+  return viewer.run(
+    async (current) => {
+      const result = await patchTexture(target.hash, target.type, { note })
+      if (!current()) return false
+      updateLocalTexture(target, { note: result.data.note ?? note })
+      ElMessage.success('名称已更新')
+    },
+    '更新名称失败',
+    true,
+  )
 }
 
-async function updateIsPublic(val: string | number | boolean) {
-  if (!canEditVisibility.value) return
-  if (!selectedTexture.value || isDetailLoading.value) return
-  const tex = selectedTexture.value
-  const isPublic = val === 1 || val === true
-  try {
-    await patchTexture(tex.hash, tex.type, { is_public: isPublic })
-    const visibility = isPublic ? 1 : 0
-    tex.is_public = visibility
-    const localTex = textures.value.find((item) => item.hash === tex.hash && item.type === tex.type)
-    if (localTex) localTex.is_public = visibility
+async function updateModel(value: string | number | boolean | undefined) {
+  const target = selectedTexture.value
+  if (
+    !canRead.value ||
+    !canEditMetadata.value ||
+    !detailReady.value ||
+    !target ||
+    target.type !== 'skin' ||
+    !['default', 'slim'].includes(String(value)) ||
+    target.model === value
+  )
+    return
+  await viewer.run(async (current) => {
+    const result = await patchTexture(target.hash, target.type, { model: String(value) })
+    if (!current()) return false
+    updateLocalTexture(target, { model: result.data.model || String(value) })
+    ElMessage.success('模型已更新')
+  }, '切换模型失败')
+}
+
+async function updateIsPublic(value: string | number | boolean) {
+  const target = selectedTexture.value
+  const isPublic = value === 1 || value === true
+  if (
+    !canRead.value ||
+    !canEditVisibility.value ||
+    !detailReady.value ||
+    !target ||
+    target.is_public === 2 ||
+    !!target.is_public === isPublic
+  )
+    return
+  await viewer.run(async (current) => {
+    const result = await patchTexture(target.hash, target.type, { is_public: isPublic })
+    if (!current()) return false
+    updateLocalTexture(target, { is_public: result.data.is_public ?? (isPublic ? 1 : 0) })
     ElMessage.success(isPublic ? '材质已公开' : '材质已设为私有')
-  } catch {
-    ElMessage.error('更新公开状态失败')
-  }
+  }, '更新公开状态失败')
 }
 
 async function fetchTextures() {
+  if (!canRead.value) return
+  listError.value = ''
+  const request = ++listRequest
+  const actorId = session.user?.id
+  const active = viewer.snapshot()
+  const current = () => active() && request === listRequest && actorId === session.user?.id
   loading.value = true
   try {
     const params = {
@@ -247,39 +306,42 @@ async function fetchTextures() {
       limit: limit.value,
     }
     const res = await getTextures(params)
+    if (!current()) return
     textures.value = res.data.items
     pagination.setPageData(res.data)
-    void cacheSkinTextureWidths(textures.value, textureResolutions.value)
-  } catch (e) {
-    console.error(e)
+  } catch {
+    if (!current()) return
+    listError.value = '加载衣柜失败'
+    ElMessage.error(listError.value)
   } finally {
-    loading.value = false
+    if (request === listRequest) loading.value = false
   }
 }
 
 async function handleNextPage() {
+  if (!(await viewer.allowChange())) return
   await pagination.goToNextPage(async (cursor, pageLimit) => {
     const params = { cursor, limit: pageLimit }
     const res = await getTextures(params)
     textures.value = res.data.items
     return res.data
   })
-  void cacheSkinTextureWidths(textures.value, textureResolutions.value)
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function handlePrevPage() {
+  if (!(await viewer.allowChange())) return
   await pagination.goToPrevPage(async (cursor, pageLimit) => {
     const params = { cursor, limit: pageLimit }
     const res = await getTextures(params)
     textures.value = res.data.items
     return res.data
   })
-  void cacheSkinTextureWidths(textures.value, textureResolutions.value)
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 async function handlePageSizeChange(value: number) {
+  if (!(await viewer.allowChange())) return
   if (!pagination.setLimit(value)) return
   await fetchTextures()
 }
@@ -351,9 +413,9 @@ async function doUpload() {
 }
 
 async function confirmDelete() {
-  if (!selectedTexture.value || !canDelete.value) return
   const target = selectedTexture.value
-  try {
+  if (!target || !canRead.value || !canDelete.value || !detailReady.value) return
+  await viewer.run(async (current) => {
     await ElMessageBox.confirm(
       '当前删除规则：若你是皮肤库记录的原上传者，将删除该库条目及所有用户对应的衣柜记录；否则只移除你自己的衣柜记录。角色绑定、头像和材质文件会保留。当前页面无法确认原上传者身份，请确认可能的影响后再继续。',
       '删除纹理',
@@ -362,46 +424,63 @@ async function confirmDelete() {
         cancelButtonText: '取消',
         type: 'warning',
         confirmButtonClass: 'el-button--danger',
+        closeOnClickModal: false,
         distinguishCancelAndClose: true,
       },
     )
-
-    if (!canDelete.value) return
+    if (!current() || !canDelete.value || !canRead.value) return false
     await deleteTexture(target.hash, target.type)
-    ElMessage.success('已删除')
+    if (!current()) return false
+    textures.value = textures.value.filter((t) => t.hash !== target.hash || t.type !== target.type)
     showDetailDialog.value = false
-    await refreshFirstPage()
-  } catch (e) {
-    if (e !== 'cancel' && e !== 'close') ElMessage.error('删除失败')
-  }
+    ElMessage.success('已删除')
+  }, '删除失败')
 }
 
 async function doApply() {
-  if (!canApply.value) return
-  if (!applyForm.value.profile_id) return ElMessage.error('请选择角色')
-  isApplying.value = true
-  try {
-    await applyTexture(applyForm.value.hash, {
-      profile_id: applyForm.value.profile_id,
-      texture_type: applyForm.value.texture_type,
-    })
+  const target = selectedTexture.value
+  const profileId = applyForm.value.profile_id
+  if (
+    !canRead.value ||
+    !canApply.value ||
+    !detailReady.value ||
+    !target ||
+    profilesLoading.value ||
+    profilesError.value
+  )
+    return
+  if (!userProfiles.value.some((p) => p.id === profileId)) return ElMessage.error('请选择有效角色')
+  await viewer.run(async (current) => {
+    await applyTexture(target.hash, { profile_id: profileId, texture_type: target.type })
+    if (!current()) return false
     ElMessage.success('已应用')
-    fetchMe()
-    fetchUserProfiles()
-    fetchTextures()
-  } catch (e: unknown) {
-    ElMessage.error('应用失败: ' + getErrorMessage(e, '应用失败'))
-  } finally {
-    isApplying.value = false
-  }
+    try {
+      await fetchMe()
+    } catch {
+      ElMessage.warning('材质已应用，但账号信息刷新失败')
+    }
+  }, '应用失败')
 }
 
-onMounted(() => {
-  refreshFirstPage()
-  fetchUserProfiles()
-})
-
 onUnmounted(() => {
+  profilesGeneration++
   disposeLocalTextureUrl(previewUrl.value)
 })
+watch(
+  [() => session.user?.id, canRead],
+  ([id, allowed], previous) => {
+    if (previous && (previous[0] !== id || !allowed)) {
+      profilesGeneration++
+      userProfiles.value = []
+      profilesLoading.value = false
+      profilesError.value = ''
+      showDetailDialog.value = false
+      selectedTexture.value = null
+      textures.value = []
+    }
+    if (allowed) void refreshFirstPage()
+    else loading.value = false
+  },
+  { immediate: true },
+)
 </script>

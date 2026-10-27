@@ -1,131 +1,88 @@
 <template>
-  <UiDialog v-model="visible" destroy-on-close variant="viewer" :busy="!!clearingTexture">
+  <UiDialog
+    v-model="visible"
+    destroy-on-close
+    variant="viewer"
+    :busy="busy"
+    :dirty="dirty"
+    title="管理角色详情"
+  >
     <UiViewerLayout v-if="profile">
-      <template #stage>
-        <SkinViewer
-          v-if="profile.skin_hash"
-          :skin-url="texturesUrl(profile.skin_hash)"
-          :cape-url="profile.cape_hash ? texturesUrl(profile.cape_hash) : null"
-          :model="profile.texture_model || profile.model || 'default'"
-          :width="320"
-          :height="430"
-        />
-        <el-empty v-else description="未设置皮肤" />
-      </template>
-
-      <div class="flex min-h-0 flex-1 flex-col">
-        <section class="border-b border-[var(--color-border)] py-3.5">
-          <el-input
-            v-if="canUpdate"
-            v-model="name"
-            placeholder="角色名称"
-            :disabled="!!clearingTexture"
-            @blur="$emit('rename')"
-            @keyup.enter="$emit('rename')"
-          />
-          <h2 v-else class="m-0 break-all text-2xl font-bold text-[var(--color-heading)]">
-            {{ profile.name }}
-          </h2>
-        </section>
-
-        <section class="border-b border-[var(--color-border)] py-3.5">
-          <div
-            class="mb-2.5 text-xs font-bold uppercase tracking-[0.5px] text-[var(--color-text-light)]"
-          >
-            皮肤绑定
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <div
-              aria-label="皮肤绑定"
-              class="min-w-0 flex-1 basis-40 rounded-lg bg-[var(--color-background-soft)] px-3 py-2 text-xs text-[var(--color-text-light)]"
-            >
-              <code v-if="profile.skin_hash" class="break-all select-text font-mono">{{
-                profile.skin_hash
-              }}</code>
-              <span v-else>未绑定</span>
-            </div>
-            <UiButton
-              v-if="canUpdate"
-              variant="secondary"
-              tone="warning"
-              :disabled="!profile.skin_hash || !!clearingTexture"
-              :loading="clearingTexture === 'skin'"
-              class="shrink-0"
-              @click="$emit('clear-skin')"
-            >
-              清除皮肤
-            </UiButton>
-          </div>
-        </section>
-
-        <section class="border-b border-[var(--color-border)] py-3.5">
-          <div
-            class="mb-2.5 text-xs font-bold uppercase tracking-[0.5px] text-[var(--color-text-light)]"
-          >
-            披风绑定
-          </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <div
-              aria-label="披风绑定"
-              class="min-w-0 flex-1 basis-40 rounded-lg bg-[var(--color-background-soft)] px-3 py-2 text-xs text-[var(--color-text-light)]"
-            >
-              <code v-if="profile.cape_hash" class="break-all select-text font-mono">{{
-                profile.cape_hash
-              }}</code>
-              <span v-else>未绑定</span>
-            </div>
-            <UiButton
-              v-if="canUpdate"
-              variant="secondary"
-              tone="warning"
-              :disabled="!profile.cape_hash || !!clearingTexture"
-              :loading="clearingTexture === 'cape'"
-              class="shrink-0"
-              @click="$emit('clear-cape')"
-            >
-              清除披风
-            </UiButton>
-          </div>
-        </section>
-
-        <section v-if="canDelete" class="mt-auto py-3.5">
-          <el-button
-            type="danger"
-            plain
-            class="w-full rounded-lg"
-            :disabled="!!clearingTexture"
-            @click="$emit('delete')"
-          >
-            删除角色
-          </el-button>
-        </section>
+      <template #stage
+        ><ProfilePreviewStage :profile="profile" :textures-url="texturesUrl"
+      /></template>
+      <ViewerNameEditor
+        :key="profile.id + String(revision)"
+        :value="profile.name"
+        :can-edit="canUpdate"
+        :busy="busy"
+        :save="saveName"
+        :allow-empty="false"
+        :max-length="16"
+        label="角色名称"
+        placeholder="角色名称"
+        @dirty="dirty = $event"
+      />
+      <section class="flex flex-col items-start gap-4 border-b border-[var(--color-border)] py-5">
+        <div class="flex flex-wrap items-center gap-3">
+          <span class="text-sm text-[var(--color-text-light)]">所有者</span
+          ><ViewerIdentity :name="profile.owner_display_name" />
+        </div>
+        <ProfileIdentifiers :profile="profile" />
+      </section>
+      <ActionBar align="start" class="py-5">
+        <UiButton
+          v-if="canUpdate && profile.skin_hash"
+          variant="secondary"
+          tone="warning"
+          :disabled="blocked"
+          @click="$emit('clear-skin')"
+          >清除皮肤</UiButton
+        >
+        <UiButton
+          v-if="canUpdate && profile.cape_hash"
+          variant="secondary"
+          tone="warning"
+          :disabled="blocked"
+          @click="$emit('clear-cape')"
+          >清除披风</UiButton
+        >
+      </ActionBar>
+      <div v-if="canDelete" class="pb-5">
+        <UiButton
+          v-if="canDelete"
+          variant="secondary"
+          tone="danger"
+          :disabled="blocked"
+          @click="$emit('delete')"
+          >删除角色</UiButton
+        >
       </div>
     </UiViewerLayout>
   </UiDialog>
 </template>
-
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Profile } from '@/api/types'
-import SkinViewer from '@/components/SkinViewer.vue'
+import ProfilePreviewStage from '@/components/common/ProfilePreviewStage.vue'
+import ProfileIdentifiers from '@/components/common/ProfileIdentifiers.vue'
+import ViewerIdentity from '@/components/common/ViewerIdentity.vue'
+import ViewerNameEditor from '@/components/common/ViewerNameEditor.vue'
+import ActionBar from '@/components/common/ActionBar.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiViewerLayout from '@/components/ui/UiViewerLayout.vue'
-
 const visible = defineModel<boolean>('visible', { required: true })
-const name = defineModel<string>('name', { required: true })
-
-defineProps<{
+const dirty = defineModel<boolean>('dirty', { default: false })
+const props = defineProps<{
   profile: Profile | null
   texturesUrl: (hash: string | null | undefined) => string
-  clearingTexture: 'skin' | 'cape' | null
+  busy: boolean
+  revision: number
+  saveName: (value: string) => Promise<boolean>
   canUpdate: boolean
   canDelete: boolean
 }>()
-
-defineEmits<{
-  rename: []
-  'clear-skin': []
-  'clear-cape': []
-  delete: []
-}>()
+const blocked = computed(() => props.busy || dirty.value)
+defineEmits<{ 'clear-skin': []; 'clear-cape': []; delete: [] }>()
 </script>

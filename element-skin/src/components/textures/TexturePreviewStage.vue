@@ -14,13 +14,16 @@ import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
 import type { Texture } from '@/api/types'
 
-withDefaults(defineProps<{
-  texture: Texture
-  texturesUrl: (hash: string | null | undefined) => string
-  width?: number
-  height?: number
-}>(), {
-  width: 320,
-  height: 430,
-})
+withDefaults(
+  defineProps<{
+    texture: Texture
+    texturesUrl: (hash: string | null | undefined) => string
+    width?: number
+    height?: number
+  }>(),
+  {
+    width: 280,
+    height: 340,
+  },
+)
 </script>

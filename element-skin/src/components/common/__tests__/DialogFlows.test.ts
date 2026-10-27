@@ -908,7 +908,7 @@ describe('notice flow drafts', () => {
 describe('role binding confirmations and immediate preview', () => {
   async function openRole() {
     const mounted = await mount(() => h(AdminRolesList))
-    button(mounted.host, '查看详情').click()
+    mounted.host.querySelector<HTMLElement>('.admin-role-card [role="button"]')!.click()
     await settle()
     return mounted
   }
@@ -921,7 +921,7 @@ describe('role binding confirmations and immediate preview', () => {
     button(dialog(), '清除皮肤').click()
     await settle()
     expect(api.patchProfileSkin).not.toHaveBeenCalled()
-    expect(dialog().querySelector('[aria-label="皮肤绑定"]')?.textContent).toContain('skin-a')
+    expect(dialog().querySelector('.ui-viewer-info')?.textContent).toContain('skin-a')
     expect(ElMessage.error).not.toHaveBeenCalled()
     button(dialog(), '清除皮肤').click()
     await settle()
@@ -938,8 +938,10 @@ describe('role binding confirmations and immediate preview', () => {
     )
     expect(api.patchProfileSkin).toHaveBeenCalledExactlyOnceWith('role-a', { hash: null })
     expect(dialog().querySelector('.test-skin-viewer')).toBeNull()
-    expect(dialog().querySelector('[aria-label="皮肤绑定"]')?.textContent).toContain('未绑定')
-    expect(button(dialog(), '清除皮肤').disabled).toBe(true)
+    expect(dialog().querySelector('.ui-viewer-info')?.textContent).not.toContain('皮肤 Hash')
+    expect(
+      [...dialog().querySelectorAll('button')].map((item) => item.textContent?.trim()),
+    ).not.toContain('清除皮肤')
   })
 
   it('preserves a failed cape binding and blocks duplicate commands until it settles', async () => {
@@ -953,31 +955,35 @@ describe('role binding confirmations and immediate preview', () => {
     dialog().querySelector<HTMLButtonElement>('.el-dialog__headerbtn')!.click()
     await settle()
     expect(api.patchProfileCape).toHaveBeenCalledExactlyOnceWith('role-a', { hash: null })
-    expect(dialog().querySelector('[aria-label="披风绑定"]')?.textContent).toContain('cape-a')
+    expect(dialog().querySelector('.ui-viewer-info')?.textContent).toContain('cape-a')
     pending.reject(new Error('clear failed'))
     await settle()
-    expect(ElMessage.error).toHaveBeenLastCalledWith('清除披风绑定失败')
-    expect(dialog().querySelector('[aria-label="披风绑定"]')?.textContent).toContain('cape-a')
+    expect(ElMessage.error).toHaveBeenLastCalledWith(
+      'clear failed；未能确认写入结果，请核对后再重试',
+    )
+    expect(dialog().querySelector('.ui-viewer-info')?.textContent).toContain('cape-a')
     expect(button(dialog(), '清除披风').disabled).toBe(false)
   })
 
-  it('does not overwrite a different selected role when a prior clear succeeds', async () => {
+  it('blocks switching roles during a write and allows switching after it settles', async () => {
     vi.spyOn(ElMessageBox, 'confirm').mockResolvedValue('confirm')
     const pending = deferred<{ data: undefined }>()
     api.patchProfileCape.mockReturnValueOnce(pending.promise)
     const mounted = await openRole()
     button(dialog(), '清除披风').click()
     await settle()
-    const edits = [...mounted.host.querySelectorAll<HTMLButtonElement>('button')].filter(
-      (element) => element.textContent?.trim() === '查看详情',
-    )
-    edits[1]!.click()
+    const cards = mounted.host.querySelectorAll<HTMLElement>('.admin-role-card [role="button"]')
+    cards[1]!.click()
     await settle()
+    expect(dialog().querySelector('h2')?.textContent?.trim()).toBe('PlayerA')
     pending.resolve({ data: undefined })
     await settle()
     expect(api.patchProfileCape).toHaveBeenCalledExactlyOnceWith('role-a', { hash: null })
-    expect(dialog().querySelector('input')!.value).toBe('PlayerB')
-    expect(dialog().querySelector('[aria-label="皮肤绑定"]')?.textContent).toContain('skin-b')
-    expect(dialog().querySelector('[aria-label="披风绑定"]')?.textContent).toContain('未绑定')
+    expect(dialog().textContent).not.toContain('披风 Hash')
+    cards[1]!.click()
+    await settle()
+    expect(dialog().querySelector('h2')?.textContent?.trim()).toBe('PlayerB')
+    expect(dialog().textContent).toContain('skin-b')
+    expect(dialog().textContent).not.toContain('披风 Hash')
   })
 })

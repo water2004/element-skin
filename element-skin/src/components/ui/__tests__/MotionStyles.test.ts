@@ -1,5 +1,6 @@
 import { createApp, h, nextTick, ref } from 'vue'
 import { createPinia } from 'pinia'
+import { useSessionStore } from '@/stores/session'
 import ElementPlus, { ElButton, ElMessage } from 'element-plus'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { installMotionStyles, motionCss } from '@/__tests__/helpers/motionStyles'
@@ -34,7 +35,14 @@ async function mountTextures(dark = false) {
   const host = document.createElement('div')
   document.body.append(host)
   const app = createApp(AdminTexturesList)
-  app.provide('isDark', ref(dark)).use(createPinia()).use(ElementPlus).mount(host)
+  const pinia = createPinia()
+  app.use(pinia).use(ElementPlus)
+  useSessionStore(pinia).user = {
+    id: 'motion-user',
+    email: 'motion@example.com',
+    permissions: ['texture.read.any'],
+  }
+  app.provide('isDark', ref(dark)).mount(host)
   cleanup.push(() => {
     app.unmount()
     host.remove()
@@ -116,7 +124,14 @@ describe('shared motion contracts', () => {
       const host = document.createElement('div')
       document.body.append(host)
       const app = createApp(AdminRolesList)
-      app.use(createPinia()).use(ElementPlus).mount(host)
+      const pinia = createPinia()
+      app.use(pinia).use(ElementPlus)
+      useSessionStore(pinia).user = {
+        id: 'motion-user',
+        email: 'motion@example.com',
+        permissions: ['profile.read.any'],
+      }
+      app.mount(host)
       cleanup.push(() => {
         app.unmount()
         host.remove()
@@ -134,7 +149,7 @@ describe('shared motion contracts', () => {
       requests.shift()!(structuredClone(cardMotionPage))
       await vi.waitFor(() => expect(host.querySelectorAll('.admin-role-card')).toHaveLength(2))
       const cards = [...host.querySelectorAll('.admin-role-card')]
-      expect(cards.map((card) => card.querySelector('.role-name')?.textContent)).toEqual([
+      expect(cards.map((card) => card.querySelector('[title]')?.textContent)).toEqual([
         'PlayerA',
         'PlayerB',
       ])
@@ -230,7 +245,7 @@ describe('shared motion contracts', () => {
     )!
     refresh.click()
     await nextTick()
-    expect(region.getAttribute('aria-busy')).toBe('true')
+    await vi.waitFor(() => expect(region.getAttribute('aria-busy')).toBe('true'))
     expect(region.querySelectorAll('.texture-card')[0]).toBe(cards[0])
     reject(new Error('refresh unavailable'))
     await vi.waitFor(() => expect(region.getAttribute('aria-busy')).toBe('false'))

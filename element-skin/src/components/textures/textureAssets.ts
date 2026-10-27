@@ -1,5 +1,3 @@
-import type { Texture } from '@/api/types'
-
 export type TextureImageFactory = () => HTMLImageElement
 
 export interface TextureWidthOptions {
@@ -44,16 +42,4 @@ export async function cacheTextureWidth(
   const width = await probeTextureWidth(hash, options)
   if (width !== null) cache.set(hash, width)
   return width
-}
-
-export function cacheSkinTextureWidths(
-  textures: Array<Pick<Texture, 'hash' | 'type'>>,
-  cache: Map<string, number>,
-  options: TextureWidthOptions = {},
-): Promise<Array<number | null>> {
-  const pending = textures
-    .filter((texture) => texture.type === 'skin' && !cache.has(texture.hash))
-    .map((texture) => cacheTextureWidth(texture.hash, cache, options))
-
-  return Promise.all(pending)
 }

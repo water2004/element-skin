@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  cacheSkinTextureWidths,
   cacheTextureWidth,
   probeTextureWidth,
   textureAssetUrl,
@@ -110,35 +109,5 @@ describe('texture width cache', () => {
     ).resolves.toBe(128)
 
     expect(Array.from(cache.entries())).toEqual([['skin-hash', 128]])
-  })
-
-  it('caches widths only for uncached skin textures', async () => {
-    const cache = new Map([['cached-skin', 32]])
-    const first = new FakeImage(64)
-    const second = new FakeImage(128)
-
-    await expect(
-      cacheSkinTextureWidths(
-        [
-          { hash: 'cached-skin', type: 'skin' },
-          { hash: 'new-skin-a', type: 'skin' },
-          { hash: 'cape-hash', type: 'cape' },
-          { hash: 'new-skin-b', type: 'skin' },
-        ],
-        cache,
-        {
-          baseUrl: '/assets',
-          createImage: imageFactory([first, second]),
-        },
-      ),
-    ).resolves.toEqual([64, 128])
-
-    expect(Array.from(cache.entries())).toEqual([
-      ['cached-skin', 32],
-      ['new-skin-a', 64],
-      ['new-skin-b', 128],
-    ])
-    expect(first.src).toBe('/assets/static/textures/new-skin-a.png')
-    expect(second.src).toBe('/assets/static/textures/new-skin-b.png')
   })
 })

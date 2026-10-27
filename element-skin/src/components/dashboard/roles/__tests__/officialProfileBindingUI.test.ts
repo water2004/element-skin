@@ -3,7 +3,7 @@ import ElementPlus from 'element-plus'
 import { describe, expect, it } from 'vitest'
 import type { ExternalIdentity, OfficialProfileBinding, Profile } from '@/api/types'
 import OfficialBindingDialog from '../OfficialBindingDialog.vue'
-import RoleCard from '../RoleCard.vue'
+import ProfileCard from '@/components/common/ProfileCard.vue'
 import RolePreviewDialog from '../RolePreviewDialog.vue'
 
 const profile: Profile = {
@@ -37,8 +37,8 @@ const binding: OfficialProfileBinding = {
 }
 
 describe('official profile binding UI', () => {
-  it('shows only a green official badge on the role card without binding operations', async () => {
-    const mounted = mountComponent(RoleCard, {
+  it('keeps role cards to a preview and name without commands or official badges', async () => {
+    const mounted = mountComponent(ProfileCard, {
       profile,
       delayIndex: 0,
       isDark: false,
@@ -49,9 +49,9 @@ describe('official profile binding UI', () => {
     })
     await flushUI()
 
-    expect(mounted.host.textContent).toContain('正版')
+    expect(mounted.host.textContent).not.toContain('正版')
     expect(mounted.host.textContent).toContain('RemoteSteve')
-    expect(buttonText(mounted.host)).toEqual(['删除'])
+    expect(buttonText(mounted.host)).toEqual([])
     expect(mounted.host.textContent).not.toContain('同步正版数据')
     expect(mounted.host.textContent).not.toContain('解除绑定')
     mounted.unmount()
@@ -65,6 +65,10 @@ describe('official profile binding UI', () => {
       profile,
       texturesUrl: (hash: string | null | undefined) => `/textures/${hash || ''}`,
       officialBinding: binding,
+      officialState: 'ready',
+      busy: false,
+      revision: 1,
+      saveName: async () => true,
       canSyncOfficialBinding: true,
       canDeleteOfficialBinding: true,
       canRename: false,
@@ -78,7 +82,7 @@ describe('official profile binding UI', () => {
     await flushUI()
 
     const dialog = document.body.querySelector<HTMLElement>('.ui-dialog--viewer')
-    expect(dialog?.textContent).toContain('正版角色')
+    expect(dialog?.textContent).toContain('正版绑定')
     expect(dialog?.textContent).toContain('Xbox account')
     findButton(dialog!, '同步正版数据').click()
     findButton(dialog!, '解除绑定').click()

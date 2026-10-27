@@ -3,6 +3,7 @@ import type { HomepageMedia, Profile } from '@/api/types'
 export const dialogFlowPermissions = [
   'profile.create.owned',
   'profile.update.any',
+  'profile.read.any',
   'texture.create.owned',
 ]
 
