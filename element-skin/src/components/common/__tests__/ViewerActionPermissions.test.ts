@@ -75,8 +75,9 @@ vi.mock('@/api/admin/textures', () => ({
 }))
 vi.mock('@/api/me', () => ({ getMe: api.getMe }))
 vi.mock('@/composables/useAvatar', () => ({ useAvatar: () => ({ setAvatar: api.setAvatar }) }))
-vi.mock('@/components/textures/textureAssets', () => ({
-  cacheTextureWidth: vi.fn().mockResolvedValue(64),
+vi.mock('@/components/textures/textureAssets', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/textures/textureAssets')>()),
+  cacheTextureDimensions: vi.fn().mockResolvedValue({ width: 64, height: 64 }),
   textureAssetUrl: (hash: string) => `/textures/${hash}.png`,
 }))
 vi.mock('@/components/SkinViewer.vue', () => ({ default: { render: () => h('div') } }))
@@ -868,4 +869,105 @@ describe('session restoration on direct page refresh', () => {
       expect(host.textContent).toContain(card)
     },
   )
+})
+
+describe('personal role card shortcuts', () => {
+  const rolePermissions = [
+    'profile.read.owned',
+    'account.update.self',
+    'texture.clear.owned',
+    'profile.delete.owned',
+    'profile.create.owned',
+  ]
+  it('offers only usable shortcuts without a delete entry and does not open the detail when used', async () => {
+    const { host } = await openPage('roles', rolePermissions, true, false)
+    const card = host.querySelector<HTMLElement>('.role-card')!
+    expect([...card.querySelectorAll('button')].map((el) => el.textContent?.trim())).toEqual([
+      '设为头像',
+      '清除皮肤',
+      '清除披风',
+    ])
+    button(card, '设为头像').click()
+    await flushUI()
+    expect(api.setAvatar).toHaveBeenCalledExactlyOnceWith('viewer-skin', 'default')
+    expect(dialog()).toBeUndefined()
+    button(card, '清除皮肤').click()
+    await flushUI()
+    expect(api.clearProfileSkin).toHaveBeenCalledExactlyOnceWith('viewer-profile')
+    expect([...card.querySelectorAll('button')].map((el) => el.textContent?.trim())).toEqual([
+      '清除披风',
+    ])
+    expect(dialog()).toBeUndefined()
+    expect(api.deleteProfile).not.toHaveBeenCalled()
+    card.querySelector<HTMLElement>('[role="button"]')!.click()
+    await flushUI()
+    expect(button(dialog(), '删除角色')).toBeDefined()
+  })
+
+  it('keeps read-only cards free of shortcuts', async () => {
+    const { host } = await openPage('roles', ['profile.read.owned'], true, false)
+    expect(host.querySelector('.role-card .card-actions')).toBeNull()
+    expect(host.querySelectorAll('.role-card button')).toHaveLength(0)
+  })
+
+  it('hides missing-material shortcuts even with all relevant permissions', async () => {
+    api.getProfiles.mockResolvedValueOnce({
+      data: {
+        items: [{ ...viewerProfile, skin_hash: null, cape_hash: null }],
+        has_next: false,
+        next_cursor: null,
+        page_size: 20,
+      },
+    })
+    const { host } = await openPage('roles', rolePermissions, true, false)
+    expect(host.querySelector('.role-card .card-actions')).toBeNull()
+    expect(host.querySelectorAll('.role-card button')).toHaveLength(0)
+  })
+
+  it('serializes card writes, blocks opening another flow and restores actions after failure', async () => {
+    let reject!: (reason: unknown) => void
+    api.clearProfileCape.mockReturnValueOnce(
+      new Promise((_, fail) => {
+        reject = fail
+      }),
+    )
+    const { host } = await openPage('roles', rolePermissions, true, false)
+    const card = host.querySelector<HTMLElement>('.role-card')!
+    button(card, '清除披风').click()
+    await flushUI()
+    expect(api.clearProfileCape).toHaveBeenCalledExactlyOnceWith('viewer-profile')
+    for (const action of card.querySelectorAll<HTMLButtonElement>('button'))
+      expect(action.disabled).toBe(true)
+    expect(button(host, '新建角色').disabled).toBe(true)
+    card.querySelector<HTMLElement>('[role="button"]')!.click()
+    await flushUI()
+    expect(dialog()).toBeUndefined()
+    reject({
+      response: {
+        status: 403,
+        data: { error: { object: 'permission', operation: 'check', reason: 'denied' } },
+      },
+    })
+    await flushUI()
+    expect(ElMessage.error).toHaveBeenCalledExactlyOnceWith('没有执行此操作的权限')
+    expect(button(card, '清除披风').disabled).toBe(false)
+    expect(button(host, '新建角色').disabled).toBe(false)
+  })
+
+  it('rechecks permission after the card clear confirmation and preserves the binding on cancellation', async () => {
+    let confirm!: (value: 'confirm') => void
+    vi.mocked(ElMessageBox.confirm).mockReturnValueOnce(
+      new Promise((resolve) => {
+        confirm = resolve
+      }),
+    )
+    const { host, session } = await openPage('roles', rolePermissions, true, false)
+    button(host, '清除皮肤').click()
+    await nextTick()
+    session.user!.permissions = ['profile.read.owned']
+    confirm('confirm')
+    await flushUI()
+    expect(api.clearProfileSkin).not.toHaveBeenCalled()
+    expect(api.deleteProfile).not.toHaveBeenCalled()
+  })
 })

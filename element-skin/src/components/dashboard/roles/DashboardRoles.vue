@@ -10,6 +10,7 @@
       <ActionBar>
         <UiButton
           v-if="canCreateOfficialBinding"
+          :disabled="viewer.blocked.value"
           size="large"
           variant="secondary"
           tone="success"
@@ -21,6 +22,7 @@
         </UiButton>
         <UiButton
           v-if="canCreateRole"
+          :disabled="viewer.blocked.value"
           size="large"
           @click="showYggImportDialog = true"
           variant="secondary"
@@ -32,6 +34,7 @@
         </UiButton>
         <UiButton
           v-if="canCreateRole"
+          :disabled="viewer.blocked.value"
           size="large"
           @click="showCreateRoleDialog = true"
           variant="primary"
@@ -60,7 +63,39 @@
           :delay-index="index % limit"
           :textures-url="texturesUrl"
           @preview="openPreviewDialog"
-        />
+        >
+          <template
+            v-if="
+              (profile.skin_hash && (canSetAvatar || canClearTexture)) ||
+              (profile.cape_hash && canClearTexture)
+            "
+            #actions
+          >
+            <UiButton
+              v-if="canSetAvatar && profile.skin_hash"
+              variant="secondary"
+              :disabled="viewer.blocked.value"
+              @click.stop="setAsAvatar(profile)"
+              >设为头像</UiButton
+            >
+            <UiButton
+              v-if="canClearTexture && profile.skin_hash"
+              variant="secondary"
+              tone="warning"
+              :disabled="viewer.blocked.value"
+              @click.stop="clearRoleSkin(profile.id)"
+              >清除皮肤</UiButton
+            >
+            <UiButton
+              v-if="canClearTexture && profile.cape_hash"
+              variant="secondary"
+              tone="warning"
+              :disabled="viewer.blocked.value"
+              @click.stop="clearRoleCape(profile.id)"
+              >清除披风</UiButton
+            >
+          </template>
+        </ProfileCard>
       </div>
 
       <el-empty
@@ -489,7 +524,7 @@ async function deleteRole(pid: string) {
     if (!current()) return false
     profiles.value = profiles.value.filter((p) => p.id !== pid)
     officialBindings.value = officialBindings.value.filter((b) => b.profile_id !== pid)
-    showPreviewDialog.value = false
+    if (selectedProfile.value?.id === pid) showPreviewDialog.value = false
     ElMessage.success('已删除')
     await refreshAccountAfterWrite()
   }, '删除失败')
@@ -513,9 +548,9 @@ async function updateRoleName(value: string): Promise<boolean> {
 }
 
 async function clearRoleTexture(pid: string, type: 'skin' | 'cape') {
-  const target = selectedProfile.value
+  const target = profileForAction(pid)
   const field = type === 'skin' ? 'skin_hash' : 'cape_hash'
-  if (!canRead.value || !canClearTexture.value || target?.id !== pid || !target[field]) return
+  if (!canRead.value || !canClearTexture.value || !target?.[field]) return
   const label = type === 'skin' ? '皮肤' : '披风'
   await viewer.run(async (current) => {
     await ElMessageBox.confirm(
@@ -541,20 +576,22 @@ const clearRoleSkin = (pid: string) => clearRoleTexture(pid, 'skin')
 const clearRoleCape = (pid: string) => clearRoleTexture(pid, 'cape')
 
 async function setAsAvatar(profile: Profile) {
-  if (
-    !canRead.value ||
-    !canSetAvatar.value ||
-    !profile.skin_hash ||
-    selectedProfile.value?.id !== profile.id
-  )
-    return
-  const hash = profile.skin_hash
-  const model = profile.model === 'slim' ? 'slim' : 'default'
+  const target = profileForAction(profile.id)
+  if (!canRead.value || !canSetAvatar.value || !target?.skin_hash) return
+  const hash = target.skin_hash
+  const model = target.model === 'slim' ? 'slim' : 'default'
   await viewer.run(async (current) => {
     const updated = await setAvatar(hash, model)
     if (current() && updated) ElMessage.success('已设为头像')
     return updated
   }, '设置头像失败')
+}
+
+function profileForAction(id: string) {
+  return (
+    profiles.value.find((profile) => profile.id === id) ||
+    (selectedProfile.value?.id === id ? selectedProfile.value : null)
+  )
 }
 
 watch(

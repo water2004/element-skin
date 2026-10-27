@@ -1,16 +1,28 @@
 <template>
-  <el-tag v-if="width" size="small" effect="plain">{{ width }}px</el-tag>
-  <span v-else class="text-sm text-[var(--color-text-light)]">{{
+  <el-tag
+    v-if="dimensions && (!nonStandardOnly || (precision !== null && precision !== 1))"
+    size="small"
+    effect="dark"
+    >{{ dimensions.width }}px</el-tag
+  >
+  <span v-else-if="!nonStandardOnly" class="text-sm text-[var(--color-text-light)]">{{
     loading ? '清晰度加载中' : '清晰度未知'
   }}</span>
 </template>
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { cacheTextureWidth } from '@/components/textures/textureAssets'
-const props = defineProps<{ hash: string }>()
-const cache = new Map<string, number>()
-const width = ref<number | null>(null)
+import { computed, ref, watch } from 'vue'
+import {
+  cacheTextureDimensions,
+  texturePrecision,
+  type TextureDimensions,
+} from '@/components/textures/textureAssets'
+const props = defineProps<{ hash: string; type?: string; nonStandardOnly?: boolean }>()
+const cache = new Map<string, TextureDimensions>()
+const dimensions = ref<TextureDimensions | null>(null)
 const loading = ref(false)
+const precision = computed(() =>
+  dimensions.value ? texturePrecision(props.type || 'skin', dimensions.value) : null,
+)
 watch(
   () => props.hash,
   async (hash, _, cleanup) => {
@@ -18,11 +30,11 @@ watch(
     cleanup(() => {
       current = false
     })
-    width.value = null
+    dimensions.value = null
     loading.value = true
-    const value = await cacheTextureWidth(hash, cache)
+    const value = await cacheTextureDimensions(hash, cache)
     if (current) {
-      width.value = value
+      dimensions.value = value
       loading.value = false
     }
   },

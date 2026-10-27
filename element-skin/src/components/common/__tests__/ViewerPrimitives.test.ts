@@ -9,9 +9,13 @@ import TextureModelTag from '@/components/textures/TextureModelTag.vue'
 import TextureResolutionTag from '@/components/textures/TextureResolutionTag.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { viewerProfile, viewerTexture } from './fixtures/viewerActions'
+import { texturePrecisionCases } from '@/components/textures/__tests__/fixtures/texturePrecision'
 
-const width = vi.hoisted(() => vi.fn())
-vi.mock('@/components/textures/textureAssets', () => ({ cacheTextureWidth: width }))
+const dimensions = vi.hoisted(() => vi.fn())
+vi.mock('@/components/textures/textureAssets', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/textures/textureAssets')>()),
+  cacheTextureDimensions: dimensions,
+}))
 vi.mock('@/components/SkinViewer.vue', () => ({
   default: { render: () => h('div', 'Skin preview') },
 }))
@@ -22,7 +26,7 @@ const cleanup: Array<() => void> = []
 const fullHash = 'b6e5ac15' + '0123456789abcdef'.repeat(3)
 const writeText = vi.fn()
 beforeEach(() => {
-  width.mockResolvedValue(64)
+  dimensions.mockResolvedValue({ width: 64, height: 64 })
   writeText.mockReset().mockResolvedValue(undefined)
   const original = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
@@ -154,6 +158,19 @@ describe('compact identifiers', () => {
 })
 
 describe('viewer card and model semantics', () => {
+  it.each(texturePrecisionCases)(
+    'shows the card px badge only at a known nonstandard density: $type $width×$height',
+    async ({ type, width, height, badge }) => {
+      dimensions.mockResolvedValueOnce({ width, height })
+      const host = await mount(() =>
+        h(TextureResolutionTag, { hash: 'precision-test', type, nonStandardOnly: true }),
+      )
+      expect(host.querySelector('.el-tag')?.textContent ?? null).toBe(badge)
+      expect(host.textContent).not.toContain('清晰度加载中')
+      expect(host.querySelector('.el-tooltip__trigger')).toBeNull()
+    },
+  )
+
   it.each([
     { type: 'skin', model: 'slim', label: 'Alex' },
     { type: 'skin', model: 'default', label: 'Steve' },
@@ -162,17 +179,26 @@ describe('viewer card and model semantics', () => {
     const host = await mount(() => h(TextureModelTag, { type, model }))
     expect(host.querySelector('.el-tag')?.textContent?.trim()).toBe(label)
     expect(host.textContent).not.toMatch(/slim|default|皮肤/)
+    expect(host.querySelector('.el-tag')?.classList.contains('is-round')).toBe(true)
+    expect(host.querySelector('.el-tag')?.classList.contains('el-tag--light')).toBe(true)
+    expect(
+      host
+        .querySelector('.el-tag')
+        ?.classList.contains(type === 'cape' ? 'el-tag--success' : 'el-tag--primary'),
+    ).toBe(true)
   })
 
   it.each(['skin-hash', 'cape-hash'])('probes the real width for %s', async (hash) => {
-    width.mockResolvedValueOnce(128)
+    dimensions.mockResolvedValueOnce({ width: 128, height: 64 })
     const host = await mount(() => h(TextureResolutionTag, { hash }))
-    expect(width).toHaveBeenLastCalledWith(hash, expect.any(Map))
+    expect(dimensions).toHaveBeenLastCalledWith(hash, expect.any(Map))
     expect(host.querySelector('.el-tag')?.textContent).toBe('128px')
+    expect(host.querySelector('.el-tag')?.classList.contains('el-tag--dark')).toBe(true)
+    expect(host.querySelector('.el-tooltip__trigger')).toBeNull()
   })
 
   it('does not fabricate a resolution after an image read fails', async () => {
-    width.mockResolvedValueOnce(null)
+    dimensions.mockResolvedValueOnce(null)
     const host = await mount(() => h(TextureResolutionTag, { hash: 'missing' }))
     expect(host.textContent).toBe('清晰度未知')
     expect(host.querySelector('.el-tag')).toBeNull()

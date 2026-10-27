@@ -105,10 +105,10 @@
               class="flex flex-col items-start gap-4 border-b border-[var(--color-border)] py-5"
             >
               <div class="flex flex-wrap gap-2">
-                <TextureResolutionTag :hash="selectedItem.hash" /><TextureModelTag
+                <TextureResolutionTag
+                  :hash="selectedItem.hash"
                   :type="selectedItem.type"
-                  :model="selectedItem.model"
-                />
+                /><TextureModelTag :type="selectedItem.type" :model="selectedItem.model" />
               </div>
               <div class="flex flex-wrap items-center gap-3">
                 <span class="text-sm text-[var(--color-text-light)]">上传者</span

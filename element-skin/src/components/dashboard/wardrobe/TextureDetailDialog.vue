@@ -24,7 +24,7 @@
       <div v-if="isLoading" role="status" class="py-4">详情加载中</div>
       <section class="flex flex-col items-start gap-3 border-b border-[var(--color-border)] py-5">
         <div class="flex flex-wrap gap-2">
-          <TextureResolutionTag :hash="texture.hash" /><TextureModelTag
+          <TextureResolutionTag :hash="texture.hash" :type="texture.type" /><TextureModelTag
             :type="texture.type"
             :model="texture.model"
           />

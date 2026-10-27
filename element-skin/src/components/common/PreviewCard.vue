@@ -13,7 +13,7 @@
       @keydown.space.self.prevent="$emit('preview')"
     >
       <div
-        class="flex h-[280px] w-full items-center justify-center overflow-hidden bg-[image:var(--color-background-hero-light)] dark:bg-[image:var(--color-background-hero-dark)]"
+        class="relative flex h-[280px] w-full items-center justify-center overflow-hidden bg-[image:var(--color-background-hero-light)] dark:bg-[image:var(--color-background-hero-dark)]"
       >
         <slot name="preview" />
       </div>

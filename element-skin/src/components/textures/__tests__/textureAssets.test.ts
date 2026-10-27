@@ -1,21 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import {
-  cacheTextureWidth,
-  probeTextureWidth,
+  cacheTextureDimensions,
+  probeTextureDimensions,
   textureAssetUrl,
+  texturePrecision,
   type TextureImageFactory,
 } from '../textureAssets'
+import { texturePrecisionCases } from './fixtures/texturePrecision'
 
 class FakeImage {
   crossOrigin: string | null = null
   onerror: (() => void) | null = null
   onload: (() => void) | null = null
   width: number
+  height: number
+  naturalWidth: number
+  naturalHeight: number
   assignedSrc = ''
   private readonly fail: boolean
 
-  constructor(width: number, fail = false) {
+  constructor(width: number, height = width, fail = false) {
     this.width = width
+    this.height = height
+    this.naturalWidth = width
+    this.naturalHeight = height
     this.fail = fail
   }
 
@@ -59,16 +67,16 @@ describe('textureAssetUrl', () => {
   })
 })
 
-describe('probeTextureWidth', () => {
-  it('loads the image anonymously and resolves its exact width', async () => {
+describe('probeTextureDimensions', () => {
+  it('loads the image anonymously and resolves its exact natural dimensions', async () => {
     const image = new FakeImage(64)
 
     await expect(
-      probeTextureWidth('skin-hash', {
+      probeTextureDimensions('skin-hash', {
         baseUrl: '/',
         createImage: imageFactory([image]),
       }),
-    ).resolves.toBe(64)
+    ).resolves.toEqual({ width: 64, height: 64 })
 
     expect(image.crossOrigin).toBe('anonymous')
     expect(image.src).toBe('/static/textures/skin-hash.png')
@@ -76,7 +84,7 @@ describe('probeTextureWidth', () => {
 
   it('resolves null and does not allocate an image for missing hashes', async () => {
     await expect(
-      probeTextureWidth('', {
+      probeTextureDimensions('', {
         baseUrl: '/',
         createImage: imageFactory([]),
       }),
@@ -84,10 +92,10 @@ describe('probeTextureWidth', () => {
   })
 
   it('resolves null when the image cannot be loaded', async () => {
-    const image = new FakeImage(64, true)
+    const image = new FakeImage(64, 64, true)
 
     await expect(
-      probeTextureWidth('broken', {
+      probeTextureDimensions('broken', {
         baseUrl: '/',
         createImage: imageFactory([image]),
       }),
@@ -97,17 +105,26 @@ describe('probeTextureWidth', () => {
   })
 })
 
-describe('texture width cache', () => {
-  it('returns a cached width without allocating another image', async () => {
-    const cache = new Map([['skin-hash', 128]])
+describe('texture dimensions cache', () => {
+  it('returns cached dimensions without allocating another image', async () => {
+    const cache = new Map([['skin-hash', { width: 128, height: 64 }]])
 
     await expect(
-      cacheTextureWidth('skin-hash', cache, {
+      cacheTextureDimensions('skin-hash', cache, {
         baseUrl: '/',
         createImage: imageFactory([]),
       }),
-    ).resolves.toBe(128)
+    ).resolves.toEqual({ width: 128, height: 64 })
 
-    expect(Array.from(cache.entries())).toEqual([['skin-hash', 128]])
+    expect(Array.from(cache.entries())).toEqual([['skin-hash', { width: 128, height: 64 }]])
   })
+})
+
+describe('texture precision', () => {
+  it.each(texturePrecisionCases)(
+    '$type $width×$height has scale $scale',
+    ({ type, width, height, scale }) => {
+      expect(texturePrecision(type, { width, height })).toBe(scale)
+    },
+  )
 })

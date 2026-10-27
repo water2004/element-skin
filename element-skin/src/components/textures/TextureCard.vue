@@ -21,6 +21,9 @@
         :height="280"
         is-static
       />
+      <div class="absolute right-2 top-2">
+        <TextureResolutionTag :hash="texture.hash" :type="texture.type" non-standard-only />
+      </div>
     </template>
     <template #info
       ><slot name="info" :texture="texture"
@@ -34,6 +37,7 @@ import SkinViewer from '@/components/SkinViewer.vue'
 import CapeViewer from '@/components/CapeViewer.vue'
 import PreviewCard from '@/components/common/PreviewCard.vue'
 import TextureModelTag from '@/components/textures/TextureModelTag.vue'
+import TextureResolutionTag from '@/components/textures/TextureResolutionTag.vue'
 import type { Texture } from '@/api/types'
 defineProps<{
   texture: Texture

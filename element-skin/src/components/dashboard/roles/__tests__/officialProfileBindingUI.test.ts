@@ -41,11 +41,7 @@ describe('official profile binding UI', () => {
     const mounted = mountComponent(ProfileCard, {
       profile,
       delayIndex: 0,
-      isDark: false,
       texturesUrl: (hash: string | null | undefined) => `/textures/${hash || ''}`,
-      officialBinding: binding,
-      canDelete: true,
-      canClearTexture: false,
     })
     await flushUI()
 

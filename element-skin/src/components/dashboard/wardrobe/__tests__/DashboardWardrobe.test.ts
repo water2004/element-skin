@@ -20,8 +20,9 @@ const profileApiMocks = vi.hoisted(() => ({
 
 vi.mock('@/api/textures', () => textureApiMocks)
 vi.mock('@/api/profiles', () => profileApiMocks)
-vi.mock('@/components/textures/textureAssets', () => ({
-  cacheTextureWidth: vi.fn().mockResolvedValue(64),
+vi.mock('@/components/textures/textureAssets', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/textures/textureAssets')>()),
+  cacheTextureDimensions: vi.fn().mockResolvedValue({ width: 64, height: 64 }),
   textureAssetUrl: vi.fn((hash: string) => `/static/textures/${hash}.png`),
 }))
 vi.mock('@/components/common/CursorPager.vue', () => ({

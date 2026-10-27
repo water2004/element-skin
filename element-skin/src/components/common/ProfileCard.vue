@@ -14,6 +14,7 @@
         is-static
     /></template>
     <template v-if="admin" #info><ViewerIdentity :name="profile.owner_display_name" /></template>
+    <template v-if="$slots.actions" #actions><slot name="actions" /></template>
   </PreviewCard>
 </template>
 <script setup lang="ts">
