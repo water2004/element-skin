@@ -7,7 +7,13 @@
           <p>管理并应用您的皮肤与披风纹理</p>
         </div>
       </div>
-      <UiButton @click="showUploadDialog = true" size="large" variant="primary" :icon="Upload">
+      <UiButton
+        v-if="canUpload"
+        @click="showUploadDialog = true"
+        size="large"
+        variant="primary"
+        :icon="Upload"
+      >
         上传纹理
       </UiButton>
     </div>
@@ -57,6 +63,10 @@
       v-model:profile-id="applyForm.profile_id"
       :is-loading="isDetailLoading"
       :is-applying="isApplying"
+      :can-edit-metadata="canEditMetadata"
+      :can-edit-visibility="canEditVisibility"
+      :can-apply="canApply"
+      :can-delete="canDelete"
       :profiles="userProfiles"
       :resolution="selectedTexture ? textureResolutions.get(selectedTexture.hash) : undefined"
       :textures-url="texturesUrl"
@@ -82,7 +92,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, inject } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'
 import type { Ref } from 'vue'
@@ -115,11 +125,21 @@ import type { Profile, Texture } from '@/api/types'
 import { useSessionStore } from '@/stores/session'
 import { getErrorMessage } from '@/utils/error'
 
-const { fetchMe } = useSessionStore()
+const session = useSessionStore()
+const { fetchMe } = session
+const permissions = computed(() => new Set(session.user?.permissions || []))
+const canUpload = computed(() => permissions.value.has('texture.create.owned'))
+const canEditMetadata = computed(() => permissions.value.has('texture.update_metadata.owned'))
+const canEditVisibility = computed(() => permissions.value.has('texture.update_visibility.owned'))
+const canDelete = computed(() => permissions.value.has('texture.delete.owned'))
+const canApply = computed(
+  () => permissions.value.has('texture.apply.owned') && permissions.value.has('profile.read.owned'),
+)
 const isDark = inject<Ref<boolean>>('isDark', ref(false))
 
 const userProfiles = ref<Profile[]>([])
 const fetchUserProfiles = async () => {
+  if (!canApply.value) return
   try {
     // Fetch all profiles for the dropdown (use a large limit if needed, or implement search)
     const res = await getProfiles({ limit: 100 })
@@ -170,6 +190,7 @@ async function openDetailDialog(tex: Texture) {
 }
 
 async function updateNote() {
+  if (!canEditMetadata.value) return
   if (!selectedTexture.value || isDetailLoading.value) return
   const tex = selectedTexture.value
   const updated = editingNoteValue.value.trim()
@@ -187,6 +208,7 @@ async function updateNote() {
 }
 
 async function updateModel(val: string | number | boolean | null | undefined) {
+  if (!canEditMetadata.value) return
   if (!selectedTexture.value || isDetailLoading.value) return
   const tex = selectedTexture.value
   try {
@@ -201,6 +223,7 @@ async function updateModel(val: string | number | boolean | null | undefined) {
 }
 
 async function updateIsPublic(val: string | number | boolean) {
+  if (!canEditVisibility.value) return
   if (!selectedTexture.value || isDetailLoading.value) return
   const tex = selectedTexture.value
   const isPublic = val === 1 || val === true
@@ -299,6 +322,7 @@ watch(showUploadDialog, (isOpen) => {
 })
 
 async function doUpload() {
+  if (!canUpload.value) return
   if (uploading.value) return
   const file = uploadForm.value.file
   if (!file) return ElMessage.error('请选择文件')
@@ -327,25 +351,33 @@ async function doUpload() {
 }
 
 async function confirmDelete() {
-  if (!selectedTexture.value) return
+  if (!selectedTexture.value || !canDelete.value) return
+  const target = selectedTexture.value
   try {
-    await ElMessageBox.confirm('确定要从衣柜中删除此纹理吗？此操作不可撤销。', '警告', {
-      confirmButtonText: '确定删除',
-      cancelButtonText: '取消',
-      type: 'warning',
-      confirmButtonClass: 'el-button--danger',
-    })
+    await ElMessageBox.confirm(
+      '当前删除规则：若你是皮肤库记录的原上传者，将删除该库条目及所有用户对应的衣柜记录；否则只移除你自己的衣柜记录。角色绑定、头像和材质文件会保留。当前页面无法确认原上传者身份，请确认可能的影响后再继续。',
+      '删除纹理',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+        confirmButtonClass: 'el-button--danger',
+        distinguishCancelAndClose: true,
+      },
+    )
 
-    await deleteTexture(selectedTexture.value.hash, selectedTexture.value.type)
+    if (!canDelete.value) return
+    await deleteTexture(target.hash, target.type)
     ElMessage.success('已删除')
     showDetailDialog.value = false
     await refreshFirstPage()
   } catch (e) {
-    if (e !== 'cancel') ElMessage.error('删除失败')
+    if (e !== 'cancel' && e !== 'close') ElMessage.error('删除失败')
   }
 }
 
 async function doApply() {
+  if (!canApply.value) return
   if (!applyForm.value.profile_id) return ElMessage.error('请选择角色')
   isApplying.value = true
   try {

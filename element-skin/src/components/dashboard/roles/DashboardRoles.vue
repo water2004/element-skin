@@ -20,6 +20,7 @@
           绑定正版
         </UiButton>
         <UiButton
+          v-if="canCreateRole"
           size="large"
           @click="showYggImportDialog = true"
           variant="secondary"
@@ -30,6 +31,7 @@
           导入皮肤站角色
         </UiButton>
         <UiButton
+          v-if="canCreateRole"
           size="large"
           @click="showCreateRoleDialog = true"
           variant="primary"
@@ -55,6 +57,8 @@
           :is-dark="isDark"
           :textures-url="texturesUrl"
           :official-binding="officialBindingFor(profile.id)"
+          :can-delete="canDeleteRole"
+          :can-clear-texture="canClearTexture"
           @preview="openPreviewDialog"
           @delete="deleteRole"
           @clear-skin="clearRoleSkin"
@@ -82,6 +86,10 @@
       v-model:visible="showPreviewDialog"
       :profile="selectedProfile"
       :textures-url="texturesUrl"
+      :can-rename="canRenameRole"
+      :can-set-avatar="canSetAvatar"
+      :can-clear-texture="canClearTexture"
+      :can-delete="canDeleteRole"
       :official-binding="selectedProfile ? officialBindingFor(selectedProfile.id) : null"
       :can-sync-official-binding="canSyncOfficialBinding"
       :can-delete-official-binding="canDeleteOfficialBinding"
@@ -191,6 +199,11 @@ const showOfficialBindingDialog = ref(false)
 const bindingLoading = ref(false)
 
 const permissionSet = computed(() => new Set(user.value?.permissions || []))
+const canCreateRole = computed(() => permissionSet.value.has('profile.create.owned'))
+const canRenameRole = computed(() => permissionSet.value.has('profile.update.owned'))
+const canDeleteRole = computed(() => permissionSet.value.has('profile.delete.owned'))
+const canClearTexture = computed(() => permissionSet.value.has('texture.clear.owned'))
+const canSetAvatar = computed(() => permissionSet.value.has('account.update.self'))
 const canCreateOfficialBinding = computed(
   () =>
     permissionSet.value.has('official_profile.create.owned') &&
@@ -232,6 +245,7 @@ function officialBindingFor(profileId: string) {
 }
 
 function openOfficialBindingDialog() {
+  if (!canCreateOfficialBinding.value) return
   showOfficialBindingDialog.value = true
 }
 
@@ -258,6 +272,7 @@ async function fetchOfficialResources() {
 }
 
 async function bindOfficialProfile(payload: { identity_id: string }) {
+  if (!canCreateOfficialBinding.value) return
   if (bindingLoading.value) return
   try {
     bindingLoading.value = true
@@ -279,12 +294,14 @@ async function bindOfficialProfile(payload: { identity_id: string }) {
 }
 
 async function syncOfficialBinding(binding: OfficialProfileBinding) {
+  if (!canSyncOfficialBinding.value) return
   try {
     await ElMessageBox.confirm(
       `将用远端正版角色 ${binding.remote_name} 覆盖本站角色的名称、皮肤和披风，是否继续？`,
       '同步正版角色',
       { type: 'warning', confirmButtonText: '开始同步', cancelButtonText: '取消' },
     )
+    if (!canSyncOfficialBinding.value) return
     const response = await syncOfficialProfileBinding(binding.id)
     if (selectedProfile.value?.id === response.data.profile.id) {
       selectedProfile.value = response.data.profile
@@ -305,12 +322,14 @@ async function syncOfficialBinding(binding: OfficialProfileBinding) {
 }
 
 async function unbindOfficialBinding(binding: OfficialProfileBinding) {
+  if (!canDeleteOfficialBinding.value) return
   try {
     await ElMessageBox.confirm('解除绑定不会删除本站角色、皮肤或外部身份。', '解除正版绑定', {
       type: 'warning',
       confirmButtonText: '解除绑定',
       cancelButtonText: '取消',
     })
+    if (!canDeleteOfficialBinding.value) return
     await deleteOfficialProfileBinding(binding.id)
     ElMessage.success('已解除正版绑定')
     await fetchOfficialResources()
@@ -369,6 +388,7 @@ async function refreshFirstPage() {
 }
 
 async function createRole() {
+  if (!canCreateRole.value) return
   if (creatingRole.value) return
   const name = (newRoleName.value || '').trim()
   if (!name) return ElMessage.error('请输入角色名称')
@@ -388,12 +408,18 @@ async function createRole() {
 }
 
 async function deleteRole(pid: string) {
+  if (!canDeleteRole.value) return
   try {
-    await ElMessageBox.confirm('真的要删除吗？你将永久丢失此角色（真的很久）！', '删除角色', {
-      type: 'error',
-      confirmButtonText: '确认删除',
-      cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      '确定删除此角色？角色记录将永久删除，衣柜中的材质仍会保留。',
+      '删除角色',
+      {
+        type: 'error',
+        confirmButtonText: '确认删除',
+        cancelButtonText: '取消',
+      },
+    )
+    if (!canDeleteRole.value) return
     await deleteProfile(pid)
     ElMessage.success('已删除')
     showPreviewDialog.value = false
@@ -407,6 +433,7 @@ async function deleteRole(pid: string) {
 }
 
 async function updateRoleName(name: string) {
+  if (!canRenameRole.value) return
   if (!selectedProfile.value) return
   const pid = selectedProfile.value.id
   const newName = (name || '').trim()
@@ -428,12 +455,18 @@ async function updateRoleName(name: string) {
 }
 
 async function clearRoleSkin(pid: string) {
+  if (!canClearTexture.value) return
   try {
-    await ElMessageBox.confirm('确定要清除该角色的皮肤吗？此操作不可撤销。', '确认清除', {
-      type: 'warning',
-      confirmButtonText: '确认清除',
-      cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      '确定清除该角色的皮肤绑定？此操作只解除绑定，不删除衣柜或皮肤库中的材质。',
+      '清除皮肤',
+      {
+        type: 'warning',
+        confirmButtonText: '确认清除',
+        cancelButtonText: '取消',
+      },
+    )
+    if (!canClearTexture.value) return
     await clearProfileSkin(pid)
     ElMessage.success('皮肤已清除')
     showPreviewDialog.value = false
@@ -447,12 +480,18 @@ async function clearRoleSkin(pid: string) {
 }
 
 async function clearRoleCape(pid: string) {
+  if (!canClearTexture.value) return
   try {
-    await ElMessageBox.confirm('确定要清除该角色的披风吗？此操作不可撤销。', '确认清除', {
-      type: 'warning',
-      confirmButtonText: '确认清除',
-      cancelButtonText: '取消',
-    })
+    await ElMessageBox.confirm(
+      '确定清除该角色的披风绑定？此操作只解除绑定，不删除衣柜或皮肤库中的材质。',
+      '清除披风',
+      {
+        type: 'warning',
+        confirmButtonText: '确认清除',
+        cancelButtonText: '取消',
+      },
+    )
+    if (!canClearTexture.value) return
     await clearProfileCape(pid)
     ElMessage.success('披风已清除')
     showPreviewDialog.value = false
@@ -466,6 +505,7 @@ async function clearRoleCape(pid: string) {
 }
 
 async function setAsAvatar(profile: Profile) {
+  if (!canSetAvatar.value) return
   if (!profile.skin_hash) return
 
   const loadingMsg = ElMessage({

@@ -16,12 +16,16 @@
       <div class="flex min-h-0 flex-1 flex-col">
         <section class="border-b border-[var(--color-border)] py-3.5">
           <el-input
+            v-if="canUpdate"
             v-model="name"
             placeholder="角色名称"
             :disabled="!!clearingTexture"
             @blur="$emit('rename')"
             @keyup.enter="$emit('rename')"
           />
+          <h2 v-else class="m-0 break-all text-2xl font-bold text-[var(--color-heading)]">
+            {{ profile.name }}
+          </h2>
         </section>
 
         <section class="border-b border-[var(--color-border)] py-3.5">
@@ -41,6 +45,7 @@
               <span v-else>未绑定</span>
             </div>
             <UiButton
+              v-if="canUpdate"
               variant="secondary"
               tone="warning"
               :disabled="!profile.skin_hash || !!clearingTexture"
@@ -70,6 +75,7 @@
               <span v-else>未绑定</span>
             </div>
             <UiButton
+              v-if="canUpdate"
               variant="secondary"
               tone="warning"
               :disabled="!profile.cape_hash || !!clearingTexture"
@@ -82,7 +88,7 @@
           </div>
         </section>
 
-        <section class="mt-auto py-3.5">
+        <section v-if="canDelete" class="mt-auto py-3.5">
           <el-button
             type="danger"
             plain
@@ -112,6 +118,8 @@ defineProps<{
   profile: Profile | null
   texturesUrl: (hash: string | null | undefined) => string
   clearingTexture: 'skin' | 'cape' | null
+  canUpdate: boolean
+  canDelete: boolean
 }>()
 
 defineEmits<{

@@ -8,10 +8,18 @@
       <div v-loading="isLoading" class="flex min-h-0 flex-1 flex-col">
         <section class="border-b border-[var(--color-border)] py-3.5">
           <div class="flex items-center gap-2 pr-12">
-            <el-button text circle class="title-action-button" @click="focusNoteInput">
+            <el-button
+              v-if="canEditMetadata"
+              text
+              circle
+              class="title-action-button"
+              aria-label="修改材质备注"
+              @click="focusNoteInput"
+            >
               <el-icon><Edit /></el-icon>
             </el-button>
             <el-input
+              v-if="canEditMetadata"
               ref="noteInputRef"
               v-model="note"
               placeholder="未命名纹理"
@@ -19,6 +27,9 @@
               @blur="emit('updateNote')"
               @keyup.enter="emit('updateNote')"
             />
+            <h2 v-else class="m-0 break-all text-2xl font-bold text-[var(--color-heading)]">
+              {{ texture.note || '未命名纹理' }}
+            </h2>
           </div>
         </section>
 
@@ -42,15 +53,17 @@
           <div
             class="mb-2.5 text-xs font-bold uppercase tracking-[0.5px] text-[var(--color-text-light)]"
           >
-            模型选择
+            {{ canEditMetadata ? '模型选择' : '模型' }}
           </div>
           <UiSegmented
+            v-if="canEditMetadata"
             :model-value="texture.model"
             @update:model-value="emit('updateModel', $event)"
           >
             <el-radio-button value="default">Default</el-radio-button>
             <el-radio-button value="slim">Slim</el-radio-button>
           </UiSegmented>
+          <span v-else>{{ texture.model === 'slim' ? 'Slim' : 'Default' }}</span>
         </section>
 
         <section
@@ -64,6 +77,7 @@
           </div>
           <div class="flex items-center gap-3">
             <el-switch
+              v-if="canEditVisibility"
               :model-value="texture.is_public"
               :active-value="1"
               :inactive-value="0"
@@ -77,7 +91,7 @@
           </div>
         </section>
 
-        <section class="border-b border-[var(--color-border)] py-3.5">
+        <section v-if="canApply" class="border-b border-[var(--color-border)] py-3.5">
           <div
             class="mb-2.5 text-xs font-bold uppercase tracking-[0.5px] text-[var(--color-text-light)]"
           >
@@ -98,7 +112,7 @@
           </div>
         </section>
 
-        <section class="mt-auto border-b-0 py-3.5 pb-0">
+        <section v-if="canDelete" class="mt-auto border-b-0 py-3.5 pb-0">
           <el-button type="danger" plain class="w-full rounded-lg" @click="emit('delete')">
             删除纹理
           </el-button>
@@ -126,6 +140,10 @@ const profileId = defineModel<string>('profileId', { required: true })
 defineProps<{
   isLoading: boolean
   isApplying: boolean
+  canEditMetadata: boolean
+  canEditVisibility: boolean
+  canApply: boolean
+  canDelete: boolean
   profiles: Profile[]
   resolution?: number
   texturesUrl: (hash: string | null | undefined) => string

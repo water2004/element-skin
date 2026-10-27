@@ -1,5 +1,11 @@
 import type { HomepageMedia, Profile } from '@/api/types'
 
+export const dialogFlowPermissions = [
+  'profile.create.owned',
+  'profile.update.any',
+  'texture.create.owned',
+]
+
 export const emailPolicyResponse = {
   data: { email_suffix_policy: { mode: 'disabled', suffixes: [] } },
 } as const

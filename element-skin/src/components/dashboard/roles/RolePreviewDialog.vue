@@ -16,16 +16,27 @@
       <div class="flex min-h-0 flex-1 flex-col">
         <section class="border-b border-[var(--color-border)] py-3.5">
           <div class="flex items-center gap-2 pr-12">
-            <el-button text circle class="title-action-button" @click="focusNameInput">
+            <el-button
+              v-if="canRename"
+              text
+              circle
+              class="title-action-button"
+              aria-label="修改角色名称"
+              @click="focusNameInput"
+            >
               <el-icon><Edit /></el-icon>
             </el-button>
             <el-input
+              v-if="canRename"
               ref="nameInputRef"
               v-model="localName"
               class="title-input-field"
               placeholder="角色名称"
               @change="$emit('rename', localName)"
             />
+            <h2 v-else class="m-0 break-all text-2xl font-bold text-[var(--color-heading)]">
+              {{ profile.name }}
+            </h2>
           </div>
         </section>
 
@@ -108,7 +119,10 @@
 
         <section
           class="border-b border-[var(--color-border)] py-3.5"
-          v-if="profile.skin_hash || profile.cape_hash"
+          v-if="
+            (canSetAvatar && profile.skin_hash) ||
+            (canClearTexture && (profile.skin_hash || profile.cape_hash))
+          "
         >
           <div
             class="mb-2.5 text-xs font-bold uppercase tracking-[0.5px] text-[var(--color-text-light)]"
@@ -117,7 +131,7 @@
           </div>
           <ActionBar full>
             <el-button
-              v-if="profile.skin_hash"
+              v-if="canSetAvatar && profile.skin_hash"
               type="primary"
               plain
               class="flex-1 rounded-lg"
@@ -126,7 +140,7 @@
               用作头像
             </el-button>
             <el-button
-              v-if="profile.skin_hash"
+              v-if="canClearTexture && profile.skin_hash"
               type="warning"
               plain
               class="flex-1 rounded-lg"
@@ -135,7 +149,7 @@
               清除皮肤
             </el-button>
             <el-button
-              v-if="profile.cape_hash"
+              v-if="canClearTexture && profile.cape_hash"
               type="warning"
               plain
               class="flex-1 rounded-lg"
@@ -146,7 +160,7 @@
           </ActionBar>
         </section>
 
-        <section class="mt-auto py-3.5">
+        <section v-if="canDelete" class="mt-auto py-3.5">
           <el-button
             type="danger"
             plain
@@ -177,6 +191,10 @@ const props = defineProps<{
   profile: Profile | null
   texturesUrl: (hash: string | null | undefined) => string
   officialBinding?: OfficialProfileBinding | null
+  canRename: boolean
+  canSetAvatar: boolean
+  canClearTexture: boolean
+  canDelete: boolean
   canSyncOfficialBinding: boolean
   canDeleteOfficialBinding: boolean
 }>()

@@ -85,10 +85,10 @@
             </template>
             <template #actions="{ texture }">
               <UiButton
+                v-if="canAddToWardrobe"
                 variant="primary"
                 :icon="Plus"
                 @click="addToWardrobe(texture)"
-                :disabled="!isLogged"
               >
                 添加到衣柜
               </UiButton>
@@ -154,20 +154,20 @@
 
               <section class="mt-auto border-b-0 py-3.5">
                 <UiButton
+                  v-if="canAddToWardrobe"
                   size="large"
                   variant="primary"
                   :icon="Plus"
                   class="w-full rounded-[12px] h-12"
                   @click="addToWardrobe(selectedItem)"
-                  :disabled="!isLogged"
                 >
                   添加到我的衣柜
                 </UiButton>
                 <p
-                  v-if="!isLogged"
+                  v-if="!canAddToWardrobe"
                   class="text-center text-[13px] text-[var(--el-text-color-secondary)] mt-3"
                 >
-                  登录后即可收藏此纹理
+                  {{ isLogged ? '当前账号没有添加到衣柜的权限' : '登录后可按账号权限收藏此纹理' }}
                 </p>
               </section>
             </div>
@@ -220,6 +220,9 @@ import { getErrorMessage, getErrorStatus } from '@/utils/error'
 const isDark = inject<Ref<boolean>>('isDark', ref(false))
 const { user } = storeToRefs(useSessionStore())
 const isLogged = computed(() => !!user.value)
+const canAddToWardrobe = computed(() =>
+  user.value?.permissions?.includes('wardrobe_entry.add.owned'),
+)
 
 const items = ref<Texture[]>([])
 const pagination = useCursorPagination<Texture>(20)
@@ -336,6 +339,7 @@ async function handlePageSizeChange(value: number) {
 }
 
 async function addToWardrobe(item: Texture) {
+  if (!canAddToWardrobe.value) return
   try {
     await apiAddToWardrobe(item.hash, item.type)
     ElMessage.success('已成功添加到我的衣柜')

@@ -4,6 +4,7 @@ import { createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Texture } from '@/api/types'
 import DashboardWardrobe from '../DashboardWardrobe.vue'
+import { useSessionStore } from '@/stores/session'
 
 const textureApiMocks = vi.hoisted(() => ({
   applyTexture: vi.fn(),
@@ -130,7 +131,13 @@ describe('DashboardWardrobe texture visibility', () => {
     const host = document.createElement('div')
     document.body.appendChild(host)
     const app = createApp({ render: () => h(DashboardWardrobe) })
-    app.use(createPinia())
+    const pinia = createPinia()
+    app.use(pinia)
+    useSessionStore(pinia).user = {
+      id: 'user-a',
+      email: 'user@example.com',
+      permissions: ['texture.read.owned', 'texture.update_visibility.owned'],
+    }
     app.use(ElementPlus)
     app.mount(host)
     await flushUI()
@@ -303,7 +310,13 @@ describe('DashboardWardrobe texture visibility', () => {
 
 interface WardrobeSetupState {
   showUploadDialog: boolean
-  uploadForm: { file: File | null; texture_type: string; model: string; note: string; is_public: boolean }
+  uploadForm: {
+    file: File | null
+    texture_type: string
+    model: string
+    note: string
+    is_public: boolean
+  }
   previewUrl: string | null
   handleFileChange: (file: { raw: File }) => void
   handleFileRemove: () => void
@@ -322,7 +335,13 @@ function mountWardrobe() {
   const host = document.createElement('div')
   document.body.appendChild(host)
   const app = createApp(DashboardWardrobe)
-  app.use(createPinia())
+  const pinia = createPinia()
+  app.use(pinia)
+  useSessionStore(pinia).user = {
+    id: 'user-a',
+    email: 'user@example.com',
+    permissions: ['texture.read.owned', 'texture.create.owned'],
+  }
   app.use(ElementPlus)
   app.mount(host)
   return {

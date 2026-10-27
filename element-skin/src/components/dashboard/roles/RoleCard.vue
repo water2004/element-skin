@@ -37,8 +37,12 @@
         <div class="role-model">模型: {{ profile.model || 'default' }}</div>
       </div>
 
-      <CardActions label="角色操作">
+      <CardActions
+        v-if="canDelete || (canClearTexture && (profile.skin_hash || profile.cape_hash))"
+        label="角色操作"
+      >
         <UiButton
+          v-if="canDelete"
           variant="secondary"
           tone="danger"
           :icon="Delete"
@@ -49,7 +53,7 @@
         </UiButton>
 
         <UiButton
-          v-if="profile.skin_hash"
+          v-if="canClearTexture && profile.skin_hash"
           variant="tertiary"
           tone="warning"
           size="default"
@@ -59,7 +63,7 @@
         </UiButton>
 
         <UiButton
-          v-if="profile.cape_hash"
+          v-if="canClearTexture && profile.cape_hash"
           variant="tertiary"
           tone="warning"
           size="default"
@@ -85,6 +89,8 @@ defineProps<{
   isDark: boolean
   texturesUrl: (hash: string | null | undefined) => string
   officialBinding?: OfficialProfileBinding | null
+  canDelete: boolean
+  canClearTexture: boolean
 }>()
 
 defineEmits<{

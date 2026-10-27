@@ -1,4 +1,5 @@
 import { createApp, h, nextTick, ref } from 'vue'
+import { createPinia } from 'pinia'
 import ElementPlus, { ElButton, ElMessage } from 'element-plus'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { installMotionStyles, motionCss } from '@/__tests__/helpers/motionStyles'
@@ -33,7 +34,7 @@ async function mountTextures(dark = false) {
   const host = document.createElement('div')
   document.body.append(host)
   const app = createApp(AdminTexturesList)
-  app.provide('isDark', ref(dark)).use(ElementPlus).mount(host)
+  app.provide('isDark', ref(dark)).use(createPinia()).use(ElementPlus).mount(host)
   cleanup.push(() => {
     app.unmount()
     host.remove()
@@ -115,7 +116,7 @@ describe('shared motion contracts', () => {
       const host = document.createElement('div')
       document.body.append(host)
       const app = createApp(AdminRolesList)
-      app.use(ElementPlus).mount(host)
+      app.use(createPinia()).use(ElementPlus).mount(host)
       cleanup.push(() => {
         app.unmount()
         host.remove()

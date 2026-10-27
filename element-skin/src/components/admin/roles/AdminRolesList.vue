@@ -59,6 +59,8 @@
       :profile="selectedProfile"
       :textures-url="texturesUrl"
       :clearing-texture="clearingTexture"
+      :can-update="canUpdate"
+      :can-delete="canDelete"
       @rename="updateProfileName"
       @clear-skin="clearProfileTexture('skin')"
       @clear-cape="clearProfileTexture('cape')"
@@ -68,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue'
+import { computed, ref, onMounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, UserFilled } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
@@ -87,8 +89,12 @@ import {
 import PageHeader from '@/components/common/PageHeader.vue'
 import type { Profile } from '@/api/types'
 import { getErrorStatus } from '@/utils/error'
+import { useSessionStore } from '@/stores/session'
 
 const isDark = inject('isDark', ref(false))
+const session = useSessionStore()
+const canUpdate = computed(() => session.user?.permissions?.includes('profile.update.any') ?? false)
+const canDelete = computed(() => session.user?.permissions?.includes('profile.delete.any') ?? false)
 
 const profiles = ref<Profile[]>([])
 const profilesPagination = useCursorPagination<Profile>(20)
@@ -174,6 +180,7 @@ function openPreview(profile: Profile) {
 }
 
 async function updateProfileName() {
+  if (!canUpdate.value) return
   if (!selectedProfile.value) return
   const newName = previewName.value.trim()
   if (!newName) {
@@ -199,6 +206,7 @@ async function updateProfileName() {
 }
 
 async function clearProfileTexture(type: 'skin' | 'cape') {
+  if (!canUpdate.value) return
   const target = selectedProfile.value
   const field = type === 'skin' ? 'skin_hash' : 'cape_hash'
   if (!target?.[field] || clearingTexture.value) return
@@ -222,6 +230,7 @@ async function clearProfileTexture(type: 'skin' | 'cape') {
       return
     }
     try {
+      if (!canUpdate.value) return
       const patch = type === 'skin' ? patchProfileSkin : patchProfileCape
       await patch(id, { hash: null })
       if (selectedProfile.value?.id === id) selectedProfile.value[field] = null
@@ -238,14 +247,20 @@ async function clearProfileTexture(type: 'skin' | 'cape') {
 }
 
 async function confirmDeleteRole() {
-  if (!selectedProfile.value) return
+  if (!selectedProfile.value || !canDelete.value) return
+  const target = selectedProfile.value
   try {
-    await ElMessageBox.confirm('确定删除此角色？此操作不可撤销。', '确认删除', {
-      type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
-    })
-    await deleteAdminProfile(selectedProfile.value.id)
+    await ElMessageBox.confirm(
+      `确定删除角色「${target.name}」？角色记录将永久删除，该用户衣柜中的材质仍会保留。`,
+      '删除角色',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+      },
+    )
+    if (!canDelete.value) return
+    await deleteAdminProfile(target.id)
     ElMessage.success('角色已删除')
     showPreview.value = false
     await refreshFromFirst()

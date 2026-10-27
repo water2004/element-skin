@@ -36,8 +36,8 @@
       </div>
 
       <CardActions>
-        <UiButton variant="primary" :icon="Edit" @click="$emit('preview', profile)">
-          编辑
+        <UiButton variant="primary" :icon="View" @click="$emit('preview', profile)">
+          查看详情
         </UiButton>
       </CardActions>
     </div>
@@ -45,7 +45,7 @@
 </template>
 
 <script setup lang="ts">
-import { Edit } from '@element-plus/icons-vue'
+import { View } from '@element-plus/icons-vue'
 import type { Profile } from '@/api/types'
 import SkinViewer from '@/components/SkinViewer.vue'
 import CardActions from '@/components/common/CardActions.vue'

@@ -44,6 +44,8 @@ describe('official profile binding UI', () => {
       isDark: false,
       texturesUrl: (hash: string | null | undefined) => `/textures/${hash || ''}`,
       officialBinding: binding,
+      canDelete: true,
+      canClearTexture: false,
     })
     await flushUI()
 
@@ -65,6 +67,10 @@ describe('official profile binding UI', () => {
       officialBinding: binding,
       canSyncOfficialBinding: true,
       canDeleteOfficialBinding: true,
+      canRename: false,
+      canSetAvatar: false,
+      canClearTexture: false,
+      canDelete: false,
       'onUpdate:visible': () => undefined,
       onSyncOfficial: (item: OfficialProfileBinding) => synced.push(item),
       onUnbindOfficial: (item: OfficialProfileBinding) => unbound.push(item),

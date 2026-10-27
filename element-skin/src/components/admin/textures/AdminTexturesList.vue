@@ -77,7 +77,9 @@
             </div>
           </template>
           <template #actions="{ texture }">
-            <UiButton variant="primary" :icon="Edit" @click="openPreview(texture)">编辑</UiButton>
+            <UiButton variant="primary" :icon="View" @click="openPreview(texture)"
+              >查看详情</UiButton
+            >
           </template>
         </TextureCard>
       </div>
@@ -107,8 +109,22 @@
         <div class="flex min-h-0 flex-1 flex-col">
           <!-- name (editable) -->
           <section class="border-b border-[var(--color-border)] py-3.5">
-            <el-input v-model="previewNote" placeholder="未命名纹理" @blur="updatePreviewNote" />
+            <el-input
+              v-if="canEditMetadata"
+              v-model="previewNote"
+              placeholder="未命名纹理"
+              @blur="updatePreviewNote"
+            />
+            <h2 v-else class="m-0 break-all text-2xl font-bold text-[var(--color-heading)]">
+              {{ selectedItem.name || '未命名纹理' }}
+            </h2>
           </section>
+          <p
+            v-if="canEditMetadata || canEditVisibility"
+            class="text-sm text-[var(--color-text-light)]"
+          >
+            管理修改立即生效：名称与模型会同步到所有用户对应的衣柜记录，模型也会同步到使用此皮肤的角色；公开状态会同步到皮肤库条目和上传记录，已收藏的记录仍保留收藏状态。
+          </p>
           <!-- hash (readonly) -->
           <section class="border-b border-[var(--color-border)] py-3.5">
             <span
@@ -143,12 +159,17 @@
             <div
               class="mb-2.5 text-xs font-bold uppercase tracking-[0.5px] text-[var(--color-text-light)]"
             >
-              模型选择
+              {{ canEditMetadata ? '模型选择' : '模型' }}
             </div>
-            <UiSegmented :model-value="selectedItem.model" @change="updateModel">
+            <UiSegmented
+              v-if="canEditMetadata"
+              :model-value="selectedItem.model"
+              @change="updateModel"
+            >
               <el-radio-button value="default">Default</el-radio-button>
               <el-radio-button value="slim">Slim</el-radio-button>
             </UiSegmented>
+            <span v-else>{{ selectedItem.model === 'slim' ? 'Slim' : 'Default' }}</span>
           </section>
           <!-- public toggle -->
           <section class="border-b border-[var(--color-border)] py-3.5">
@@ -157,10 +178,15 @@
             >
               公开状态
             </div>
-            <el-switch :model-value="selectedItem.is_public" @change="updateIsPublic" />
+            <el-switch
+              v-if="canEditVisibility"
+              :model-value="selectedItem.is_public"
+              @change="updateIsPublic"
+            />
+            <span v-else>{{ selectedItem.is_public ? '公开' : '私有' }}</span>
           </section>
           <!-- force delete -->
-          <section class="border-b-0 py-3.5">
+          <section v-if="canDelete" class="border-b-0 py-3.5">
             <el-button type="danger" plain @click="confirmForceDelete">强制下架</el-button>
           </section>
         </div>
@@ -170,9 +196,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, inject, onMounted, type Ref } from 'vue'
+import { computed, ref, inject, onMounted, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Picture, Edit } from '@element-plus/icons-vue'
+import { Refresh, Picture, View } from '@element-plus/icons-vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import SearchBar from '@/components/common/SearchBar.vue'
 import TextureCard from '@/components/textures/TextureCard.vue'
@@ -186,10 +212,16 @@ import { useCursorPagination } from '@/composables/useCursorPagination'
 import { getAdminTextures, patchAdminTexture, deleteAdminTexture } from '@/api/admin/textures'
 import type { Texture } from '@/api/types'
 import PageHeader from '@/components/common/PageHeader.vue'
+import { useSessionStore } from '@/stores/session'
 
 type TextureQueryParams = { cursor?: string | null; limit?: number; q?: string; type?: string }
 
 const isDark = inject<Ref<boolean>>('isDark', ref(false))
+const session = useSessionStore()
+const permissions = computed(() => new Set(session.user?.permissions || []))
+const canEditMetadata = computed(() => permissions.value.has('texture.update_metadata.any'))
+const canEditVisibility = computed(() => permissions.value.has('texture.update_visibility.any'))
+const canDelete = computed(() => permissions.value.has('texture.delete.any'))
 
 const textures = ref<Texture[]>([])
 const pagination = useCursorPagination<Texture>(20)
@@ -280,6 +312,7 @@ function openPreview(item: Texture) {
 }
 
 async function updatePreviewNote() {
+  if (!canEditMetadata.value) return
   if (!selectedItem.value) return
   const newName = previewNote.value.trim()
   if (newName === selectedItem.value.name) return
@@ -296,6 +329,7 @@ async function updatePreviewNote() {
 }
 
 async function updateModel(newModel: string | number | boolean | undefined) {
+  if (!canEditMetadata.value) return
   if (!selectedItem.value) return
   try {
     await patchAdminTexture(selectedItem.value.hash, {
@@ -310,6 +344,7 @@ async function updateModel(newModel: string | number | boolean | undefined) {
 }
 
 async function updateIsPublic(newValue: string | number | boolean) {
+  if (!canEditVisibility.value) return
   if (!selectedItem.value) return
   const item = selectedItem.value
 
@@ -330,6 +365,7 @@ async function updateIsPublic(newValue: string | number | boolean) {
   }
 
   try {
+    if (!canEditVisibility.value) return
     await patchAdminTexture(item.hash, { type: item.type, is_public: Boolean(newValue) })
     item.is_public = Boolean(newValue)
     ElMessage.success(newValue ? '材质已公开' : '已取消公开')
@@ -339,14 +375,15 @@ async function updateIsPublic(newValue: string | number | boolean) {
 }
 
 async function confirmForceDelete() {
-  if (!selectedItem.value) return
+  if (!selectedItem.value || !canDelete.value) return
   const item = selectedItem.value
   try {
     await ElMessageBox.confirm(
-      '强制下架将从所有用户的衣柜中移除该材质，并从皮肤库中彻底删除。此操作不可撤销！确定继续？',
+      '强制下架将删除此材质的皮肤库条目及所有用户对应的衣柜记录。已有角色绑定、头像和材质文件会保留，此操作不会停用已应用的材质。确定继续？',
       '危险操作',
-      { confirmButtonText: '确认强制删除', cancelButtonText: '取消', type: 'error' },
+      { confirmButtonText: '确认下架', cancelButtonText: '取消', type: 'warning' },
     )
+    if (!canDelete.value) return
     await deleteAdminTexture(item.hash, { force: true, type: item.type })
     ElMessage.success('材质已强制下架')
     showPreview.value = false

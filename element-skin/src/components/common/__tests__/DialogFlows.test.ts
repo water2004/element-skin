@@ -25,6 +25,7 @@ import {
   expectedMediaPatch,
   uploadFileData,
   siteSettingsGroups,
+  dialogFlowPermissions,
 } from './fixtures/dialogFlows'
 
 const api = vi.hoisted(() => ({
@@ -120,7 +121,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   api.getPublicSettings.mockResolvedValue(structuredClone(emailPolicyResponse))
   api.getMe.mockResolvedValue({
-    data: { id: 'user-a', email: 'user@example.com', permissions: ['profile.create.owned'] },
+    data: { id: 'user-a', email: 'user@example.com', permissions: [...dialogFlowPermissions] },
   })
   api.getProfiles.mockResolvedValue({
     data: { items: [], has_next: false, next_cursor: null, page_size: 20 },
@@ -200,7 +201,7 @@ async function mount(render: () => VNode) {
   useSessionStore(pinia).user = {
     id: 'user-a',
     email: 'user@example.com',
-    permissions: ['profile.create.owned'],
+    permissions: [...dialogFlowPermissions],
   }
   app.mount(host)
   const unmount = () => {
@@ -907,7 +908,7 @@ describe('notice flow drafts', () => {
 describe('role binding confirmations and immediate preview', () => {
   async function openRole() {
     const mounted = await mount(() => h(AdminRolesList))
-    button(mounted.host, '编辑').click()
+    button(mounted.host, '查看详情').click()
     await settle()
     return mounted
   }
@@ -968,7 +969,7 @@ describe('role binding confirmations and immediate preview', () => {
     button(dialog(), '清除披风').click()
     await settle()
     const edits = [...mounted.host.querySelectorAll<HTMLButtonElement>('button')].filter(
-      (element) => element.textContent?.trim() === '编辑',
+      (element) => element.textContent?.trim() === '查看详情',
     )
     edits[1]!.click()
     await settle()
