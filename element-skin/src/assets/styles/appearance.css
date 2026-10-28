@@ -15,6 +15,7 @@
 html {
   background: var(--color-background);
   scrollbar-gutter: stable;
+  scroll-padding-top: calc(var(--layout-header-height, 64px) + var(--space-content-padding, 16px));
 }
 
 /* 首页由 AppShell 保留同宽滚动槽；视口交给 fixed 背景完整绘制。 */

@@ -1,111 +1,117 @@
 <template>
   <div class="app-shell" :class="{ 'is-home-layout': isHome, 'is-auth-layout': isAuthPage }">
-    <el-header class="layout-header-wrap" v-if="!isAuthPage">
-      <div class="layout-header" ref="headerRef">
-        <div ref="headerBrandRef" class="header-brand">
-          <!-- Logo -->
-          <div class="logo" @click="go('/')">{{ siteName }}</div>
+    <div v-if="!isAuthPage" ref="headerSpaceRef" class="layout-header-space">
+      <el-header class="layout-header-wrap">
+        <div class="layout-header" ref="headerRef">
+          <div ref="headerBrandRef" class="header-brand">
+            <!-- Logo -->
+            <div class="logo" @click="go('/')">{{ siteName }}</div>
 
-          <div class="mobile-nav" v-if="authReady && isLogged">
-            <el-button
-              @click="drawer = true"
-              :icon="MenuIcon"
-              text
-              circle
-              class="mobile-menu-btn"
-              aria-label="打开导航菜单"
-            />
+            <div class="mobile-nav" v-if="authReady && isLogged">
+              <el-button
+                @click="drawer = true"
+                :icon="MenuIcon"
+                text
+                circle
+                class="mobile-menu-btn"
+                aria-label="打开导航菜单"
+              />
+            </div>
+          </div>
+
+          <!-- Desktop Navigation -->
+          <div
+            ref="desktopNavRef"
+            class="desktop-nav"
+            :class="{ 'is-hidden': !showDesktopNav }"
+            :aria-hidden="!showDesktopNav"
+          >
+            <el-menu
+              mode="horizontal"
+              :default-active="activeRoute"
+              router
+              :ellipsis="false"
+              :default-openeds="defaultOpeneds"
+            >
+              <template v-for="(item, index) in navLinks" :key="item.path || item.index">
+                <el-sub-menu
+                  v-if="item.type === 'group'"
+                  :index="item.index"
+                  :trigger="item.trigger"
+                  :class="['nav-menu-entry', 'nav-priority-' + (index + 1)]"
+                >
+                  <template #title>
+                    <span>{{ item.title }}</span>
+                  </template>
+                  <el-menu-item
+                    v-for="child in item.children"
+                    :key="child.path"
+                    :index="child.path"
+                  >
+                    <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
+                    <span>{{ child.title }}</span>
+                    <span v-if="shouldShowNotificationBadge(child)" class="notification-nav-dot" />
+                  </el-menu-item>
+                </el-sub-menu>
+                <el-menu-item
+                  v-else
+                  :index="item.path"
+                  :class="['nav-menu-entry', 'nav-priority-' + (index + 1)]"
+                >
+                  <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
+                  <span>{{ item.title }}</span>
+                  <span v-if="shouldShowNotificationBadge(item)" class="notification-nav-dot" />
+                </el-menu-item>
+              </template>
+            </el-menu>
+          </div>
+
+          <div ref="headerActionsRef" class="header-actions" :aria-busy="!authReady">
+            <template v-if="authReady">
+              <el-button
+                v-if="canAccessNotifications"
+                class="notification-toggle"
+                :class="{ 'has-unread': shouldShowNotificationBadge({ path: '/notifications' }) }"
+                :icon="Bell"
+                circle
+                text
+                aria-label="通知中心"
+                @click="go('/notifications')"
+              />
+
+              <!-- Theme Toggle -->
+              <el-button
+                class="theme-toggle"
+                :icon="isDark ? Sunny : Moon"
+                circle
+                text
+                :aria-label="isDark ? '切换浅色主题' : '切换深色主题'"
+                @click="toggleTheme"
+              />
+
+              <AccountMenu
+                v-if="isLogged"
+                :avatar-src="customAvatar || ''"
+                :avatar-configured="avatarConfigured"
+                :avatar-loading="isAvatarLoading"
+                :account-name="accountName"
+                :role-label="accountRoleLabel"
+                :can-access-admin="canAccessAdmin"
+                :links="accountLinks"
+                @navigate="go"
+                @logout="logout"
+              />
+
+              <!-- Auth Buttons -->
+              <template v-else>
+                <el-button type="primary" @click="go('/login')">登录</el-button>
+                <el-button @click="go('/register')" class="hero-register-btn"> 注册 </el-button>
+              </template>
+            </template>
           </div>
         </div>
-
-        <!-- Desktop Navigation -->
-        <div
-          ref="desktopNavRef"
-          class="desktop-nav"
-          :class="{ 'is-hidden': !showDesktopNav }"
-          :aria-hidden="!showDesktopNav"
-        >
-          <el-menu
-            mode="horizontal"
-            :default-active="activeRoute"
-            router
-            :ellipsis="false"
-            :default-openeds="defaultOpeneds"
-          >
-            <template v-for="(item, index) in navLinks" :key="item.path || item.index">
-              <el-sub-menu
-                v-if="item.type === 'group'"
-                :index="item.index"
-                :trigger="item.trigger"
-                :class="['nav-menu-entry', 'nav-priority-' + (index + 1)]"
-              >
-                <template #title>
-                  <span>{{ item.title }}</span>
-                </template>
-                <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path">
-                  <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
-                  <span>{{ child.title }}</span>
-                  <span v-if="shouldShowNotificationBadge(child)" class="notification-nav-dot" />
-                </el-menu-item>
-              </el-sub-menu>
-              <el-menu-item
-                v-else
-                :index="item.path"
-                :class="['nav-menu-entry', 'nav-priority-' + (index + 1)]"
-              >
-                <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
-                <span>{{ item.title }}</span>
-                <span v-if="shouldShowNotificationBadge(item)" class="notification-nav-dot" />
-              </el-menu-item>
-            </template>
-          </el-menu>
-        </div>
-
-        <div ref="headerActionsRef" class="header-actions" :aria-busy="!authReady">
-          <template v-if="authReady">
-            <el-button
-              v-if="canAccessNotifications"
-              class="notification-toggle"
-              :class="{ 'has-unread': shouldShowNotificationBadge({ path: '/notifications' }) }"
-              :icon="Bell"
-              circle
-              text
-              aria-label="通知中心"
-              @click="go('/notifications')"
-            />
-
-            <!-- Theme Toggle -->
-            <el-button
-              class="theme-toggle"
-              :icon="isDark ? Sunny : Moon"
-              circle
-              text
-              :aria-label="isDark ? '切换浅色主题' : '切换深色主题'"
-              @click="toggleTheme"
-            />
-
-            <AccountMenu
-              v-if="isLogged"
-              :avatar-src="customAvatar || ''"
-              :avatar-configured="avatarConfigured"
-              :avatar-loading="isAvatarLoading"
-              :account-name="accountName"
-              :role-label="accountRoleLabel"
-              :can-access-admin="canAccessAdmin"
-              :links="accountLinks"
-              @navigate="go"
-              @logout="logout"
-            />
-
-            <!-- Auth Buttons -->
-            <template v-else>
-              <el-button type="primary" @click="go('/login')">登录</el-button>
-              <el-button @click="go('/register')" class="hero-register-btn"> 注册 </el-button>
-            </template>
-          </template>
-        </div>
-      </div>
-    </el-header>
+      </el-header>
+    </div>
 
     <!-- Mobile Drawer -->
     <el-drawer v-model="drawer" title="导航菜单" direction="ltr" size="280px" class="mobile-drawer">
@@ -200,6 +206,7 @@ const {
 } = useAppLayoutState()
 
 const headerRef = ref<HTMLElement | null>(null)
+const headerSpaceRef = ref<HTMLElement | null>(null)
 const headerBrandRef = ref<HTMLElement | null>(null)
 const headerActionsRef = ref<HTMLElement | null>(null)
 const desktopNavRef = ref<HTMLElement | null>(null)
@@ -207,6 +214,10 @@ const showDesktopNav = ref(false)
 let navResizeObserver: ResizeObserver | null = null
 
 function updateDesktopNavVisibility() {
+  // Fixed 顶栏沿用流式占位的实际宽度，包含现有滚动槽策略；不计算滚动条宽度。
+  const space = headerSpaceRef.value
+  const width = space?.getBoundingClientRect().width
+  if (space && width && width > 0) space.style.setProperty('--layout-header-width', `${width}px`)
   const header = headerRef.value
   const brand = headerBrandRef.value
   const actions = headerActionsRef.value
@@ -233,7 +244,7 @@ onMounted(() => {
   const observer = new ResizeObserver(updateDesktopNavVisibility)
   navResizeObserver = observer
   watch(
-    [headerRef, headerBrandRef, headerActionsRef, desktopNavRef],
+    [headerRef, headerBrandRef, headerActionsRef, desktopNavRef, headerSpaceRef],
     (elements) => {
       observer.disconnect()
       for (const element of elements) {
@@ -315,18 +326,29 @@ onUnmounted(() => {
 }
 
 .layout-header-wrap {
+  position: fixed;
+  top: 0;
+  width: var(--layout-header-width, 100%);
+  box-sizing: border-box;
   padding: 0 20px;
   background: var(--color-header-background);
   backdrop-filter: blur(8px);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
   border-bottom: 1px solid var(--color-border);
-  height: 64px;
+  height: var(--layout-header-height);
   z-index: 100;
   flex-shrink: 0;
 }
 
+.layout-header-space {
+  height: var(--layout-header-height);
+  flex-shrink: 0;
+  min-width: 0;
+}
+
 .is-home-layout .layout-header-wrap {
   position: relative;
+  width: 100%;
   background: transparent;
   border-bottom: none;
   box-shadow: none;

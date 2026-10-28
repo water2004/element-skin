@@ -53,6 +53,7 @@ beforeAll(() => {
   })
   styles.textContent = [
     readFileSync(path.join(process.cwd(), 'src/assets/styles/appearance.css'), 'utf8'),
+    readFileSync(path.join(process.cwd(), 'src/assets/styles/tokens.css'), 'utf8'),
     readFileSync(path.join(process.cwd(), 'src/assets/styles/element-overrides.css'), 'utf8'),
     ...componentStyles,
   ].join('\n')
@@ -72,7 +73,8 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement,
   ) {
-    if (this.classList.contains('layout-header')) return rectangle(0, measurements.header)
+    if (this.classList.contains('layout-header') || this.classList.contains('layout-header-space'))
+      return rectangle(0, measurements.header)
     if (this.classList.contains('header-brand')) return rectangle(0, measurements.brandRight)
     if (this.classList.contains('header-actions'))
       return rectangle(measurements.actionsLeft, measurements.header - measurements.actionsLeft)
@@ -91,6 +93,36 @@ afterEach(() => {
 })
 
 describe('responsive navigation lifecycle', () => {
+  it('keeps a viewport header and flow placeholder through scrolling, locking and home transitions', async () => {
+    const mounted = await mountLayout('/notifications')
+    const header = mounted.host.querySelector<HTMLElement>('.layout-header-wrap')!
+    const space = mounted.host.querySelector<HTMLElement>('.layout-header-space')!
+    expect(getComputedStyle(header).position).toBe('fixed')
+    expect(getComputedStyle(header).top).toBe('0px')
+    expect(space.style.getPropertyValue('--layout-header-width')).toBe('1200px')
+    const { observer, elements } = navigation(mounted.host)
+    for (const scroll of [0, 500, 1500]) {
+      vi.stubGlobal('scrollY', scroll)
+      document.body.classList.add('el-popup-parent--hidden')
+      observer.resize(elements[4]!)
+      await flushLayout()
+      expect(getComputedStyle(header).position).toBe('fixed')
+      expect(getComputedStyle(header).top).toBe('0px')
+      expect(space.style.getPropertyValue('--layout-header-width')).toBe('1200px')
+      document.body.classList.remove('el-popup-parent--hidden')
+    }
+    measurements = headerMeasurements.mobile
+    observer.resize(elements[4]!)
+    await flushLayout()
+    expect(space.style.getPropertyValue('--layout-header-width')).toBe('360px')
+    await mounted.router.push('/')
+    await flushLayout()
+    expect(mounted.host.querySelector('.layout-header-wrap')).toBe(header)
+    expect(getComputedStyle(header).position).toBe('relative')
+    await mounted.router.push('/login')
+    await flushLayout()
+    expect(mounted.host.querySelector('.layout-header-space')).toBeNull()
+  })
   it.each(viewportCases)(
     'keeps the reserved navigation width across home and operation pages at $label',
     async ({ measurements: viewport, visible }) => {
@@ -350,7 +382,7 @@ describe('responsive navigation lifecycle', () => {
       for (const oldElement of oldElements) expect(current.elements).not.toContain(oldElement)
       expectNavigation(mounted.host, false)
     }
-    expect(initial.observer.observe).toHaveBeenCalledTimes(16)
+    expect(initial.observer.observe).toHaveBeenCalledTimes(20)
     const resizeCalls = initial.observer.observe.mock.calls.length
     mounted.unmount()
     expect([...initial.observer.elements]).toEqual([])
@@ -398,9 +430,13 @@ function rectangle(left: number, width: number): DOMRect {
 }
 
 function navigation(host: HTMLElement) {
-  const elements = ['.layout-header', '.header-brand', '.header-actions', '.desktop-nav'].map(
-    (selector) => host.querySelector(selector)!,
-  )
+  const elements = [
+    '.layout-header',
+    '.header-brand',
+    '.header-actions',
+    '.desktop-nav',
+    '.layout-header-space',
+  ].map((selector) => host.querySelector(selector)!)
   const observer = TestResizeObserver.instances.find((instance) =>
     instance.elements.has(elements[0]!),
   )
