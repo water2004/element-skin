@@ -247,6 +247,39 @@ async function selectUpload(root: ParentNode) {
 }
 
 describe('independent and sensitive form lifecycles', () => {
+  it('retains failed fields and clears only a successfully saved settings group', async () => {
+    api.saveAdminSettingsGroup.mockImplementation(async (group: string) => {
+      if (group === 'site') throw new Error('site save failed')
+      return { data: {} }
+    })
+    const mounted = await mount(() => h(AdminSettings))
+    const cards = mounted.host.querySelectorAll<HTMLElement>('.ui-card')
+    const name = cards[0]!.querySelector<HTMLInputElement>('input[placeholder="皮肤站"]')!
+    const days = cards[2]!.querySelector<HTMLInputElement>('input')!
+    await input(name, 'unsaved site')
+    await input(days, '14')
+    days.dispatchEvent(new Event('change', { bubbles: true }))
+    await settle()
+    expect(cards[0]!.querySelectorAll('.field-change-hint')).toHaveLength(1)
+    expect(cards[2]!.querySelectorAll('.field-change-hint')).toHaveLength(1)
+    button(cards[0]!, '保存').click()
+    button(cards[2]!, '保存').click()
+    await settle()
+    expect(api.saveAdminSettingsGroup).toHaveBeenNthCalledWith(1, 'site', {
+      ...siteSettingsGroups.site,
+      site_name: 'unsaved site',
+    })
+    expect(api.saveAdminSettingsGroup).toHaveBeenNthCalledWith(2, 'auth', {
+      ...siteSettingsGroups.auth,
+      jwt_expire_days: 14,
+    })
+    expect(name.value).toBe('unsaved site')
+    expect(cards[0]!.querySelectorAll('.field-change-hint')).toHaveLength(1)
+    expect(cards[2]!.querySelectorAll('.field-change-hint')).toHaveLength(0)
+    expect(cards[2]!.textContent).not.toContain('有未保存更改')
+    await input(name, siteSettingsGroups.site.site_name)
+    expect(cards[0]!.querySelectorAll('.field-change-hint')).toHaveLength(0)
+  })
   it('keeps site settings explicit, protects grouped writes, and confirms reload without losing a cancelled draft', async () => {
     const pending = deferred<void>()
     api.saveAdminSettingsGroup

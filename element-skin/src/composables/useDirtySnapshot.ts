@@ -1,4 +1,4 @@
-import { computed, ref, watch, type Ref } from 'vue'
+import { computed, ref, type Ref } from 'vue'
 
 /**
  * Track whether a reactive source has unsaved changes by comparing JSON snapshots.
@@ -11,6 +11,9 @@ import { computed, ref, watch, type Ref } from 'vue'
  */
 export function useDirtySnapshot<T>(source: Ref<T>) {
   const snapshot = ref('')
+  const baseline = computed<T | undefined>(() =>
+    snapshot.value === '' ? undefined : JSON.parse(snapshot.value),
+  )
 
   const hasChanges = computed(
     () => snapshot.value !== '' && snapshot.value !== JSON.stringify(source.value),
@@ -24,5 +27,12 @@ export function useDirtySnapshot<T>(source: Ref<T>) {
     snapshot.value = ''
   }
 
-  return { hasChanges, capture, reset }
+  function hasFieldChanges<K extends keyof T>(field: K): boolean {
+    return (
+      snapshot.value !== '' &&
+      JSON.stringify(source.value?.[field]) !== JSON.stringify(baseline.value?.[field])
+    )
+  }
+
+  return { hasChanges, hasFieldChanges, capture, reset }
 }

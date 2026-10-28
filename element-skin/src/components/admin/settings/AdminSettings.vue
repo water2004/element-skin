@@ -37,22 +37,31 @@
       <el-form label-position="top" :model="settings.site" :disabled="loading || saving.site">
         <el-row :gutter="20">
           <el-col :xs="24" :sm="8">
-            <el-form-item label="允许新用户注册">
+            <DirtyFormItem
+              :dirty="siteDirty.hasFieldChanges('allow_register')"
+              label="允许新用户注册"
+            >
               <el-switch v-model="settings.site.allow_register" />
-            </el-form-item>
+            </DirtyFormItem>
           </el-col>
           <el-col :xs="24" :sm="8">
-            <el-form-item label="强制邀请码">
+            <DirtyFormItem :dirty="siteDirty.hasFieldChanges('require_invite')" label="强制邀请码">
               <el-switch v-model="settings.site.require_invite" />
-            </el-form-item>
+            </DirtyFormItem>
           </el-col>
           <el-col :xs="24" :sm="8">
-            <el-form-item label="启用公共皮肤库">
+            <DirtyFormItem
+              :dirty="siteDirty.hasFieldChanges('enable_skin_library')"
+              label="启用公共皮肤库"
+            >
               <el-switch v-model="settings.site.enable_skin_library" />
-            </el-form-item>
+            </DirtyFormItem>
           </el-col>
         </el-row>
-        <el-form-item label="新建角色 UUID 生成方式">
+        <DirtyFormItem
+          :dirty="siteDirty.hasFieldChanges('profile_uuid_mode')"
+          label="新建角色 UUID 生成方式"
+        >
           <el-radio-group
             v-model="settings.site.profile_uuid_mode"
             class="inline-flex flex-wrap gap-2"
@@ -63,36 +72,39 @@
           <span class="text-xs text-[var(--color-text-light)] leading-normal mt-1 block ml-4"
             >默认使用随机 UUID（uuid4）；启用后按角色名生成离线 UUID。</span
           >
-        </el-form-item>
-        <el-form-item label="最大纹理大小 (KB)">
+        </DirtyFormItem>
+        <DirtyFormItem
+          :dirty="siteDirty.hasFieldChanges('max_texture_size')"
+          label="最大纹理大小 (KB)"
+        >
           <el-input-number v-model="settings.site.max_texture_size" :min="64" :step="128" />
-        </el-form-item>
+        </DirtyFormItem>
         <el-divider />
         <el-row :gutter="20">
           <el-col :span="24">
-            <el-form-item label="站点名称">
+            <DirtyFormItem :dirty="siteDirty.hasFieldChanges('site_name')" label="站点名称">
               <el-input v-model="settings.site.site_name" placeholder="皮肤站" />
-            </el-form-item>
+            </DirtyFormItem>
           </el-col>
         </el-row>
         <el-row :gutter="20">
           <el-col :span="24">
-            <el-form-item label="站点副标题">
+            <DirtyFormItem :dirty="siteDirty.hasFieldChanges('site_subtitle')" label="站点副标题">
               <el-input
                 v-model="settings.site.site_subtitle"
                 placeholder="简洁、高效、现代的 Minecraft 皮肤管理站"
               />
-            </el-form-item>
+            </DirtyFormItem>
           </el-col>
         </el-row>
         <el-row :gutter="20">
           <el-col :span="24">
-            <el-form-item label="页脚附加信息">
+            <DirtyFormItem :dirty="siteDirty.hasFieldChanges('footer_text')" label="页脚附加信息">
               <el-input
                 v-model="settings.site.footer_text"
                 placeholder="Copyright © 2026 Element Skin"
               />
-            </el-form-item>
+            </DirtyFormItem>
           </el-col>
         </el-row>
         <el-row :gutter="20">
@@ -101,32 +113,44 @@
               <el-collapse-item title="监管信息" name="regulatory-info">
                 <el-row :gutter="20">
                   <el-col :xs="24" :sm="12">
-                    <el-form-item label="ICP 备案信息">
+                    <DirtyFormItem
+                      :dirty="siteDirty.hasFieldChanges('filing_icp')"
+                      label="ICP 备案信息"
+                    >
                       <el-input v-model="settings.site.filing_icp" placeholder="留空则不展示" />
-                    </el-form-item>
+                    </DirtyFormItem>
                   </el-col>
                   <el-col :xs="24" :sm="12">
-                    <el-form-item label="ICP 备案链接">
+                    <DirtyFormItem
+                      :dirty="siteDirty.hasFieldChanges('filing_icp_link')"
+                      label="ICP 备案链接"
+                    >
                       <el-input
                         v-model="settings.site.filing_icp_link"
                         placeholder="留空则不展示"
                       />
-                    </el-form-item>
+                    </DirtyFormItem>
                   </el-col>
                 </el-row>
                 <el-row :gutter="20">
                   <el-col :xs="24" :sm="12">
-                    <el-form-item label="公安备案信息">
+                    <DirtyFormItem
+                      :dirty="siteDirty.hasFieldChanges('filing_mps')"
+                      label="公安备案信息"
+                    >
                       <el-input v-model="settings.site.filing_mps" placeholder="留空则不展示" />
-                    </el-form-item>
+                    </DirtyFormItem>
                   </el-col>
                   <el-col :xs="24" :sm="12">
-                    <el-form-item label="公安备案链接">
+                    <DirtyFormItem
+                      :dirty="siteDirty.hasFieldChanges('filing_mps_link')"
+                      label="公安备案链接"
+                    >
                       <el-input
                         v-model="settings.site.filing_mps_link"
                         placeholder="留空则不展示"
                       />
-                    </el-form-item>
+                    </DirtyFormItem>
                   </el-col>
                 </el-row>
               </el-collapse-item>
@@ -160,29 +184,41 @@
         :model="settings.security"
         :disabled="loading || saving.security"
       >
-        <el-form-item label="强密码检查">
+        <DirtyFormItem
+          :dirty="securityDirty.hasFieldChanges('enable_strong_password_check')"
+          label="强密码检查"
+        >
           <el-switch v-model="settings.security.enable_strong_password_check" />
           <span class="text-xs text-[var(--color-text-light)] leading-normal mt-1 block ml-4"
             >启用后，用户注册或修改密码将执行严格的复杂度检查。</span
           >
-        </el-form-item>
+        </DirtyFormItem>
         <el-divider />
-        <el-form-item label="身份验证速率限制">
+        <DirtyFormItem
+          :dirty="securityDirty.hasFieldChanges('rate_limit_enabled')"
+          label="身份验证速率限制"
+        >
           <el-switch v-model="settings.security.rate_limit_enabled" />
           <span class="text-xs text-[var(--color-text-light)] leading-normal mt-1 block ml-4"
             >启用后将限制登录、重置密码等接口的尝试频率。</span
           >
-        </el-form-item>
+        </DirtyFormItem>
         <el-row :gutter="20" v-if="settings.security.rate_limit_enabled">
           <el-col :xs="24" :sm="12">
-            <el-form-item label="尝试次数上限">
+            <DirtyFormItem
+              :dirty="securityDirty.hasFieldChanges('rate_limit_auth_attempts')"
+              label="尝试次数上限"
+            >
               <el-input-number v-model="settings.security.rate_limit_auth_attempts" :min="1" />
-            </el-form-item>
+            </DirtyFormItem>
           </el-col>
           <el-col :xs="24" :sm="12">
-            <el-form-item label="时间窗口 (分钟)">
+            <DirtyFormItem
+              :dirty="securityDirty.hasFieldChanges('rate_limit_auth_window')"
+              label="时间窗口 (分钟)"
+            >
               <el-input-number v-model="settings.security.rate_limit_auth_window" :min="1" />
-            </el-form-item>
+            </DirtyFormItem>
           </el-col>
         </el-row>
       </el-form>
@@ -208,12 +244,15 @@
         </div>
       </template>
       <el-form label-position="top" :model="settings.auth" :disabled="loading || saving.auth">
-        <el-form-item label="令牌有效期 (天)">
+        <DirtyFormItem
+          :dirty="authDirty.hasFieldChanges('jwt_expire_days')"
+          label="令牌有效期 (天)"
+        >
           <el-input-number v-model="settings.auth.jwt_expire_days" :min="1" :max="365" />
           <p class="text-xs text-[var(--color-text-light)] leading-normal mt-1 block">
             用户登录后，其身份令牌将在该天数后失效。
           </p>
-        </el-form-item>
+        </DirtyFormItem>
       </el-form>
     </UiCard>
   </div>
@@ -228,6 +267,7 @@ import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/setti
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import DirtyTag from '@/components/common/DirtyTag.vue'
+import DirtyFormItem from '@/components/common/DirtyFormItem.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 
