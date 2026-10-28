@@ -1,12 +1,6 @@
 <template>
-  <el-tag
-    v-if="visible"
-    size="small"
-    type="warning"
-    effect="dark"
-    :class="rootClass"
-  >
-    有未保存更改
+  <el-tag v-if="visible" size="small" type="warning" effect="dark" :class="rootClass">
+    未保存
   </el-tag>
 </template>
 

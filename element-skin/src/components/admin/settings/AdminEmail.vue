@@ -23,7 +23,6 @@
           >
             <el-icon><Postcard /></el-icon>
             <span>SMTP 与验证配置</span>
-            <DirtyTag :visible="hasSettingsChanges" />
           </div>
           <el-button
             type="primary"
@@ -45,17 +44,23 @@
           </div>
           <el-row :gutter="40">
             <el-col :xs="24" :sm="12">
-              <el-form-item label="启用邮件验证">
+              <DirtyFormItem
+                label="启用邮件验证"
+                :dirty="settingsDirty.hasFieldChanges('email_verify_enabled')"
+              >
                 <el-switch v-model="emailSettings.email_verify_enabled" />
                 <p class="text-xs text-[var(--color-text-light)] leading-normal mt-1">
                   开启后，用户注册和重置密码时必须通过邮件验证码确认身份。
                 </p>
-              </el-form-item>
+              </DirtyFormItem>
             </el-col>
             <el-col :xs="24" :sm="12" v-if="emailSettings.email_verify_enabled">
-              <el-form-item label="验证码有效期 (秒)">
+              <DirtyFormItem
+                label="验证码有效期 (秒)"
+                :dirty="settingsDirty.hasFieldChanges('email_verify_ttl')"
+              >
                 <el-input-number v-model="emailSettings.email_verify_ttl" :min="60" :step="60" />
-              </el-form-item>
+              </DirtyFormItem>
             </el-col>
           </el-row>
         </div>
@@ -70,43 +75,55 @@
           </div>
           <el-row :gutter="20">
             <el-col :xs="24" :sm="18">
-              <el-form-item label="服务器地址">
+              <DirtyFormItem label="服务器地址" :dirty="settingsDirty.hasFieldChanges('smtp_host')">
                 <el-input v-model="emailSettings.smtp_host" placeholder="smtp.example.com" />
-              </el-form-item>
+              </DirtyFormItem>
             </el-col>
             <el-col :xs="24" :sm="6">
-              <el-form-item label="端口">
+              <DirtyFormItem label="端口" :dirty="settingsDirty.hasFieldChanges('smtp_port')">
                 <el-input v-model="emailSettings.smtp_port" placeholder="465" />
-              </el-form-item>
+              </DirtyFormItem>
             </el-col>
           </el-row>
 
           <el-row :gutter="20">
             <el-col :xs="24" :sm="12">
-              <el-form-item label="用户名 (通常为邮箱地址)">
+              <DirtyFormItem
+                label="用户名 (通常为邮箱地址)"
+                :dirty="settingsDirty.hasFieldChanges('smtp_user')"
+              >
                 <el-input v-model="emailSettings.smtp_user" placeholder="user@example.com" />
-              </el-form-item>
+              </DirtyFormItem>
             </el-col>
             <el-col :xs="24" :sm="12">
-              <el-form-item label="密码 / 授权码">
+              <DirtyFormItem
+                label="密码 / 授权码"
+                :dirty="settingsDirty.hasFieldChanges('smtp_password')"
+              >
                 <el-input
                   v-model="emailSettings.smtp_password"
                   type="password"
                   show-password
                   placeholder="留空则不修改原有密码"
                 />
-              </el-form-item>
+              </DirtyFormItem>
             </el-col>
           </el-row>
 
           <el-row :gutter="20">
             <el-col :xs="24" :sm="12">
-              <el-form-item label="使用 SSL/TLS 加密">
+              <DirtyFormItem
+                label="使用 SSL/TLS 加密"
+                :dirty="settingsDirty.hasFieldChanges('smtp_ssl')"
+              >
                 <el-switch v-model="emailSettings.smtp_ssl" />
-              </el-form-item>
+              </DirtyFormItem>
             </el-col>
             <el-col :xs="24" :sm="12">
-              <el-form-item label="发件人显示名称">
+              <DirtyFormItem
+                label="发件人显示名称"
+                :dirty="settingsDirty.hasFieldChanges('smtp_sender')"
+              >
                 <el-input
                   v-model="emailSettings.smtp_sender"
                   placeholder="SkinServer <no-reply@example.com>"
@@ -114,7 +131,7 @@
                 <p class="text-xs text-[var(--color-text-light)] leading-normal mt-1">
                   发件人在邮件客户端中显示的名称及回复地址。
                 </p>
-              </el-form-item>
+              </DirtyFormItem>
             </el-col>
           </el-row>
         </div>
@@ -236,6 +253,7 @@ import type { EmailSuffixPolicy } from '@/api/types'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import DirtyTag from '@/components/common/DirtyTag.vue'
+import DirtyFormItem from '@/components/common/DirtyFormItem.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
 

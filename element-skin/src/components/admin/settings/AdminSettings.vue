@@ -24,7 +24,6 @@
           >
             <el-icon><Monitor /></el-icon>
             <span>基础设置</span>
-            <DirtyTag :visible="hasGroupChanges('site')" />
           </div>
           <el-button
             type="primary"
@@ -171,7 +170,6 @@
           >
             <el-icon><Lock /></el-icon>
             <span>安全与速率限制</span>
-            <DirtyTag :visible="hasGroupChanges('security')" />
           </div>
           <el-button
             type="primary"
@@ -237,7 +235,6 @@
           >
             <el-icon><Key /></el-icon>
             <span>令牌与认证 (JWT)</span>
-            <DirtyTag :visible="hasGroupChanges('auth')" />
           </div>
           <el-button
             type="primary"
@@ -273,7 +270,6 @@ import { Refresh, Setting, Monitor, Lock, Key } from '@element-plus/icons-vue'
 import { getAdminSettingsGroup, saveAdminSettingsGroup } from '@/api/admin/settings'
 import PageHeader from '@/components/common/PageHeader.vue'
 import UiCard from '@/components/ui/UiCard.vue'
-import DirtyTag from '@/components/common/DirtyTag.vue'
 import DirtyFormItem from '@/components/common/DirtyFormItem.vue'
 import { useDirtySnapshot } from '@/composables/useDirtySnapshot'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
@@ -330,12 +326,6 @@ const { confirmReload } = useUnsavedChangesGuard({
 async function reloadSettings() {
   if (loading.value) return
   if (await confirmReload()) await loadAllSettings()
-}
-
-function hasGroupChanges(group: SettingsGroup) {
-  if (group === 'site') return siteDirty.hasChanges.value
-  if (group === 'security') return securityDirty.hasChanges.value
-  return authDirty.hasChanges.value
 }
 
 function captureGroup(group: SettingsGroup) {

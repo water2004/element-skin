@@ -14,6 +14,7 @@ import AdminNotices from '@/components/admin/notices/AdminNotices.vue'
 import AdminRolesList from '@/components/admin/roles/AdminRolesList.vue'
 import DashboardWardrobe from '@/components/dashboard/wardrobe/DashboardWardrobe.vue'
 import AdminSettings from '@/components/admin/settings/AdminSettings.vue'
+import AdminEmail from '@/components/admin/settings/AdminEmail.vue'
 import {
   boundProfile,
   otherProfile,
@@ -26,6 +27,10 @@ import {
   uploadFileData,
   siteSettingsGroups,
   dialogFlowPermissions,
+  adminEmailSettings,
+  adminEmailPolicy,
+  emailFieldChanges,
+  emailDraftChanges,
 } from './fixtures/dialogFlows'
 
 const api = vi.hoisted(() => ({
@@ -54,6 +59,8 @@ const api = vi.hoisted(() => ({
   uploadTexture: vi.fn(),
   getAdminSettingsGroup: vi.fn(),
   saveAdminSettingsGroup: vi.fn(),
+  getAdminEmailSuffixPolicy: vi.fn(),
+  putAdminEmailSuffixPolicy: vi.fn(),
 }))
 vi.mock('@/api/public', () => ({ getPublicSettings: api.getPublicSettings }))
 vi.mock('@/api/me', () => ({
@@ -102,6 +109,8 @@ vi.mock('@/api/textures', () => ({
 vi.mock('@/api/admin/settings', () => ({
   getAdminSettingsGroup: api.getAdminSettingsGroup,
   saveAdminSettingsGroup: api.saveAdminSettingsGroup,
+  getAdminEmailSuffixPolicy: api.getAdminEmailSuffixPolicy,
+  putAdminEmailSuffixPolicy: api.putAdminEmailSuffixPolicy,
 }))
 vi.mock('@/components/CapeViewer.vue', () => ({ default: { render: () => h('div', 'cape') } }))
 vi.mock('@/components/SkinViewer.vue', () => ({
@@ -119,6 +128,7 @@ vi.mock('@/components/SkinViewer.vue', () => ({
 const cleanup: Array<() => void> = []
 beforeEach(() => {
   vi.clearAllMocks()
+  api.saveAdminSettingsGroup.mockReset().mockResolvedValue({ data: {} })
   api.getPublicSettings.mockResolvedValue(structuredClone(emailPolicyResponse))
   api.getMe.mockResolvedValue({
     data: { id: 'user-a', email: 'user@example.com', permissions: [...dialogFlowPermissions] },
@@ -148,9 +158,15 @@ beforeEach(() => {
   api.getTextures.mockResolvedValue({
     data: { items: [], has_next: false, next_cursor: null, page_size: 20 },
   })
-  api.getAdminSettingsGroup.mockImplementation(async (group: keyof typeof siteSettingsGroups) => ({
-    data: structuredClone(siteSettingsGroups[group]),
-  }))
+  api.getAdminSettingsGroup.mockImplementation(
+    async (group: keyof typeof siteSettingsGroups | 'email') => ({
+      data: structuredClone(group === 'email' ? adminEmailSettings : siteSettingsGroups[group]),
+    }),
+  )
+  api.getAdminEmailSuffixPolicy
+    .mockReset()
+    .mockResolvedValue({ data: structuredClone(adminEmailPolicy) })
+  api.putAdminEmailSuffixPolicy.mockReset().mockResolvedValue({ data: {} })
   vi.spyOn(ElMessage, 'success').mockImplementation(() => ({ close: vi.fn() }))
   vi.spyOn(ElMessage, 'error').mockImplementation(() => ({ close: vi.fn() }))
   vi.spyOn(ElMessage, 'warning').mockImplementation(() => ({ close: vi.fn() }))
@@ -251,6 +267,149 @@ async function selectUpload(root: ParentNode) {
   return file
 }
 
+function emailField(root: ParentNode, label: string) {
+  const field = [...root.querySelectorAll<HTMLElement>('.el-form-item')].find(
+    (item) => item.querySelector('.el-form-item__label > span')?.textContent?.trim() === label,
+  )
+  if (!field) throw new Error(`No email field: ${label}`)
+  return field
+}
+
+function dirtyEmailLabels(root: ParentNode) {
+  return [...root.querySelectorAll('.field-change-hint')].map((hint) =>
+    hint
+      .closest('.el-form-item')
+      ?.querySelector('.el-form-item__label > span')
+      ?.textContent?.trim(),
+  )
+}
+
+describe('email settings field hints and grouped save baselines', () => {
+  it.each(emailFieldChanges)('marks only $label and clears it when restored', async (change) => {
+    const mounted = await mount(() => h(AdminEmail))
+    const smtp = mounted.host.querySelector<HTMLElement>('.ui-card')!
+    const field = emailField(smtp, change.label)
+    expect(smtp.querySelectorAll('.dirty-form-item')).toHaveLength(8)
+    expect(dirtyEmailLabels(smtp)).toEqual([])
+    if (change.kind === 'switch') {
+      const control = field.querySelector<HTMLElement>('.el-switch')!
+      control.click()
+      await settle()
+      expect(dirtyEmailLabels(smtp)).toEqual([change.label])
+      control.click()
+    } else {
+      const control = field.querySelector<HTMLInputElement>('input')!
+      const original = control.value
+      if (change.label === '密码 / 授权码') {
+        expect(original).toBe('')
+        expect(control.type).toBe('password')
+      }
+      await input(control, change.value)
+      control.dispatchEvent(new Event('change', { bubbles: true }))
+      await settle()
+      expect(dirtyEmailLabels(smtp)).toEqual([change.label])
+      await input(control, original)
+      control.dispatchEvent(new Event('change', { bubbles: true }))
+    }
+    await settle()
+    expect(dirtyEmailLabels(smtp)).toEqual([])
+    expect(smtp.querySelector('.el-card__header .el-tag')).toBeNull()
+    expect(api.saveAdminSettingsGroup).not.toHaveBeenCalled()
+  })
+
+  it('retains failed SMTP secrets and policy drafts, then clears only each successfully saved group', async () => {
+    const pending = deferred<void>()
+    const requests: Array<{ group: string; settings: Record<string, unknown> }> = []
+    api.saveAdminSettingsGroup
+      .mockImplementationOnce((group: string, settings: Record<string, unknown>) => {
+        requests.push({ group, settings: { ...settings } })
+        return pending.promise
+      })
+      .mockImplementationOnce(async (group: string, settings: Record<string, unknown>) => {
+        requests.push({ group, settings: { ...settings } })
+        return { data: {} }
+      })
+    api.putAdminEmailSuffixPolicy.mockRejectedValueOnce(new Error('policy save failed'))
+    const mounted = await mount(() => h(AdminEmail))
+    const cards = mounted.host.querySelectorAll<HTMLElement>('.ui-card')
+    const smtp = cards[0]!,
+      policy = cards[1]!
+    const host = emailField(smtp, '服务器地址').querySelector<HTMLInputElement>('input')!
+    const password = emailField(smtp, '密码 / 授权码').querySelector<HTMLInputElement>('input')!
+    expect(password.value).toBe('')
+    expect(mounted.host.textContent).not.toContain(adminEmailSettings.smtp_password)
+    await input(host, emailDraftChanges.smtp_host)
+    await input(password, emailDraftChanges.smtp_password)
+    await input(
+      policy.querySelector<HTMLInputElement>('input[placeholder="例如 @qq.com"]')!,
+      emailDraftChanges.policySuffix,
+    )
+    button(policy, '添加').click()
+    await settle()
+    expect(dirtyEmailLabels(smtp)).toEqual(['服务器地址', '密码 / 授权码'])
+    expect(smtp.querySelector('.el-card__header .el-tag')).toBeNull()
+    expect(policy.querySelector('.el-card__header .el-tag')?.textContent?.trim()).toBe('未保存')
+    expect(policy.querySelectorAll('.field-change-hint')).toHaveLength(0)
+
+    button(smtp, '保存配置').click()
+    button(smtp, '保存配置').click()
+    await settle()
+    expect(api.saveAdminSettingsGroup).toHaveBeenCalledTimes(1)
+    expect(password.disabled).toBe(true)
+    expect(button(mounted.host, '重新加载').disabled).toBe(true)
+    button(policy, '保存策略').click()
+    await settle()
+    expect(ElMessage.error).toHaveBeenLastCalledWith('保存邮箱后缀策略失败')
+    expect(policy.querySelector('.el-card__header .el-tag')?.textContent?.trim()).toBe('未保存')
+
+    pending.reject(new Error('SMTP save failed'))
+    await settle()
+    expect(ElMessage.error).toHaveBeenLastCalledWith('保存失败')
+    expect(host.value).toBe(emailDraftChanges.smtp_host)
+    expect(password.value).toBe(emailDraftChanges.smtp_password)
+    expect(dirtyEmailLabels(smtp)).toEqual(['服务器地址', '密码 / 授权码'])
+    const confirm = vi.spyOn(ElMessageBox, 'confirm').mockRejectedValue('cancel')
+    button(mounted.host, '重新加载').click()
+    await settle()
+    expect(api.getAdminSettingsGroup).toHaveBeenCalledExactlyOnceWith('email')
+    expect(api.getAdminEmailSuffixPolicy).toHaveBeenCalledTimes(1)
+    expect(password.value).toBe(emailDraftChanges.smtp_password)
+
+    button(smtp, '保存配置').click()
+    await settle()
+    const expectedSettings = {
+      ...adminEmailSettings,
+      smtp_host: emailDraftChanges.smtp_host,
+      smtp_password: emailDraftChanges.smtp_password,
+    }
+    expect(requests).toEqual([
+      { group: 'email', settings: expectedSettings },
+      { group: 'email', settings: expectedSettings },
+    ])
+    expect(password.value).toBe('')
+    expect(host.value).toBe(emailDraftChanges.smtp_host)
+    expect(dirtyEmailLabels(smtp)).toEqual([])
+    expect(policy.querySelector('.el-card__header .el-tag')?.textContent?.trim()).toBe('未保存')
+    button(mounted.host, '重新加载').click()
+    await settle()
+    expect(confirm).toHaveBeenCalledTimes(2)
+    expect(api.getAdminSettingsGroup).toHaveBeenCalledTimes(1)
+
+    const expectedPolicy = {
+      ...adminEmailPolicy,
+      allowlist: [...adminEmailPolicy.allowlist, emailDraftChanges.policySuffix],
+    }
+    api.getAdminEmailSuffixPolicy.mockResolvedValueOnce({ data: expectedPolicy })
+    button(policy, '保存策略').click()
+    await settle()
+    expect(api.putAdminEmailSuffixPolicy).toHaveBeenNthCalledWith(1, expectedPolicy)
+    expect(api.putAdminEmailSuffixPolicy).toHaveBeenNthCalledWith(2, expectedPolicy)
+    expect(api.putAdminEmailSuffixPolicy).toHaveBeenCalledTimes(2)
+    expect(policy.querySelector('.el-card__header .el-tag')).toBeNull()
+    expect(dirtyEmailLabels(smtp)).toEqual([])
+  })
+})
+
 describe('independent and sensitive form lifecycles', () => {
   it('retains failed fields and clears only a successfully saved settings group', async () => {
     api.saveAdminSettingsGroup.mockImplementation(async (group: string) => {
@@ -281,7 +440,9 @@ describe('independent and sensitive form lifecycles', () => {
     expect(name.value).toBe('unsaved site')
     expect(cards[0]!.querySelectorAll('.field-change-hint')).toHaveLength(1)
     expect(cards[2]!.querySelectorAll('.field-change-hint')).toHaveLength(0)
-    expect(cards[2]!.textContent).not.toContain('有未保存更改')
+    expect(cards[2]!.querySelector('.el-card__header .el-tag')).toBeNull()
+    expect(cards[0]!.querySelector('.el-card__header .el-tag')).toBeNull()
+    expect(cards[0]!.querySelector('.field-change-hint')?.textContent).toBe('未保存')
     await input(name, siteSettingsGroups.site.site_name)
     expect(cards[0]!.querySelectorAll('.field-change-hint')).toHaveLength(0)
   })
@@ -295,7 +456,8 @@ describe('independent and sensitive form lifecycles', () => {
     const name = site.querySelector<HTMLInputElement>('input[placeholder="皮肤站"]')!
     await input(name, 'Updated Site')
     expect(api.saveAdminSettingsGroup).not.toHaveBeenCalled()
-    expect(site.textContent).toContain('有未保存更改')
+    expect(site.querySelector('.field-change-hint')?.textContent).toBe('未保存')
+    expect(site.querySelector('.el-card__header .el-tag')).toBeNull()
     const confirm = vi
       .spyOn(ElMessageBox, 'confirm')
       .mockRejectedValueOnce('cancel')
@@ -316,13 +478,14 @@ describe('independent and sensitive form lifecycles', () => {
     pending.reject(new Error('save failed'))
     await settle()
     expect(name.value).toBe('Updated Site')
-    expect(site.textContent).toContain('有未保存更改')
+    expect(site.querySelector('.field-change-hint')?.textContent).toBe('未保存')
+    expect(site.querySelector('.el-card__header .el-tag')).toBeNull()
     button(mounted.host, '重新加载').click()
     await settle()
     expect(confirm).toHaveBeenCalledTimes(2)
     expect(api.getAdminSettingsGroup).toHaveBeenCalledTimes(6)
     expect(name.value).toBe(siteSettingsGroups.site.site_name)
-    await vi.waitFor(() => expect(site.textContent).not.toContain('有未保存更改'))
+    await vi.waitFor(() => expect(site.querySelectorAll('.field-change-hint')).toHaveLength(0))
   })
 
   it('protects texture upload options and files on indirect exit, then clears the abandoned selection and preview', async () => {
@@ -431,7 +594,7 @@ describe('independent and sensitive form lifecycles', () => {
     await settle()
     expect(
       [...mounted.host.querySelectorAll('.el-tag')].map((tag) => tag.textContent?.trim()),
-    ).toContain('有未保存更改')
+    ).toContain('未保存')
     card.querySelector<HTMLButtonElement>('button[aria-label="删除媒体"]')!.click()
     await selectUpload(mounted.host)
     expect(ElMessage.warning).toHaveBeenCalledTimes(2)
@@ -443,7 +606,7 @@ describe('independent and sensitive form lifecycles', () => {
     await settle()
     expect(
       [...mounted.host.querySelectorAll('.el-tag')].map((tag) => tag.textContent?.trim()),
-    ).not.toContain('有未保存更改')
+    ).not.toContain('未保存')
     expect(button(mounted.host, '保存配置').disabled).toBe(true)
     card.click()
     await settle()

@@ -67,6 +67,40 @@ export const siteSettingsGroups = {
   },
   auth: { jwt_expire_days: 7 },
 }
+
+export const adminEmailSettings = {
+  email_verify_enabled: true,
+  email_verify_ttl: 300,
+  smtp_host: 'smtp.example.test',
+  smtp_port: '465',
+  smtp_user: 'mail@example.test',
+  smtp_password: 'server-secret-must-not-be-displayed',
+  smtp_ssl: true,
+  smtp_sender: 'Test Mail',
+}
+
+export const adminEmailPolicy = {
+  mode: 'disabled',
+  allowlist: ['@base.example.test'],
+  denylist: [],
+}
+
+export const emailFieldChanges = [
+  { label: '启用邮件验证', kind: 'switch' },
+  { label: '验证码有效期 (秒)', kind: 'number', value: '600' },
+  { label: '服务器地址', kind: 'input', value: 'smtp.changed.test' },
+  { label: '端口', kind: 'input', value: '587' },
+  { label: '用户名 (通常为邮箱地址)', kind: 'input', value: 'changed@example.test' },
+  { label: '密码 / 授权码', kind: 'input', value: 'draft-mail-secret' },
+  { label: '使用 SSL/TLS 加密', kind: 'switch' },
+  { label: '发件人显示名称', kind: 'input', value: 'Changed Mail' },
+] as const
+
+export const emailDraftChanges = {
+  smtp_host: 'smtp.changed.test',
+  smtp_password: 'draft-mail-secret',
+  policySuffix: '@new.example.test',
+}
 export const expectedMediaPatch = {
   title: 'Edited Village',
   enabled: true,
