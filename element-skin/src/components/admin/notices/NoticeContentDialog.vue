@@ -55,9 +55,9 @@
       </el-form>
 
       <aside
-        class="rounded-xl border border-[var(--color-border)] bg-[var(--color-background-soft)] p-4"
+        class="notice-content-preview rounded-xl border border-[var(--color-border)] bg-[var(--color-background-soft)] p-4"
       >
-        <div class="mb-4 flex items-center justify-between gap-3">
+        <div class="mb-4 flex shrink-0 items-center justify-between gap-3">
           <div class="font-semibold text-[var(--color-heading)]">预览</div>
           <div class="flex items-center gap-2">
             <el-tag size="small" :type="form.display_mode === 'detail' ? 'primary' : 'info'">
@@ -68,24 +68,26 @@
             </el-tag>
           </div>
         </div>
-        <UiCard shadow="never">
-          <article class="p-1">
-            <h2 class="m-0 text-2xl font-semibold text-[var(--color-heading)]">
-              {{ form.title || '未命名公告' }}
-            </h2>
-            <p class="mt-4 mb-0 text-sm leading-7 text-[var(--color-text-light)]">
-              {{ form.summary || '暂无摘要' }}
-            </p>
-            <div
-              v-if="form.display_mode === 'detail'"
-              class="mt-6 border-t border-[var(--color-border)] pt-5 text-sm leading-7 text-[var(--color-text)] [&_a]:text-[var(--el-color-primary)] [&_blockquote]:border-l-4 [&_blockquote]:border-[var(--el-color-primary)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--color-text-light)] [&_code]:rounded [&_code]:bg-[var(--color-background-soft)] [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:font-semibold [&_ol]:pl-5 [&_p]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-xl [&_pre]:bg-[var(--color-background-soft)] [&_pre]:p-3 [&_ul]:pl-5"
-              v-html="previewHtml"
-            />
-            <div v-if="form.link_url && form.link_text" class="mt-6">
-              <el-button size="small" type="primary">{{ form.link_text }}</el-button>
-            </div>
-          </article>
-        </UiCard>
+        <div class="notice-preview-scroll" role="region" aria-label="公告预览" tabindex="0">
+          <UiCard shadow="never">
+            <article class="break-words p-1">
+              <h2 class="m-0 text-2xl font-semibold text-[var(--color-heading)]">
+                {{ form.title || '未命名公告' }}
+              </h2>
+              <p class="mt-4 mb-0 text-sm leading-7 text-[var(--color-text-light)]">
+                {{ form.summary || '暂无摘要' }}
+              </p>
+              <div
+                v-if="form.display_mode === 'detail'"
+                class="mt-6 border-t border-[var(--color-border)] pt-5 text-sm leading-7 text-[var(--color-text)] [&_a]:text-[var(--el-color-primary)] [&_blockquote]:border-l-4 [&_blockquote]:border-[var(--el-color-primary)] [&_blockquote]:pl-3 [&_blockquote]:text-[var(--color-text-light)] [&_code]:rounded [&_code]:bg-[var(--color-background-soft)] [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:text-xl [&_h1]:font-semibold [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:font-semibold [&_ol]:pl-5 [&_p]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-xl [&_pre]:bg-[var(--color-background-soft)] [&_pre]:p-3 [&_ul]:pl-5"
+                v-html="previewHtml"
+              />
+              <div v-if="form.link_url && form.link_text" class="mt-6">
+                <el-button size="small" type="primary">{{ form.link_text }}</el-button>
+              </div>
+            </article>
+          </UiCard>
+        </div>
       </aside>
     </div>
 
@@ -153,5 +155,29 @@ function draftField<K extends keyof NoticeDraft>(field: K) {
 .notice-content-dialog .el-dialog__body {
   min-height: 0;
   overflow-y: auto;
+}
+
+.notice-content-dialog .notice-content-preview {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  min-width: 0;
+  min-height: 0;
+  height: 50dvh;
+}
+
+.notice-content-dialog .notice-preview-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* 与模板 lg 双列断点一致；网格行高由左侧表单决定，预览内容不参与撑高。 */
+@media (min-width: 64rem) {
+  .notice-content-dialog .notice-content-preview {
+    height: auto;
+    contain: size;
+  }
 }
 </style>

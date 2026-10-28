@@ -80,6 +80,8 @@ withDefaults(
 
 .ui-page-header-title {
   margin: 0;
+  width: fit-content;
+  max-width: 100%;
   font-size: var(--font-size-title);
   font-weight: 400;
   line-height: 1.6;
