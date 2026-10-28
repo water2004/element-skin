@@ -149,46 +149,47 @@ function buttonAttrs() {
   inset: 0;
   width: 100%;
   height: 100%;
+  transform: translateY(100%) rotate(-90deg);
   opacity: 0;
   pointer-events: none;
 }
 
+.ui-button--swap {
+  overflow: hidden;
+}
+
+.ui-button--swap .ui-button-content {
+  transform: translateY(0) scale(1);
+}
+
 .ui-button--swap .ui-button-content,
 .ui-button-swap {
-  transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
+  transition:
+    transform var(--motion-duration-swap) var(--motion-easing-swap),
+    opacity var(--motion-duration-swap) ease;
 }
 
 .ui-button--swap:not(.is-disabled):not(.is-loading):focus-visible .ui-button-content {
+  transform: translateY(-100%) scale(0.8);
   opacity: 0;
 }
 
 .ui-button--swap:not(.is-disabled):not(.is-loading):focus-visible .ui-button-swap {
+  transform: translateY(0) rotate(0deg);
   opacity: 1;
 }
 
 @media (hover: hover) {
   .ui-button--swap:not(.is-disabled):not(.is-loading):hover .ui-button-content {
+    transform: translateY(-100%) scale(0.8);
     opacity: 0;
   }
   .ui-button--swap:not(.is-disabled):not(.is-loading):hover .ui-button-swap {
+    transform: translateY(0) rotate(0deg);
     opacity: 1;
   }
   .ui-button--hover:not(.is-disabled):not(.is-loading):hover {
     box-shadow: var(--shadow-button-hover);
-  }
-}
-
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  .ui-button--hover {
-    transition:
-      color var(--motion-duration-fast) var(--motion-easing-standard),
-      background-color var(--motion-duration-fast) var(--motion-easing-standard),
-      border-color var(--motion-duration-fast) var(--motion-easing-standard),
-      box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
-      transform var(--motion-duration-fast) var(--motion-easing-standard);
-  }
-  .ui-button--hover:not(.is-disabled):not(.is-loading):hover {
-    transform: translateY(calc(-1 * var(--motion-offset-hover)));
   }
 }
 

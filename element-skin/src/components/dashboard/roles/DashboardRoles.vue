@@ -74,56 +74,35 @@
               role="group"
               aria-label="角色快捷操作"
             >
-              <el-tooltip
+              <UiButton
                 v-if="canSetAvatar && profile.skin_hash"
-                content="设为头像"
-                placement="top"
-                :trigger="['hover', 'focus']"
-                :trigger-keys="[]"
+                variant="secondary"
+                aria-label="设为头像"
+                :swap-icon="Setting"
+                :disabled="viewer.blocked.value"
+                @click.stop="setAsAvatar(profile)"
+                >头像</UiButton
               >
-                <UiButton
-                  variant="secondary"
-                  aria-label="设为头像"
-                  :swap-icon="Setting"
-                  :disabled="viewer.blocked.value"
-                  @click.stop="setAsAvatar(profile)"
-                  >头像</UiButton
-                >
-              </el-tooltip>
-              <el-tooltip
+              <UiButton
                 v-if="canClearTexture && profile.skin_hash"
-                content="清除皮肤"
-                placement="top"
-                :trigger="['hover', 'focus']"
-                :trigger-keys="[]"
+                variant="secondary"
+                tone="warning"
+                aria-label="清除皮肤"
+                :swap-icon="Close"
+                :disabled="viewer.blocked.value"
+                @click.stop="clearRoleSkin(profile.id)"
+                >皮肤</UiButton
               >
-                <UiButton
-                  variant="secondary"
-                  tone="warning"
-                  aria-label="清除皮肤"
-                  :swap-icon="Close"
-                  :disabled="viewer.blocked.value"
-                  @click.stop="clearRoleSkin(profile.id)"
-                  >皮肤</UiButton
-                >
-              </el-tooltip>
-              <el-tooltip
+              <UiButton
                 v-if="canClearTexture && profile.cape_hash"
-                content="清除披风"
-                placement="top"
-                :trigger="['hover', 'focus']"
-                :trigger-keys="[]"
+                variant="secondary"
+                tone="warning"
+                aria-label="清除披风"
+                :swap-icon="Close"
+                :disabled="viewer.blocked.value"
+                @click.stop="clearRoleCape(profile.id)"
+                >披风</UiButton
               >
-                <UiButton
-                  variant="secondary"
-                  tone="warning"
-                  aria-label="清除披风"
-                  :swap-icon="Close"
-                  :disabled="viewer.blocked.value"
-                  @click.stop="clearRoleCape(profile.id)"
-                  >披风</UiButton
-                >
-              </el-tooltip>
             </div>
           </template>
         </ProfileCard>

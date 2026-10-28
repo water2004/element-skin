@@ -142,6 +142,55 @@ describe('UiButton public behavior', () => {
     button.click()
     expect(click).toHaveBeenCalledTimes(1)
   })
+
+  it('uses the same overshoot transition when swapping in and returning, respecting disabled state', async () => {
+    const state = reactive({ disabled: false })
+    const root = mount(() =>
+      h(UiButton, { ...state, swapIcon: Setting, 'aria-label': '设为头像' }, () => '头像'),
+    )
+    const button = root.querySelector('button')!
+    const content = button.querySelector('.ui-button-content')!
+    const icon = button.querySelector('.ui-button-swap')!
+    const swapTransition = 'transform 300ms cubic-bezier(0.34,1.56,0.64,1),opacity 300ms ease'
+    expect(cssValue(button, 'overflow')).toBe('hidden')
+    expect(cssValue(content, 'transition')).toBe(swapTransition)
+    expect(cssValue(icon, 'transition')).toBe(swapTransition)
+    expect(cssValue(content, 'transform')).toBe('translateY(0) scale(1)')
+    expect(cssValue(icon, 'transform')).toBe('translateY(100%) rotate(-90deg)')
+    expect(cssValue(icon, 'opacity')).toBe('0')
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    button.focus()
+    button.dispatchEvent(new KeyboardEvent('keyup', { key: 'Tab', bubbles: true }))
+    expect(document.activeElement).toBe(button)
+    expect(button.matches(':focus-visible')).toBe(true)
+    // JSDOM 的焦点变化不使已缓存的 computed style 失效，用无样式 class 触发重算。
+    button.classList.add('focus-style-probe')
+    expect(cssValue(content, 'transform')).toBe('translateY(-100%) scale(0.8)')
+    expect(cssValue(content, 'opacity')).toBe('0')
+    expect(cssValue(icon, 'transform')).toBe('translateY(0) rotate(0deg)')
+    expect(cssValue(icon, 'opacity')).toBe('1')
+    expect(button.getAttribute('aria-label')).toBe('设为头像')
+
+    button.blur()
+    button.classList.remove('focus-style-probe')
+    expect(cssValue(content, 'transform')).toBe('translateY(0) scale(1)')
+    expect(cssValue(content, 'opacity')).toBe('1')
+    expect(cssValue(icon, 'transform')).toBe('translateY(100%) rotate(-90deg)')
+    expect(cssValue(icon, 'opacity')).toBe('0')
+    expect(cssValue(content, 'transition')).toBe(swapTransition)
+    expect(cssValue(icon, 'transition')).toBe(swapTransition)
+
+    button.focus()
+    button.classList.add('focus-style-probe')
+    state.disabled = true
+    await nextTick()
+    expect(cssValue(content, 'transform')).toBe('translateY(0) scale(1)')
+    expect(cssValue(content, 'opacity')).toBe('1')
+    expect(cssValue(icon, 'opacity')).toBe('0')
+    expect(content.textContent).toBe('头像')
+  })
+
   it.each(buttonVariants)('renders $variant / $tone independently', (testCase) => {
     const root = mount(() =>
       h(UiButton, { variant: testCase.variant, tone: testCase.tone }, () => '操作'),

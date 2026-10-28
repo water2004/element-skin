@@ -57,9 +57,11 @@
   --motion-duration-base: 180ms;
   --motion-duration-smooth: 320ms;
   --motion-duration-slow: 400ms;
+  --motion-duration-swap: 300ms;
   --motion-stagger: 30ms;
   --motion-stagger-limit: 120ms;
   --motion-easing-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-easing-swap: cubic-bezier(0.34, 1.56, 0.64, 1);
   --motion-offset-content: 8px;
   --motion-offset-card: 12px;
   --motion-offset-hover: 2px;
@@ -89,6 +91,7 @@
     --motion-duration-base: 0ms;
     --motion-duration-smooth: 0ms;
     --motion-duration-slow: 0ms;
+    --motion-duration-swap: 0ms;
     --motion-stagger: 0ms;
     --motion-stagger-limit: 0ms;
     --motion-offset-content: 0px;

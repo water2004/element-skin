@@ -905,9 +905,8 @@ describe('personal role card shortcuts', () => {
     const avatar = button(card, '头像')
     avatar.focus()
     await flushUI()
-    expect(
-      document.getElementById(avatar.getAttribute('aria-describedby')!)?.textContent?.trim(),
-    ).toBe('设为头像')
+    expect(avatar.hasAttribute('aria-describedby')).toBe(false)
+    expect(card.querySelector('.el-tooltip__trigger')).toBeNull()
     for (const code of ['Enter', 'Space']) {
       const key = new KeyboardEvent('keydown', {
         code,
@@ -925,9 +924,8 @@ describe('personal role card shortcuts', () => {
     const skin = button(card, '皮肤')
     skin.dispatchEvent(new MouseEvent('mouseenter'))
     await flushUI()
-    expect(
-      document.getElementById(skin.getAttribute('aria-describedby')!)?.textContent?.trim(),
-    ).toBe('清除皮肤')
+    expect(skin.hasAttribute('aria-describedby')).toBe(false)
+    expect(card.querySelector('.el-tooltip__trigger')).toBeNull()
     skin.click()
     await flushUI()
     expect(api.clearProfileSkin).toHaveBeenCalledExactlyOnceWith('viewer-profile')
