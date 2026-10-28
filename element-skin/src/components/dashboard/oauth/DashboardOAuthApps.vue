@@ -23,14 +23,15 @@
           >
             刷新
           </UiButton>
-          <el-button
+          <UiButton
+            hover-effect
+            variant="primary"
+            :icon="Plus"
             v-if="canCreateApps"
-            type="primary"
             @click="router.push({ name: 'dashboard-oauth-app-create' })"
           >
-            <el-icon><Plus /></el-icon>
             申请新应用
-          </el-button>
+          </UiButton>
         </ActionBar>
       </div>
 
@@ -82,10 +83,12 @@
               </el-text>
             </div>
             <div class="flex justify-end">
-              <el-button
+              <UiButton
+                hover-effect
+                variant="secondary"
+                tone="primary"
+                :icon="Edit"
                 v-if="canManageApps"
-                type="primary"
-                plain
                 @click="
                   router.push({
                     name: 'dashboard-oauth-app-edit',
@@ -93,9 +96,8 @@
                   })
                 "
               >
-                <el-icon><Edit /></el-icon>
                 管理
-              </el-button>
+              </UiButton>
             </div>
           </div>
         </div>

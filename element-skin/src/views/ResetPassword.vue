@@ -56,9 +56,16 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="resetPassword" :loading="loading" class="w-full">
+          <UiButton
+            hover-effect
+            variant="primary"
+            size="large"
+            @click="resetPassword"
+            :loading="loading"
+            class="w-full"
+          >
             {{ loading ? '提交中...' : '重置密码' }}
-          </el-button>
+          </UiButton>
         </el-form-item>
       </el-form>
 
@@ -70,6 +77,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'

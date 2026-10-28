@@ -41,14 +41,15 @@
             </div>
           </div>
 
-          <el-button
-            type="primary"
+          <UiButton
+            hover-effect
+            variant="primary"
             :loading="authorizingProviderId === provider.id"
             :disabled="!!authorizingProviderId"
             @click="$emit('connect', provider.id)"
           >
             {{ identityCount(provider.id) ? '添加另一个' : '连接' }}
-          </el-button>
+          </UiButton>
         </div>
       </div>
 
@@ -62,6 +63,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { Connection } from '@element-plus/icons-vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import type { ExternalIdentity, IdentityProvider } from '@/api/types'

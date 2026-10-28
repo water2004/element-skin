@@ -36,6 +36,7 @@
       <ActionBar align="start" class="mt-2">
         <UiButton
           variant="primary"
+          hover-effect
           size="small"
           :disabled="!dirty || busy || saving || !canEdit"
           :loading="saving"

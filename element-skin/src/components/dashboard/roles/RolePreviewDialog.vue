@@ -59,6 +59,8 @@
             <UiButton
               v-if="canSyncOfficialBinding"
               variant="secondary"
+              tone="success"
+              hover-effect
               :disabled="blocked"
               @click="$emit('sync-official', officialBinding)"
               >同步正版数据</UiButton
@@ -83,6 +85,8 @@
           <UiButton
             v-if="canSetAvatar && profile.skin_hash"
             variant="secondary"
+            tone="primary"
+            hover-effect
             :disabled="blocked"
             @click="$emit('set-avatar', profile)"
             >用作头像</UiButton

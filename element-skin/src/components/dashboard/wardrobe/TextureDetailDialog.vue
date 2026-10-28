@@ -68,6 +68,7 @@
             </el-select>
             <UiButton
               variant="primary"
+              hover-effect
               :disabled="blocked || !profileId || profilesLoading || !!profilesError"
               @click="$emit('apply')"
               >应用到角色</UiButton

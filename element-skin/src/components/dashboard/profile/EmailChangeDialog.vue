@@ -72,14 +72,15 @@
 
     <template #footer="{ requestClose }">
       <el-button :disabled="loading || codeLoading" @click="requestClose">取消</el-button>
-      <el-button
-        type="primary"
+      <UiButton
+        hover-effect
+        variant="primary"
         :loading="loading"
         :disabled="policyLoading || policyError || codeLoading"
         @click="submit"
       >
         确认重设
-      </el-button>
+      </UiButton>
     </template>
   </UiDialog>
 </template>

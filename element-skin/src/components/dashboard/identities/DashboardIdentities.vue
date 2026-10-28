@@ -6,6 +6,7 @@
           v-if="canCreateIdentity"
           size="large"
           variant="primary"
+          hover-effect
           :icon="Plus"
           :disabled="!linkProviders.length"
           @click="showAddIdentityDialog = true"
@@ -46,13 +47,14 @@
       </div>
 
       <el-empty v-else-if="!loading" description="尚未连接外部身份">
-        <el-button
+        <UiButton
+          hover-effect
+          variant="primary"
           v-if="canCreateIdentity && linkProviders.length"
-          type="primary"
           @click="showAddIdentityDialog = true"
         >
           添加第一个身份
-        </el-button>
+        </UiButton>
       </el-empty>
     </div>
 

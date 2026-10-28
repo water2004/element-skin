@@ -19,15 +19,15 @@
     </el-form>
     <template #footer="{ requestClose }">
       <el-button :disabled="creating" @click="requestClose">取消</el-button>
-      <el-button type="primary" :loading="creating" @click="submit">
-        <el-icon><Check /></el-icon>
+      <UiButton hover-effect variant="primary" :icon="Check" :loading="creating" @click="submit">
         创建
-      </el-button>
+      </UiButton>
     </template>
   </UiDialog>
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { Check } from '@element-plus/icons-vue'
 import { computed, watch } from 'vue'
 import UiDialog from '@/components/ui/UiDialog.vue'

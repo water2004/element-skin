@@ -134,10 +134,17 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="register" :loading="loading" class="w-full">
-            <el-icon v-if="!loading"><UserFilled /></el-icon>
+          <UiButton
+            hover-effect
+            variant="primary"
+            :icon="UserFilled"
+            size="large"
+            @click="register"
+            :loading="loading"
+            class="w-full"
+          >
             {{ loading ? '注册中...' : '注册' }}
-          </el-button>
+          </UiButton>
         </el-form-item>
       </el-form>
 

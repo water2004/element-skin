@@ -47,10 +47,15 @@
         <el-form-item label="邮箱">
           <div class="flex w-full min-w-0 flex-wrap gap-3">
             <el-input :model-value="user?.email || ''" disabled />
-            <el-button v-if="canUpdateOwnAccount" @click="showEmailChangeDialog = true">
-              <el-icon><Message /></el-icon>
+            <UiButton
+              hover-effect
+              variant="secondary"
+              :icon="Message"
+              v-if="canUpdateOwnAccount"
+              @click="showEmailChangeDialog = true"
+            >
               重设邮箱
-            </el-button>
+            </UiButton>
           </div>
         </el-form-item>
         <el-form-item label="用户名">
@@ -97,10 +102,15 @@
         </el-form-item>
 
         <div class="flex flex-wrap gap-3 justify-end">
-          <el-button type="primary" @click="updateProfile" size="large">
-            <el-icon><Check /></el-icon>
+          <UiButton
+            hover-effect
+            variant="primary"
+            :icon="Check"
+            @click="updateProfile"
+            size="large"
+          >
             保存修改
-          </el-button>
+          </UiButton>
           <el-button
             type="danger"
             @click="showDeleteDialog = true"
@@ -161,6 +171,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import PageContainer from '@/components/common/PageContainer.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import { ref, computed, watch, onBeforeUnmount } from 'vue'

@@ -55,21 +55,23 @@
         <el-button v-if="step === 'input'" type="primary" :loading="loading" @click="$emit('next')">
           下一步
         </el-button>
-        <el-button
+        <UiButton
+          hover-effect
+          variant="primary"
           v-else
-          type="primary"
           :loading="loading"
           :disabled="selectedProfiles.length === 0"
           @click="$emit('confirm')"
         >
           确认导入
-        </el-button>
+        </UiButton>
       </div>
     </template>
   </UiDialog>
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { formatUUID } from '@/utils/format'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import UiOptionCard from '@/components/ui/UiOptionCard.vue'

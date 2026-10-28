@@ -99,6 +99,7 @@ function buttonAttrs() {
 <style scoped>
 .ui-button {
   --ui-button-height: var(--control-height-default);
+  --ui-button-accent: var(--color-primary);
   position: relative;
   height: var(--ui-button-height);
   border-radius: var(--radius-control);
@@ -107,6 +108,18 @@ function buttonAttrs() {
     background-color var(--motion-duration-fast) var(--motion-easing-standard),
     border-color var(--motion-duration-fast) var(--motion-easing-standard),
     box-shadow var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.ui-button.el-button--success {
+  --ui-button-accent: var(--el-color-success);
+}
+
+.ui-button.el-button--warning {
+  --ui-button-accent: var(--el-color-warning);
+}
+
+.ui-button.el-button--danger {
+  --ui-button-accent: var(--el-color-danger);
 }
 
 .ui-button.el-button--small {
@@ -189,7 +202,8 @@ function buttonAttrs() {
     opacity: 1;
   }
   .ui-button--hover:not(.is-disabled):not(.is-loading):hover {
-    box-shadow: var(--shadow-button-hover);
+    box-shadow: var(--shadow-button-hover)
+      color-mix(in srgb, var(--ui-button-accent) 28%, transparent);
   }
 }
 

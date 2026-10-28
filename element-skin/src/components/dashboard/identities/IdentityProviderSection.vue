@@ -31,15 +31,17 @@
         </div>
 
         <ActionBar>
-          <el-button
+          <UiButton
+            hover-effect
+            variant="secondary"
+            :icon="Plus"
             v-if="canAdd && group.enabled && group.link_enabled"
             :loading="authorizingProviderId === group.id"
             :disabled="!!authorizingProviderId || !!reconnectingIdentityId"
             @click="$emit('add', group.id)"
           >
-            <el-icon><Plus /></el-icon>
             添加另一个
-          </el-button>
+          </UiButton>
         </ActionBar>
       </div>
     </template>
@@ -135,20 +137,21 @@
           </div>
 
           <ActionBar class="shrink-0">
-            <el-button
+            <UiButton
+              hover-effect
+              variant="primary"
               v-if="
                 canAdd &&
                 group.enabled &&
                 group.link_enabled &&
                 identity.authorization_status === 'reauthorization_required'
               "
-              type="primary"
               :loading="reconnectingIdentityId === identity.id"
               :disabled="!!authorizingProviderId || !!reconnectingIdentityId"
               @click="$emit('reconnect', identity)"
             >
               重新连接
-            </el-button>
+            </UiButton>
             <el-button v-if="canUpdate" @click="$emit('rename', identity)"> 修改标签 </el-button>
             <el-button v-if="canDelete" type="danger" plain @click="$emit('remove', identity)">
               删除
@@ -161,6 +164,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { computed } from 'vue'
 import { ArrowRight, Connection, Link as LinkIcon, Plus } from '@element-plus/icons-vue'
 import ActionBar from '@/components/common/ActionBar.vue'

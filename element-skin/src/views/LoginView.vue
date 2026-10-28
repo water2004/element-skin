@@ -36,10 +36,17 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" @click="login" :loading="loading" class="w-full">
-            <el-icon v-if="!loading"><Right /></el-icon>
+          <UiButton
+            hover-effect
+            variant="primary"
+            :icon="Right"
+            size="large"
+            @click="login"
+            :loading="loading"
+            class="w-full"
+          >
             {{ loading ? '登录中...' : '登录' }}
-          </el-button>
+          </UiButton>
         </el-form-item>
       </el-form>
 
@@ -52,7 +59,9 @@
       <template v-if="loginProviders.length">
         <el-divider class="external-login-divider">或使用外部身份登录</el-divider>
         <div class="external-login-buttons grid gap-3">
-          <el-button
+          <UiButton
+            hover-effect
+            variant="secondary"
             v-for="provider in loginProviders"
             :key="provider.id"
             class="external-login-button"
@@ -71,7 +80,7 @@
               <el-icon v-else class="shrink-0"><Connection /></el-icon>
               <span>使用 {{ provider.name }} 登录</span>
             </span>
-          </el-button>
+          </UiButton>
         </div>
       </template>
 
@@ -84,6 +93,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { reactive, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'

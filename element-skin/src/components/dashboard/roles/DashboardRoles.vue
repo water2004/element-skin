@@ -11,6 +11,7 @@
           size="large"
           variant="secondary"
           tone="success"
+          hover-effect
           :icon="Link"
           class="role-header-button"
           @click="openOfficialBindingDialog"
@@ -24,6 +25,7 @@
           @click="showYggImportDialog = true"
           variant="secondary"
           tone="warning"
+          hover-effect
           :icon="Download"
           class="role-header-button"
         >
@@ -35,6 +37,7 @@
           size="large"
           @click="showCreateRoleDialog = true"
           variant="primary"
+          hover-effect
           :icon="Plus"
           class="role-header-button"
         >
@@ -77,6 +80,8 @@
               <UiButton
                 v-if="canSetAvatar && profile.skin_hash"
                 variant="secondary"
+                tone="primary"
+                hover-effect
                 aria-label="设为头像"
                 :swap-icon="Setting"
                 :disabled="viewer.blocked.value"

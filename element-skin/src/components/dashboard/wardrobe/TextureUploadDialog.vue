@@ -117,15 +117,16 @@
             <el-button class="flex-1 rounded-lg" :disabled="uploading" @click="requestClose"
               >取消</el-button
             >
-            <el-button
-              type="primary"
+            <UiButton
+              hover-effect
+              variant="primary"
+              :icon="Upload"
               class="flex-1 rounded-lg"
               :loading="uploading"
               @click="submit"
             >
-              <el-icon><Upload /></el-icon>
               确认上传
-            </el-button>
+            </UiButton>
           </section>
         </el-form>
       </UiViewerLayout>
@@ -134,6 +135,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { computed, ref, watch } from 'vue'
 import { Upload, UploadFilled } from '@element-plus/icons-vue'
 import type { UploadFile, UploadInstance } from 'element-plus'

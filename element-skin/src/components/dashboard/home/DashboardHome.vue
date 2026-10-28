@@ -34,15 +34,20 @@
                 点击下方按钮复制 API 地址，或直接将其拖到支持 authlib-injector 的启动器窗口中。
               </p>
               <el-input v-model="apiUrl" readonly maxlength="256" class="api-url-input" />
-              <a
-                class="el-button el-button--primary drag-btn inline-flex items-center justify-center gap-2 font-medium whitespace-nowrap"
+              <UiButton
+                tag="a"
+                variant="primary"
+                size="large"
+                hover-effect
+                :icon="CopyDocument"
+                class="drag-btn font-medium whitespace-nowrap"
                 :href="`authlib-injector:yggdrasil-server:${encodeURIComponent(apiUrl)}`"
+                draggable="true"
                 title="点击复制，或拖到启动器"
                 @click.prevent="copyApiUrl"
               >
-                <el-icon><CopyDocument /></el-icon>
-                <span>复制或拖到启动器</span>
-              </a>
+                复制或拖到启动器
+              </UiButton>
             </div>
           </UiCard>
         </section>

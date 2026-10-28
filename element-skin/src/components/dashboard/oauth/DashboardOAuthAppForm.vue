@@ -169,15 +169,16 @@
             >
               仅保存
             </el-button>
-            <el-button
+            <UiButton
+              hover-effect
+              variant="primary"
+              :icon="app ? Upload : Plus"
               v-if="canEditFields"
-              type="primary"
               :loading="saving"
               @click="save(app?.status !== 'pending')"
             >
-              <el-icon><Upload v-if="app" /><Plus v-else /></el-icon>
               {{ primaryLabel }}
-            </el-button>
+            </UiButton>
           </ActionBar>
         </div>
       </UiCard>
@@ -186,6 +187,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import PageContainer from '@/components/common/PageContainer.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'

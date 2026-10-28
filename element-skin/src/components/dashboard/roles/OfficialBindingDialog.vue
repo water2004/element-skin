@@ -71,20 +71,22 @@
     <template #footer="{ requestClose }">
       <ActionBar>
         <el-button :disabled="loading" @click="requestClose">取消</el-button>
-        <el-button
-          type="primary"
+        <UiButton
+          hover-effect
+          variant="primary"
           :loading="loading"
           :disabled="!selectedIdentityId"
           @click="confirm"
         >
           建立绑定
-        </el-button>
+        </UiButton>
       </ActionBar>
     </template>
   </UiDialog>
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { computed, ref, watch } from 'vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import ActionBar from '@/components/common/ActionBar.vue'

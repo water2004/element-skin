@@ -8,7 +8,12 @@ import { compileStyle } from '@vue/compiler-sfc'
 import UiButton from '../UiButton.vue'
 import UiCard from '../UiCard.vue'
 import SearchBar from '@/components/common/SearchBar.vue'
-import { buttonVariants, cardPaddings } from './fixtures/primitiveCases'
+import {
+  buttonAccents,
+  buttonVariants,
+  cardPaddings,
+  launcherLink,
+} from './fixtures/primitiveCases'
 
 const cleanup: Array<() => void> = []
 const styles = document.createElement('style')
@@ -95,6 +100,42 @@ function cssValue(element: Element, property: string): string {
 }
 
 describe('UiButton public behavior', () => {
+  it.each(buttonAccents)(
+    'uses the $tone accent for opt-in glow without changing button position',
+    ({ tone, color }) => {
+      const root = mount(() => h(UiButton, { tone, hoverEffect: true }, () => '操作'))
+      const button = root.querySelector('button')!
+      expect(cssValue(button, '--ui-button-accent')).toBe(color)
+      expect(cssValue(button, '--shadow-button-hover')).toBe('0 4px 12px')
+      expect(button.classList.contains('ui-button--hover')).toBe(true)
+      expect(cssValue(button, 'transform')).toBe('none')
+    },
+  )
+
+  it('keeps glow opt-in and leaves the disabled/loading guards intact', async () => {
+    const state = reactive({ hoverEffect: false, disabled: false, loading: false })
+    const click = vi.fn()
+    const root = mount(() => h(UiButton, { ...state, onClick: click }, () => '保存'))
+    const button = root.querySelector('button')!
+    expect(button.classList.contains('ui-button--hover')).toBe(false)
+    state.hoverEffect = true
+    await nextTick()
+    expect(button.classList.contains('ui-button--hover')).toBe(true)
+    button.click()
+    expect(click).toHaveBeenCalledTimes(1)
+    state.loading = true
+    await nextTick()
+    expect(button.classList.contains('is-loading')).toBe(true)
+    button.click()
+    expect(click).toHaveBeenCalledTimes(1)
+    state.loading = false
+    state.disabled = true
+    await nextTick()
+    expect(button.classList.contains('is-disabled')).toBe(true)
+    button.click()
+    expect(click).toHaveBeenCalledTimes(1)
+  })
+
   it('replaces only the leading icon while retaining the label and blocking repeat activation', async () => {
     const state = reactive({ loading: false })
     const click = vi.fn()
@@ -324,6 +365,35 @@ describe('UiButton public behavior', () => {
       expect(click).toHaveBeenCalledTimes(1)
     },
   )
+
+  it('preserves a draggable launcher link and the copy handler preventing protocol navigation', () => {
+    const click = vi.fn((event: MouseEvent) => event.preventDefault())
+    const root = mount(() =>
+      h(
+        UiButton,
+        {
+          tag: 'a',
+          href: launcherLink.href,
+          draggable: true,
+          variant: 'primary',
+          size: 'large',
+          hoverEffect: true,
+          onClick: click,
+        },
+        () => launcherLink.label,
+      ),
+    )
+    const link = root.querySelector('a')!
+    expect(root.querySelector('button')).toBeNull()
+    expect(link.getAttribute('href')).toBe(launcherLink.href)
+    expect(link.draggable).toBe(true)
+    expect(link.textContent?.trim()).toBe(launcherLink.label)
+    expect(cssValue(link, 'height')).toBe('40px')
+    const event = new MouseEvent('click', { bubbles: true, cancelable: true })
+    expect(link.dispatchEvent(event)).toBe(false)
+    expect(event.defaultPrevented).toBe(true)
+    expect(click).toHaveBeenCalledExactlyOnceWith(event)
+  })
 })
 
 describe('UiCard public behavior', () => {

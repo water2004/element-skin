@@ -7,6 +7,7 @@
           @click="showUploadDialog = true"
           size="large"
           variant="primary"
+          hover-effect
           :icon="Upload"
         >
           上传纹理
