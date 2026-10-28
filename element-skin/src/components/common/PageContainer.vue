@@ -27,4 +27,14 @@ withDefaults(defineProps<{ variant?: 'form' | 'editor' | 'wide' | 'gallery' }>()
 .page-container--gallery {
   max-width: none;
 }
+
+.page-container :deep(.el-form-item__content) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.page-container :deep(.el-table),
+.page-container :deep(.el-input-number) {
+  max-width: 100%;
+}
 </style>

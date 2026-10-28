@@ -4,45 +4,43 @@
       title="角色管理"
       subtitle="创建并管理您的 Minecraft 角色身份"
       class="animate-fade-in"
-      ><template #actions
-        ><ActionBar>
-          <UiButton
-            v-if="canCreateOfficialBinding"
-            :disabled="viewer.blocked.value"
-            size="large"
-            variant="secondary"
-            tone="success"
-            :icon="Link"
-            class="role-header-button"
-            @click="openOfficialBindingDialog"
-          >
-            绑定正版
-          </UiButton>
-          <UiButton
-            v-if="canCreateRole"
-            :disabled="viewer.blocked.value"
-            size="large"
-            @click="showYggImportDialog = true"
-            variant="secondary"
-            tone="warning"
-            :icon="Download"
-            class="role-header-button"
-          >
-            导入皮肤站角色
-          </UiButton>
-          <UiButton
-            v-if="canCreateRole"
-            :disabled="viewer.blocked.value"
-            size="large"
-            @click="showCreateRoleDialog = true"
-            variant="primary"
-            :icon="Plus"
-            class="role-header-button"
-          >
-            新建角色
-          </UiButton>
-        </ActionBar></template
-      ></PageHeader
+      ><template #actions>
+        <UiButton
+          v-if="canCreateOfficialBinding"
+          :disabled="viewer.blocked.value"
+          size="large"
+          variant="secondary"
+          tone="success"
+          :icon="Link"
+          class="role-header-button"
+          @click="openOfficialBindingDialog"
+        >
+          绑定正版
+        </UiButton>
+        <UiButton
+          v-if="canCreateRole"
+          :disabled="viewer.blocked.value"
+          size="large"
+          @click="showYggImportDialog = true"
+          variant="secondary"
+          tone="warning"
+          :icon="Download"
+          class="role-header-button"
+        >
+          导入皮肤站角色
+        </UiButton>
+        <UiButton
+          v-if="canCreateRole"
+          :disabled="viewer.blocked.value"
+          size="large"
+          @click="showCreateRoleDialog = true"
+          variant="primary"
+          :icon="Plus"
+          class="role-header-button"
+        >
+          新建角色
+        </UiButton>
+      </template></PageHeader
     >
 
     <div
@@ -213,7 +211,6 @@ import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Download, Link, Setting, Close } from '@element-plus/icons-vue'
-import ActionBar from '@/components/common/ActionBar.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import ProfileCard from '@/components/common/ProfileCard.vue'

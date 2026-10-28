@@ -17,8 +17,10 @@
 
     <UiCard shadow="never">
       <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div
+            class="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-[var(--color-heading)]"
+          >
             <el-icon><Postcard /></el-icon>
             <span>SMTP 与验证配置</span>
             <DirtyTag :visible="hasSettingsChanges" />
@@ -121,8 +123,10 @@
 
     <UiCard class="mt-6" shadow="never">
       <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div
+            class="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-[var(--color-heading)]"
+          >
             <el-icon><Filter /></el-icon>
             <span>账户邮箱后缀策略</span>
             <DirtyTag :visible="hasPolicyChanges" />

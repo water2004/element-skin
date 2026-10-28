@@ -3,11 +3,9 @@
     <PageHeader title="OIDC 身份提供方" subtitle="配置允许用户登录和绑定的外部 OIDC 端点">
       <template #icon><Connection /></template>
       <template #actions>
-        <ActionBar>
-          <el-button v-if="canCreate" type="primary" :icon="Plus" @click="openCreate">
-            添加提供方
-          </el-button>
-        </ActionBar>
+        <el-button v-if="canCreate" type="primary" :icon="Plus" @click="openCreate">
+          添加提供方
+        </el-button>
       </template>
     </PageHeader>
 

@@ -18,8 +18,10 @@
     <!-- Site Config -->
     <UiCard class="mb-6" shadow="never">
       <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div
+            class="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-[var(--color-heading)]"
+          >
             <el-icon><Monitor /></el-icon>
             <span>基础设置</span>
             <DirtyTag :visible="hasGroupChanges('site')" />
@@ -163,8 +165,10 @@
     <!-- Security Config -->
     <UiCard class="mb-6" shadow="never">
       <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div
+            class="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-[var(--color-heading)]"
+          >
             <el-icon><Lock /></el-icon>
             <span>安全与速率限制</span>
             <DirtyTag :visible="hasGroupChanges('security')" />
@@ -227,8 +231,10 @@
     <!-- Auth / JWT Config -->
     <UiCard class="mb-6" shadow="never">
       <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div
+            class="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-[var(--color-heading)]"
+          >
             <el-icon><Key /></el-icon>
             <span>令牌与认证 (JWT)</span>
             <DirtyTag :visible="hasGroupChanges('auth')" />

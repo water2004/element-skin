@@ -6,9 +6,7 @@
     >
       <template #icon><Connection /></template>
       <template #actions>
-        <ActionBar>
-          <el-button :icon="ArrowLeft" @click="backToList">返回列表</el-button>
-        </ActionBar>
+        <el-button :icon="ArrowLeft" @click="backToList">返回列表</el-button>
       </template>
     </PageHeader>
 

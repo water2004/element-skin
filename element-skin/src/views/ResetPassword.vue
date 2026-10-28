@@ -7,7 +7,7 @@
     >
       <div class="text-center mb-8">
         <h1
-          class="m-0 mb-2 text-[var(--font-size-auth-title)] font-semibold text-[var(--color-heading)]"
+          class="m-0 mb-2 text-[length:var(--font-size-auth-title)] font-semibold text-[var(--color-heading)]"
         >
           重置密码
         </h1>

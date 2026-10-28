@@ -1,42 +1,44 @@
 <template>
   <PageContainer variant="wide" class="animate-fade-in">
-    <PageHeader title="首页图片" subtitle="管理静态图与 Panorama 的播放顺序、时长和镜头轨迹">
+    <PageHeader
+      title="首页图片"
+      subtitle="管理静态图与 Panorama 的播放顺序、时长和镜头轨迹"
+      actions-full
+    >
       <template #icon><PictureFilled /></template>
       <template #actions>
-        <ActionBar>
-          <DirtyTag :visible="hasChanges" :spaced="false" />
-          <el-upload
-            action="#"
-            :http-request="uploadImage"
-            :show-file-list="false"
-            accept=".png,.jpg,.jpeg,.webp"
-            :disabled="busy"
-          >
-            <el-button :icon="Upload" size="large" :disabled="busy">上传图片</el-button>
-          </el-upload>
-          <el-upload
-            action="#"
-            :http-request="uploadPanorama"
-            :show-file-list="false"
-            accept=".zip"
-            :disabled="busy"
-          >
-            <el-button :icon="Box" size="large" :disabled="busy">上传 Panorama</el-button>
-          </el-upload>
-          <el-button size="large" :disabled="busy || !hasChanges" @click="discardChanges">
-            放弃更改
-          </el-button>
-          <el-button
-            type="primary"
-            :icon="Check"
-            size="large"
-            :loading="saving"
-            :disabled="busy || !hasChanges"
-            @click="saveChanges"
-          >
-            保存配置
-          </el-button>
-        </ActionBar>
+        <DirtyTag :visible="hasChanges" :spaced="false" />
+        <el-upload
+          action="#"
+          :http-request="uploadImage"
+          :show-file-list="false"
+          accept=".png,.jpg,.jpeg,.webp"
+          :disabled="busy"
+        >
+          <el-button :icon="Upload" size="large" :disabled="busy">上传图片</el-button>
+        </el-upload>
+        <el-upload
+          action="#"
+          :http-request="uploadPanorama"
+          :show-file-list="false"
+          accept=".zip"
+          :disabled="busy"
+        >
+          <el-button :icon="Box" size="large" :disabled="busy">上传 Panorama</el-button>
+        </el-upload>
+        <el-button size="large" :disabled="busy || !hasChanges" @click="discardChanges">
+          放弃更改
+        </el-button>
+        <el-button
+          type="primary"
+          :icon="Check"
+          size="large"
+          :loading="saving"
+          :disabled="busy || !hasChanges"
+          @click="saveChanges"
+        >
+          保存配置
+        </el-button>
       </template>
     </PageHeader>
 
@@ -107,7 +109,6 @@ import {
 } from '@/components/admin/homepage/homepageMediaState'
 import { saveHomepageMediaChanges } from '@/components/admin/homepage/homepageMediaSave'
 import { useHomepageMediaDrag } from '@/components/admin/homepage/useHomepageMediaDrag'
-import ActionBar from '@/components/common/ActionBar.vue'
 import PageHeader from '@/components/common/PageHeader.vue'
 import DirtyTag from '@/components/common/DirtyTag.vue'
 import { useUnsavedChangesGuard } from '@/composables/useUnsavedChangesGuard'
@@ -282,7 +283,7 @@ onMounted(fetchItems)
 .media-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, 240px);
-  gap: 22px;
+  gap: var(--space-panel-padding);
   justify-content: center;
 }
 .media-grid-move,

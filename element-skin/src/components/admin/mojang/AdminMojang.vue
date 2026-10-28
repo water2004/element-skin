@@ -16,8 +16,10 @@
     <!-- Global Strategy Card -->
     <UiCard class="mb-6" shadow="never">
       <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div
+            class="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-[var(--color-heading)]"
+          >
             <el-icon><Setting /></el-icon>
             <span>全局调度策略</span>
           </div>
@@ -49,7 +51,7 @@
           </p>
         </div>
         <div
-          class="flex items-center justify-between gap-4 py-3 px-4 bg-[var(--color-background-soft)] rounded-lg"
+          class="flex flex-wrap items-center justify-between gap-4 py-3 px-4 bg-[var(--color-background-soft)] rounded-lg"
         >
           <div class="flex flex-col gap-1">
             <span class="font-semibold text-[var(--color-heading)] text-sm">健康探测周期</span>
@@ -72,8 +74,10 @@
     <!-- Endpoints List -->
     <UiCard shadow="never">
       <template #header>
-        <div class="flex justify-between items-center">
-          <div class="flex items-center gap-2 font-semibold text-[var(--color-heading)]">
+        <div class="flex flex-wrap justify-between items-center gap-3">
+          <div
+            class="flex min-w-0 flex-wrap items-center gap-2 font-semibold text-[var(--color-heading)]"
+          >
             <el-icon><List /></el-icon>
             <span>Fallback 服务链</span>
           </div>
@@ -309,6 +313,7 @@ onMounted(fetchSettings)
 <style scoped>
 .probe-interval-input {
   width: 200px;
+  flex-shrink: 0;
 }
 
 /* Note Column */

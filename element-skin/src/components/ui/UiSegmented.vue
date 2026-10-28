@@ -32,6 +32,12 @@ const rootClass = computed(() => ['ui-segmented', `ui-segmented--${props.variant
 </script>
 
 <style>
+.ui-segmented {
+  max-width: 100%;
+  min-width: 0;
+  row-gap: var(--space-control-gap);
+}
+
 .ui-segmented--capsule .el-radio-button__inner {
   background: var(--color-segmented-background);
   color: var(--color-text);

@@ -17,6 +17,7 @@ withDefaults(
 
 <style scoped>
 .ui-option-card {
+  min-width: 0;
   width: 100%;
   margin-right: 0 !important;
   height: auto !important;
@@ -29,6 +30,12 @@ withDefaults(
     border-color var(--motion-duration-base) var(--motion-easing-standard) !important;
   border: 1px solid var(--color-border) !important;
   background: var(--color-card-background) !important;
+}
+
+.ui-option-card :deep(.el-radio__label) {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .ui-option-card:hover {

@@ -7,17 +7,17 @@
         <el-avatar
           :shape="customAvatar ? 'square' : 'circle'"
           :size="72"
-          class="profile-avatar"
+          class="profile-avatar shrink-0"
           :src="customAvatar || ''"
           :class="{ 'has-custom': !!customAvatar }"
         >
           {{ !customAvatar ? emailInitial : '' }}
         </el-avatar>
-        <div>
+        <div class="min-w-0 break-words">
           <h3 class="m-0 text-lg font-semibold text-[var(--color-heading)] transition-colors">
             {{ user?.display_name || '未设置用户名' }}
           </h3>
-          <p class="mt-2 mb-0 text-[13px] text-[var(--color-text-light)] transition-colors">
+          <p class="mt-2 mb-0 break-all text-sm text-[var(--color-text-light)] transition-colors">
             {{ user?.email }}
           </p>
         </div>
@@ -43,9 +43,9 @@
         </div>
       </el-alert>
 
-      <el-form label-width="120px" :model="form" label-position="left">
+      <el-form class="profile-form" label-width="120px" :model="form" label-position="left">
         <el-form-item label="邮箱">
-          <div class="flex w-full gap-3">
+          <div class="flex w-full min-w-0 flex-wrap gap-3">
             <el-input :model-value="user?.email || ''" disabled />
             <el-button v-if="canUpdateOwnAccount" @click="showEmailChangeDialog = true">
               <el-icon><Message /></el-icon>
@@ -96,7 +96,7 @@
           </div>
         </el-form-item>
 
-        <div class="flex gap-3 justify-end">
+        <div class="flex flex-wrap gap-3 justify-end">
           <el-button type="primary" @click="updateProfile" size="large">
             <el-icon><Check /></el-icon>
             保存修改
@@ -351,5 +351,20 @@ async function confirmDeleteAccount() {
   transition:
     background-color var(--motion-duration-base) ease,
     color var(--motion-duration-base) ease;
+}
+
+@media (max-width: 640px) {
+  .profile-form :deep(.el-form-item) {
+    display: block;
+  }
+  .profile-form :deep(.el-form-item__label) {
+    width: 100% !important;
+    height: auto;
+    justify-content: flex-start;
+    padding-bottom: var(--space-control-gap);
+  }
+  .profile-form :deep(.el-form-item__content) {
+    margin-left: 0 !important;
+  }
 }
 </style>

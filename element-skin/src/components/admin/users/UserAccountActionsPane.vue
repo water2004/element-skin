@@ -1,7 +1,7 @@
 <template>
   <div class="grid gap-4 md:grid-cols-2">
     <div
-      class="flex items-center justify-between gap-4 rounded-lg border border-[var(--color-border)] p-4"
+      class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--color-border)] p-4"
     >
       <div>
         <div class="font-semibold text-[var(--color-heading)]">账号封禁</div>
@@ -26,7 +26,7 @@
       >
     </div>
     <div
-      class="flex items-center justify-between gap-4 rounded-lg border border-[var(--color-border)] p-4"
+      class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--color-border)] p-4"
     >
       <div>
         <div class="font-semibold text-[var(--color-heading)]">强制重置密码</div>
@@ -37,7 +37,7 @@
       </el-button>
     </div>
     <div
-      class="flex items-center justify-between gap-4 rounded-lg border border-[var(--el-color-danger-light-7)] p-4 md:col-span-2"
+      class="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-[var(--el-color-danger-light-7)] p-4 md:col-span-2"
     >
       <div>
         <div class="font-semibold text-[var(--el-color-danger)]">注销账号</div>

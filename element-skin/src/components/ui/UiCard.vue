@@ -41,6 +41,7 @@ function cardAttrs() {
 
 <style scoped>
 .ui-card {
+  min-width: 0;
   --el-card-padding: var(--space-card-padding);
   border-radius: var(--radius-card);
   border: 1px solid var(--color-border);
@@ -52,6 +53,14 @@ function cardAttrs() {
     transform var(--motion-duration-base) ease,
     box-shadow var(--motion-duration-base) ease;
   overflow: hidden;
+}
+
+.ui-card :deep(.el-card__body) {
+  min-width: 0;
+}
+
+.ui-card :deep(.el-card__header) {
+  overflow-wrap: anywhere;
 }
 
 .ui-card.is-hoverable:hover {

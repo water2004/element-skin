@@ -18,7 +18,7 @@
     </PageHeader>
 
     <div
-      class="grid grid-cols-1 gap-5 lg:grid-cols-[360px_minmax(0,1fr)] xl:grid-cols-[420px_minmax(0,1fr)]"
+      class="grid min-w-0 grid-cols-1 gap-5 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,420px)_minmax(0,1fr)]"
     >
       <UiCard shadow="never" padding="none" class="overflow-hidden">
         <div
@@ -60,7 +60,7 @@
                   </span>
                 </div>
                 <div
-                  class="mt-1 text-sm leading-6 text-[var(--color-text-light)] line-clamp-2 [&_a]:text-[var(--el-color-primary)] [&_p]:m-0"
+                  class="mt-1 text-sm leading-6 text-[var(--color-text-light)] line-clamp-2 [&_img]:max-w-full [&_img]:h-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_a]:text-[var(--el-color-primary)] [&_p]:m-0"
                   v-html="noticePreview(notice)"
                 />
                 <div class="mt-2 flex items-center justify-between gap-3">
@@ -105,7 +105,7 @@
         v-loading="detailLoading"
         element-loading-background="transparent"
       >
-        <article v-if="selectedNotice">
+        <article v-if="selectedNotice" class="min-w-0 break-words">
           <div class="mb-4 flex flex-wrap items-center gap-2">
             <el-tag v-if="selectedNotice.pinned" size="small" type="warning">置顶</el-tag>
             <el-tag size="small" type="info">{{ noticeTypeLabel(selectedNotice.type) }}</el-tag>
@@ -120,7 +120,7 @@
             </span>
           </div>
 
-          <h2 class="m-0 text-3xl font-semibold text-[var(--color-heading)]">
+          <h2 class="m-0 break-words text-3xl font-semibold text-[var(--color-heading)]">
             {{ selectedNotice.title }}
           </h2>
           <p
@@ -135,7 +135,7 @@
             class="mt-6 border-t border-[var(--color-border)] pt-6"
           >
             <div
-              class="text-[var(--color-text)] leading-8 [&_p]:my-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:pl-6 [&_ol]:pl-6 [&_li]:my-1 [&_blockquote]:border-l-4 [&_blockquote]:border-[var(--el-color-primary)] [&_blockquote]:pl-4 [&_blockquote]:text-[var(--color-text-light)] [&_code]:rounded [&_code]:bg-[var(--color-background-soft)] [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:overflow-auto [&_pre]:rounded-xl [&_pre]:bg-[var(--color-background-soft)] [&_pre]:p-4 [&_a]:text-[var(--el-color-primary)]"
+              class="text-[var(--color-text)] leading-8 [&_p]:my-4 [&_h1]:text-2xl [&_h1]:font-semibold [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold [&_ul]:pl-6 [&_ol]:pl-6 [&_li]:my-1 [&_blockquote]:border-l-4 [&_blockquote]:border-[var(--el-color-primary)] [&_blockquote]:pl-4 [&_blockquote]:text-[var(--color-text-light)] [&_code]:rounded [&_code]:bg-[var(--color-background-soft)] [&_code]:px-1.5 [&_code]:py-0.5 [&_pre]:max-w-full [&_pre]:overflow-auto [&_pre]:rounded-xl [&_pre]:bg-[var(--color-background-soft)] [&_pre]:p-4 [&_img]:max-w-full [&_img]:h-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_a]:text-[var(--el-color-primary)]"
               v-html="renderedSelectedContent"
             />
           </div>
@@ -143,6 +143,7 @@
           <div v-if="selectedNotice.link_url && selectedNotice.link_text" class="mt-8">
             <UiButton
               variant="primary"
+              class="h-auto! min-h-8 max-w-full whitespace-normal! [&_.ui-button-content]:max-w-full [&_.ui-button-content]:break-all"
               tag="a"
               :href="selectedNotice.link_url"
               target="_blank"

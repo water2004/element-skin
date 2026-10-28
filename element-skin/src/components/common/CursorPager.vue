@@ -2,6 +2,7 @@
   <div class="cursor-pager" v-if="visible">
     <el-button
       class="pager-arrow"
+      aria-label="上一页"
       circle
       :icon="ArrowLeftBold"
       :disabled="disabledPrev || loading"
@@ -31,6 +32,7 @@
       class="pager-arrow"
       circle
       :icon="ArrowRightBold"
+      aria-label="下一页"
       :disabled="disabledNext || loading"
       @click="$emit('next')"
     />
@@ -81,9 +83,10 @@ function handlePageSizeChange(value: unknown) {
 <style scoped>
 .cursor-pager {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: var(--space-control-gap);
 }
 
 .pager-arrow {

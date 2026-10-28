@@ -213,9 +213,14 @@ async function mount(render: () => VNode) {
   return { host, unmount }
 }
 function dialog() {
-  const result = [...document.querySelectorAll<HTMLElement>('.ui-dialog')].find(
-    (element) => element.closest<HTMLElement>('.el-overlay')?.style.display !== 'none',
-  )
+  // 两步弹窗切换时，旧层可仍在离场；操作浏览器实际最上面的可见层。
+  const result = [...document.querySelectorAll<HTMLElement>('.ui-dialog')]
+    .filter((element) => element.closest<HTMLElement>('.el-overlay')?.style.display !== 'none')
+    .sort(
+      (a, b) =>
+        Number(b.closest<HTMLElement>('.el-overlay')?.style.zIndex || 0) -
+        Number(a.closest<HTMLElement>('.el-overlay')?.style.zIndex || 0),
+    )[0]
   if (!result) throw new Error('No visible dialog')
   return result
 }

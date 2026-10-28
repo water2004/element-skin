@@ -145,8 +145,8 @@ function handleWhitelistToggle(val: string | number | boolean) {
 
 .url-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-content-padding);
 }
 
 .url-item label {
@@ -158,8 +158,8 @@ function handleWhitelistToggle(val: string | number | boolean) {
 
 .features-panel {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-content-padding);
 }
 
 .feature-card-item {
@@ -186,6 +186,8 @@ function handleWhitelistToggle(val: string | number | boolean) {
 
 .section-header-small {
   display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-control-gap);
   justify-content: space-between;
   align-items: center;
   margin-bottom: 15px;
@@ -193,6 +195,7 @@ function handleWhitelistToggle(val: string | number | boolean) {
 
 .add-user-form-box {
   width: 300px;
+  max-width: 100%;
 }
 
 @media (max-width: 768px) {

@@ -7,7 +7,7 @@
       :shape="user.avatar_hash ? 'square' : 'circle'"
       :class="[
         user.avatar_hash ? 'has-custom' : 'bg-[var(--color-background-mute)]',
-        'text-xl font-semibold text-[var(--color-text-light)]',
+        'shrink-0 text-xl font-semibold text-[var(--color-text-light)]',
       ]"
       :src="userAvatars[user.avatar_hash || ''] || ''"
     >
@@ -15,7 +15,7 @@
     </el-avatar>
     <div class="min-w-0 flex-1">
       <div class="flex flex-wrap items-center gap-2">
-        <h3 class="m-0 text-xl font-semibold text-[var(--color-heading)]">
+        <h3 class="m-0 break-all text-xl font-semibold text-[var(--color-heading)]">
           {{ user.display_name || '未设置显示名' }}
         </h3>
         <el-tag v-if="isProtectedSubject" type="danger" effect="dark" size="small">
@@ -30,8 +30,10 @@
           {{ role.name }}
         </el-tag>
       </div>
-      <p class="mt-1 mb-0 text-sm text-[var(--color-text-light)]">{{ user.email }}</p>
-      <p class="mt-1 mb-0 font-mono text-xs text-[var(--color-text-light)]">UID: {{ user.id }}</p>
+      <p class="mt-1 mb-0 break-all text-sm text-[var(--color-text-light)]">{{ user.email }}</p>
+      <p class="mt-1 mb-0 break-all font-mono text-xs text-[var(--color-text-light)]">
+        UID: {{ user.id }}
+      </p>
     </div>
     <div class="md:text-right">
       <el-tag v-if="isBanned" type="warning" effect="dark">

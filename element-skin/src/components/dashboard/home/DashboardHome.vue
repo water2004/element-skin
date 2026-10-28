@@ -6,7 +6,7 @@
     ></PageHeader>
 
     <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
-      <div class="order-2 lg:order-1">
+      <div class="order-2 min-w-0 lg:order-1">
         <section class="flex flex-col gap-4 mb-8">
           <UiCard class="dashboard-stat-card" shadow="hover">
             <div class="stat-card-content">
@@ -72,7 +72,7 @@
       </div>
 
       <aside class="order-1 lg:order-2 flex flex-col gap-4">
-        <div class="flex justify-between items-center gap-3">
+        <div class="flex flex-wrap justify-between items-center gap-3">
           <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">公告</h2>
           <el-button size="small" text @click="goNotifications">
             <span>全部</span>
@@ -310,15 +310,16 @@ onBeforeUnmount(() => {
 }
 
 .stat-card-content {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   justify-content: center;
-  gap: 96px;
+  gap: var(--space-panel-padding);
   min-height: 96px;
 }
 
 .dashboard-stat-card :deep(.el-statistic) {
-  min-width: 160px;
+  min-width: 0;
   text-align: center;
 }
 
@@ -378,6 +379,7 @@ onBeforeUnmount(() => {
 
 .service-status-actions {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
   flex-shrink: 0;
@@ -399,7 +401,7 @@ onBeforeUnmount(() => {
   .stat-card-content {
     align-items: stretch;
     justify-content: center;
-    flex-direction: column;
+    grid-template-columns: 1fr;
     gap: 18px;
     min-height: 88px;
   }
