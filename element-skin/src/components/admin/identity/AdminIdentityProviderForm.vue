@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto max-w-[1000px] space-y-6 py-5 animate-fade-in">
+  <PageContainer variant="editor" class="space-y-6 animate-fade-in">
     <PageHeader
       :title="providerId ? '编辑 OIDC 身份提供方' : '添加 OIDC 身份提供方'"
       subtitle="配置 Discovery、客户端凭据以及站点开放的身份能力"
@@ -145,10 +145,11 @@
         </UiCard>
       </template>
     </div>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Connection } from '@element-plus/icons-vue'

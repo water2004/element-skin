@@ -27,6 +27,37 @@ function mount(render: () => VNode) {
 }
 
 describe('page headers and action groups', () => {
+  it('keeps navigation, object metadata, primary actions and filters in their own regions', () => {
+    const back = vi.fn(),
+      save = vi.fn(),
+      search = vi.fn()
+    const root = mount(() =>
+      h(
+        PageHeader,
+        { title: '编辑应用', subtitle: '应用说明', actionsFull: true },
+        {
+          leading: () => h(UiButton, { 'aria-label': '返回列表', onClick: back }, () => '返回'),
+          meta: () => h('code', 'client-id'),
+          actions: () => h(UiButton, { onClick: save }, () => '保存'),
+          toolbar: () => h(SearchBar, { modelValue: 'query', onSearch: search }),
+        },
+      ),
+    )
+    expect(root.querySelector('h1')?.textContent).toBe('编辑应用')
+    expect(root.querySelector('.ui-page-header-text code')?.textContent).toBe('client-id')
+    const actions = root.querySelector('.ui-page-header-actions')!
+    expect(actions.classList.contains('is-full')).toBe(true)
+    expect(actions.textContent?.trim()).toBe('保存')
+    root.querySelector<HTMLButtonElement>('[aria-label="返回列表"]')!.click()
+    actions.querySelector<HTMLButtonElement>('button')!.click()
+    root.querySelector<HTMLButtonElement>('.ui-page-header-toolbar button')!.click()
+    expect(back).toHaveBeenCalledTimes(1)
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(root.querySelector<HTMLInputElement>('.ui-page-header-toolbar input')?.value).toBe(
+      'query',
+    )
+    expect(search).toHaveBeenCalledExactlyOnceWith()
+  })
   it('renders an accessible heading and action group without an AppLayout ancestor', async () => {
     const state = reactive({
       title: '通知中心',

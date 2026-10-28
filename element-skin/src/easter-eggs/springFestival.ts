@@ -90,7 +90,6 @@ export function start(): EasterEggCleanup {
       border-bottom-color: #f4a62a !important;
     }
 
-    html.easter-egg-spring-festival .page-header-content h1,
     html.easter-egg-spring-festival .ui-page-header-title,
     html.easter-egg-spring-festival .hero-title {
       background: linear-gradient(135deg, var(--color-heading) 0%, #e86b3c 54%, #f4a62a 100%);

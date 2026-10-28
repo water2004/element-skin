@@ -1,5 +1,5 @@
 <template>
-  <div class="flex flex-col animate-fade-in">
+  <PageContainer variant="wide" class="flex flex-col animate-fade-in">
     <PageHeader
       title="通知中心"
       subtitle="查看与你相关的站内消息和公告"
@@ -158,10 +158,11 @@
         </div>
       </UiCard>
     </div>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'

@@ -43,6 +43,14 @@
   --font-size-body: 15px;
   --font-size-title: 24px;
   --layout-header-height: 64px;
+  --space-page-gutter: 20px;
+  --space-page-block: 20px;
+  --page-width-form: 900px;
+  --page-width-editor: 1000px;
+  --page-width-wide: 1200px;
+  --auth-card-width: 440px;
+  --font-size-auth-title: 28px;
+  --shadow-auth-card: 0 8px 32px rgba(0, 0, 0, 0.1);
 
   /* 控件反馈、内容入场和展示入场分级；同一组内容共用起点和时长。 */
   --motion-duration-fast: 120ms;

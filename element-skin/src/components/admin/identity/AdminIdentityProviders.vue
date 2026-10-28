@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[1000px] mx-auto py-5 animate-fade-in">
+  <PageContainer variant="wide" class="animate-fade-in">
     <PageHeader title="OIDC 身份提供方" subtitle="配置允许用户登录和绑定的外部 OIDC 端点">
       <template #icon><Connection /></template>
       <template #actions>
@@ -117,10 +117,11 @@
       </div>
       <el-empty v-else-if="!loading && canRead" description="尚未配置外部 OIDC 提供方" />
     </div>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Connection, Plus, Promotion } from '@element-plus/icons-vue'

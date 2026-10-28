@@ -1,11 +1,6 @@
 <template>
-  <div class="profile-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <h1>个人资料</h1>
-        <p>管理您的账号安全与个性化设置</p>
-      </div>
-    </div>
+  <PageContainer variant="form" class="profile-section animate-fade-in">
+    <PageHeader title="个人资料" subtitle="管理您的账号安全与个性化设置"></PageHeader>
 
     <UiCard class="max-w-[600px] mx-auto p-8 profile-form-card">
       <div class="flex items-center gap-4">
@@ -162,10 +157,12 @@
         </el-button>
       </template>
     </UiDialog>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -173,7 +170,6 @@ import { Clock, Check, Delete, Message } from '@element-plus/icons-vue'
 import { useAvatar } from '@/composables/useAvatar'
 import { changePassword, patchMe, deleteMe } from '@/api/me'
 import { isEasterEggDisabled, setEasterEggDisabled } from '@/easter-eggs'
-import type { User } from '@/api/types'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import EmailChangeDialog from './EmailChangeDialog.vue'

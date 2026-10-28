@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[1000px] mx-auto py-5 animate-fade-in">
+  <PageContainer variant="wide" class="animate-fade-in">
     <PageHeader title="邀请码管理" subtitle="创建并管理用于限制新用户注册的邀请码">
       <template #icon><Ticket /></template>
       <template #actions>
@@ -139,10 +139,11 @@
         </div>
       </template>
     </UiDialog>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

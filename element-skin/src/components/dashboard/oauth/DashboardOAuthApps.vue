@@ -1,11 +1,9 @@
 <template>
-  <div class="space-y-6 animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <h1>第三方应用</h1>
-        <p>管理你申请的应用，以及你授权给外部应用的访问能力</p>
-      </div>
-    </div>
+  <PageContainer variant="wide" class="space-y-6 animate-fade-in">
+    <PageHeader
+      title="第三方应用"
+      subtitle="管理你申请的应用，以及你授权给外部应用的访问能力"
+    ></PageHeader>
 
     <UiCard v-if="showAppSection" class="p-6">
       <div class="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -178,10 +176,12 @@
         </div>
       </div>
     </UiCard>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'

@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[1000px] mx-auto py-5 animate-fade-in">
+  <PageContainer variant="wide" class="animate-fade-in">
     <PageHeader title="用户管理" subtitle="管理站内所有用户及其角色的状态与权限">
       <template #icon><UserFilled /></template>
       <template #actions>
@@ -95,10 +95,11 @@
       :banning="banning"
       @confirm="confirmBanUser"
     />
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

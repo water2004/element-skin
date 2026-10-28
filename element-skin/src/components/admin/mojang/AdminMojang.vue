@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[1100px] mx-auto py-5 animate-fade-in">
+  <PageContainer variant="wide" class="animate-fade-in">
     <PageHeader
       title="Fallback 服务配置"
       subtitle="管理外部 Yggdrasil 或 Mojang API 的回退逻辑与白名单"
@@ -156,10 +156,11 @@
         </el-table-column>
       </el-table>
     </UiCard>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage, ElLoading } from 'element-plus'
 import {

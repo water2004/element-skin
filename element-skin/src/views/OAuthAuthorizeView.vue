@@ -1,17 +1,16 @@
 <template>
   <div class="flex-1 px-4 py-10">
     <UiCard class="mx-auto max-w-3xl [--el-card-padding:1rem] sm:[--el-card-padding:2rem]">
-      <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 class="m-0 text-2xl font-semibold text-[var(--color-heading)]">授权第三方应用</h1>
-          <p class="mt-2 mb-0 text-sm text-[var(--color-text-light)]">
-            请确认该应用请求的站点能力，授权后应用可代表你调用对应接口。
-          </p>
-        </div>
-        <UiButton loading-mode="icon" :icon="Refresh" :loading="loading" @click="loadDetails"
-          >刷新</UiButton
-        >
-      </div>
+      <PageHeader
+        title="授权第三方应用"
+        subtitle="请确认该应用请求的站点能力，授权后应用可代表你调用对应接口。"
+      >
+        <template #actions>
+          <UiButton loading-mode="icon" :icon="Refresh" :loading="loading" @click="loadDetails"
+            >刷新</UiButton
+          >
+        </template>
+      </PageHeader>
 
       <el-alert
         v-if="message"
@@ -50,6 +49,7 @@
 </template>
 
 <script setup lang="ts">
+import PageHeader from '@/components/common/PageHeader.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { Refresh } from '@element-plus/icons-vue'
 import { computed, onMounted, ref } from 'vue'

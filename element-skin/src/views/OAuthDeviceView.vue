@@ -1,12 +1,10 @@
 <template>
   <div class="flex-1 px-4 py-10">
     <UiCard class="mx-auto max-w-3xl [--el-card-padding:1rem] sm:[--el-card-padding:2rem]">
-      <div class="mb-6">
-        <h1 class="m-0 text-2xl font-semibold text-[var(--color-heading)]">设备授权</h1>
-        <p class="mt-2 mb-0 text-sm text-[var(--color-text-light)]">
-          输入设备上显示的用户代码，确认第三方应用可访问的站点能力。
-        </p>
-      </div>
+      <PageHeader
+        title="设备授权"
+        subtitle="输入设备上显示的用户代码，确认第三方应用可访问的站点能力。"
+      />
 
       <div class="flex gap-3">
         <el-input
@@ -42,6 +40,7 @@
 </template>
 
 <script setup lang="ts">
+import PageHeader from '@/components/common/PageHeader.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'

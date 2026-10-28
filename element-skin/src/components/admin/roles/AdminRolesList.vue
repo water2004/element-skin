@@ -1,5 +1,5 @@
 <template>
-  <div class="w-full mx-auto py-5">
+  <PageContainer variant="gallery">
     <div class="animate-fade-in">
       <PageHeader title="角色管理" subtitle="浏览和管理全站所有用户的游戏角色与材质">
         <template #icon><UserFilled /></template>
@@ -80,10 +80,11 @@
       @clear-cape="clearProfileTexture('cape')"
       @delete="confirmDeleteRole"
     />
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

@@ -1,11 +1,9 @@
 <template>
-  <div class="flex flex-col animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <h1>仪表盘</h1>
-        <p>这里汇总了您的资源数量、启动器接入入口与备用服务的健康状态</p>
-      </div>
-    </div>
+  <PageContainer variant="wide" class="flex flex-col animate-fade-in">
+    <PageHeader
+      title="仪表盘"
+      subtitle="这里汇总了您的资源数量、启动器接入入口与备用服务的健康状态"
+    ></PageHeader>
 
     <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_340px] gap-6 items-start">
       <div class="order-2 lg:order-1">
@@ -118,10 +116,12 @@
         </UiCard>
       </aside>
     </div>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { getPublicSettings, getPublicFallbackStatus } from '@/api/public'

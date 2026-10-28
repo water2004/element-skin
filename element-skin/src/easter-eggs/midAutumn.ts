@@ -192,7 +192,6 @@ export function start(): EasterEggCleanup {
       border-bottom-color: var(--mid-autumn-primary-soft) !important;
     }
 
-    html.dark.easter-egg-mid-autumn .page-header-content h1,
     html.dark.easter-egg-mid-autumn .ui-page-header-title,
     html.dark.easter-egg-mid-autumn .hero-title {
       background: var(--mid-autumn-title);

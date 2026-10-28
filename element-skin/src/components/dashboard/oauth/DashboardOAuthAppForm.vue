@@ -1,7 +1,14 @@
 <template>
-  <div class="space-y-6 animate-fade-in">
-    <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-      <div class="flex min-w-0 items-start gap-3">
+  <PageContainer variant="editor" class="space-y-6 animate-fade-in">
+    <PageHeader
+      :title="app ? '修改第三方应用' : '申请第三方应用'"
+      :subtitle="
+        app
+          ? '在完整页面中维护授权方式、API 权限和可选的 Webhook endpoint。'
+          : '填写应用能力并提交审核；不需要事件通知时无需配置 Webhook。'
+      "
+    >
+      <template #leading>
         <el-button
           circle
           plain
@@ -10,32 +17,16 @@
         >
           <el-icon><ArrowLeft /></el-icon>
         </el-button>
-        <div class="min-w-0">
-          <div class="flex flex-wrap items-center gap-2">
-            <h1 class="m-0 text-2xl font-semibold text-[var(--color-heading)]">
-              {{ app ? '修改第三方应用' : '申请第三方应用' }}
-            </h1>
-            <el-tag v-if="app" size="small" :type="statusType(app.status)">
-              {{ statusLabel(app.status) }}
-            </el-tag>
-          </div>
-          <p class="mt-2 mb-0 text-sm text-[var(--color-text-light)]">
-            {{
-              app
-                ? '在完整页面中维护授权方式、API 权限和可选的 Webhook endpoint。'
-                : '填写应用能力并提交审核；不需要事件通知时无需配置 Webhook。'
-            }}
-          </p>
-          <el-text
-            v-if="app"
-            copyable
-            class="mt-2 block font-mono text-xs text-[var(--color-text-light)]"
-          >
-            {{ app.client_id }}
-          </el-text>
-        </div>
-      </div>
-    </div>
+      </template>
+      <template v-if="app" #meta>
+        <el-tag size="small" :type="statusType(app.status)">
+          {{ statusLabel(app.status) }}
+        </el-tag>
+        <el-text copyable class="mt-2 block font-mono text-xs text-[var(--color-text-light)]">
+          {{ app.client_id }}
+        </el-text>
+      </template>
+    </PageHeader>
 
     <el-skeleton v-if="loading" :rows="10" animated />
 
@@ -191,10 +182,12 @@
         </div>
       </UiCard>
     </template>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageHeader from '@/components/common/PageHeader.vue'
+import PageContainer from '@/components/common/PageContainer.vue'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete, Key, Plus, Upload } from '@element-plus/icons-vue'

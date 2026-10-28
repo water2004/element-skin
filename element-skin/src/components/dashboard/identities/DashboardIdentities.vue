@@ -1,23 +1,19 @@
 <template>
-  <div class="identity-section animate-fade-in">
-    <div class="page-header">
-      <div class="page-header-content">
-        <div>
-          <h1>身份管理</h1>
-          <p>连接并管理用于第三方登录和外部能力的账号</p>
-        </div>
-      </div>
-      <UiButton
-        v-if="canCreateIdentity"
-        size="large"
-        variant="primary"
-        :icon="Plus"
-        :disabled="!linkProviders.length"
-        @click="showAddIdentityDialog = true"
-      >
-        添加身份
-      </UiButton>
-    </div>
+  <PageContainer variant="editor" class="identity-section animate-fade-in">
+    <PageHeader title="身份管理" subtitle="连接并管理用于第三方登录和外部能力的账号"
+      ><template #actions
+        ><UiButton
+          v-if="canCreateIdentity"
+          size="large"
+          variant="primary"
+          :icon="Plus"
+          :disabled="!linkProviders.length"
+          @click="showAddIdentityDialog = true"
+        >
+          添加身份
+        </UiButton></template
+      ></PageHeader
+    >
 
     <div v-loading="loading" class="min-h-[280px]">
       <div v-if="identityGroups.length" class="grid gap-5">
@@ -67,10 +63,12 @@
       :authorizing-provider-id="authorizingProviderId"
       @connect="connectProvider"
     />
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'

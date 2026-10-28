@@ -264,35 +264,6 @@ onUnmounted(() => {
 </script>
 
 <style>
-.app-shell :where(.page-header) {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 40px;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-
-.app-shell :where(.page-header-content h1) {
-  font-size: 32px;
-  margin: 0 0 8px 0;
-  background: linear-gradient(135deg, var(--color-heading) 0%, #409eff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.app-shell :where(.page-header-content p) {
-  margin: 0;
-  color: var(--color-text-light);
-  font-size: 16px;
-  transition: color var(--motion-duration-base) ease;
-}
-
-.app-shell :where(.page-header-actions) {
-  display: flex;
-  gap: 12px;
-}
-
 .app-shell :where(.form-tip) {
   font-size: 12px;
   color: var(--color-text-light);
@@ -536,7 +507,8 @@ onUnmounted(() => {
 }
 
 .app-main {
-  padding: 20px;
+  padding: var(--space-page-gutter);
+  min-width: 0;
   flex: 1;
   display: flex;
   flex-direction: column;

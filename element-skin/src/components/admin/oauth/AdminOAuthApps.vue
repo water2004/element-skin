@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-auto max-w-[1200px] py-5 animate-fade-in">
+  <PageContainer variant="wide" class="animate-fade-in">
     <PageHeader title="第三方应用" subtitle="查看、审核和停用全站已注册的第三方应用">
       <template #icon><Link /></template>
       <template #actions>
@@ -165,10 +165,11 @@
       :can-review="canReviewApps"
       @review="review"
     />
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

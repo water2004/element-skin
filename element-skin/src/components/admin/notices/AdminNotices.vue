@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[1100px] mx-auto py-5 animate-fade-in">
+  <PageContainer variant="wide" class="animate-fade-in">
     <PageHeader title="通知公告" subtitle="发布公告并控制可见人群、展示方式和生命周期">
       <template #icon><Bell /></template>
       <template #actions>
@@ -135,10 +135,11 @@
       @save="saveNotice"
       @closed="handleEditorClosed"
     />
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'

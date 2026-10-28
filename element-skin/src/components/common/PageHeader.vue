@@ -1,17 +1,28 @@
 <template>
   <header class="ui-page-header">
     <div class="ui-page-header-content">
+      <div v-if="$slots.leading" class="shrink-0"><slot name="leading" /></div>
       <div v-if="$slots.icon" class="ui-page-header-icon" aria-hidden="true">
         <slot name="icon" />
       </div>
       <div class="ui-page-header-text">
         <component :is="'h' + level" class="ui-page-header-title">{{ title }}</component>
         <p v-if="subtitle" class="ui-page-header-subtitle">{{ subtitle }}</p>
+        <div v-if="$slots.meta" class="mt-2 flex min-w-0 flex-wrap items-center gap-2">
+          <slot name="meta" />
+        </div>
       </div>
     </div>
-    <ActionBar v-if="$slots.actions" class="ui-page-header-actions" :label="actionsLabel">
+    <ActionBar
+      v-if="$slots.actions"
+      class="ui-page-header-actions"
+      :class="{ 'is-full': actionsFull }"
+      :align="actionsFull ? 'start' : 'end'"
+      :label="actionsLabel"
+    >
       <slot name="actions" />
     </ActionBar>
+    <div v-if="$slots.toolbar" class="ui-page-header-toolbar"><slot name="toolbar" /></div>
   </header>
 </template>
 
@@ -24,8 +35,9 @@ withDefaults(
     subtitle?: string
     level?: 1 | 2 | 3
     actionsLabel?: string
+    actionsFull?: boolean
   }>(),
-  { subtitle: undefined, level: 1, actionsLabel: undefined },
+  { subtitle: undefined, level: 1, actionsLabel: undefined, actionsFull: false },
 )
 </script>
 
@@ -35,8 +47,8 @@ withDefaults(
   flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 30px;
-  gap: 20px;
+  margin-bottom: var(--space-panel-padding);
+  gap: var(--space-content-padding);
   width: 100%;
 }
 
@@ -84,6 +96,12 @@ withDefaults(
 .ui-page-header-actions {
   flex: 0 1 auto;
   max-width: 100%;
+}
+
+.ui-page-header-toolbar {
+  flex: 1 1 100%;
+  width: 100%;
+  min-width: 0;
 }
 
 @media (max-width: 768px) {

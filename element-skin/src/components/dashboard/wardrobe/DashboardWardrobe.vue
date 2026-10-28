@@ -1,22 +1,18 @@
 <template>
-  <div class="wardrobe-section">
-    <div class="page-header animate-fade-in">
-      <div class="page-header-content">
-        <div>
-          <h1>我的衣柜</h1>
-          <p>管理并应用您的皮肤与披风纹理</p>
-        </div>
-      </div>
-      <UiButton
-        v-if="canUpload"
-        @click="showUploadDialog = true"
-        size="large"
-        variant="primary"
-        :icon="Upload"
-      >
-        上传纹理
-      </UiButton>
-    </div>
+  <PageContainer variant="gallery" class="wardrobe-section">
+    <PageHeader title="我的衣柜" subtitle="管理并应用您的皮肤与披风纹理" class="animate-fade-in"
+      ><template #actions
+        ><UiButton
+          v-if="canUpload"
+          @click="showUploadDialog = true"
+          size="large"
+          variant="primary"
+          :icon="Upload"
+        >
+          上传纹理
+        </UiButton></template
+      ></PageHeader
+    >
 
     <div
       class="min-h-[400px]"
@@ -96,10 +92,12 @@
       @file-exceed="handleFileExceed"
       @submit="doUpload"
     />
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { computed, ref, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadFile } from 'element-plus'

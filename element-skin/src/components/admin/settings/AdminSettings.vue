@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[900px] mx-auto py-5 animate-fade-in">
+  <PageContainer variant="form" class="animate-fade-in">
     <PageHeader title="站点设置" subtitle="管理站点基础配置、安全策略及第三方集成">
       <template #icon><Setting /></template>
       <template #actions>
@@ -255,10 +255,11 @@
         </DirtyFormItem>
       </el-form>
     </UiCard>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'

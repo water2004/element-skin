@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[1000px] mx-auto py-5 animate-fade-in">
+  <PageContainer variant="form" class="animate-fade-in">
     <PageHeader title="彩蛋列表" subtitle="配置服务端允许启用的节日彩蛋">
       <template #icon><MagicStick /></template>
       <template #actions>
@@ -57,10 +57,11 @@
         </div>
       </UiCard>
     </div>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import { onMounted, ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'

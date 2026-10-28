@@ -1,5 +1,5 @@
 <template>
-  <div class="skin-library-container">
+  <PageContainer variant="gallery" class="skin-library-container">
     <div v-if="isDisabled" class="disabled-container animate-fade-in">
       <el-empty description="皮肤库已关闭">
         <template #extra>
@@ -8,37 +8,31 @@
       </el-empty>
     </div>
     <template v-else>
-      <div class="page-header animate-fade-in">
-        <div class="page-header-content">
-          <div>
-            <h1>皮肤库</h1>
-            <p>探索并收藏精美材质</p>
-          </div>
-        </div>
-        <ActionBar full align="center">
-          <SearchBar
-            v-model="searchQuery"
-            :loading="loading"
-            placeholder="搜索哈希、材质名或上传者"
-            @clear="handleClearSearch"
-            @search="handleSearch"
-          />
-          <UiSegmented
-            v-model="filterType"
-            @change="handleFilterChange"
-            size="large"
-            class="skin-library-filter"
-          >
-            <el-radio-button value="">全部</el-radio-button>
-            <el-radio-button value="skin">皮肤</el-radio-button>
-            <el-radio-button value="cape">披风</el-radio-button>
-          </UiSegmented>
-          <el-select v-model="sortBy" @change="handleSortChange" size="large" class="sort-select">
-            <el-option label="最新上传" value="latest" />
-            <el-option label="最多使用" value="most_used" />
-          </el-select>
-        </ActionBar>
-      </div>
+      <PageHeader title="皮肤库" subtitle="探索并收藏精美材质" class="animate-fade-in"
+        ><template #toolbar
+          ><ActionBar full align="center">
+            <SearchBar
+              v-model="searchQuery"
+              :loading="loading"
+              placeholder="搜索哈希、材质名或上传者"
+              @clear="handleClearSearch"
+              @search="handleSearch"
+            />
+            <UiSegmented
+              v-model="filterType"
+              @change="handleFilterChange"
+              size="large"
+              class="skin-library-filter"
+            >
+              <el-radio-button value="">全部</el-radio-button>
+              <el-radio-button value="skin">皮肤</el-radio-button>
+              <el-radio-button value="cape">披风</el-radio-button>
+            </UiSegmented>
+            <el-select v-model="sortBy" @change="handleSortChange" size="large" class="sort-select">
+              <el-option label="最新上传" value="latest" />
+              <el-option label="最多使用" value="most_used" />
+            </el-select> </ActionBar></template
+      ></PageHeader>
 
       <div
         class="library-grid-container"
@@ -148,10 +142,12 @@
         </div>
       </div>
     </template>
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { ref, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -337,11 +333,6 @@ watch(
 </script>
 
 <style scoped>
-.skin-library-container {
-  margin: 0 0;
-  padding: 0;
-}
-
 .disabled-container {
   display: flex;
   justify-content: center;
@@ -351,15 +342,6 @@ watch(
 
 .library-grid-container {
   min-height: 400px;
-}
-
-.skin-library-container .page-header {
-  align-items: flex-start;
-  flex-direction: column;
-}
-
-.skin-library-container .page-header-content {
-  width: 100%;
 }
 
 .search-bar-container {

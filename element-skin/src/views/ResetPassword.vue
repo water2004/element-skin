@@ -3,10 +3,14 @@
     class="flex items-center justify-center flex-1 p-5 bg-[var(--color-background-hero-light)] dark:bg-[var(--color-background-hero-dark)] transition-colors"
   >
     <div
-      class="w-full max-w-[440px] bg-[var(--color-card-background)] rounded-[16px] p-6 sm:p-10 shadow-[0_8px_32px_rgba(0,0,0,0.1)] animate-fade-in border border-[var(--color-border)]"
+      class="w-full max-w-[var(--auth-card-width)] bg-[var(--color-card-background)] rounded-[var(--radius-card)] p-6 sm:p-10 shadow-[var(--shadow-auth-card)] animate-fade-in border border-[var(--color-border)]"
     >
       <div class="text-center mb-8">
-        <h1 class="m-0 mb-2 text-[28px] font-semibold text-[var(--color-heading)]">重置密码</h1>
+        <h1
+          class="m-0 mb-2 text-[var(--font-size-auth-title)] font-semibold text-[var(--color-heading)]"
+        >
+          重置密码
+        </h1>
         <p class="m-0 text-sm text-[var(--color-text-light)]">输入您的邮箱并获取验证码以重置密码</p>
       </div>
 

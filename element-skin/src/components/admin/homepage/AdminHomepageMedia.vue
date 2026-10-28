@@ -1,5 +1,5 @@
 <template>
-  <div class="max-w-[1040px] mx-auto py-5 animate-fade-in">
+  <PageContainer variant="wide" class="animate-fade-in">
     <PageHeader title="首页图片" subtitle="管理静态图与 Panorama 的播放顺序、时长和镜头轨迹">
       <template #icon><PictureFilled /></template>
       <template #actions>
@@ -80,10 +80,11 @@
       :preview-url="selectedItem ? previewUrl(selectedItem) : ''"
       @update:item="updateSelectedItem"
     />
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'

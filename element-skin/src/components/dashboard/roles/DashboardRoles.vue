@@ -1,50 +1,49 @@
 <template>
-  <div class="roles-section">
-    <div class="page-header animate-fade-in">
-      <div class="page-header-content">
-        <div>
-          <h1>角色管理</h1>
-          <p>创建并管理您的 Minecraft 角色身份</p>
-        </div>
-      </div>
-      <ActionBar>
-        <UiButton
-          v-if="canCreateOfficialBinding"
-          :disabled="viewer.blocked.value"
-          size="large"
-          variant="secondary"
-          tone="success"
-          :icon="Link"
-          class="role-header-button"
-          @click="openOfficialBindingDialog"
-        >
-          绑定正版
-        </UiButton>
-        <UiButton
-          v-if="canCreateRole"
-          :disabled="viewer.blocked.value"
-          size="large"
-          @click="showYggImportDialog = true"
-          variant="secondary"
-          tone="warning"
-          :icon="Download"
-          class="role-header-button"
-        >
-          导入皮肤站角色
-        </UiButton>
-        <UiButton
-          v-if="canCreateRole"
-          :disabled="viewer.blocked.value"
-          size="large"
-          @click="showCreateRoleDialog = true"
-          variant="primary"
-          :icon="Plus"
-          class="role-header-button"
-        >
-          新建角色
-        </UiButton>
-      </ActionBar>
-    </div>
+  <PageContainer variant="gallery" class="roles-section">
+    <PageHeader
+      title="角色管理"
+      subtitle="创建并管理您的 Minecraft 角色身份"
+      class="animate-fade-in"
+      ><template #actions
+        ><ActionBar>
+          <UiButton
+            v-if="canCreateOfficialBinding"
+            :disabled="viewer.blocked.value"
+            size="large"
+            variant="secondary"
+            tone="success"
+            :icon="Link"
+            class="role-header-button"
+            @click="openOfficialBindingDialog"
+          >
+            绑定正版
+          </UiButton>
+          <UiButton
+            v-if="canCreateRole"
+            :disabled="viewer.blocked.value"
+            size="large"
+            @click="showYggImportDialog = true"
+            variant="secondary"
+            tone="warning"
+            :icon="Download"
+            class="role-header-button"
+          >
+            导入皮肤站角色
+          </UiButton>
+          <UiButton
+            v-if="canCreateRole"
+            :disabled="viewer.blocked.value"
+            size="large"
+            @click="showCreateRoleDialog = true"
+            variant="primary"
+            :icon="Plus"
+            class="role-header-button"
+          >
+            新建角色
+          </UiButton>
+        </ActionBar></template
+      ></PageHeader
+    >
 
     <div
       class="min-h-[400px]"
@@ -204,10 +203,12 @@
       @next="getYggProfiles"
       @confirm="importYggProfile"
     />
-  </div>
+  </PageContainer>
 </template>
 
 <script setup lang="ts">
+import PageContainer from '@/components/common/PageContainer.vue'
+import PageHeader from '@/components/common/PageHeader.vue'
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
