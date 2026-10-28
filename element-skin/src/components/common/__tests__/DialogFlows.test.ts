@@ -587,9 +587,12 @@ describe('independent and sensitive form lifecycles', () => {
     const confirm = vi.spyOn(ElMessageBox, 'confirm')
     const mounted = await mount(() => h(AdminHomepageMedia))
     const configuration = mounted.host.querySelector('[aria-label="配置更改"]')!
-    const status = configuration.querySelector('[role="status"] .el-tag')!
-    expect(status.textContent?.trim()).toBe('未保存')
-    expect(status.classList.contains('invisible')).toBe(true)
+    const reserved = configuration.querySelector('[role="status"] [aria-hidden="true"]')!
+    const visibleTag = () =>
+      configuration.querySelector('[role="status"] .el-tag:not([aria-hidden="true"])')
+    expect(reserved.textContent?.trim()).toBe('未保存')
+    expect(reserved.classList.contains('invisible')).toBe(true)
+    expect(visibleTag()).toBeNull()
     expect(
       [...configuration.querySelectorAll('button')].map((el) => el.textContent?.trim()),
     ).toEqual(['放弃更改', '保存配置'])
@@ -597,9 +600,11 @@ describe('independent and sensitive form lifecycles', () => {
     card.click()
     await settle()
     await input(dialog().querySelector('input')!, 'Edited Village')
+    expect(visibleTag()?.textContent?.trim()).toBe('未保存')
+    expect(visibleTag()?.classList.contains('el-zoom-in-center-enter-active')).toBe(true)
     button(dialog(), '返回配置').click()
     await settle()
-    expect(status.classList.contains('invisible')).toBe(false)
+    expect(visibleTag()?.textContent?.trim()).toBe('未保存')
     card.querySelector<HTMLButtonElement>('button[aria-label="删除媒体"]')!.click()
     await selectUpload(mounted.host)
     expect(ElMessage.warning).toHaveBeenCalledTimes(2)
@@ -609,8 +614,8 @@ describe('independent and sensitive form lifecycles', () => {
     expect(confirm).not.toHaveBeenCalled()
     button(mounted.host, '放弃更改').click()
     await settle()
-    expect(configuration.querySelector('[role="status"] .el-tag')).toBe(status)
-    expect(status.classList.contains('invisible')).toBe(true)
+    expect(configuration.querySelector('[role="status"] [aria-hidden="true"]')).toBe(reserved)
+    expect(visibleTag()).toBeNull()
     expect(button(mounted.host, '保存配置').disabled).toBe(true)
     card.click()
     await settle()

@@ -81,8 +81,8 @@ withDefaults(
 .ui-page-header-title {
   margin: 0;
   font-size: var(--font-size-title);
-  font-weight: 700;
-  line-height: 1.4;
+  font-weight: 400;
+  line-height: 1.6;
   color: var(--color-heading);
   background: linear-gradient(135deg, var(--color-heading) 0%, var(--color-primary) 100%);
   background-clip: text;
@@ -91,7 +91,7 @@ withDefaults(
 }
 
 .ui-page-header-subtitle {
-  margin: 4px 0 0;
+  margin: var(--space-control-gap) 0 0;
   color: var(--color-text-light);
   font-size: var(--font-size-description);
   line-height: 1.6;

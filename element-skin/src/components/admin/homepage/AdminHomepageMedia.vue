@@ -39,8 +39,15 @@
           >
             保存配置
           </el-button>
-          <span role="status">
-            <DirtyTag :visible="true" :spaced="false" :class="{ invisible: !hasChanges }" />
+          <span role="status" class="inline-grid">
+            <DirtyTag
+              :visible="true"
+              :spaced="false"
+              disable-transitions
+              aria-hidden="true"
+              class="invisible col-start-1 row-start-1"
+            />
+            <DirtyTag :visible="hasChanges" :spaced="false" class="col-start-1 row-start-1" />
           </span>
         </ActionBar>
       </template>
