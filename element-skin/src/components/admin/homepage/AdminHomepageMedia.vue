@@ -7,7 +7,6 @@
     >
       <template #icon><PictureFilled /></template>
       <template #actions>
-        <DirtyTag :visible="hasChanges" :spaced="false" />
         <el-upload
           action="#"
           :http-request="uploadImage"
@@ -26,19 +25,24 @@
         >
           <el-button :icon="Box" size="large" :disabled="busy">上传 Panorama</el-button>
         </el-upload>
-        <el-button size="large" :disabled="busy || !hasChanges" @click="discardChanges">
-          放弃更改
-        </el-button>
-        <el-button
-          type="primary"
-          :icon="Check"
-          size="large"
-          :loading="saving"
-          :disabled="busy || !hasChanges"
-          @click="saveChanges"
-        >
-          保存配置
-        </el-button>
+        <ActionBar align="start" label="配置更改">
+          <el-button size="large" :disabled="busy || !hasChanges" @click="discardChanges">
+            放弃更改
+          </el-button>
+          <el-button
+            type="primary"
+            :icon="Check"
+            size="large"
+            :loading="saving"
+            :disabled="busy || !hasChanges"
+            @click="saveChanges"
+          >
+            保存配置
+          </el-button>
+          <span role="status">
+            <DirtyTag :visible="true" :spaced="false" :class="{ invisible: !hasChanges }" />
+          </span>
+        </ActionBar>
       </template>
     </PageHeader>
 
@@ -87,6 +91,7 @@
 
 <script setup lang="ts">
 import PageContainer from '@/components/common/PageContainer.vue'
+import ActionBar from '@/components/common/ActionBar.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'

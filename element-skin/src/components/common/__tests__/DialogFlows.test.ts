@@ -586,15 +586,20 @@ describe('independent and sensitive form lifecycles', () => {
   it('discards only the homepage draft without an API call and requires handling it before resource commands', async () => {
     const confirm = vi.spyOn(ElMessageBox, 'confirm')
     const mounted = await mount(() => h(AdminHomepageMedia))
+    const configuration = mounted.host.querySelector('[aria-label="配置更改"]')!
+    const status = configuration.querySelector('[role="status"] .el-tag')!
+    expect(status.textContent?.trim()).toBe('未保存')
+    expect(status.classList.contains('invisible')).toBe(true)
+    expect(
+      [...configuration.querySelectorAll('button')].map((el) => el.textContent?.trim()),
+    ).toEqual(['放弃更改', '保存配置'])
     const card = mounted.host.querySelector<HTMLElement>('[data-homepage-media-id="media-a"]')!
     card.click()
     await settle()
     await input(dialog().querySelector('input')!, 'Edited Village')
     button(dialog(), '返回配置').click()
     await settle()
-    expect(
-      [...mounted.host.querySelectorAll('.el-tag')].map((tag) => tag.textContent?.trim()),
-    ).toContain('未保存')
+    expect(status.classList.contains('invisible')).toBe(false)
     card.querySelector<HTMLButtonElement>('button[aria-label="删除媒体"]')!.click()
     await selectUpload(mounted.host)
     expect(ElMessage.warning).toHaveBeenCalledTimes(2)
@@ -604,9 +609,8 @@ describe('independent and sensitive form lifecycles', () => {
     expect(confirm).not.toHaveBeenCalled()
     button(mounted.host, '放弃更改').click()
     await settle()
-    expect(
-      [...mounted.host.querySelectorAll('.el-tag')].map((tag) => tag.textContent?.trim()),
-    ).not.toContain('未保存')
+    expect(configuration.querySelector('[role="status"] .el-tag')).toBe(status)
+    expect(status.classList.contains('invisible')).toBe(true)
     expect(button(mounted.host, '保存配置').disabled).toBe(true)
     card.click()
     await settle()

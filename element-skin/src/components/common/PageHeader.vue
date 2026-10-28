@@ -84,6 +84,10 @@ withDefaults(
   font-weight: 700;
   line-height: 1.4;
   color: var(--color-heading);
+  background: linear-gradient(135deg, var(--color-heading) 0%, var(--color-primary) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .ui-page-header-subtitle {

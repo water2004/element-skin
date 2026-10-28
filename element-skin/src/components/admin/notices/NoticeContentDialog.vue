@@ -3,14 +3,14 @@
     :model-value="modelValue"
     :title="createMode ? '新建公告' : '编辑公告'"
     variant="wide-form"
+    class="notice-content-dialog"
+    align-center
     :dirty="dirty"
     :busy="saving"
     @update:model-value="emit('update:modelValue', $event)"
     @closed="emit('closed')"
   >
-    <div
-      class="grid max-h-[72vh] grid-cols-1 gap-5 overflow-auto p-6 lg:grid-cols-[minmax(0,1fr)_420px]"
-    >
+    <div class="grid min-w-0 grid-cols-1 items-start gap-5 p-6 lg:grid-cols-[minmax(0,1fr)_420px]">
       <el-form label-position="top" :disabled="saving">
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto]">
           <el-form-item label="标题">
@@ -46,7 +46,7 @@
           <el-input
             v-model="contentMarkdown"
             type="textarea"
-            :rows="18"
+            :rows="8"
             maxlength="20000"
             show-word-limit
             placeholder="支持标题、段落、列表、引用、代码块和链接；原始 HTML 会被清洗"
@@ -90,18 +90,19 @@
     </div>
 
     <template #footer="{ requestClose }">
-      <div class="px-6 pb-6">
+      <ActionBar align="end" mobile-align="end" class="px-6 pb-4">
         <el-button :disabled="saving" @click="requestClose">取消</el-button>
         <el-button type="primary" :disabled="saving" @click="emit('continue')"
           >下一步：发布设置</el-button
         >
-      </div>
+      </ActionBar>
     </template>
   </UiDialog>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import ActionBar from '@/components/common/ActionBar.vue'
 import UiCard from '@/components/ui/UiCard.vue'
 import UiDialog from '@/components/ui/UiDialog.vue'
 import type { NoticeDraft } from '@/api/admin/notices'
@@ -135,3 +136,22 @@ function draftField<K extends keyof NoticeDraft>(field: K) {
   })
 }
 </script>
+
+<style>
+/* UiDialog 传送至 body，样式用专属类约束，不依赖调用组件的 scope 属性。 */
+.notice-content-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2 * var(--space-content-padding));
+}
+
+.notice-content-dialog .el-dialog__header,
+.notice-content-dialog .el-dialog__footer {
+  flex-shrink: 0;
+}
+
+.notice-content-dialog .el-dialog__body {
+  min-height: 0;
+  overflow-y: auto;
+}
+</style>

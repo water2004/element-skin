@@ -45,9 +45,10 @@
 
       <el-form class="profile-form" label-width="120px" :model="form" label-position="left">
         <el-form-item label="邮箱">
-          <div class="flex w-full min-w-0 flex-wrap gap-3">
-            <el-input :model-value="user?.email || ''" disabled />
+          <div class="flex w-full min-w-0 items-center gap-3">
+            <el-input class="min-w-0 flex-1" :model-value="user?.email || ''" disabled />
             <UiButton
+              class="shrink-0"
               hover-effect
               variant="secondary"
               :icon="Message"
