@@ -3,7 +3,13 @@
     <PageHeader title="邀请码管理" subtitle="创建并管理用于限制新用户注册的邀请码">
       <template #icon><Ticket /></template>
       <template #actions>
-        <el-button :icon="Refresh" @click="loadInvites" plain>刷新</el-button>
+        <UiButton
+          loading-mode="icon"
+          :loading="pagination.isLoading.value"
+          :icon="Refresh"
+          @click="loadInvites"
+          >刷新</UiButton
+        >
         <el-button type="primary" :icon="Plus" @click="showInviteDialog">创建邀请码</el-button>
       </template>
     </PageHeader>
@@ -137,6 +143,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { computed, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Plus, Delete, Ticket } from '@element-plus/icons-vue'

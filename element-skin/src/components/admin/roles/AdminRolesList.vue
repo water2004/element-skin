@@ -4,9 +4,14 @@
       <PageHeader title="角色管理" subtitle="浏览和管理全站所有用户的游戏角色与材质">
         <template #icon><UserFilled /></template>
         <template #actions>
-          <el-button :icon="Refresh" plain :loading="loading" @click="refreshFromFirst">
+          <UiButton
+            loading-mode="icon"
+            :icon="Refresh"
+            :loading="loading"
+            @click="refreshFromFirst"
+          >
             刷新
-          </el-button>
+          </UiButton>
         </template>
       </PageHeader>
 
@@ -79,6 +84,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, UserFilled } from '@element-plus/icons-vue'

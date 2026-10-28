@@ -3,7 +3,9 @@
     <PageHeader title="第三方应用" subtitle="查看、审核和停用全站已注册的第三方应用">
       <template #icon><Link /></template>
       <template #actions>
-        <el-button :icon="Refresh" plain :loading="loading" @click="loadData"> 刷新 </el-button>
+        <UiButton loading-mode="icon" :icon="Refresh" :loading="loading" @click="loadData">
+          刷新
+        </UiButton>
       </template>
     </PageHeader>
 
@@ -167,6 +169,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Link, Refresh } from '@element-plus/icons-vue'

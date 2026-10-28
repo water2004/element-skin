@@ -4,9 +4,14 @@
       <PageHeader title="材质管理" subtitle="浏览和管理皮肤库中所有上传的材质">
         <template #icon><Picture /></template>
         <template #actions>
-          <el-button :icon="Refresh" plain :loading="loading" @click="refreshTexturesFromFirst">
+          <UiButton
+            loading-mode="icon"
+            :icon="Refresh"
+            :loading="loading"
+            @click="refreshTexturesFromFirst"
+          >
             刷新
-          </el-button>
+          </UiButton>
         </template>
       </PageHeader>
 

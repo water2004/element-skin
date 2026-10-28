@@ -87,6 +87,7 @@
                 <UiButton
                   variant="secondary"
                   aria-label="设为头像"
+                  :swap-icon="Setting"
                   :disabled="viewer.blocked.value"
                   @click.stop="setAsAvatar(profile)"
                   >头像</UiButton
@@ -103,6 +104,7 @@
                   variant="secondary"
                   tone="warning"
                   aria-label="清除皮肤"
+                  :swap-icon="Close"
                   :disabled="viewer.blocked.value"
                   @click.stop="clearRoleSkin(profile.id)"
                   >皮肤</UiButton
@@ -119,6 +121,7 @@
                   variant="secondary"
                   tone="warning"
                   aria-label="清除披风"
+                  :swap-icon="Close"
                   :disabled="viewer.blocked.value"
                   @click.stop="clearRoleCape(profile.id)"
                   >披风</UiButton
@@ -208,7 +211,7 @@
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Download, Link } from '@element-plus/icons-vue'
+import { Plus, Download, Link, Setting, Close } from '@element-plus/icons-vue'
 import ActionBar from '@/components/common/ActionBar.vue'
 import CursorPager from '@/components/common/CursorPager.vue'
 import UiButton from '@/components/ui/UiButton.vue'

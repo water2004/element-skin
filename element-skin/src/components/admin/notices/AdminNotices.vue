@@ -10,7 +10,13 @@
           <el-option label="定时发布" value="scheduled" />
           <el-option label="已过期" value="expired" />
         </el-select>
-        <el-button :icon="Refresh" plain @click="refreshFirstPage">刷新</el-button>
+        <UiButton
+          loading-mode="icon"
+          :loading="pagination.isLoading.value"
+          :icon="Refresh"
+          @click="refreshFirstPage"
+          >刷新</UiButton
+        >
         <el-button type="primary" :icon="Plus" @click="openCreateDialog"> 新建公告 </el-button>
       </template>
     </PageHeader>
@@ -133,6 +139,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Bell, Delete, Edit, Plus, Refresh, Setting } from '@element-plus/icons-vue'

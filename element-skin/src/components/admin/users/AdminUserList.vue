@@ -3,9 +3,14 @@
     <PageHeader title="用户管理" subtitle="管理站内所有用户及其角色的状态与权限">
       <template #icon><UserFilled /></template>
       <template #actions>
-        <el-button :icon="Refresh" plain :loading="loading" @click="refreshUsersFromFirst">
+        <UiButton
+          loading-mode="icon"
+          :icon="Refresh"
+          :loading="loading"
+          @click="refreshUsersFromFirst"
+        >
           刷新
-        </el-button>
+        </UiButton>
       </template>
     </PageHeader>
 
@@ -94,6 +99,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, UserFilled } from '@element-plus/icons-vue'

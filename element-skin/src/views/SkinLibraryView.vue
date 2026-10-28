@@ -74,6 +74,7 @@
                 variant="primary"
                 :icon="Plus"
                 :disabled="viewer.busy.value"
+                hover-effect
                 @click.stop="addToWardrobe(texture)"
               >
                 添加到衣柜
@@ -124,6 +125,7 @@
                 variant="primary"
                 :icon="Plus"
                 :disabled="viewer.busy.value"
+                hover-effect
                 @click="addToWardrobe(selectedItem)"
                 >添加到衣柜</UiButton
               >

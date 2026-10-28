@@ -4,9 +4,15 @@
       <template #icon><MagicStick /></template>
       <template #actions>
         <DirtyTag :visible="hasChanges" :spaced="false" />
-        <el-button :icon="Refresh" plain :disabled="loading || saving" @click="reloadSettings">
+        <UiButton
+          loading-mode="icon"
+          :loading="loading"
+          :icon="Refresh"
+          :disabled="loading || saving"
+          @click="reloadSettings"
+        >
           重新加载
-        </el-button>
+        </UiButton>
         <el-button type="primary" :loading="saving" :disabled="loading" @click="saveSettings">
           保存
         </el-button>
@@ -55,6 +61,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { onMounted, ref, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { MagicStick, Refresh } from '@element-plus/icons-vue'

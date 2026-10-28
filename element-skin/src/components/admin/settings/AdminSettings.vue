@@ -3,9 +3,15 @@
     <PageHeader title="站点设置" subtitle="管理站点基础配置、安全策略及第三方集成">
       <template #icon><Setting /></template>
       <template #actions>
-        <el-button :icon="Refresh" plain :disabled="isSaving || loading" @click="reloadSettings">
+        <UiButton
+          loading-mode="icon"
+          :loading="loading"
+          :icon="Refresh"
+          :disabled="isSaving || loading"
+          @click="reloadSettings"
+        >
           重新加载
-        </el-button>
+        </UiButton>
       </template>
     </PageHeader>
 
@@ -214,6 +220,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { ref, onMounted, reactive, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Setting, Monitor, Lock, Key } from '@element-plus/icons-vue'

@@ -25,6 +25,7 @@
   --radius-dialog: 14px;
   --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.05);
   --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --shadow-button-hover: 0 4px 12px color-mix(in srgb, var(--color-primary) 28%, transparent);
 
   --space-control-gap: 8px;
   --space-action-gap: 12px;

@@ -54,10 +54,16 @@
             <h2 class="m-0 text-lg font-semibold text-[var(--color-heading)]">服务状态</h2>
             <div class="service-status-actions">
               <span class="refresh-countdown">自动刷新 {{ refreshCountdown }}s</span>
-              <el-button @click="loadFallbackStatus" :loading="isChecking" size="small" text>
-                <el-icon><Refresh /></el-icon>
+              <UiButton
+                loading-mode="icon"
+                :icon="Refresh"
+                @click="loadFallbackStatus"
+                :loading="isChecking"
+                size="small"
+                variant="tertiary"
+              >
                 <span>刷新</span>
-              </el-button>
+              </UiButton>
             </div>
           </div>
 
@@ -116,6 +122,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { getPublicSettings, getPublicFallbackStatus } from '@/api/public'
 import { getMe } from '@/api/me'

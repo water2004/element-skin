@@ -11,7 +11,9 @@
           <el-radio-button value="unread">未读</el-radio-button>
         </UiSegmented>
         <el-tag size="large" type="info">全部通知</el-tag>
-        <UiButton :icon="Refresh" :loading="loading" @click="refreshFirstPage"> 刷新 </UiButton>
+        <UiButton loading-mode="icon" :icon="Refresh" :loading="loading" @click="refreshFirstPage">
+          刷新
+        </UiButton>
       </template>
     </PageHeader>
 

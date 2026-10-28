@@ -8,7 +8,9 @@
             请确认该应用请求的站点能力，授权后应用可代表你调用对应接口。
           </p>
         </div>
-        <el-button :loading="loading" @click="loadDetails">刷新</el-button>
+        <UiButton loading-mode="icon" :icon="Refresh" :loading="loading" @click="loadDetails"
+          >刷新</UiButton
+        >
       </div>
 
       <el-alert
@@ -48,6 +50,8 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { Warning } from '@element-plus/icons-vue'

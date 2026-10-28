@@ -16,10 +16,15 @@
           </p>
         </div>
         <ActionBar>
-          <el-button v-if="canReadApps" :loading="loading" @click="loadApps">
-            <el-icon><Refresh /></el-icon>
+          <UiButton
+            loading-mode="icon"
+            :icon="Refresh"
+            v-if="canReadApps"
+            :loading="loading"
+            @click="loadApps"
+          >
             刷新
-          </el-button>
+          </UiButton>
           <el-button
             v-if="canCreateApps"
             type="primary"
@@ -107,10 +112,15 @@
             管理外部应用已经获得的用户委托权限。
           </p>
         </div>
-        <el-button v-if="canReadGrants" :loading="grantsLoading" @click="loadGrants">
-          <el-icon><Refresh /></el-icon>
+        <UiButton
+          loading-mode="icon"
+          :icon="Refresh"
+          v-if="canReadGrants"
+          :loading="grantsLoading"
+          @click="loadGrants"
+        >
           刷新
-        </el-button>
+        </UiButton>
       </div>
 
       <el-alert
@@ -172,6 +182,7 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Edit, Plus, Refresh } from '@element-plus/icons-vue'

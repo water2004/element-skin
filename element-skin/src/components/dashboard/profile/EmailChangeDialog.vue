@@ -20,7 +20,15 @@
         :closable="false"
         show-icon
       />
-      <el-button type="primary" plain class="w-full" @click="loadPolicy">重新加载</el-button>
+      <UiButton
+        loading-mode="icon"
+        :icon="Refresh"
+        :loading="policyLoading"
+        tone="primary"
+        class="w-full"
+        @click="loadPolicy"
+        >重新加载</UiButton
+      >
     </div>
 
     <el-form
@@ -77,6 +85,8 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Ticket } from '@element-plus/icons-vue'

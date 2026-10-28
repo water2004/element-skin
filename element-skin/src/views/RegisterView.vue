@@ -20,9 +20,16 @@
           :closable="false"
           show-icon
         />
-        <el-button type="primary" plain class="w-full" @click="loadRegistrationSettings">
+        <UiButton
+          loading-mode="icon"
+          :icon="Refresh"
+          :loading="settingsLoading"
+          tone="primary"
+          class="w-full"
+          @click="loadRegistrationSettings"
+        >
           重新加载
-        </el-button>
+        </UiButton>
       </div>
 
       <el-alert
@@ -139,6 +146,8 @@
 </template>
 
 <script setup lang="ts">
+import UiButton from '@/components/ui/UiButton.vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { computed, reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'

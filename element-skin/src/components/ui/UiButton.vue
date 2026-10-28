@@ -1,7 +1,16 @@
 <template>
   <ElButton
     v-bind="buttonAttrs()"
-    :class="['ui-button', attrs.class, { 'ui-button--icon-only': iconOnly }]"
+    :class="[
+      'ui-button',
+      attrs.class,
+      {
+        'ui-button--icon-only': iconOnly,
+        'ui-button--loading-icon': loadingMode === 'icon',
+        'ui-button--swap': swapIcon && !iconOnly,
+        'ui-button--hover': hoverEffect,
+      },
+    ]"
     :type="buttonType"
     :plain="variant === 'secondary' && tone !== 'neutral'"
     :text="variant === 'tertiary'"
@@ -13,15 +22,23 @@
     @click="emit('click', $event)"
   >
     <template #loading>
-      <span class="ui-button-spinner" aria-hidden="true">
+      <span v-if="loadingMode !== 'icon' || iconOnly" class="ui-button-spinner" aria-hidden="true">
         <ElIcon class="is-loading"><Loading /></ElIcon>
       </span>
     </template>
     <template v-if="!iconOnly && $slots.default" #default>
       <span class="ui-button-content">
-        <ElIcon v-if="icon" aria-hidden="true"><component :is="icon" /></ElIcon>
+        <ElIcon
+          v-if="icon || (loading && loadingMode === 'icon')"
+          aria-hidden="true"
+          :class="{ 'is-loading': loading && loadingMode === 'icon' }"
+          ><component :is="loading && loadingMode === 'icon' ? Loading : icon"
+        /></ElIcon>
         <slot />
       </span>
+      <ElIcon v-if="swapIcon && !iconOnly" class="ui-button-swap" aria-hidden="true">
+        <component :is="swapIcon" />
+      </ElIcon>
     </template>
   </ElButton>
 </template>
@@ -42,6 +59,9 @@ const props = withDefaults(
     iconOnly?: boolean
     loading?: boolean
     disabled?: boolean
+    loadingMode?: 'overlay' | 'icon'
+    swapIcon?: ButtonProps['icon']
+    hoverEffect?: boolean
   }>(),
   {
     variant: 'secondary',
@@ -51,6 +71,9 @@ const props = withDefaults(
     iconOnly: false,
     loading: false,
     disabled: false,
+    loadingMode: 'overlay',
+    swapIcon: undefined,
+    hoverEffect: false,
   },
 )
 
@@ -106,6 +129,7 @@ function buttonAttrs() {
 }
 
 .ui-button-content {
+  opacity: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -116,8 +140,56 @@ function buttonAttrs() {
   margin-left: 0;
 }
 
-.ui-button.is-loading .ui-button-content {
+.ui-button.is-loading:not(.ui-button--loading-icon) .ui-button-content {
   opacity: 0;
+}
+
+.ui-button-swap {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.ui-button--swap .ui-button-content,
+.ui-button-swap {
+  transition: opacity var(--motion-duration-fast) var(--motion-easing-standard);
+}
+
+.ui-button--swap:not(.is-disabled):not(.is-loading):focus-visible .ui-button-content {
+  opacity: 0;
+}
+
+.ui-button--swap:not(.is-disabled):not(.is-loading):focus-visible .ui-button-swap {
+  opacity: 1;
+}
+
+@media (hover: hover) {
+  .ui-button--swap:not(.is-disabled):not(.is-loading):hover .ui-button-content {
+    opacity: 0;
+  }
+  .ui-button--swap:not(.is-disabled):not(.is-loading):hover .ui-button-swap {
+    opacity: 1;
+  }
+  .ui-button--hover:not(.is-disabled):not(.is-loading):hover {
+    box-shadow: var(--shadow-button-hover);
+  }
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .ui-button--hover {
+    transition:
+      color var(--motion-duration-fast) var(--motion-easing-standard),
+      background-color var(--motion-duration-fast) var(--motion-easing-standard),
+      border-color var(--motion-duration-fast) var(--motion-easing-standard),
+      box-shadow var(--motion-duration-fast) var(--motion-easing-standard),
+      transform var(--motion-duration-fast) var(--motion-easing-standard);
+  }
+  .ui-button--hover:not(.is-disabled):not(.is-loading):hover {
+    transform: translateY(calc(-1 * var(--motion-offset-hover)));
+  }
 }
 
 .ui-button-spinner {

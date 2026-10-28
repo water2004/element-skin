@@ -1,5 +1,5 @@
 import { createApp, h, nextTick, reactive, type VNode } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Setting } from '@element-plus/icons-vue'
 import { ElCollapse, ElCollapseItem } from 'element-plus'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { readFileSync } from 'node:fs'
@@ -95,6 +95,53 @@ function cssValue(element: Element, property: string): string {
 }
 
 describe('UiButton public behavior', () => {
+  it('replaces only the leading icon while retaining the label and blocking repeat activation', async () => {
+    const state = reactive({ loading: false })
+    const click = vi.fn()
+    const root = mount(() =>
+      h(UiButton, { ...state, icon: Refresh, loadingMode: 'icon', onClick: click }, () => '刷新'),
+    )
+    const button = root.querySelector('button')!
+    const content = button.querySelector('.ui-button-content')!
+    state.loading = true
+    await nextTick()
+    expect(button.querySelector('.ui-button-content')).toBe(content)
+    expect(content.textContent?.trim()).toBe('刷新')
+    expect(cssValue(content, 'opacity')).toBe('1')
+    expect(button.querySelectorAll('.el-icon')).toHaveLength(1)
+    expect(button.querySelectorAll('.is-loading')).toHaveLength(1)
+    expect(button.querySelector('.ui-button-spinner')).toBeNull()
+    expect(button.disabled).toBe(true)
+    button.click()
+    expect(click).not.toHaveBeenCalled()
+    state.loading = false
+    await nextTick()
+    expect(content.querySelector('.is-loading')).toBeNull()
+    button.click()
+    expect(click).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a swap icon decorative and preserves the action name and command', async () => {
+    const state = reactive({ disabled: false })
+    const click = vi.fn()
+    const root = mount(() =>
+      h(
+        UiButton,
+        { ...state, swapIcon: Setting, 'aria-label': '设为头像', onClick: click },
+        () => '头像',
+      ),
+    )
+    const button = root.querySelector('button')!
+    expect(button.getAttribute('aria-label')).toBe('设为头像')
+    expect(button.querySelector('.ui-button-content')?.textContent).toBe('头像')
+    expect(button.querySelector('.ui-button-swap')?.getAttribute('aria-hidden')).toBe('true')
+    button.click()
+    expect(click).toHaveBeenCalledTimes(1)
+    state.disabled = true
+    await nextTick()
+    button.click()
+    expect(click).toHaveBeenCalledTimes(1)
+  })
   it.each(buttonVariants)('renders $variant / $tone independently', (testCase) => {
     const root = mount(() =>
       h(UiButton, { variant: testCase.variant, tone: testCase.tone }, () => '操作'),
